@@ -1,0 +1,17 @@
+# TAMS Pro
+
+> TAMS Pro is a travel agency management system for bookings, B2B agents, vendors, invoices, expenses and financial reports. Web app with offline support and cloud sync.
+
+## Pages
+
+- [Home](/): Overview of TAMS Pro and core capabilities.
+- [Features](/features): Bookings, vendors, B2B agents, invoices, expenses and reporting features.
+- [Pricing](/pricing): Plans and pricing for travel agencies.
+- [Contact](/contact): Support and sales contact information.
+- [Sign Up](/signup): Create a free TAMS Pro account.
+- [Login](/login): Sign in to your TAMS Pro workspace.
+
+## Optional
+
+- [Privacy Policy](/privacy): How TAMS Pro handles user data.
+- [Terms of Service](/terms): Terms governing use of TAMS Pro.

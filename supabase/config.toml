@@ -1,0 +1,10 @@
+project_id = "siyqzpimojafbmgrhehs"
+
+[functions.google-auth]
+verify_jwt = false
+
+[functions.drive-operations]
+verify_jwt = true
+
+[functions.app-version]
+verify_jwt = false
