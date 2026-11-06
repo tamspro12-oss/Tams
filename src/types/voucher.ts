@@ -67,3 +67,4 @@ export interface Voucher {
     contact_person: string;
   } | null;
 }
+

@@ -345,3 +345,4 @@ export function generateVoucherWhatsAppText(v: Voucher, agencyName = "TAMS Pro")
   lines.push(`\nHave a safe and pleasant journey! If you have any questions, please contact our support.`);
   return lines.join("\n");
 }
+

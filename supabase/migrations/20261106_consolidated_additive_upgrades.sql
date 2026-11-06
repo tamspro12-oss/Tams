@@ -3,19 +3,18 @@
 -- Safe for Live Production: ZERO DESTRUCTIVE CHANGES
 -- ==============================================================================
 
--- 1. Phase 4 Performance Index on queries
+-- 1. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_queries_agency_status_priority_created
 ON public.queries (agency_id, status, priority, created_at DESC);
 
--- 2. Phase 5 Performance Search Index on b2b_bookings
 CREATE INDEX IF NOT EXISTS idx_b2b_bookings_search
 ON public.b2b_bookings (agency_id, agent_id, passenger_name, pnr);
 
--- 3. Phase 6 B2B Agent Voucher Privileges column
+-- 2. B2B Agent Voucher Privileges
 ALTER TABLE public.b2b_agents
 ADD COLUMN IF NOT EXISTS can_create_vouchers BOOLEAN DEFAULT false;
 
--- 4. Phase 6 Vouchers Table
+-- 3. Vouchers Table
 CREATE TABLE IF NOT EXISTS public.vouchers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   agency_id UUID NOT NULL,
@@ -28,8 +27,6 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
   passenger_passport TEXT,
   passengers JSONB DEFAULT '[]'::jsonb,
   contact_number TEXT,
-  
-  -- Umrah & Hotel fields
   package_name TEXT,
   hotel_name TEXT,
   city TEXT,
@@ -51,8 +48,6 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
   madinah_check_in DATE,
   madinah_check_out DATE,
   madinah_nights INTEGER,
-
-  -- Ticket fields
   airline TEXT,
   flight_number TEXT,
   sector TEXT,
@@ -62,7 +57,6 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
   baggage TEXT,
   pnr TEXT,
   ticket_number TEXT,
-
   remarks TEXT,
   terms_and_conditions TEXT,
   created_by UUID,
@@ -85,20 +79,12 @@ BEGIN
     CREATE POLICY "Users can manage vouchers in their agency"
     ON public.vouchers
     FOR ALL
-    USING (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    )
-    WITH CHECK (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    );
+    USING (agency_id = public.current_user_agency_id())
+    WITH CHECK (agency_id = public.current_user_agency_id());
   END IF;
 END $$;
 
--- 5. Task 3 Reminders Table
+-- 4. Reminders Table
 CREATE TABLE IF NOT EXISTS public.reminders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID,
@@ -127,20 +113,12 @@ BEGIN
     CREATE POLICY "Users can manage reminders in their agency"
     ON public.reminders
     FOR ALL
-    USING (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    )
-    WITH CHECK (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    );
+    USING (agency_id = public.current_user_agency_id())
+    WITH CHECK (agency_id = public.current_user_agency_id());
   END IF;
 END $$;
 
--- 6. Task 3 Reminder Settings Table
+-- 5. Reminder Settings Table
 CREATE TABLE IF NOT EXISTS public.reminder_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   agency_id UUID NOT NULL UNIQUE,
@@ -163,15 +141,7 @@ BEGIN
     CREATE POLICY "Users can manage reminder settings in their agency"
     ON public.reminder_settings
     FOR ALL
-    USING (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    )
-    WITH CHECK (
-      agency_id IN (
-        SELECT agency_id FROM public.profiles WHERE id = auth.uid()
-      )
-    );
+    USING (agency_id = public.current_user_agency_id())
+    WITH CHECK (agency_id = public.current_user_agency_id());
   END IF;
 END $$;

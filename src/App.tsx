@@ -33,24 +33,14 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 // Lazy-loaded App Pages (Protected)
 const Index = lazy(() => import("./pages/Index"));
 const Admin = lazy(() => import("./pages/Admin"));
-const Clients = lazy(() => import("./pages/Clients"));
-const Vendors = lazy(() => import("./pages/Vendors"));
-const Expenses = lazy(() => import("./pages/Expenses"));
-const Reports = lazy(() => import("./pages/Reports"));
-const Settings = lazy(() => import("./pages/Settings"));
+const BookingsHub = lazy(() => import("./pages/BookingsHub"));
+const LeadsQuotesHub = lazy(() => import("./pages/LeadsQuotesHub"));
+const AccountsHub = lazy(() => import("./pages/AccountsHub"));
+const NotificationsHub = lazy(() => import("./pages/NotificationsHub"));
+const SettingsHub = lazy(() => import("./pages/SettingsHub"));
 const UmrahCalculator = lazy(() => import("./pages/UmrahCalculator"));
-const BankCashManager = lazy(() => import("./pages/BankCashManager"));
-const Queries = lazy(() => import("./pages/Queries"));
-const EmailHistory = lazy(() => import("./pages/EmailHistory"));
-const UserManual = lazy(() => import("./pages/UserManual"));
-const B2BAgents = lazy(() => import("./pages/B2BAgents"));
 const B2BAgentDashboard = lazy(() => import("./pages/B2BAgentDashboard"));
 const VendorDashboard = lazy(() => import("./pages/VendorDashboard"));
-const Refunds = lazy(() => import("./pages/Refunds"));
-const OpeningBalances = lazy(() => import("./pages/OpeningBalances"));
-const Quotations = lazy(() => import("./pages/Quotations"));
-const Vouchers = lazy(() => import("./pages/Vouchers"));
-const Reminders = lazy(() => import("./pages/Reminders"));
 
 // Lazy non-critical overlays (kept out of the initial bundle)
 const UpdateNotification = lazy(() =>
@@ -149,27 +139,39 @@ const App = () => {
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
                   <Route path="/public" element={<Navigate to="/" replace />} />
 
-                  {/* ========== APP ROUTES (Login Required) ========== */}
+                  {/* ========== CANONICAL 7 HUBS (Login Required) ========== */}
                   <Route path="/app/dashboard" element={<ProtectedRoute><DashboardLayout><Index /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><Admin /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/clients" element={<ProtectedRoute><DashboardLayout><Clients /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/quotations" element={<ProtectedRoute><DashboardLayout><Quotations /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/vouchers" element={<ProtectedRoute><DashboardLayout><Vouchers /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/reminders" element={<ProtectedRoute><DashboardLayout><Reminders /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/b2b-agents" element={<ProtectedRoute><DashboardLayout><B2BAgents /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><B2BAgentDashboard /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/vendors" element={<ProtectedRoute><DashboardLayout><Vendors /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/vendors/:vendorId" element={<ProtectedRoute><DashboardLayout><VendorDashboard /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/queries" element={<ProtectedRoute><DashboardLayout><Queries /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/expenses" element={<ProtectedRoute><DashboardLayout><Expenses /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/reports" element={<ProtectedRoute><DashboardLayout><Reports /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><BookingsHub /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><LeadsQuotesHub /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/accounts" element={<ProtectedRoute><DashboardLayout><AccountsHub /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><UmrahCalculator /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/bank-cash" element={<ProtectedRoute><DashboardLayout><BankCashManager /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/refunds" element={<ProtectedRoute><DashboardLayout><Refunds /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/opening-balances" element={<ProtectedRoute><DashboardLayout><OpeningBalances /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/email-history" element={<ProtectedRoute><DashboardLayout><EmailHistory /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><Settings /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/user-manual" element={<ProtectedRoute><DashboardLayout><UserManual /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><NotificationsHub /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><SettingsHub /></DashboardLayout></ProtectedRoute>} />
+
+                  {/* Detail Routes */}
+                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><B2BAgentDashboard /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/vendors/:vendorId" element={<ProtectedRoute><DashboardLayout><VendorDashboard /></DashboardLayout></ProtectedRoute>} />
+
+                  {/* ========== 100% SEAMLESS LEGACY ROUTE REDIRECTS ========== */}
+                  <Route path="/app/clients" element={<Navigate to="/app/bookings?tab=clients" replace />} />
+                  <Route path="/app/b2b-agents" element={<Navigate to="/app/bookings?tab=b2b-agents" replace />} />
+                  <Route path="/app/vendors" element={<Navigate to="/app/bookings?tab=vendors" replace />} />
+                  <Route path="/app/vouchers" element={<Navigate to="/app/bookings?tab=vouchers" replace />} />
+
+                  <Route path="/app/queries" element={<Navigate to="/app/leads-quotes?tab=queries" replace />} />
+                  <Route path="/app/client-queries" element={<Navigate to="/app/leads-quotes?tab=queries" replace />} />
+                  <Route path="/app/quotations" element={<Navigate to="/app/leads-quotes?tab=quotations" replace />} />
+
+                  <Route path="/app/bank-cash" element={<Navigate to="/app/accounts?tab=bank-cash" replace />} />
+                  <Route path="/app/expenses" element={<Navigate to="/app/accounts?tab=expenses" replace />} />
+                  <Route path="/app/refunds" element={<Navigate to="/app/accounts?tab=refunds" replace />} />
+                  <Route path="/app/reports" element={<Navigate to="/app/accounts?tab=reports" replace />} />
+                  <Route path="/app/opening-balances" element={<Navigate to="/app/accounts?tab=opening-balances" replace />} />
+
+                  <Route path="/app/reminders" element={<Navigate to="/app/notifications?tab=reminders" replace />} />
+                  <Route path="/app/email-history" element={<Navigate to="/app/settings?tab=email-history" replace />} />
+                  <Route path="/app/user-manual" element={<Navigate to="/app/settings?tab=manual" replace />} />
                   
                   <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />

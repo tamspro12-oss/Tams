@@ -61,6 +61,8 @@ import {
 } from "@/components/ui/sidebar";
 
 
+import { useReminders } from "@/hooks/useReminders";
+
 interface DashboardLayoutProps {
   children: ReactNode;
 }
@@ -73,6 +75,7 @@ function AppSidebar() {
   const { isAdmin } = useIsAdmin();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const { pendingRemindersCount } = useReminders();
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -100,26 +103,30 @@ function AppSidebar() {
     }
   };
 
+  // Exactly 7 Top-Level Hubs (plus Admin Panel if authorized)
   const navigation = [
-    ...(isAdmin ? [{ name: "Admin Panel", href: "/app/admin", icon: Shield }] : []),
-    { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
-    { name: "Client Bookings", href: "/app/clients", icon: Calendar },
-    { name: "Quotations", href: "/app/quotations", icon: FileText },
-    { name: "Vouchers", href: "/app/vouchers", icon: Ticket },
-    { name: "Reminders", href: "/app/reminders", icon: Bell },
-    { name: "B2B Agents", href: "/app/b2b-agents", icon: Users },
-    { name: "Vendors", href: "/app/vendors", icon: Plane },
-    { name: "Client Queries", href: "/app/queries", icon: MessageSquare },
-    { name: "Expenses", href: "/app/expenses", icon: Receipt },
-    { name: "Bank & Cash", href: "/app/bank-cash", icon: Wallet },
-    { name: "Refunds", href: "/app/refunds", icon: RotateCcw },
-    { name: "Opening Balances", href: "/app/opening-balances", icon: Scale },
-    { name: "Umrah Calculator", href: "/app/umrah-calculator", icon: Calculator },
-    { name: "Reports", href: "/app/reports", icon: BarChart3 },
-    { name: "Email History", href: "/app/email-history", icon: Mail },
-    { name: "Settings", href: "/app/settings", icon: Settings },
-    { name: "User Manual", href: "/app/user-manual", icon: BookOpen },
+    ...(isAdmin ? [{ name: "Admin Panel", href: "/app/admin", icon: Shield, badge: null }] : []),
+    { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard, badge: null },
+    { name: "Bookings", href: "/app/bookings", icon: Calendar, badge: null },
+    { name: "Queries & Quotes", href: "/app/leads-quotes", icon: MessageSquare, badge: null },
+    { name: "Accounts", href: "/app/accounts", icon: Wallet, badge: null },
+    { name: "Umrah Calculator", href: "/app/umrah-calculator", icon: Calculator, badge: null },
+    { name: "Notifications", href: "/app/notifications", icon: Bell, badge: pendingRemindersCount > 0 ? pendingRemindersCount : null },
+    { name: "Settings", href: "/app/settings", icon: Settings, badge: null },
   ];
+
+  const isNavActive = (href: string) => {
+    const p = location.pathname;
+    if (href === "/app/dashboard") return p === "/app/dashboard";
+    if (href === "/app/bookings") return p.startsWith("/app/bookings") || p.startsWith("/app/clients") || p.startsWith("/app/b2b-agents") || p.startsWith("/app/vendors") || p.startsWith("/app/vouchers");
+    if (href === "/app/leads-quotes") return p.startsWith("/app/leads-quotes") || p.startsWith("/app/queries") || p.startsWith("/app/quotations");
+    if (href === "/app/accounts") return p.startsWith("/app/accounts") || p.startsWith("/app/bank-cash") || p.startsWith("/app/expenses") || p.startsWith("/app/refunds") || p.startsWith("/app/reports") || p.startsWith("/app/opening-balances");
+    if (href === "/app/umrah-calculator") return p.startsWith("/app/umrah-calculator");
+    if (href === "/app/notifications") return p.startsWith("/app/notifications") || p.startsWith("/app/reminders");
+    if (href === "/app/settings") return p.startsWith("/app/settings") || p.startsWith("/app/email-history") || p.startsWith("/app/user-manual");
+    if (href === "/app/admin") return p.startsWith("/app/admin");
+    return p === href;
+  };
 
   const handleNavClick = () => {
     if (isMobile && openMobile) {
@@ -151,14 +158,14 @@ function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
               {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
+                const isActive = isNavActive(item.href);
                 return (
                   <SidebarMenuItem key={item.name}>
                     <Link
                       to={item.href}
                       onClick={handleNavClick}
                       className={cn(
-                        "group relative flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-xl text-[13px] font-medium w-full touch-manipulation select-none overflow-hidden",
+                        "group relative flex items-center justify-between px-3 py-2.5 md:py-3 rounded-xl text-[13px] font-medium w-full touch-manipulation select-none overflow-hidden",
                         "transition-all duration-200 ease-out",
                         "active:scale-[0.97]",
                         "min-h-[44px]",
@@ -172,16 +179,24 @@ function AppSidebar() {
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 bg-accent rounded-r-full" />
                       )}
                       
-                      <item.icon 
-                        className={cn(
-                          "w-[18px] h-[18px] flex-shrink-0 transition-colors duration-200",
-                          isActive ? "text-accent" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
-                        )} 
-                      />
-                      
-                      <span className="text-[13px] leading-tight">
-                        {item.name}
-                      </span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <item.icon 
+                          className={cn(
+                            "w-[18px] h-[18px] flex-shrink-0 transition-colors duration-200",
+                            isActive ? "text-accent" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                          )} 
+                        />
+                        
+                        <span className="text-[13px] leading-tight truncate">
+                          {item.name}
+                        </span>
+                      </div>
+
+                      {item.badge != null && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-white shrink-0">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuItem>
                 );

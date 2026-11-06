@@ -39,3 +39,4 @@ export interface DynamicTravelAlert {
   sectorOrDetails?: string;
   clientId: string;
 }
+
