@@ -6,174 +6,198 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, ArrowLeft, UserPlus, Check, Crown, Zap, Star, Mail, Eye, EyeOff } from "lucide-react";
+import { Plane, ArrowLeft, Shield, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
-import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import { preloadEssentialData } from "@/lib/dataPreloader";
 
 const signupSchema = z.object({
-  fullName: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
-  agencyName: z.string().trim().min(2, "Agency name must be at least 2 characters").max(200),
-  email: z.string().trim().email("Please enter a valid email").max(255),
-  password: z.string().min(6, "Password must be at least 6 characters").max(128),
+  agencyName: z
+    .string()
+    .trim()
+    .min(2, "Agency name must be at least 2 characters")
+    .max(200, "Agency name must be less than 200 characters"),
+  email: z
+    .string()
+    .trim()
+    .email("Please enter a valid email address")
+    .max(255, "Email must be less than 255 characters"),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .max(128, "Password must be less than 128 characters"),
+  phone: z
+    .string()
+    .trim()
+    .min(7, "Please enter a valid phone number (at least 7 digits)")
+    .max(25, "Phone number is too long")
+    .regex(/^[+0-9\s\-()]+$/, "Please enter a valid phone format (e.g. 03001234567 or +923001234567)"),
 });
 
-type PlanType = "free" | "monthly" | "yearly";
-
-const plans: { id: PlanType; name: string; price: string; period: string; icon: typeof Star; features: string[]; popular?: boolean }[] = [
-  {
-    id: "free",
-    name: "Free Trial",
-    price: "Free",
-    period: "14 days",
-    icon: Zap,
-    features: ["Full access for 14 days", "All features included", "No credit card needed"],
-  },
-  {
-    id: "monthly",
-    name: "Monthly",
-    price: "14-Day Trial",
-    period: "then paid",
-    icon: Star,
-    features: ["14-day free trial first", "All premium features", "Priority support"],
-    popular: true,
-  },
-  {
-    id: "yearly",
-    name: "Yearly",
-    price: "14-Day Trial",
-    period: "then paid",
-    icon: Crown,
-    features: ["14-day free trial first", "Best value — save more", "Extended support"],
-  },
-];
 export default function SignupPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>("free");
   const [showPassword, setShowPassword] = useState(false);
-  const [showVerifyMessage, setShowVerifyMessage] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState("");
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const result = signupSchema.safeParse({
-      fullName: formData.get("fullName"),
+    const validation = signupSchema.safeParse({
       agencyName: formData.get("agencyName"),
       email: formData.get("email"),
       password: formData.get("password"),
+      phone: formData.get("phone"),
     });
 
-    if (!result.success) {
-      toast({ title: "Please check your input", description: result.error.errors[0].message, variant: "destructive" });
+    if (!validation.success) {
+      toast({
+        title: "Please check your input",
+        description: validation.error.errors[0].message,
+        variant: "destructive",
+      });
       setLoading(false);
       return;
     }
 
-    const { fullName, agencyName, email, password } = result.data;
+    const { agencyName, email, password, phone } = validation.data;
 
     try {
+      // 1. Create account with Supabase Auth (default plan = trial / free, 14-day access)
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: fullName, agency_name: agencyName, subscription_plan: selectedPlan },
-          emailRedirectTo: window.location.origin + "/login",
+          data: {
+            agency_name: agencyName,
+            full_name: agencyName,
+            phone_number: phone,
+            phone: phone,
+            subscription_plan: "free",
+          },
         },
       });
 
+      // Handle existing email / user registration errors
       if (signUpError) {
-        toast({ title: "Sign up failed", description: signUpError.message, variant: "destructive" });
+        const msg = signUpError.message?.toLowerCase() || "";
+        if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("unique constraint")) {
+          toast({
+            title: "Email already registered",
+            description: "This email is already registered. Please sign in.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Unable to create account",
+            description: signUpError.message || "Please check your information and try again.",
+            variant: "destructive",
+          });
+        }
         setLoading(false);
         return;
       }
 
-      // Check if session is already granted (Supabase email confirmations disabled or instant trial)
-      if (signUpData?.session) {
+      // Check for user enumeration case where Supabase returns empty identities
+      if (signUpData?.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
         toast({
-          title: "Account Created!",
-          description: "Welcome to TAMS Pro! Redirecting to your dashboard...",
+          title: "Email already registered",
+          description: "This email is already registered. Please sign in.",
+          variant: "destructive",
         });
-        navigate("/app/dashboard", { replace: true });
+        setLoading(false);
         return;
       }
 
-      // Try automatic immediate sign-in
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // 2. Ensure active session (auto-login immediately)
+      let activeSession = signUpData?.session;
+
+      if (!activeSession) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          // If auto sign-in threw because user already exists
+          const signInMsg = signInError.message?.toLowerCase() || "";
+          if (signInMsg.includes("invalid login credentials")) {
+            toast({
+              title: "Email already registered",
+              description: "This email is already registered. Please sign in.",
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
+        }
+        activeSession = signInData?.session || null;
+      }
+
+      // 3. Save / Sync agency_name and phone in the profiles / agencies table
+      const activeUser = activeSession?.user || signUpData?.user;
+      if (activeUser) {
+        try {
+          import("@/lib/sessionManager").then(({ sessionManager }) => {
+            sessionManager.startSession(activeUser.id);
+          });
+          preloadEssentialData(queryClient);
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("agency_id")
+            .eq("id", activeUser.id)
+            .maybeSingle();
+
+          if (profile?.agency_id) {
+            await supabase
+              .from("agencies")
+              .update({
+                name: agencyName,
+                phone_number: phone,
+                contact_info: phone,
+              })
+              .eq("id", profile.agency_id);
+          }
+        } catch (syncErr) {
+          console.warn("Post-signup profile sync:", syncErr);
+        }
+      }
+
+      // 4. Success toast and instant redirect to dashboard
+      toast({
+        title: "Your account is confirmed. Welcome to TAMS Pro!",
+        description: "Your 14-day free trial has started. Opening dashboard...",
       });
 
-      if (!signInError && signInData?.session) {
-        toast({
-          title: "Welcome to TAMS Pro!",
-          description: "Your account is ready. Redirecting to dashboard...",
-        });
-        navigate("/app/dashboard", { replace: true });
-        return;
-      }
-
-      // If email confirmation is required by Supabase backend:
-      setVerifyEmail(email);
-      setShowVerifyMessage(true);
+      navigate("/app/dashboard", { replace: true });
     } catch (err: any) {
       toast({
         title: "Registration error",
         description: err?.message || "Something went wrong. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
 
-  // Email verification success screen
-  if (showVerifyMessage) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-accent p-4">
-      <SeoHead title="Sign Up Free - TAMS Pro Travel Agency Software" description="Create your free TAMS Pro account and start managing bookings, vendors and invoices for your travel agency in minutes." path="/signup" />
-        <div className="w-full max-w-md">
-          <Card className="shadow-2xl border-0 backdrop-blur-sm bg-card/95">
-            <CardContent className="pt-10 pb-8 space-y-6 text-center">
-              <div className="mx-auto w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Mail className="w-10 h-10 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold font-heading text-foreground">Check Your Email</h2>
-                <p className="text-muted-foreground text-sm">
-                  We sent a verification link to
-                </p>
-                <p className="text-primary font-semibold">{verifyEmail}</p>
-              </div>
-              <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-left">
-                <p className="text-sm text-foreground font-medium">📩 Click the link in your email to verify</p>
-                <p className="text-xs text-muted-foreground">
-                  After verifying, you'll be redirected to the login page. Didn't receive it? Check your spam folder.
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                🎉 Your <strong>14-day free trial</strong> starts as soon as you verify!
-              </p>
-              <Button onClick={() => navigate("/login")} className="w-full h-11 font-semibold">
-                Go to Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-accent p-4">
-      <h1 className="sr-only">Create your free TAMS Pro account</h1>
-      <div className="w-full max-w-lg">
-        <div className="mb-6">
+      <SeoHead
+        title="Sign Up - TAMS Pro Travel Agency Management"
+        description="Create your free TAMS Pro account and start managing travel bookings, vendors, invoices and financial reports."
+        path="/signup"
+      />
+      <h1 className="sr-only">Sign up for TAMS Pro</h1>
+
+      <div className="w-full max-w-md">
+        {/* Back to Home */}
+        <div className="mb-4">
           <Link to="/">
             <Button variant="ghost" size="sm" className="gap-2 text-white/80 hover:text-white hover:bg-white/10">
               <ArrowLeft className="h-4 w-4" />
@@ -182,102 +206,79 @@ export default function SignupPage() {
           </Link>
         </div>
 
+        {/* Signup Card — exactly identical to LoginPage style */}
         <Card className="shadow-2xl border-0 backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-3 text-center pb-3">
+          <CardHeader className="space-y-4 text-center pb-4 pt-6">
+            {/* Logo & Branding */}
             <div className="flex flex-col items-center gap-3">
               <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg">
                 <Plane className="w-8 h-8 text-primary-foreground" />
               </div>
               <div className="space-y-1">
-                <CardTitle className="text-2xl font-bold font-heading bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Create Account
+                <CardTitle className="text-2xl sm:text-3xl font-bold font-heading bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  TAMS PRO
                 </CardTitle>
-                <CardDescription className="text-sm">
-                  Get started with TAMS Pro
+                <CardDescription className="text-sm font-medium">
+                  Create your Travel Agency account
                 </CardDescription>
               </div>
             </div>
+
+            {/* Secure Signup Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 rounded-full text-xs font-semibold mx-auto">
+              <Shield className="w-3.5 h-3.5" />
+              14-Day Free Access • Instant Setup
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-5">
-            {/* Plan Selection */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Choose Your Plan</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {plans.map((plan) => {
-                  const Icon = plan.icon;
-                  const isSelected = selectedPlan === plan.id;
-                  return (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      onClick={() => setSelectedPlan(plan.id)}
-                      className={cn(
-                        "relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 text-center",
-                        isSelected
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-primary/40 hover:bg-muted/30"
-                      )}
-                    >
-                      {plan.popular && (
-                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                          Popular
-                        </span>
-                      )}
-                      <Icon className={cn("w-5 h-5", isSelected ? "text-primary" : "text-muted-foreground")} />
-                      <span className={cn("text-xs font-semibold", isSelected ? "text-primary" : "text-foreground")}>
-                        {plan.name}
-                      </span>
-                      <span className={cn("text-[11px]", isSelected ? "text-primary/70" : "text-muted-foreground")}>
-                        {plan.price}
-                      </span>
-                      {isSelected && (
-                        <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-                          <Check className="w-2.5 h-2.5 text-primary-foreground" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {/* Plan features hint */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {plans.find(p => p.id === selectedPlan)?.features.map((f, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                    <Check className="w-2.5 h-2.5 text-green-500" />
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <form onSubmit={handleSignup} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="fullName" className="text-xs font-semibold">Full Name</Label>
-                  <Input id="fullName" name="fullName" placeholder="Your name" className="h-10" required autoComplete="name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="agencyName" className="text-xs font-semibold">Agency Name</Label>
-                  <Input id="agencyName" name="agencyName" placeholder="Agency name" className="h-10" required />
-                </div>
-              </div>
-
+          <CardContent className="space-y-4 pb-6">
+            <form onSubmit={handleSignup} className="space-y-3.5">
+              {/* Field 1: Agency Name */}
               <div className="space-y-1.5">
-                <Label htmlFor="signup-email" className="text-xs font-semibold">Email</Label>
-                <Input id="signup-email" name="email" type="email" placeholder="you@example.com" className="h-10" required autoComplete="email" />
+                <Label htmlFor="agencyName" className="text-xs font-semibold text-foreground">
+                  Agency Name *
+                </Label>
+                <Input
+                  id="agencyName"
+                  name="agencyName"
+                  type="text"
+                  placeholder="e.g. Al-Haramain Travels"
+                  className="h-10 sm:h-11 text-sm"
+                  required
+                  autoFocus
+                />
               </div>
 
+              {/* Field 2: Email */}
               <div className="space-y-1.5">
-                <Label htmlFor="signup-password" className="text-xs font-semibold">Password</Label>
+                <Label htmlFor="signup-email" className="text-xs font-semibold text-foreground">
+                  Email Address *
+                </Label>
+                <Input
+                  id="signup-email"
+                  name="email"
+                  type="email"
+                  placeholder="agency@example.com"
+                  className="h-10 sm:h-11 text-sm"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+
+              {/* Field 3: Password */}
+              <div className="space-y-1.5">
+                <Label htmlFor="signup-password" className="text-xs font-semibold text-foreground">
+                  Password * (min 6 characters)
+                </Label>
                 <div className="relative">
                   <Input
                     id="signup-password"
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 6 characters"
-                    className="h-10 pr-10"
+                    placeholder="••••••••"
+                    className="h-10 sm:h-11 text-sm pr-10"
                     required
+                    minLength={6}
                     autoComplete="new-password"
                   />
                   <button
@@ -292,40 +293,67 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full h-11 font-semibold" disabled={loading}>
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Creating account...
-                  </span>
-                ) : (
-                  "Create Account"
-                )}
-              </Button>
+              {/* Field 4: Phone Number */}
+              <div className="space-y-1.5">
+                <Label htmlFor="phone" className="text-xs font-semibold text-foreground">
+                  Phone Number *
+                </Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  placeholder="e.g. 03001234567 or +923001234567"
+                  className="h-10 sm:h-11 text-sm"
+                  required
+                  autoComplete="tel"
+                />
+              </div>
 
-              <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1">
-                <Mail className="w-3 h-3" />
-                A verification email will be sent to confirm your account
-              </p>
+              {/* Create Account Button */}
+              <div className="pt-1">
+                <Button
+                  type="submit"
+                  className="w-full h-11 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Creating Account...
+                    </span>
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+              </div>
             </form>
 
-            <div className="pt-3 border-t border-border text-center">
-              <p className="text-sm text-muted-foreground">
+            {/* Already have an account? Sign In & Terms */}
+            <div className="pt-3 border-t border-border text-center space-y-2">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Already have an account?{" "}
-                <Link to="/login" className="text-primary hover:underline font-medium">
+                <Link to="/login" className="text-primary hover:underline font-semibold">
                   Sign In
                 </Link>
+              </p>
+              <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                By creating an account, you agree to our{" "}
+                <Link to="/terms" className="underline hover:text-foreground">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link to="/privacy" className="underline hover:text-foreground">
+                  Privacy Policy
+                </Link>.
               </p>
             </div>
           </CardContent>
         </Card>
 
-        <div className="mt-6 text-center">
-          <p className="text-xs text-white/60">
-            By signing up, you agree to our{" "}
-            <Link to="/terms" className="underline hover:text-white/80">Terms</Link>
-            {" "}and{" "}
-            <Link to="/privacy" className="underline hover:text-white/80">Privacy Policy</Link>
+        {/* Footer Branding */}
+        <div className="mt-4 text-center">
+          <p className="text-xs text-white/80 font-medium">
+            Developed by TAMS Pro
           </p>
         </div>
       </div>
