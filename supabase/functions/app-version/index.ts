@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.4.1'; // Update this with each deployment
+const CURRENT_VERSION = '3.5.0'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,14 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.5.0': [
+          'Complete Settings Redesign: clean zero-scroll layout with 5 prominent top tabs (Account, Branding, Email Integration, Storage & Backup, User Manual)',
+          'Global removal of WhatsApp Integration, Meta credentials, and WhatsApp Business Number fields',
+          'Relocated Theme Changer to Global Top Header Bar alongside Notification Bell and Online indicator',
+          'Automatic responsive views globally: defaults to desktop layout on desktop screens and mobile on phones',
+          'Template auto-population: Agency Name, Phone, and Email automatically populated from signup profile across Invoice, Booking, and Reminder templates',
+          'Unified Email Integration: clean sub-tabs for Email Configuration, Email Logs History, and Email Cleanup',
+        ],
         '3.4.1': [
           'Compact single-bar control header for Umrah Package Calculator',
           'Streamlined Passengers and Service Charges row with Profit field removed',
