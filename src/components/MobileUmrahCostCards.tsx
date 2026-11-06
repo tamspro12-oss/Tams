@@ -7,13 +7,15 @@ import { cn } from "@/lib/utils";
 
 type RateMode = "sharing" | "room";
 
-interface HotelEntry {
+export interface HotelEntry {
   id: string;
+  city: "makkah" | "madinah";
   name: string;
   sharingType: "Quint" | "Quad" | "Triple" | "Double" | "Sharing";
   rateMode: RateMode;
   rate: string;
   nights: string;
+  currency?: string;
 }
 
 const SHARING_TYPES = ["Sharing", "Quint", "Quad", "Triple", "Double"] as const;
@@ -22,35 +24,15 @@ const OCCUPANCY_DIVISORS: Record<string, number> = {
 };
 
 export interface MobileUmrahCostCardsProps {
-  // Hotel state
-  useMultiHotel: boolean;
+  // Hotel state & handlers
   makkahHotels: HotelEntry[];
   madinahHotels: HotelEntry[];
-  makkahNights: string;
-  madinahNights: string;
-  makkahRate: string;
-  madinahRate: string;
-  makkahSharingType: string;
-  madinahSharingType: string;
-  makkahRateMode: RateMode;
-  madinahRateMode: RateMode;
   hotelCurrency: string;
   isPresetLocked: boolean;
-  // Hotel handlers
-  setMakkahNights: (v: string) => void;
-  setMadinahNights: (v: string) => void;
-  setMakkahRate: (v: string) => void;
-  setMadinahRate: (v: string) => void;
-  setMakkahSharingType: (v: any) => void;
-  setMadinahSharingType: (v: any) => void;
-  handleMakkahRateModeChange: (v: RateMode) => void;
-  handleMadinahRateModeChange: (v: RateMode) => void;
   addMakkahHotel: () => void;
   addMadinahHotel: () => void;
-  updateMakkahHotel: (id: string, field: keyof HotelEntry, value: string) => void;
-  updateMadinahHotel: (id: string, field: keyof HotelEntry, value: string) => void;
-  removeMakkahHotel: (id: string) => void;
-  removeMadinahHotel: (id: string) => void;
+  updateHotel: (id: string, field: keyof HotelEntry, value: any) => void;
+  removeHotel: (id: string) => void;
   // Charges
   ticketCost: string; setTicketCost: (v: string) => void;
   ticketCurrency: string; setTicketCurrency: (v: string) => void;
@@ -67,12 +49,7 @@ export interface MobileUmrahCostCardsProps {
   convertToPKR: (amount: number, currency: string) => number;
   formatCurrency: (v: number) => string;
   getCurrencySymbol: (c: string) => string;
-  getSingleHotelRowTotal: (rate: string, nights: string, rateMode: RateMode, sharingType: string) => number;
   getHotelRowTotal: (hotel: HotelEntry) => number;
-  makkahMultiTotal: number;
-  madinahMultiTotal: number;
-  makkahMultiNights: number;
-  madinahMultiNights: number;
 }
 
 const MobileCurrencySelect = ({

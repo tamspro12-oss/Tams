@@ -6,7 +6,24 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ArrowLeft, Plus, Trash2, Calculator, Check, ArrowRightCircle, Download, Eye, Sparkles, Building2
+  ArrowLeft,
+  X,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  ArrowRightCircle,
+  Download,
+  Eye,
+  Hash,
+  Calendar,
+  CalendarDays,
+  Briefcase,
+  Tag,
+  User,
+  Mail,
+  Phone,
+  FileText,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, parseISO } from "date-fns";
@@ -64,11 +81,11 @@ export default function QuotationFormPage() {
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("PKR");
 
   const [items, setItems] = useState<QuotationItem[]>([
@@ -101,6 +118,7 @@ export default function QuotationFormPage() {
   const clientNameRef = useRef<HTMLInputElement>(null);
   const clientEmailRef = useRef<HTMLInputElement>(null);
   const clientPhoneRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const firstItemDescRef = useRef<HTMLInputElement>(null);
   const lastItemUnitPriceRef = useRef<HTMLInputElement>(null);
 
@@ -137,7 +155,6 @@ export default function QuotationFormPage() {
         navigate("/app/leads-quotes?tab=quotations", { replace: true });
       }
     } else {
-      // Prefill from navigation state (e.g. from Umrah Calculator or Client Query)
       const prefill = (location.state as { prefill?: Partial<QuotationInput> })?.prefill;
       if (prefill) {
         if (prefill.client_name) setClientName(prefill.client_name);
@@ -159,7 +176,7 @@ export default function QuotationFormPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       quotationNumberRef.current?.focus();
-    }, 100);
+    }, 80);
     return () => clearTimeout(timer);
   }, []);
 
@@ -236,73 +253,13 @@ export default function QuotationFormPage() {
     setValidUntil(format(addDays(base, days), "yyyy-MM-dd"));
   };
 
-  // Umrah calculator result import
-  const handleUseCalculatorResult = () => {
-    try {
-      const raw = localStorage.getItem("tams_latest_umrah_calc");
-      if (!raw) {
-        toast.info("No recent Umrah calculation found", {
-          description: "Open the Umrah Calculator and click calculate first.",
-        });
-        return;
-      }
-      const data = JSON.parse(raw);
-      const res = data?.result;
-      if (!res || !res.totalPackageCost) {
-        toast.info("No valid Umrah calculation data found");
-        return;
-      }
-
-      const perPerson = Math.round(res.perPerson || 0);
-      const passengers = Number(res.totalPassengers) || 1;
-      const nights = res.nights || 14;
-
-      setServiceType("umrah");
-      setTitle(`Umrah Package — ${nights} Nights (${passengers} Pax)`);
-      setDescription(
-        `Custom Umrah package calculated for ${passengers} passenger(s). Per person rate: PKR ${perPerson.toLocaleString()}.`
-      );
-      setCurrency("PKR");
-      setItems([
-        {
-          description: `Umrah Package (${nights} Nights, ${passengers} Pax)`,
-          qty: passengers,
-          unit_price: perPerson,
-          amount: perPerson * passengers,
-        },
-      ]);
-
-      toast.success("Imported calculation from Umrah Calculator!");
-    } catch (e) {
-      toast.error("Failed to read Umrah calculation");
-    }
-  };
-
-  // Convert to Booking action
-  const handleConvertToBooking = () => {
-    navigate("/app/bookings?tab=clients", {
-      state: {
-        openAddClient: true,
-        prefill: {
-          name: clientName,
-          contact_number: clientPhone,
-          email: clientEmail,
-          travel_type: serviceType === "umrah" ? "Umrah" : "Ticket",
-          selling_price: total,
-          notes: `Converted from Quotation #${quotationNumber}${title ? ` — ${title}` : ""}\nQuotation Total: ${currency} ${total.toLocaleString()}`,
-          converted_from_quote_id: id,
-        },
-      },
-    });
-  };
-
   const hasUnsavedChanges = Boolean(
     quotationNumber.trim() || clientName.trim() || items.some((i) => i.description.trim())
   );
 
-  const handleBack = useCallback(() => {
+  const handleClose = useCallback(() => {
     if (hasUnsavedChanges && !convertedBookingId) {
-      const confirmLeave = window.confirm("You have unsaved changes. Discard and go back?");
+      const confirmLeave = window.confirm("You have unsaved changes. Discard and close?");
       if (!confirmLeave) return;
     }
     navigate("/app/leads-quotes?tab=quotations");
@@ -422,6 +379,24 @@ export default function QuotationFormPage() {
     }
   };
 
+  // Convert to Booking action
+  const handleConvertToBooking = () => {
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          name: clientName,
+          contact_number: clientPhone,
+          email: clientEmail,
+          travel_type: serviceType === "umrah" ? "Umrah" : "Ticket",
+          selling_price: total,
+          notes: `Converted from Quotation #${quotationNumber}${title ? ` — ${title}` : ""}\nQuotation Total: ${currency} ${total.toLocaleString()}`,
+          converted_from_quote_id: id,
+        },
+      },
+    });
+  };
+
   // Global Keyboard Shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Ctrl/Cmd + Shift + Enter = Save & PDF
@@ -438,19 +413,11 @@ export default function QuotationFormPage() {
       return;
     }
 
-    // Esc = Back
+    // Esc = Close
     if (e.key === "Escape") {
       e.preventDefault();
-      handleBack();
+      handleClose();
       return;
-    }
-  };
-
-  // Enter advances to next field on single-line inputs
-  const handleEnterAdvance = (nextRef: React.RefObject<HTMLElement | null>) => (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      nextRef.current?.focus();
     }
   };
 
@@ -459,50 +426,33 @@ export default function QuotationFormPage() {
       onKeyDown={handleKeyDown}
       className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-7xl mx-auto overflow-hidden bg-background"
     >
-      {/* Top Bar */}
+      {/* 1. Global Header Bar: Back, Title, Action Group: Save & PDF -> Save Quotation -> X */}
       <div className="h-12 md:h-14 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-30">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            onClick={handleBack}
-            className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+            onClick={handleClose}
+            className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             title="Go back (Esc)"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div className="flex items-baseline gap-2 truncate">
-            <h1 className="text-base sm:text-lg font-bold text-foreground truncate">
-              {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
-            </h1>
-            <span className="hidden xl:inline text-[11px] text-muted-foreground font-mono">
-              Tab = next | Ctrl+Enter = Save | Ctrl+Shift+Enter = Save & PDF | Esc = Back
-            </span>
-          </div>
+          <h1 className="text-base sm:text-lg font-bold text-foreground truncate">
+            {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
+          </h1>
         </div>
 
+        {/* Action Group: Save & PDF -> Save Quotation -> X */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Umrah calculator quick fill */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleUseCalculatorResult}
-            className="hidden sm:inline-flex h-8 px-2.5 text-xs gap-1.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-            title="Fill quotation lines from latest Umrah calculation"
-          >
-            <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>Use Calculator Result</span>
-          </Button>
-
           {isEdit && !convertedBookingId && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={handleConvertToBooking}
-              className="hidden md:inline-flex h-8 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold"
+              className="hidden md:inline-flex h-8 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             >
               <ArrowRightCircle className="w-3.5 h-3.5" />
               <span>Convert to Booking</span>
@@ -511,279 +461,331 @@ export default function QuotationFormPage() {
 
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleBack}
-            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </Button>
-
-          <Button
-            type="button"
             variant="outline"
             size="sm"
+            tabIndex={13}
             onClick={() => handleSave(true)}
             disabled={isSubmitting}
-            className="hidden sm:inline-flex h-8 px-3 text-xs gap-1"
+            className="h-8 px-3 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
             title="Save and download PDF (Ctrl+Shift+Enter)"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Save & PDF</span>
+            <span className="hidden sm:inline">Save & PDF</span>
+            <span className="sm:hidden">PDF</span>
           </Button>
 
           <Button
             type="button"
             size="sm"
+            tabIndex={14}
             onClick={() => handleSave(false)}
             disabled={isSubmitting}
-            className="h-8 px-3.5 text-xs font-semibold shadow-sm"
+            className="h-8 px-3.5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             title="Save Quotation (Ctrl+Enter)"
           >
-            {isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
+          </Button>
+
+          {/* Compact X Icon Button */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tabIndex={15}
+            onClick={handleClose}
+            aria-label="Cancel and close"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+            title="Cancel and close (Esc)"
+          >
+            <X className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {/* Main Content: Desktop One Screen (No Page Scroll) */}
-      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-3 sm:p-4 flex flex-col gap-2.5">
+      {/* Main Content: Single Screen Card Layout, No Page Scrolling */}
+      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
         
-        {/* TOP STRIP (one row): Quotation # * | Date * | Valid Until | Service Type * | Status */}
-        <div className="grid grid-cols-12 gap-2.5 bg-muted/20 p-2.5 sm:p-3 rounded-xl border border-border/70 shrink-0">
-          {/* Quotation # */}
-          <div className="col-span-12 sm:col-span-3 space-y-1">
-            <Label htmlFor="quote_num" className="text-xs font-semibold flex items-center justify-between">
-              <span>Quotation # <span className="text-destructive">*</span></span>
-              {errors.quotationNumber && (
-                <span className="text-[10px] text-destructive truncate">{errors.quotationNumber}</span>
-              )}
-            </Label>
-            <Input
-              id="quote_num"
-              ref={quotationNumberRef}
-              tabIndex={1}
-              value={quotationNumber}
-              onChange={(e) => {
-                setQuotationNumber(e.target.value);
-                if (errors.quotationNumber) setErrors((prev) => ({ ...prev, quotationNumber: undefined }));
-              }}
-              onBlur={(e) => checkQuotationNumberUniqueness(e.target.value)}
-              onKeyDown={handleEnterAdvance(quotationDateRef)}
-              placeholder="e.g. QT-2026-089"
-              className={cn(
-                "h-9 text-base sm:text-xs font-semibold rounded-lg",
-                errors.quotationNumber && "border-destructive focus-visible:ring-destructive"
-              )}
-            />
-            {mostRecentQuotationNumber && !quotationNumber && (
-              <p className="text-[10px] text-muted-foreground truncate">
-                Last used:{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuotationNumber(mostRecentQuotationNumber);
-                    quotationDateRef.current?.focus();
-                  }}
-                  className="underline hover:text-foreground font-mono"
-                >
-                  {mostRecentQuotationNumber}
-                </button>
-              </p>
-            )}
-          </div>
-
-          {/* Date */}
-          <div className="col-span-6 sm:col-span-2 space-y-1">
-            <Label htmlFor="quote_date" className="text-xs font-semibold">
-              Date <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="quote_date"
-              ref={quotationDateRef}
-              tabIndex={2}
-              type="date"
-              value={quotationDate}
-              onChange={(e) => setQuotationDate(e.target.value)}
-              onKeyDown={handleEnterAdvance(validUntilRef)}
-              className="h-9 text-base sm:text-xs rounded-lg"
-            />
-          </div>
-
-          {/* Valid Until + quick chips */}
-          <div className="col-span-6 sm:col-span-3 space-y-1">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="valid_until" className="text-xs font-semibold">
-                Valid Until
+        {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4) */}
+        <div className="bg-card rounded-2xl border border-border/70 shadow-sm p-3 sm:p-4 shrink-0 min-w-0">
+          <div className="grid grid-cols-12 gap-2.5 min-w-0">
+            
+            {/* ROW 1 (3 columns): Quotation # (col-span-3), Date * (col-span-4), Valid Until (col-span-5) */}
+            <div className="col-span-12 md:col-span-3 space-y-1 min-w-0">
+              <Label htmlFor="quote_num" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                <span>Quotation # <span className="text-destructive">*</span></span>
+                {errors.quotationNumber && (
+                  <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.quotationNumber}</span>
+                )}
               </Label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => applyValidUntilChip(7)}
-                  className="text-[9px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border"
-                >
-                  +7d
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyValidUntilChip(14)}
-                  className="text-[9px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border"
-                >
-                  +14d
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyValidUntilChip(30)}
-                  className="text-[9px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border"
-                >
-                  +30d
-                </button>
+              <div className="relative">
+                <Hash className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="quote_num"
+                  ref={quotationNumberRef}
+                  tabIndex={1}
+                  value={quotationNumber}
+                  onChange={(e) => {
+                    setQuotationNumber(e.target.value);
+                    if (errors.quotationNumber) setErrors((prev) => ({ ...prev, quotationNumber: undefined }));
+                  }}
+                  onBlur={(e) => checkQuotationNumberUniqueness(e.target.value)}
+                  placeholder="e.g. QT-2026-089"
+                  className={cn(
+                    "pl-9 h-9 text-base sm:text-xs font-semibold rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
+                    errors.quotationNumber && "border-destructive focus-visible:ring-destructive"
+                  )}
+                />
+              </div>
+              {mostRecentQuotationNumber && !quotationNumber && (
+                <p className="text-[10px] text-muted-foreground truncate">
+                  Last used:{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuotationNumber(mostRecentQuotationNumber);
+                      quotationDateRef.current?.focus();
+                    }}
+                    className="underline hover:text-foreground font-mono focus-visible:ring-1 focus-visible:ring-primary"
+                  >
+                    {mostRecentQuotationNumber}
+                  </button>
+                </p>
+              )}
+            </div>
+
+            <div className="col-span-6 md:col-span-4 space-y-1 min-w-0">
+              <Label htmlFor="quote_date" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Date <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="quote_date"
+                  ref={quotationDateRef}
+                  tabIndex={2}
+                  type="date"
+                  value={quotationDate}
+                  onChange={(e) => setQuotationDate(e.target.value)}
+                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                />
               </div>
             </div>
-            <Input
-              id="valid_until"
-              ref={validUntilRef}
-              tabIndex={3}
-              type="date"
-              value={validUntil}
-              onChange={(e) => setValidUntil(e.target.value)}
-              onKeyDown={handleEnterAdvance(clientNameRef)}
-              className="h-9 text-base sm:text-xs rounded-lg"
-            />
-          </div>
 
-          {/* Service Type */}
-          <div className="col-span-6 sm:col-span-2 space-y-1">
-            <Label className="text-xs font-semibold">
-              Service Type <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={serviceType}
-              onValueChange={(v: ServiceType) => setServiceType(v)}
-            >
-              <SelectTrigger className="h-9 text-xs rounded-lg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-50 text-xs">
-                {SERVICE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Status */}
-          <div className="col-span-6 sm:col-span-2 space-y-1">
-            <Label className="text-xs font-semibold">Status</Label>
-            <Select value={status} onValueChange={(v: Status) => setStatus(v)}>
-              <SelectTrigger className="h-9 text-xs rounded-lg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-50 text-xs">
-                {STATUS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* CLIENT ROW: Client Name * | Email | Phone */}
-        <div className="grid grid-cols-12 gap-2.5 bg-muted/20 p-2.5 sm:p-3 rounded-xl border border-border/70 shrink-0 relative">
-          <div className="col-span-12 sm:col-span-5 space-y-1 relative">
-            <Label htmlFor="client_name" className="text-xs font-semibold flex items-center justify-between">
-              <span>Client / Recipient Name <span className="text-destructive">*</span></span>
-              {errors.clientName && (
-                <span className="text-[10px] text-destructive">{errors.clientName}</span>
-              )}
-            </Label>
-            <Input
-              id="client_name"
-              ref={clientNameRef}
-              tabIndex={4}
-              value={clientName}
-              onChange={(e) => {
-                setClientName(e.target.value);
-                setShowClientSuggestions(true);
-                if (errors.clientName) setErrors((prev) => ({ ...prev, clientName: undefined }));
-              }}
-              onFocus={() => setShowClientSuggestions(true)}
-              onKeyDown={handleEnterAdvance(clientEmailRef)}
-              placeholder="Start typing client name to autocomplete..."
-              className={cn(
-                "h-9 text-base sm:text-xs rounded-lg",
-                errors.clientName && "border-destructive focus-visible:ring-destructive"
-              )}
-            />
-
-            {/* Client Autocomplete Suggestions Dropdown */}
-            {showClientSuggestions && filteredClientSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden text-xs">
-                <div className="p-1.5 bg-muted/50 border-b text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                  Suggested Existing Clients
-                </div>
-                {filteredClientSuggestions.map((c: any) => (
+            <div className="col-span-6 md:col-span-5 space-y-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="valid_until" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Valid Until
+                </Label>
+                <div className="flex items-center gap-1">
                   <button
-                    key={c.id}
                     type="button"
-                    onClick={() => handleSelectClient(c)}
-                    className="w-full text-left px-3 py-2 hover:bg-muted/70 flex items-center justify-between transition-colors border-b last:border-b-0"
+                    tabIndex={4}
+                    onClick={() => applyValidUntilChip(7)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
-                    <div>
-                      <p className="font-semibold text-foreground">{c.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{c.contact_number || c.email || "No contact"}</p>
-                    </div>
-                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">Select</span>
+                    +7d
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    tabIndex={5}
+                    onClick={() => applyValidUntilChip(14)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                  >
+                    +14d
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={6}
+                    onClick={() => applyValidUntilChip(30)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                  >
+                    +30d
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
+              <div className="relative">
+                <CalendarDays className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="valid_until"
+                  ref={validUntilRef}
+                  tabIndex={3}
+                  type="date"
+                  value={validUntil}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                />
+              </div>
+            </div>
 
-          <div className="col-span-12 sm:col-span-4 space-y-1">
-            <Label htmlFor="client_email" className="text-xs font-semibold">
-              Email Address
-            </Label>
-            <Input
-              id="client_email"
-              ref={clientEmailRef}
-              tabIndex={5}
-              type="email"
-              value={clientEmail}
-              onChange={(e) => setClientEmail(e.target.value)}
-              onKeyDown={handleEnterAdvance(clientPhoneRef)}
-              placeholder="client@example.com (for direct PDF emailing)"
-              className="h-9 text-base sm:text-xs rounded-lg"
-            />
-          </div>
+            {/* ROW 2 (2 columns, col-span-6 each): Service Type * and Status */}
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Service Type <span className="text-destructive">*</span>
+              </Label>
+              <Select value={serviceType} onValueChange={(v: ServiceType) => setServiceType(v)}>
+                <SelectTrigger
+                  tabIndex={7}
+                  className="h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Briefcase className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="z-50 text-xs">
+                  {SERVICE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="col-span-12 sm:col-span-3 space-y-1">
-            <Label htmlFor="client_phone" className="text-xs font-semibold">
-              Phone Number
-            </Label>
-            <Input
-              id="client_phone"
-              ref={clientPhoneRef}
-              tabIndex={6}
-              type="tel"
-              inputMode="tel"
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              onKeyDown={handleEnterAdvance(firstItemDescRef)}
-              placeholder="+92 300 1234567"
-              className="h-9 text-base sm:text-xs rounded-lg"
-            />
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Status
+              </Label>
+              <Select value={status} onValueChange={(v: Status) => setStatus(v)}>
+                <SelectTrigger
+                  tabIndex={8}
+                  className="h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="z-50 text-xs">
+                  {STATUS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ROW 3 (2 columns, col-span-6 each): Client / Recipient Name * and Email Address */}
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0 relative">
+              <Label htmlFor="client_name" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                <span>Client / Recipient Name <span className="text-destructive">*</span></span>
+                {errors.clientName && (
+                  <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.clientName}</span>
+                )}
+              </Label>
+              <div className="relative">
+                <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="client_name"
+                  ref={clientNameRef}
+                  tabIndex={9}
+                  value={clientName}
+                  onChange={(e) => {
+                    setClientName(e.target.value);
+                    setShowClientSuggestions(true);
+                    if (errors.clientName) setErrors((prev) => ({ ...prev, clientName: undefined }));
+                  }}
+                  onFocus={() => setShowClientSuggestions(true)}
+                  placeholder="Client name (type to search clients)..."
+                  className={cn(
+                    "pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
+                    errors.clientName && "border-destructive focus-visible:ring-destructive"
+                  )}
+                />
+              </div>
+
+              {/* Autocomplete Suggestions */}
+              {showClientSuggestions && filteredClientSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden text-xs">
+                  <div className="p-1.5 bg-muted/50 border-b text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    Matching Existing Clients
+                  </div>
+                  {filteredClientSuggestions.map((c: any) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleSelectClient(c)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex items-center justify-between transition-colors border-b last:border-b-0 focus-visible:bg-muted focus-visible:outline-none"
+                    >
+                      <div>
+                        <p className="font-semibold text-foreground">{c.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{c.contact_number || c.email || "No contact"}</p>
+                      </div>
+                      <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Select</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+              <Label htmlFor="client_email" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Email Address
+              </Label>
+              <div className="relative">
+                <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="client_email"
+                  ref={clientEmailRef}
+                  tabIndex={10}
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="client@example.com (for direct PDF dispatch)"
+                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* ROW 4 (2 columns, col-span-6 each): Phone Number and Title / Subject */}
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+              <Label htmlFor="client_phone" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Phone Number
+              </Label>
+              <div className="relative">
+                <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="client_phone"
+                  ref={clientPhoneRef}
+                  tabIndex={11}
+                  type="tel"
+                  inputMode="tel"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  placeholder="+92 300 1234567"
+                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+              <Label htmlFor="quote_title" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Quotation Title / Subject
+              </Label>
+              <div className="relative">
+                <FileText className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="quote_title"
+                  ref={titleRef}
+                  tabIndex={12}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. 14-Day Umrah Package / Executive Ticket"
+                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                />
+              </div>
+            </div>
+
           </div>
         </div>
 
-        {/* 2 ZONES SPLIT: MIDDLE ITEMS TABLE (~65%) & RIGHT TOTALS/TERMS (~35%) */}
+        {/* 2 ZONES: MIDDLE LINE ITEMS (~65% -> 8 cols) & RIGHT TOTALS/TERMS (~35% -> 4 cols) */}
         <div className="flex-1 min-h-0 grid grid-cols-12 gap-2.5">
           
-          {/* MIDDLE: Quotation Items Table (~65% -> 8 cols) */}
-          <div className="col-span-12 lg:col-span-8 flex flex-col min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden">
+          {/* MIDDLE: Quotation Line Items Table */}
+          <div className="col-span-12 lg:col-span-8 flex flex-col min-h-0 bg-card rounded-2xl border border-border/70 overflow-hidden shadow-sm">
             <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xs uppercase tracking-wider text-foreground">Line Items</span>
@@ -794,7 +796,7 @@ export default function QuotationFormPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => addItem(true)}
-                className="h-7 px-2.5 text-xs gap-1 font-medium"
+                className="h-7 px-2.5 text-xs gap-1 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add line</span>
@@ -809,8 +811,8 @@ export default function QuotationFormPage() {
               <div className="col-span-2 text-right">Amount</div>
             </div>
 
-            {/* Rows container with internal scroll */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-2.5 space-y-2">
+            {/* Internal Scroll Rows Container */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-2.5 space-y-1.5">
               {items.map((it, idx) => {
                 const isLast = idx === items.length - 1;
                 return (
@@ -824,7 +826,7 @@ export default function QuotationFormPage() {
                         placeholder="Item or service description..."
                         value={it.description}
                         onChange={(e) => updateItem(idx, { description: e.target.value })}
-                        className="h-8 text-base sm:text-xs rounded-md"
+                        className="h-8 text-base sm:text-xs rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-4 sm:col-span-2">
@@ -835,7 +837,7 @@ export default function QuotationFormPage() {
                         placeholder="Qty"
                         value={it.qty}
                         onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })}
-                        className="h-8 text-base sm:text-xs rounded-md text-center"
+                        className="h-8 text-base sm:text-xs rounded-md text-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-4 sm:col-span-2">
@@ -849,13 +851,12 @@ export default function QuotationFormPage() {
                         value={it.unit_price}
                         onChange={(e) => updateItem(idx, { unit_price: Number(e.target.value) })}
                         onKeyDown={(e) => {
-                          // Tab on last field of last line automatically adds a new line
                           if (isLast && e.key === "Tab" && !e.shiftKey) {
                             e.preventDefault();
                             addItem(true);
                           }
                         }}
-                        className="h-8 text-base sm:text-xs rounded-md text-right font-mono"
+                        className="h-8 text-base sm:text-xs rounded-md text-right font-mono focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-3 sm:col-span-1 text-right text-xs font-bold font-mono truncate">
@@ -868,7 +869,7 @@ export default function QuotationFormPage() {
                         size="icon"
                         disabled={items.length <= 1}
                         onClick={() => removeItem(idx)}
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-md"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                         title="Delete line"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -878,36 +879,16 @@ export default function QuotationFormPage() {
                 );
               })}
             </div>
-
-            {/* Title / Description optional row inside table area */}
-            <div className="p-2 border-t bg-muted/10 grid grid-cols-12 gap-2 shrink-0">
-              <div className="col-span-12 sm:col-span-6">
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Optional Subject/Title (e.g. 14-Day Executive Umrah Package)"
-                  className="h-8 text-base sm:text-xs rounded-md"
-                />
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional brief note/subtitle shown under quotation title..."
-                  className="h-8 text-base sm:text-xs rounded-md"
-                />
-              </div>
-            </div>
           </div>
 
-          {/* RIGHT: Sticky Totals Card & Notes/Terms (~35% -> 4 cols) */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col justify-between gap-2 bg-card rounded-xl border border-border/70 p-3 overflow-y-auto">
-            <div className="space-y-2.5">
+          {/* RIGHT: Totals Card, Notes & Terms */}
+          <div className="col-span-12 lg:col-span-4 flex flex-col justify-between gap-2 bg-card rounded-2xl border border-border/70 p-3 overflow-y-auto shadow-sm">
+            <div className="space-y-2">
               {/* Currency & Subtotal */}
-              <div className="flex items-center justify-between pb-2 border-b">
-                <span className="text-xs font-semibold text-muted-foreground">Currency</span>
+              <div className="flex items-center justify-between pb-1.5 border-b">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase">Currency</span>
                 <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-7 w-24 text-xs font-semibold">
+                  <SelectTrigger className="h-7 w-24 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-50 text-xs">
@@ -934,7 +915,7 @@ export default function QuotationFormPage() {
                   inputMode="decimal"
                   value={discount}
                   onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="h-7 w-28 text-right text-xs font-mono rounded"
+                  className="h-7 w-28 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
@@ -948,21 +929,21 @@ export default function QuotationFormPage() {
                   inputMode="decimal"
                   value={tax}
                   onChange={(e) => setTax(Number(e.target.value))}
-                  className="h-7 w-28 text-right text-xs font-mono rounded"
+                  className="h-7 w-28 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
               {/* TOTAL (large bold) */}
-              <div className="pt-2 border-t flex items-baseline justify-between bg-primary/5 p-2.5 rounded-lg border border-primary/20">
-                <span className="font-bold text-sm text-foreground">TOTAL:</span>
+              <div className="pt-2 border-t flex items-baseline justify-between bg-primary/5 p-2 rounded-xl border border-primary/20">
+                <span className="font-bold text-xs uppercase tracking-wide text-foreground">TOTAL:</span>
                 <span className="text-xl sm:text-2xl font-black text-primary font-mono tracking-tight">
                   {currency} {total.toLocaleString()}
                 </span>
               </div>
 
-              {/* Compact Notes */}
+              {/* Notes */}
               <div className="space-y-1 pt-1">
-                <Label htmlFor="notes" className="text-[11px] font-semibold text-muted-foreground">
+                <Label htmlFor="notes" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Notes (Client facing)
                 </Label>
                 <Textarea
@@ -970,14 +951,14 @@ export default function QuotationFormPage() {
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Included baggage, flight transit notes, payment deadlines..."
-                  className="min-h-[46px] text-base sm:text-xs rounded-md resize-none"
+                  placeholder="Included baggage, flight transit notes, payment terms..."
+                  className="min-h-[44px] text-base sm:text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
-              {/* Terms & Conditions */}
+              {/* Terms */}
               <div className="space-y-1">
-                <Label htmlFor="terms" className="text-[11px] font-semibold text-muted-foreground">
+                <Label htmlFor="terms" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Terms & Conditions
                 </Label>
                 <Textarea
@@ -986,23 +967,23 @@ export default function QuotationFormPage() {
                   value={terms}
                   onChange={(e) => setTerms(e.target.value)}
                   placeholder="Terms of quotation..."
-                  className="min-h-[46px] text-base sm:text-xs rounded-md resize-none"
+                  className="min-h-[44px] text-base sm:text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
             </div>
 
-            {/* Mobile Bottom Bar Save */}
-            <div className="lg:hidden sticky bottom-0 left-0 right-0 pt-3 pb-[env(safe-area-inset-bottom,0.75rem)] bg-background/95 backdrop-blur border-t mt-3 flex items-center justify-between gap-2">
+            {/* Mobile Bottom Bar */}
+            <div className="lg:hidden sticky bottom-0 left-0 right-0 pt-2 pb-[env(safe-area-inset-bottom,0.75rem)] bg-background/95 backdrop-blur border-t mt-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] text-muted-foreground">Total Amount</p>
-                <p className="font-bold text-base text-primary truncate">{currency} {total.toLocaleString()}</p>
+                <p className="font-bold text-sm text-primary truncate">{currency} {total.toLocaleString()}</p>
               </div>
               <div className="flex gap-1.5 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleBack}
-                  className="min-h-[44px] px-3 text-xs"
+                  onClick={handleClose}
+                  className="min-h-[40px] px-3 text-xs"
                 >
                   Cancel
                 </Button>
@@ -1010,7 +991,7 @@ export default function QuotationFormPage() {
                   type="button"
                   onClick={() => handleSave(false)}
                   disabled={isSubmitting}
-                  className="min-h-[44px] px-4 text-xs font-semibold shadow-md"
+                  className="min-h-[40px] px-3.5 text-xs font-semibold shadow-md"
                 >
                   {isSubmitting ? "Saving..." : isEdit ? "Update" : "Save Quotation"}
                 </Button>
