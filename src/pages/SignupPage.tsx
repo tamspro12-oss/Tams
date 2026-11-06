@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SeoHead } from "@/components/SeoHead";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, ArrowLeft, Shield, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
@@ -18,6 +17,12 @@ const signupSchema = z.object({
     .trim()
     .min(2, "Agency name must be at least 2 characters")
     .max(200, "Agency name must be less than 200 characters"),
+  phone: z
+    .string()
+    .trim()
+    .min(7, "Please enter a valid phone number")
+    .max(25, "Phone number is too long")
+    .regex(/^[+0-9\s\-()]+$/, "Please enter a valid phone format (e.g. 03001234567 or +923001234567)"),
   email: z
     .string()
     .trim()
@@ -27,45 +32,65 @@ const signupSchema = z.object({
     .string()
     .min(6, "Password must be at least 6 characters")
     .max(128, "Password must be less than 128 characters"),
-  phone: z
-    .string()
-    .trim()
-    .min(7, "Please enter a valid phone number (at least 7 digits)")
-    .max(25, "Phone number is too long")
-    .regex(/^[+0-9\s\-()]+$/, "Please enter a valid phone format (e.g. 03001234567 or +923001234567)"),
 });
 
 export default function SignupPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{
+    agencyName?: string;
+    phone?: string;
+    email?: string;
+    password?: string;
+  }>({});
+
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Autofocus first field on desktop only (avoids popping keyboard on mobile)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      firstInputRef.current?.focus();
+    }
+  }, []);
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
+    setFieldErrors({});
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
     const validation = signupSchema.safeParse({
       agencyName: formData.get("agencyName"),
+      phone: formData.get("phone"),
       email: formData.get("email"),
       password: formData.get("password"),
-      phone: formData.get("phone"),
     });
 
     if (!validation.success) {
+      const errors: { [key: string]: string } = {};
+      validation.error.errors.forEach((err) => {
+        const field = err.path[0] as string;
+        if (field && !errors[field]) {
+          errors[field] = err.message;
+        }
+      });
+      setFieldErrors(errors);
+
       toast({
         title: "Please check your input",
-        description: validation.error.errors[0].message,
+        description: validation.error.errors[0]?.message || "Invalid input",
         variant: "destructive",
       });
       setLoading(false);
       return;
     }
 
-    const { agencyName, email, password, phone } = validation.data;
+    const { agencyName, phone, email, password } = validation.data;
 
     try {
       // 1. Create account with Supabase Auth (default plan = trial / free, 14-day access)
@@ -87,6 +112,7 @@ export default function SignupPage() {
       if (signUpError) {
         const msg = signUpError.message?.toLowerCase() || "";
         if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("unique constraint")) {
+          setFieldErrors({ email: "This email is already registered. Please sign in." });
           toast({
             title: "Email already registered",
             description: "This email is already registered. Please sign in.",
@@ -105,6 +131,7 @@ export default function SignupPage() {
 
       // Check for user enumeration case where Supabase returns empty identities
       if (signUpData?.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
+        setFieldErrors({ email: "This email is already registered. Please sign in." });
         toast({
           title: "Email already registered",
           description: "This email is already registered. Please sign in.",
@@ -124,9 +151,9 @@ export default function SignupPage() {
         });
 
         if (signInError) {
-          // If auto sign-in threw because user already exists
           const signInMsg = signInError.message?.toLowerCase() || "";
           if (signInMsg.includes("invalid login credentials")) {
+            setFieldErrors({ email: "This email is already registered. Please sign in." });
             toast({
               title: "Email already registered",
               description: "This email is already registered. Please sign in.",
@@ -187,176 +214,200 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-accent p-4">
-      <SeoHead
-        title="Sign Up - TAMS Pro Travel Agency Management"
-        description="Create your free TAMS Pro account and start managing travel bookings, vendors, invoices and financial reports."
-        path="/signup"
-      />
-      <h1 className="sr-only">Sign up for TAMS Pro</h1>
+    <AuthLayout
+      title="Create your agency account"
+      subtitle="Start managing bookings, ledgers and quotes in minutes"
+      type="signup"
+      seoTitle="Sign Up - TAMS Pro Travel Agency Management"
+      seoDescription="Create your free TAMS Pro account and start managing travel bookings, vendors, invoices and financial reports."
+      seoPath="/signup"
+    >
+      <form onSubmit={handleSignup} className="space-y-3 sm:space-y-3.5">
+        {/* 2-Column Grid on Desktop (>= 1024px), Single Column on Mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3 lg:gap-3.5">
+          {/* Row 1, Col 1: Agency Name */}
+          <div className="space-y-1">
+            <Label htmlFor="signup-agency" className="text-[13px] font-medium text-foreground">
+              Agency Name
+            </Label>
+            <Input
+              ref={firstInputRef}
+              id="signup-agency"
+              name="agencyName"
+              type="text"
+              autoComplete="organization"
+              enterKeyHint="next"
+              placeholder="e.g. Al-Haramain Travels"
+              className={`h-11 sm:h-11 lg:h-11 text-[16px] sm:text-sm rounded-lg transition-colors focus-visible:ring-emerald-500 ${
+                fieldErrors.agencyName ? "border-destructive focus-visible:ring-destructive" : ""
+              }`}
+              required
+              onChange={() => {
+                if (fieldErrors.agencyName) {
+                  setFieldErrors((prev) => ({ ...prev, agencyName: undefined }));
+                }
+              }}
+            />
+            {fieldErrors.agencyName && (
+              <p className="text-[11px] text-destructive font-medium leading-tight mt-0.5">
+                {fieldErrors.agencyName}
+              </p>
+            )}
+          </div>
 
-      <div className="w-full max-w-md">
-        {/* Back to Home */}
-        <div className="mb-4">
-          <Link to="/">
-            <Button variant="ghost" size="sm" className="gap-2 text-white/80 hover:text-white hover:bg-white/10">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
+          {/* Row 1, Col 2: Phone Number */}
+          <div className="space-y-1">
+            <Label htmlFor="signup-phone" className="text-[13px] font-medium text-foreground">
+              Phone Number
+            </Label>
+            <Input
+              id="signup-phone"
+              name="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              enterKeyHint="next"
+              placeholder="e.g. 03001234567"
+              className={`h-11 sm:h-11 lg:h-11 text-[16px] sm:text-sm rounded-lg transition-colors focus-visible:ring-emerald-500 ${
+                fieldErrors.phone ? "border-destructive focus-visible:ring-destructive" : ""
+              }`}
+              required
+              onChange={() => {
+                if (fieldErrors.phone) {
+                  setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                }
+              }}
+            />
+            {fieldErrors.phone && (
+              <p className="text-[11px] text-destructive font-medium leading-tight mt-0.5">
+                {fieldErrors.phone}
+              </p>
+            )}
+          </div>
+
+          {/* Row 2, Col 1: Email Address */}
+          <div className="space-y-1">
+            <Label htmlFor="signup-email" className="text-[13px] font-medium text-foreground">
+              Email Address
+            </Label>
+            <Input
+              id="signup-email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              enterKeyHint="next"
+              placeholder="agency@example.com"
+              className={`h-11 sm:h-11 lg:h-11 text-[16px] sm:text-sm rounded-lg transition-colors focus-visible:ring-emerald-500 ${
+                fieldErrors.email ? "border-destructive focus-visible:ring-destructive" : ""
+              }`}
+              required
+              onChange={() => {
+                if (fieldErrors.email) {
+                  setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                }
+              }}
+            />
+            {fieldErrors.email && (
+              <p className="text-[11px] text-destructive font-medium leading-tight mt-0.5">
+                {fieldErrors.email}
+              </p>
+            )}
+          </div>
+
+          {/* Row 2, Col 2: Password */}
+          <div className="space-y-1">
+            <Label htmlFor="signup-password" className="text-[13px] font-medium text-foreground">
+              Password
+            </Label>
+            <div className="relative">
+              <Input
+                id="signup-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                enterKeyHint="done"
+                placeholder="•••••••• (min 6 chars)"
+                className={`h-11 sm:h-11 lg:h-11 text-[16px] sm:text-sm rounded-lg pr-11 transition-colors focus-visible:ring-emerald-500 ${
+                  fieldErrors.password ? "border-destructive focus-visible:ring-destructive" : ""
+                }`}
+                required
+                minLength={6}
+                onChange={() => {
+                  if (fieldErrors.password) {
+                    setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                  }
+                }}
+              />
+              <button
+                type="button"
+                tabIndex={0}
+                onClick={() => setShowPassword(!showPassword)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setShowPassword(!showPassword);
+                  }
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-hidden focus:text-foreground p-1.5 rounded-md transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {fieldErrors.password ? (
+              <p className="text-[11px] text-destructive font-medium leading-tight mt-0.5">
+                {fieldErrors.password}
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/75 leading-none mt-0.5">
+                Must be at least 6 characters
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Signup Card — exactly identical to LoginPage style */}
-        <Card className="shadow-2xl border-0 backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-4 text-center pb-4 pt-6">
-            {/* Logo & Branding */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg">
-                <Plane className="w-8 h-8 text-primary-foreground" />
-              </div>
-              <div className="space-y-1">
-                <CardTitle className="text-2xl sm:text-3xl font-bold font-heading bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  TAMS PRO
-                </CardTitle>
-                <CardDescription className="text-sm font-medium">
-                  Create your Travel Agency account
-                </CardDescription>
-              </div>
-            </div>
+        {/* Create Account Button */}
+        <div className="pt-1.5">
+          <Button
+            type="submit"
+            className="w-full h-11 sm:h-12 min-h-[44px] sm:min-h-[48px] rounded-lg text-sm sm:text-base font-semibold shadow-md hover:shadow-lg transition-all focus-visible:ring-emerald-500"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                Creating Account...
+              </span>
+            ) : (
+              "Create Account"
+            )}
+          </Button>
+        </div>
 
-            {/* Secure Signup Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 rounded-full text-xs font-semibold mx-auto">
-              <Shield className="w-3.5 h-3.5" />
-              14-Day Free Access • Instant Setup
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-4 pb-6">
-            <form onSubmit={handleSignup} className="space-y-3.5">
-              {/* Field 1: Agency Name */}
-              <div className="space-y-1.5">
-                <Label htmlFor="agencyName" className="text-xs font-semibold text-foreground">
-                  Agency Name *
-                </Label>
-                <Input
-                  id="agencyName"
-                  name="agencyName"
-                  type="text"
-                  placeholder="e.g. Al-Haramain Travels"
-                  className="h-10 sm:h-11 text-sm"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              {/* Field 2: Email */}
-              <div className="space-y-1.5">
-                <Label htmlFor="signup-email" className="text-xs font-semibold text-foreground">
-                  Email Address *
-                </Label>
-                <Input
-                  id="signup-email"
-                  name="email"
-                  type="email"
-                  placeholder="agency@example.com"
-                  className="h-10 sm:h-11 text-sm"
-                  required
-                  autoComplete="email"
-                />
-              </div>
-
-              {/* Field 3: Password */}
-              <div className="space-y-1.5">
-                <Label htmlFor="signup-password" className="text-xs font-semibold text-foreground">
-                  Password * (min 6 characters)
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="signup-password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    className="h-10 sm:h-11 text-sm pr-10"
-                    required
-                    minLength={6}
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Field 4: Phone Number */}
-              <div className="space-y-1.5">
-                <Label htmlFor="phone" className="text-xs font-semibold text-foreground">
-                  Phone Number *
-                </Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  placeholder="e.g. 03001234567 or +923001234567"
-                  className="h-10 sm:h-11 text-sm"
-                  required
-                  autoComplete="tel"
-                />
-              </div>
-
-              {/* Create Account Button */}
-              <div className="pt-1">
-                <Button
-                  type="submit"
-                  className="w-full h-11 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Creating Account...
-                    </span>
-                  ) : (
-                    "Create Account"
-                  )}
-                </Button>
-              </div>
-            </form>
-
-            {/* Already have an account? Sign In & Terms */}
-            <div className="pt-3 border-t border-border text-center space-y-2">
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link to="/login" className="text-primary hover:underline font-semibold">
-                  Sign In
-                </Link>
-              </p>
-              <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
-                By creating an account, you agree to our{" "}
-                <Link to="/terms" className="underline hover:text-foreground">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link to="/privacy" className="underline hover:text-foreground">
-                  Privacy Policy
-                </Link>.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Footer Branding */}
-        <div className="mt-4 text-center">
-          <p className="text-xs text-white/80 font-medium">
-            Developed by TAMS Pro
+        {/* Already have an account? Sign In & Terms */}
+        <div className="pt-2 text-center space-y-1.5 border-t border-border/60">
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className="text-primary hover:underline font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-xs"
+            >
+              Sign In
+            </Link>
+          </p>
+          <p className="text-[10.5px] text-muted-foreground/75 leading-tight">
+            By creating an account, you agree to our{" "}
+            <Link to="/terms" className="underline hover:text-foreground">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="underline hover:text-foreground">
+              Privacy Policy
+            </Link>.
           </p>
         </div>
-      </div>
-    </div>
+      </form>
+    </AuthLayout>
   );
 }

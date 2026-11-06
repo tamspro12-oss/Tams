@@ -1,10 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, RotateCcw, Calendar as CalendarIcon, Save, Upload, Maximize2, Minimize2, Plus, Trash2, Package, PlusCircle, FileDown, FileText, CheckCircle2 } from "lucide-react";
+import {
+  Calculator,
+  RotateCcw,
+  Calendar as CalendarIcon,
+  Save,
+  Upload,
+  Plus,
+  Minus,
+  Trash2,
+  Package,
+  PlusCircle,
+  FileDown,
+  FileText,
+  CheckCircle2,
+  Copy,
+  Info,
+  Unlock,
+  ArrowRight,
+  Sparkles,
+  ChevronRight,
+} from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
 import { format } from "date-fns";
@@ -27,9 +46,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { MobileUmrahCostCards } from "@/components/MobileUmrahCostCards";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 // Rate mode: "sharing" = per person rate, "room" = room rate divided by occupancy
 type RateMode = "sharing" | "room";
@@ -53,16 +83,11 @@ interface HotelEntry {
   nights: string;
 }
 
-// Custom presets stored in localStorage
-interface CustomPreset extends PresetPackage {
-  isCustom: true;
-}
-
 interface PresetPackage {
   id: string;
   name: string;
-  makkahHotels: Omit<HotelEntry, 'id'>[];
-  madinahHotels: Omit<HotelEntry, 'id'>[];
+  makkahHotels: Omit<HotelEntry, "id">[];
+  madinahHotels: Omit<HotelEntry, "id">[];
   visaFee?: string;
   transport?: string;
   ziyarat?: string;
@@ -80,11 +105,11 @@ interface CalculationResult {
   totalPassengers: number;
 }
 
-// Default presets (read-only templates) - ALL use "Sharing" type, default visa=0, nights 12/8
+// Default presets (read-only templates)
 const DEFAULT_PRESETS: PresetPackage[] = [
   {
     id: "package1",
-    name: "Package 1",
+    name: "Package 1 (Standard)",
     makkahHotels: [{ name: "Standard Hotel Makkah", sharingType: "Sharing", rateMode: "sharing", rate: "150", nights: "12" }],
     madinahHotels: [{ name: "Standard Hotel Madinah", sharingType: "Sharing", rateMode: "sharing", rate: "120", nights: "8" }],
     visaFee: "0",
@@ -94,7 +119,7 @@ const DEFAULT_PRESETS: PresetPackage[] = [
   },
   {
     id: "package2",
-    name: "Package 2",
+    name: "Package 2 (3-Star)",
     makkahHotels: [{ name: "3-Star Hotel Makkah", sharingType: "Sharing", rateMode: "sharing", rate: "250", nights: "12" }],
     madinahHotels: [{ name: "3-Star Hotel Madinah", sharingType: "Sharing", rateMode: "sharing", rate: "200", nights: "8" }],
     visaFee: "0",
@@ -104,7 +129,7 @@ const DEFAULT_PRESETS: PresetPackage[] = [
   },
   {
     id: "package3",
-    name: "Package 3",
+    name: "Package 3 (4-Star)",
     makkahHotels: [{ name: "4-Star Hotel Makkah", sharingType: "Sharing", rateMode: "sharing", rate: "450", nights: "12" }],
     madinahHotels: [{ name: "4-Star Hotel Madinah", sharingType: "Sharing", rateMode: "sharing", rate: "380", nights: "8" }],
     visaFee: "0",
@@ -114,13 +139,9 @@ const DEFAULT_PRESETS: PresetPackage[] = [
   },
   {
     id: "package4",
-    name: "Package 4",
-    makkahHotels: [
-      { name: "5-Star Hotel Makkah", sharingType: "Sharing", rateMode: "sharing", rate: "800", nights: "12" },
-    ],
-    madinahHotels: [
-      { name: "5-Star Hotel Madinah", sharingType: "Sharing", rateMode: "sharing", rate: "650", nights: "8" },
-    ],
+    name: "Package 4 (5-Star)",
+    makkahHotels: [{ name: "5-Star Hotel Makkah", sharingType: "Sharing", rateMode: "sharing", rate: "800", nights: "12" }],
+    madinahHotels: [{ name: "5-Star Hotel Madinah", sharingType: "Sharing", rateMode: "sharing", rate: "650", nights: "8" }],
     visaFee: "0",
     transport: "0",
     ziyarat: "0",
@@ -128,21 +149,16 @@ const DEFAULT_PRESETS: PresetPackage[] = [
   },
 ];
 
-// "Sharing" renamed to more common industry term
-// "Sharing" is default type
 const SHARING_TYPES = ["Sharing", "Quint", "Quad", "Triple", "Double"] as const;
 
 export default function UmrahCalculator() {
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const { data: agency } = useAgency();
 
   // Exchange Rate
   const [sarToPkrRate, setSarToPkrRate] = useState("77.50");
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  
-  // Travel & Hotels - Original single hotel (backward compatibility)
-  // DEFAULT: Makkah 12 nights, Madinah 8 nights (changeable by user)
+
+  // Travel & Hotels
   const [arrivalDate, setArrivalDate] = useState<Date | undefined>(undefined);
   const [departureDate, setDepartureDate] = useState<Date | undefined>(undefined);
   const [makkahNights, setMakkahNights] = useState("12");
@@ -151,21 +167,19 @@ export default function UmrahCalculator() {
   const [madinahRate, setMadinahRate] = useState("");
   const [hotelCurrency, setHotelCurrency] = useState("SAR");
 
-  // NEW: Multi-hotel support (additive feature)
+  // Multi-hotel support
   const [useMultiHotel, setUseMultiHotel] = useState(false);
   const [makkahHotels, setMakkahHotels] = useState<HotelEntry[]>([]);
   const [madinahHotels, setMadinahHotels] = useState<HotelEntry[]>([]);
-  
-  // NEW: Sharing type labels for single hotel mode - DEFAULT is "Sharing"
-  const [makkahSharingType, setMakkahSharingType] = useState<HotelEntry['sharingType']>("Sharing");
-  const [madinahSharingType, setMadinahSharingType] = useState<HotelEntry['sharingType']>("Sharing");
-  
-  // NEW: Rate mode for single hotel mode - "sharing" = per person, "room" = room rate / occupancy
+
+  // Sharing type labels for single hotel mode
+  const [makkahSharingType, setMakkahSharingType] = useState<HotelEntry["sharingType"]>("Sharing");
+  const [madinahSharingType, setMadinahSharingType] = useState<HotelEntry["sharingType"]>("Sharing");
+
+  // Rate mode for single hotel mode
   const [makkahRateMode, setMakkahRateMode] = useState<RateMode>("sharing");
   const [madinahRateMode, setMadinahRateMode] = useState<RateMode>("sharing");
 
-  // Auto-select sharing type based on rate mode
-  // When mode is "sharing" → type is "Sharing", when mode is "room" → type is "Quad"
   const handleMakkahRateModeChange = (mode: RateMode) => {
     setMakkahRateMode(mode);
     if (mode === "sharing") {
@@ -183,13 +197,17 @@ export default function UmrahCalculator() {
       setMadinahSharingType("Quad");
     }
   };
-  
-  // NEW: Preset support
+
+  // Presets
   const [selectedPreset, setSelectedPreset] = useState<string>("");
   const [isPresetLocked, setIsPresetLocked] = useState(false);
   const [customPresets, setCustomPresets] = useState<PresetPackage[]>([]);
   const [showAddPresetDialog, setShowAddPresetDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
+
+  // Mobile Bottom Sheets
+  const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
+  const [mobilePresetSheetOpen, setMobilePresetSheetOpen] = useState(false);
 
   // Load custom presets from localStorage
   useEffect(() => {
@@ -203,12 +221,11 @@ export default function UmrahCalculator() {
     }
   }, []);
 
-  // Charges - DEFAULT visa fee is 0
+  // Charges
   const [visaFee, setVisaFee] = useState("0");
   const [visaCurrency, setVisaCurrency] = useState("SAR");
   const [ticketCost, setTicketCost] = useState("");
   const [ticketCurrency, setTicketCurrency] = useState("PKR");
-  // DEFAULT values: transport, ziyarat, food = "0"
   const [transport, setTransport] = useState("0");
   const [transportCurrency, setTransportCurrency] = useState("SAR");
   const [ziyarat, setZiyarat] = useState("0");
@@ -218,7 +235,7 @@ export default function UmrahCalculator() {
   const [serviceCharges, setServiceCharges] = useState("");
   const [serviceChargesCurrency, setServiceChargesCurrency] = useState("PKR");
 
-  // Passenger Types
+  // Passengers
   const [adultCount, setAdultCount] = useState("");
   const [childCount, setChildCount] = useState("");
   const [infantCount, setInfantCount] = useState("");
@@ -228,7 +245,7 @@ export default function UmrahCalculator() {
   const [profitPercent, setProfitPercent] = useState("");
   const [profitFixed, setProfitFixed] = useState("");
 
-  // Results
+  // Results & Draft
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [hasDraft, setHasDraft] = useState(false);
 
@@ -255,10 +272,9 @@ export default function UmrahCalculator() {
   // Multi-hotel handlers
   const addMakkahHotel = () => {
     if (!useMultiHotel) {
-      // First time enabling multi-hotel, migrate existing data
       const existingHotel: HotelEntry = {
         id: generateId(),
-        name: "Hotel Makkah",
+        name: "Hotel Makkah 1",
         sharingType: makkahSharingType,
         rateMode: makkahRateMode,
         rate: makkahRate,
@@ -267,21 +283,24 @@ export default function UmrahCalculator() {
       setMakkahHotels(makkahRate || makkahNights ? [existingHotel] : []);
       setUseMultiHotel(true);
     }
-    setMakkahHotels(prev => [...prev, {
-      id: generateId(),
-      name: "",
-      sharingType: "Sharing",
-      rateMode: "sharing",
-      rate: "",
-      nights: "",
-    }]);
+    setMakkahHotels(prev => [
+      ...prev,
+      {
+        id: generateId(),
+        name: "",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "",
+        nights: "",
+      },
+    ]);
   };
 
   const addMadinahHotel = () => {
     if (!useMultiHotel) {
       const existingHotel: HotelEntry = {
         id: generateId(),
-        name: "Hotel Madinah",
+        name: "Hotel Madinah 1",
         sharingType: madinahSharingType,
         rateMode: madinahRateMode,
         rate: madinahRate,
@@ -290,22 +309,25 @@ export default function UmrahCalculator() {
       setMadinahHotels(madinahRate || madinahNights ? [existingHotel] : []);
       setUseMultiHotel(true);
     }
-    setMadinahHotels(prev => [...prev, {
-      id: generateId(),
-      name: "",
-      sharingType: "Sharing",
-      rateMode: "sharing",
-      rate: "",
-      nights: "",
-    }]);
+    setMadinahHotels(prev => [
+      ...prev,
+      {
+        id: generateId(),
+        name: "",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "",
+        nights: "",
+      },
+    ]);
   };
 
   const updateMakkahHotel = (id: string, field: keyof HotelEntry, value: string) => {
-    setMakkahHotels(prev => prev.map(h => h.id === id ? { ...h, [field]: value } : h));
+    setMakkahHotels(prev => prev.map(h => (h.id === id ? { ...h, [field]: value } : h)));
   };
 
   const updateMadinahHotel = (id: string, field: keyof HotelEntry, value: string) => {
-    setMadinahHotels(prev => prev.map(h => h.id === id ? { ...h, [field]: value } : h));
+    setMadinahHotels(prev => prev.map(h => (h.id === id ? { ...h, [field]: value } : h)));
   };
 
   const removeMakkahHotel = (id: string) => {
@@ -328,10 +350,9 @@ export default function UmrahCalculator() {
     });
   };
 
-  // Get all presets (default + custom)
-  const allPresets = [...DEFAULT_PRESETS, ...customPresets];
+  // Presets list
+  const allPresets = useMemo(() => [...DEFAULT_PRESETS, ...customPresets], [customPresets]);
 
-  // Preset handler
   const applyPreset = (presetId: string) => {
     if (presetId === "none") {
       setSelectedPreset("none");
@@ -341,23 +362,22 @@ export default function UmrahCalculator() {
       setMadinahHotels([]);
       return;
     }
-    
+
     const preset = allPresets.find(p => p.id === presetId);
     if (!preset) return;
 
-    // Apply preset values
     setUseMultiHotel(true);
     setMakkahHotels(preset.makkahHotels.map(h => ({ ...h, id: generateId() })));
     setMadinahHotels(preset.madinahHotels.map(h => ({ ...h, id: generateId() })));
-    
-    if (preset.visaFee) setVisaFee(preset.visaFee);
-    if (preset.transport) setTransport(preset.transport);
-    if (preset.ziyarat) setZiyarat(preset.ziyarat);
-    if (preset.food) setFood(preset.food);
-    
+
+    if (preset.visaFee !== undefined) setVisaFee(preset.visaFee);
+    if (preset.transport !== undefined) setTransport(preset.transport);
+    if (preset.ziyarat !== undefined) setZiyarat(preset.ziyarat);
+    if (preset.food !== undefined) setFood(preset.food);
+
     setSelectedPreset(presetId);
     setIsPresetLocked(true);
-    toast.success(`${preset.name} applied! Ticket, Service Charges & Profit remain editable.`);
+    toast.success(`${preset.name} applied! Ticket, profit & passengers remain editable.`);
   };
 
   const unlockPreset = () => {
@@ -366,7 +386,6 @@ export default function UmrahCalculator() {
     toast.info("Preset unlocked - all fields are now editable");
   };
 
-  // Save current configuration as a new preset
   const saveAsPreset = () => {
     if (!newPresetName.trim()) {
       toast.error("Please enter a preset name");
@@ -376,7 +395,7 @@ export default function UmrahCalculator() {
     const newPreset: PresetPackage = {
       id: `custom_${Date.now()}`,
       name: newPresetName.trim(),
-      makkahHotels: useMultiHotel 
+      makkahHotels: useMultiHotel
         ? makkahHotels.map(h => ({ name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights }))
         : [{ name: "Makkah Hotel", sharingType: makkahSharingType, rateMode: makkahRateMode, rate: makkahRate, nights: makkahNights }],
       madinahHotels: useMultiHotel
@@ -407,39 +426,46 @@ export default function UmrahCalculator() {
     toast.success("Preset deleted");
   };
 
-  // ORIGINAL calculation logic - unchanged
-  // Calculate per-person cost for a hotel based on rate mode
+  // Calculation formulas (100% UNCHANGED)
   const getHotelCostPerPerson = (rate: number, nights: number, rateMode: RateMode, sharingType: string): number => {
     if (rateMode === "room") {
-      // Room Rate mode: divide by occupancy to get per-person cost
       const divisor = OCCUPANCY_DIVISORS[sharingType] || 1;
       return (rate / divisor) * nights;
     }
-    // Sharing mode: rate is already per person
     return rate * nights;
   };
 
-  const handleCalculate = () => {
+  const calculateUmrah = () => {
     let makkahNightsCount: number;
     let madinahNightsCount: number;
     let makkahCostPerPerson: number;
     let madinahCostPerPerson: number;
 
     if (useMultiHotel) {
-      // Multi-hotel calculation: sum all hotels with rate mode support
       makkahNightsCount = makkahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
       madinahNightsCount = madinahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
-      
-      makkahCostPerPerson = makkahHotels.reduce((sum, h) => 
-        sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency), 0);
-      madinahCostPerPerson = madinahHotels.reduce((sum, h) => 
-        sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency), 0);
+
+      makkahCostPerPerson = makkahHotels.reduce(
+        (sum, h) =>
+          sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency),
+        0
+      );
+      madinahCostPerPerson = madinahHotels.reduce(
+        (sum, h) =>
+          sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency),
+        0
+      );
     } else {
-      // Single hotel calculation with rate mode support
       makkahNightsCount = parseValue(makkahNights);
       madinahNightsCount = parseValue(madinahNights);
-      makkahCostPerPerson = convertToPKR(getHotelCostPerPerson(parseValue(makkahRate), makkahNightsCount, makkahRateMode, makkahSharingType), hotelCurrency);
-      madinahCostPerPerson = convertToPKR(getHotelCostPerPerson(parseValue(madinahRate), madinahNightsCount, madinahRateMode, madinahSharingType), hotelCurrency);
+      makkahCostPerPerson = convertToPKR(
+        getHotelCostPerPerson(parseValue(makkahRate), makkahNightsCount, makkahRateMode, makkahSharingType),
+        hotelCurrency
+      );
+      madinahCostPerPerson = convertToPKR(
+        getHotelCostPerPerson(parseValue(madinahRate), madinahNightsCount, madinahRateMode, madinahSharingType),
+        hotelCurrency
+      );
     }
 
     const totalNights = makkahNightsCount + madinahNightsCount;
@@ -466,9 +492,9 @@ export default function UmrahCalculator() {
     }
 
     const finalTotal = baseTotal + profitAmount;
-    const perPerson = costPerPerson + (profitAmount / passengerMultiplier);
+    const perPerson = costPerPerson + profitAmount / passengerMultiplier;
 
-    setResult({
+    return {
       nights: totalNights,
       makkahCost: makkahCostPerPerson * passengerMultiplier,
       madinahCost: madinahCostPerPerson * passengerMultiplier,
@@ -477,7 +503,51 @@ export default function UmrahCalculator() {
       finalTotal,
       perPerson,
       totalPassengers,
-    });
+    };
+  };
+
+  // Real-time calculation effect
+  useEffect(() => {
+    const res = calculateUmrah();
+    setResult(res);
+  }, [
+    sarToPkrRate,
+    makkahNights,
+    madinahNights,
+    makkahRate,
+    madinahRate,
+    makkahSharingType,
+    madinahSharingType,
+    makkahRateMode,
+    madinahRateMode,
+    hotelCurrency,
+    useMultiHotel,
+    makkahHotels,
+    madinahHotels,
+    visaFee,
+    visaCurrency,
+    ticketCost,
+    ticketCurrency,
+    transport,
+    transportCurrency,
+    ziyarat,
+    ziyaratCurrency,
+    food,
+    foodCurrency,
+    serviceCharges,
+    serviceChargesCurrency,
+    adultCount,
+    childCount,
+    infantCount,
+    profitType,
+    profitPercent,
+    profitFixed,
+  ]);
+
+  const handleCalculate = () => {
+    const res = calculateUmrah();
+    setResult(res);
+    toast.success("Package calculated successfully");
   };
 
   const handleReset = () => {
@@ -516,7 +586,6 @@ export default function UmrahCalculator() {
     setProfitType("percentage");
     setProfitPercent("");
     setProfitFixed("");
-    setResult(null);
     sessionStorage.removeItem("umrah_calculator_draft");
     setHasDraft(false);
     toast.success("Calculator reset successfully");
@@ -582,8 +651,8 @@ export default function UmrahCalculator() {
       setMakkahRate(data.makkahRate || "");
       setMadinahRate(data.madinahRate || "");
       setHotelCurrency(data.hotelCurrency || "SAR");
-      setMakkahSharingType(data.makkahSharingType || "Double");
-      setMadinahSharingType(data.madinahSharingType || "Double");
+      setMakkahSharingType(data.makkahSharingType || "Sharing");
+      setMadinahSharingType(data.madinahSharingType || "Sharing");
       setUseMultiHotel(data.useMultiHotel || false);
       setMakkahHotels(data.makkahHotels || []);
       setMadinahHotels(data.madinahHotels || []);
@@ -615,10 +684,130 @@ export default function UmrahCalculator() {
     }
   };
 
+  const handleCopyQuote = () => {
+    if (!result) return;
+    const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
+    const lines = [
+      `🕋 Umrah Package Quotation ${presetName ? `(${presetName})` : ""}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      arrivalDate && departureDate
+        ? `📅 Dates: ${format(arrivalDate, "dd MMM yyyy")} to ${format(departureDate, "dd MMM yyyy")} (${result.nights} Nights)`
+        : `📅 Duration: ${result.nights} Nights`,
+      `👥 Passengers: ${result.totalPassengers || 1} (${adultCount || 0} Adults, ${childCount || 0} Children${infantCount ? `, ${infantCount} Infants` : ""})`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `💰 Total Package: Rs ${formatCurrency(result.finalTotal)}`,
+      `👤 Cost Per Person: Rs ${formatCurrency(result.perPerson)}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `Includes: Hotels (Makkah & Madinah), Visa, Tickets, Transport, Ziyarat & Services.`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    toast.success("Quote summary copied to clipboard!");
+  };
+
+  const handleDownloadPdf = () => {
+    if (!result) {
+      toast.error("Please calculate first");
+      return;
+    }
+    const hotels = useMultiHotel
+      ? [
+          ...makkahHotels.map(h => ({ city: "Makkah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
+          ...madinahHotels.map(h => ({ city: "Madinah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
+        ]
+      : [
+          { city: "Makkah" as const, name: "Makkah Hotel", sharingType: makkahSharingType, rateMode: makkahRateMode, rate: makkahRate, nights: makkahNights, currency: hotelCurrency },
+          { city: "Madinah" as const, name: "Madinah Hotel", sharingType: madinahSharingType, rateMode: madinahRateMode, rate: madinahRate, nights: madinahNights, currency: hotelCurrency },
+        ];
+    const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
+    try {
+      exportUmrahSummaryPdf({
+        agencyName: agency?.name,
+        agencyPhone: (agency as any)?.phone || (agency as any)?.contact_number || agency?.contact_info,
+        agencyEmail: agency?.email || agency?.contact_email,
+        agencyAddress: (agency as any)?.address,
+        packageName: presetName,
+        arrivalDate: arrivalDate || null,
+        departureDate: departureDate || null,
+        sarToPkrRate,
+        hotels,
+        visaFee,
+        visaCurrency,
+        ticketCost,
+        ticketCurrency,
+        transport,
+        transportCurrency,
+        ziyarat,
+        ziyaratCurrency,
+        food,
+        foodCurrency,
+        serviceCharges,
+        serviceChargesCurrency,
+        adultCount,
+        childCount,
+        infantCount,
+        result,
+      });
+      toast.success("Summary PDF downloaded");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  const handleCreateQuotation = () => {
+    if (!result) {
+      toast.error("Calculate first to create a quotation");
+      return;
+    }
+    const perPerson = Math.round(result.perPerson);
+    navigate("/app/quotations", {
+      state: {
+        prefill: {
+          service_type: "umrah",
+          title: `Umrah Package — ${result.nights} Nights`,
+          description: `${result.totalPassengers} passenger(s). Per person: Rs ${perPerson.toLocaleString()}.`,
+          currency: "PKR",
+          items: [
+            {
+              description: `Umrah Package (per person) — ${result.nights} nights`,
+              qty: result.totalPassengers,
+              unit_price: perPerson,
+              amount: perPerson * result.totalPassengers,
+            },
+          ],
+          source: "umrah-calculator",
+        },
+      },
+    });
+  };
+
+  const handleCreateBooking = () => {
+    if (!result) {
+      toast.error("Calculate first to create a booking");
+      return;
+    }
+    const perPerson = Math.round(result.perPerson);
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          travel_type: "Umrah",
+          selling_price: result.finalTotal,
+          purchasing_price: result.baseTotal,
+          group_size: result.totalPassengers,
+          group_booking_type: result.totalPassengers > 1 ? "group" : "individual",
+          flight_date: arrivalDate || "",
+          return_date: departureDate || "",
+          notes: `Umrah Package calculation (${result.nights} nights, ${result.totalPassengers} passengers). Cost per person: Rs ${perPerson.toLocaleString()}.`,
+        },
+      },
+    });
+  };
+
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-PK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    return new Intl.NumberFormat("en-PK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
@@ -633,14 +822,6 @@ export default function UmrahCalculator() {
     return symbols[currency] || currency;
   };
 
-  // Calculate row totals for live preview with rate mode support
-  const getRowTotal = (amount: string, nights: string, currency: string): number => {
-    const amt = parseValue(amount);
-    const nts = parseValue(nights) || 1;
-    return convertToPKR(amt * (nights ? nts : 1), currency);
-  };
-
-  // Calculate hotel row total with rate mode support
   const getHotelRowTotal = (hotel: HotelEntry): number => {
     const rate = parseValue(hotel.rate);
     const nights = parseValue(hotel.nights);
@@ -651,7 +832,6 @@ export default function UmrahCalculator() {
     return convertToPKR(rate * nights, hotelCurrency);
   };
 
-  // Calculate single hotel row total with rate mode support  
   const getSingleHotelRowTotal = (rate: string, nights: string, rateMode: RateMode, sharingType: string): number => {
     const r = parseValue(rate);
     const n = parseValue(nights);
@@ -662,9 +842,20 @@ export default function UmrahCalculator() {
     return convertToPKR(r * n, hotelCurrency);
   };
 
-  const CurrencySelect = ({ value, onChange, className = "" }: { value: string; onChange: (v: string) => void; className?: string }) => (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className={cn("h-8 text-xs", className)}>
+  // Reusable currency select
+  const CurrencySelect = ({
+    value,
+    onChange,
+    className = "",
+    disabled = false,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    className?: string;
+    disabled?: boolean;
+  }) => (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className={cn("h-7 text-xs font-medium px-2 py-0", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -677,1070 +868,1813 @@ export default function UmrahCalculator() {
     </Select>
   );
 
-  const SharingTypeSelect = ({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) => (
+  const SharingTypeSelect = ({
+    value,
+    onChange,
+    disabled = false,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    disabled?: boolean;
+  }) => (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="h-7 text-xs w-20">
+      <SelectTrigger className="h-7 text-xs w-[76px] px-1.5 py-0 mx-auto">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {SHARING_TYPES.map(type => (
-          <SelectItem key={type} value={type}>{type}</SelectItem>
+          <SelectItem key={type} value={type} className="text-xs">
+            {type}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
 
-  // Rate Mode Selector Component
-  const RateModeSelect = ({ value, onChange, disabled = false }: { value: RateMode; onChange: (v: RateMode) => void; disabled?: boolean }) => (
-    <Select value={value} onValueChange={(v) => onChange(v as RateMode)} disabled={disabled}>
-      <SelectTrigger className="h-7 text-xs w-[70px]">
+  const RateModeSelect = ({
+    value,
+    onChange,
+    disabled = false,
+  }: {
+    value: RateMode;
+    onChange: (v: RateMode) => void;
+    disabled?: boolean;
+  }) => (
+    <Select value={value} onValueChange={v => onChange(v as RateMode)} disabled={disabled}>
+      <SelectTrigger className="h-7 text-xs w-[72px] px-1.5 py-0 mx-auto">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="sharing">
-          <span title="Rate is per person">Sharing</span>
+        <SelectItem value="sharing" className="text-xs">
+          Sharing
         </SelectItem>
-        <SelectItem value="room">
-          <span title="Room rate divided by occupancy">Room</span>
+        <SelectItem value="room" className="text-xs">
+          Room
         </SelectItem>
       </SelectContent>
     </Select>
   );
 
+  // Stepper helper
+  const stepCount = (current: string, delta: number, setter: (val: string) => void) => {
+    const curVal = parseInt(current) || 0;
+    const newVal = Math.max(0, curVal + delta);
+    setter(newVal === 0 ? "" : newVal.toString());
+  };
+
   const totalPassengers = parseValue(adultCount) + parseValue(childCount) + parseValue(infantCount);
 
-  // Calculate multi-hotel totals for display
+  // Totals for table
   const makkahMultiTotal = makkahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
   const madinahMultiTotal = madinahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
   const makkahMultiNights = makkahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
   const madinahMultiNights = madinahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
 
+  const makkahCostPerPerson = useMultiHotel
+    ? makkahMultiTotal
+    : makkahNights && makkahRate
+    ? getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType)
+    : 0;
+
+  const madinahCostPerPerson = useMultiHotel
+    ? madinahMultiTotal
+    : madinahNights && madinahRate
+    ? getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType)
+    : 0;
+
+  const ticketPerPerson = ticketCost ? convertToPKR(parseValue(ticketCost), ticketCurrency) : 0;
+  const visaPerPerson = visaFee ? convertToPKR(parseValue(visaFee), visaCurrency) : 0;
+  const transportPerPerson = transport ? convertToPKR(parseValue(transport), transportCurrency) : 0;
+  const ziyaratPerPerson = ziyarat ? convertToPKR(parseValue(ziyarat), ziyaratCurrency) : 0;
+  const foodPerPerson = food ? convertToPKR(parseValue(food), foodCurrency) : 0;
+
+  // Base table sum per person
+  const tableBaseCostPerPerson =
+    makkahCostPerPerson +
+    madinahCostPerPerson +
+    ticketPerPerson +
+    visaPerPerson +
+    transportPerPerson +
+    ziyaratPerPerson +
+    foodPerPerson;
+
   return (
-    <div className="p-4 md:p-6">
-      <div className="max-w-6xl mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Calculator className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">
+    <div className="w-full">
+      {/* =========================================================================
+          DESKTOP LAYOUT (>= 1024px)
+          Fills remaining viewport height with ZERO vertical scroll on 1366x768 & 1440x900
+         ========================================================================= */}
+      <div className="hidden lg:flex flex-col -m-2 md:-m-4 lg:-m-6 h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden p-3 lg:p-4 gap-2.5 bg-background">
+        {/* 1) TOP TOOLBAR (compact 2 rows, ~84px total) */}
+        <div className="shrink-0 space-y-2">
+          {/* Row 1: Title on left, Presets on right */}
+          <div className="flex items-center justify-between gap-3 h-8">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Calculator className="w-4 h-4 text-primary" />
+              </div>
+              <h1 className="text-lg font-bold tracking-tight text-foreground truncate">
                 Umrah Package Calculator
               </h1>
-              <p className="text-xs text-muted-foreground">
-                All costs per person • Auto-multiplied by passengers
-              </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {hasDraft && (
-              <Button onClick={handleLoadDraft} variant="secondary" size="sm" className="h-8 gap-1.5">
-                <Upload className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Load Draft</span>
-              </Button>
-            )}
-          </div>
-        </div>
 
-        {/* Preset Selector */}
-        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-lg bg-accent/30 border border-accent/50">
-          <div className="flex items-center gap-2 shrink-0">
-            <Package className="w-4 h-4 text-accent-foreground" />
-            <span className="text-sm font-medium">Quick Preset:</span>
-          </div>
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-[200px]">
-            <Select value={selectedPreset} onValueChange={applyPreset}>
-              <SelectTrigger className="h-8 flex-1 sm:w-[180px] text-xs">
-                <SelectValue placeholder="Select package..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None (Manual Entry)</SelectItem>
-                {allPresets.map(preset => (
-                  <SelectItem key={preset.id} value={preset.id}>
-                    {preset.name}
-                    {preset.id.startsWith('custom_') && ' ⭐'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              onClick={() => setShowAddPresetDialog(true)} 
-              variant="outline" 
-              size="sm" 
-              className="h-8 px-2 sm:px-2.5 gap-1.5 text-xs shrink-0"
-              title="Add Preset"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Add Preset</span>
-            </Button>
-          </div>
-          {isPresetLocked && (
-            <Button onClick={unlockPreset} variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">
-              🔓 Unlock to Edit
-            </Button>
-          )}
-          {selectedPreset && selectedPreset.startsWith('custom_') && (
-            <Button 
-              onClick={() => deleteCustomPreset(selectedPreset)} 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 text-xs text-destructive hover:text-destructive"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1" />
-              Delete
-            </Button>
-          )}
-          <span className="text-xs text-muted-foreground ml-auto hidden md:block">
-            Presets auto-fill hotels & services. Ticket/Profit remain editable.
-          </span>
-        </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {hasDraft && (
+                <Button
+                  onClick={handleLoadDraft}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Load Draft</span>
+                </Button>
+              )}
 
-        {/* Add Preset Dialog */}
-        <Dialog open={showAddPresetDialog} onOpenChange={setShowAddPresetDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Save as New Preset</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="preset-name">Preset Name</Label>
-                <Input
-                  id="preset-name"
-                  value={newPresetName}
-                  onChange={(e) => setNewPresetName(e.target.value)}
-                  placeholder="e.g., Package 5, Economy Special..."
-                  className="h-10"
-                />
+              {/* Quick Preset Selector with Tooltip */}
+              <div className="flex items-center gap-1.5 bg-card border border-border/80 rounded-lg px-2 py-0.5 shadow-2xs">
+                <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground hidden xl:inline">Quick Preset:</span>
+
+                <Select value={selectedPreset} onValueChange={applyPreset}>
+                  <SelectTrigger className="h-7 w-[160px] text-xs border-0 bg-transparent shadow-none px-1 focus:ring-0">
+                    <SelectValue placeholder="Select package..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Manual Entry)</SelectItem>
+                    {allPresets.map(preset => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.name}
+                        {preset.id.startsWith("custom_") && " ⭐"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                        aria-label="Preset information"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs max-w-xs">
+                      Presets auto-fill hotels & services. Ticket, profit & passengers remain editable.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {isPresetLocked && (
+                  <Button
+                    onClick={unlockPreset}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-1.5 text-[11px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 gap-1"
+                  >
+                    <Unlock className="w-3 h-3" />
+                    <span>Unlock</span>
+                  </Button>
+                )}
+
+                {selectedPreset && selectedPreset.startsWith("custom_") && (
+                  <Button
+                    onClick={() => deleteCustomPreset(selectedPreset)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                    title="Delete preset"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                This will save your current hotel configurations, visa, transport, ziyarat, and food values as a reusable preset. Each hotel's Type and rates will be preserved.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddPresetDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={saveAsPreset}>
-                Save Preset
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
-        {/* Exchange Rate & Dates - Inline Bar */}
-        <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-            <span className="text-sm font-medium text-primary">1 SAR =</span>
-            <Input
-              type="number"
-              value={sarToPkrRate}
-              onChange={(e) => setSarToPkrRate(e.target.value)}
-              className="w-16 sm:w-20 h-8 text-sm font-semibold"
-              placeholder="77.50"
-            />
-            <span className="text-sm font-medium">PKR</span>
+              <Button
+                onClick={() => setShowAddPresetDialog(true)}
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 gap-1.5 text-xs font-medium shadow-2xs"
+                title="Save current config as Preset"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-primary" />
+                <span>Add Preset</span>
+              </Button>
+            </div>
           </div>
-          <div className="h-6 w-px bg-border hidden md:block" />
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs w-[130px] justify-start">
-                  {arrivalDate ? format(arrivalDate, "MMM dd, yyyy") : "Arrival"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={arrivalDate} onSelect={setArrivalDate} initialFocus className="pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
-            <span className="text-muted-foreground">→</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs w-[130px] justify-start">
-                  {departureDate ? format(departureDate, "MMM dd, yyyy") : "Departure"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={departureDate} onSelect={setDepartureDate} initialFocus className="pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="h-6 w-px bg-border hidden md:block" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Hotel Currency:</span>
-            <CurrencySelect value={hotelCurrency} onChange={setHotelCurrency} className="w-20" />
+
+          {/* Row 2: Slim bar containing Exchange Rate, Dates, Hotel Currency */}
+          <div className="h-9 px-3 rounded-lg bg-card border border-border/80 flex items-center justify-between gap-3 text-xs shadow-2xs">
+            {/* Exchange rate */}
+            <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+              <span className="font-semibold text-foreground">1 SAR =</span>
+              <Input
+                type="number"
+                value={sarToPkrRate}
+                onChange={e => setSarToPkrRate(e.target.value)}
+                className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center"
+                placeholder="77.50"
+              />
+              <span className="font-medium text-muted-foreground">PKR</span>
+            </div>
+
+            <div className="h-4 w-px bg-border/80" />
+
+            {/* Dates: Arrival -> Departure */}
+            <div className="flex items-center gap-2 shrink-0">
+              <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-7 text-xs w-[115px] justify-start px-2 font-normal">
+                    {arrivalDate ? format(arrivalDate, "dd MMM yyyy") : "Arrival Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={arrivalDate}
+                    onSelect={setArrivalDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <ArrowRight className="w-3 h-3 text-muted-foreground" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-7 text-xs w-[115px] justify-start px-2 font-normal">
+                    {departureDate ? format(departureDate, "dd MMM yyyy") : "Departure Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={departureDate}
+                    onSelect={setDepartureDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="h-4 w-px bg-border/80" />
+
+            {/* Hotel Currency */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-muted-foreground font-medium">Hotel Currency:</span>
+              <CurrencySelect value={hotelCurrency} onChange={setHotelCurrency} className="w-[75px] h-7" />
+            </div>
           </div>
         </div>
 
-        {/* Main Cost Section - Table on desktop, Cards on mobile */}
-        {isMobile ? (
-          <MobileUmrahCostCards
-            useMultiHotel={useMultiHotel}
-            makkahHotels={makkahHotels}
-            madinahHotels={madinahHotels}
-            makkahNights={makkahNights}
-            madinahNights={madinahNights}
-            makkahRate={makkahRate}
-            madinahRate={madinahRate}
-            makkahSharingType={makkahSharingType}
-            madinahSharingType={madinahSharingType}
-            makkahRateMode={makkahRateMode}
-            madinahRateMode={madinahRateMode}
-            hotelCurrency={hotelCurrency}
-            isPresetLocked={isPresetLocked}
-            setMakkahNights={setMakkahNights}
-            setMadinahNights={setMadinahNights}
-            setMakkahRate={setMakkahRate}
-            setMadinahRate={setMadinahRate}
-            setMakkahSharingType={setMakkahSharingType}
-            setMadinahSharingType={setMadinahSharingType}
-            handleMakkahRateModeChange={handleMakkahRateModeChange}
-            handleMadinahRateModeChange={handleMadinahRateModeChange}
-            addMakkahHotel={addMakkahHotel}
-            addMadinahHotel={addMadinahHotel}
-            updateMakkahHotel={updateMakkahHotel}
-            updateMadinahHotel={updateMadinahHotel}
-            removeMakkahHotel={removeMakkahHotel}
-            removeMadinahHotel={removeMadinahHotel}
-            ticketCost={ticketCost}
-            setTicketCost={setTicketCost}
-            ticketCurrency={ticketCurrency}
-            setTicketCurrency={setTicketCurrency}
-            visaFee={visaFee}
-            setVisaFee={setVisaFee}
-            visaCurrency={visaCurrency}
-            setVisaCurrency={setVisaCurrency}
-            transport={transport}
-            setTransport={setTransport}
-            transportCurrency={transportCurrency}
-            setTransportCurrency={setTransportCurrency}
-            ziyarat={ziyarat}
-            setZiyarat={setZiyarat}
-            ziyaratCurrency={ziyaratCurrency}
-            setZiyaratCurrency={setZiyaratCurrency}
-            food={food}
-            setFood={setFood}
-            foodCurrency={foodCurrency}
-            setFoodCurrency={setFoodCurrency}
-            serviceCharges={serviceCharges}
-            setServiceCharges={setServiceCharges}
-            serviceChargesCurrency={serviceChargesCurrency}
-            setServiceChargesCurrency={setServiceChargesCurrency}
-            parseValue={parseValue}
-            convertToPKR={convertToPKR}
-            formatCurrency={formatCurrency}
-            getCurrencySymbol={getCurrencySymbol}
-            getSingleHotelRowTotal={getSingleHotelRowTotal}
-            getHotelRowTotal={getHotelRowTotal}
-            makkahMultiTotal={makkahMultiTotal}
-            madinahMultiTotal={madinahMultiTotal}
-            makkahMultiNights={makkahMultiNights}
-            madinahMultiNights={madinahMultiNights}
-          />
-        ) : (
-        <div className="rounded-lg border border-border overflow-hidden bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-[180px] font-semibold">Description</TableHead>
-                <TableHead className="w-[80px] text-center font-semibold">Type</TableHead>
-                <TableHead className="w-[70px] text-center font-semibold">Rate Mode</TableHead>
-                <TableHead className="w-[90px] text-center font-semibold">Nights</TableHead>
-                <TableHead className="w-[100px] text-center font-semibold">Rate/Amount</TableHead>
-                <TableHead className="w-[70px] text-center font-semibold">Currency</TableHead>
-                <TableHead className="w-[120px] text-right font-semibold">Per Person (PKR)</TableHead>
-                <TableHead className="w-[40px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Makkah Hotels Section */}
-              {!useMultiHotel ? (
-                <TableRow className="hover:bg-muted/30">
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>🕋</span>
-                      <span>Makkah Hotel</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <SharingTypeSelect 
-                      value={makkahSharingType} 
-                      onChange={(v) => setMakkahSharingType(v as HotelEntry['sharingType'])}
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <RateModeSelect
-                      value={makkahRateMode}
-                      onChange={handleMakkahRateModeChange}
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Input
-                      type="number"
-                      value={makkahNights}
-                      onChange={(e) => setMakkahNights(e.target.value)}
-                      className="h-8 w-16 mx-auto text-center text-sm"
-                      placeholder="0"
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Input
-                      type="number"
-                      value={makkahRate}
-                      onChange={(e) => setMakkahRate(e.target.value)}
-                      className="h-8 w-20 mx-auto text-center text-sm"
-                      placeholder="0.00"
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground">
-                    {getCurrencySymbol(hotelCurrency)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {makkahNights && makkahRate ? (
-                      <div className="flex flex-col items-end">
-                        <span>Rs {formatCurrency(getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType))}</span>
-                        {makkahRateMode === "room" && (
-                          <span className="text-[10px] text-muted-foreground">
-                            ÷{OCCUPANCY_DIVISORS[makkahSharingType]}
-                          </span>
-                        )}
-                      </div>
-                    ) : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      onClick={addMakkahHotel}
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      title="Add another Makkah hotel"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <>
-                  {makkahHotels.map((hotel, index) => (
-                    <TableRow key={hotel.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">
+        {/* 2) MAIN AREA = 2 COLUMNS (fills remaining height, overflow-hidden) */}
+        <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 overflow-hidden">
+          {/* LEFT COLUMN (~65% / col-span-8): "Costs" table */}
+          <div className="col-span-8 flex flex-col h-full rounded-xl border border-border/80 bg-card overflow-hidden shadow-xs">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted/70 backdrop-blur-xs z-10">
+                  <TableRow className="h-8 border-b border-border/80 hover:bg-transparent">
+                    <TableHead className="w-[180px] font-semibold text-xs text-foreground py-1">Description</TableHead>
+                    <TableHead className="w-[85px] text-center font-semibold text-xs text-foreground py-1">Type</TableHead>
+                    <TableHead className="w-[80px] text-center font-semibold text-xs text-foreground py-1">Rate Mode</TableHead>
+                    <TableHead className="w-[70px] text-center font-semibold text-xs text-foreground py-1">Nights</TableHead>
+                    <TableHead className="w-[95px] text-center font-semibold text-xs text-foreground py-1">Rate/Amount</TableHead>
+                    <TableHead className="w-[75px] text-center font-semibold text-xs text-foreground py-1">Currency</TableHead>
+                    <TableHead className="w-[125px] text-right font-semibold text-xs text-foreground py-1 pr-3">Per Person (PKR)</TableHead>
+                    <TableHead className="w-[36px] py-1"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* 1. Makkah Hotel */}
+                  {!useMultiHotel ? (
+                    <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                      <TableCell className="font-medium text-xs py-1.5">
                         <div className="flex items-center gap-2">
-                          <span>🕋</span>
-                          <Input
-                            type="text"
-                            value={hotel.name}
-                            onChange={(e) => updateMakkahHotel(hotel.id, 'name', e.target.value)}
-                            className="h-7 text-xs w-28"
-                            placeholder={`Makkah Hotel ${index + 1}`}
-                            disabled={isPresetLocked}
-                          />
+                          <span className="text-base">🕋</span>
+                          <span className="font-semibold">Makkah Hotel</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <SharingTypeSelect 
-                          value={hotel.sharingType} 
-                          onChange={(v) => updateMakkahHotel(hotel.id, 'sharingType', v)}
+                      <TableCell className="text-center py-1.5">
+                        <SharingTypeSelect
+                          value={makkahSharingType}
+                          onChange={v => setMakkahSharingType(v as HotelEntry["sharingType"])}
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <RateModeSelect
-                          value={hotel.rateMode}
-                          onChange={(v) => updateMakkahHotel(hotel.id, 'rateMode', v)}
+                          value={makkahRateMode}
+                          onChange={handleMakkahRateModeChange}
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <Input
                           type="number"
-                          value={hotel.nights}
-                          onChange={(e) => updateMakkahHotel(hotel.id, 'nights', e.target.value)}
-                          className="h-8 w-16 mx-auto text-center text-sm"
+                          value={makkahNights}
+                          onChange={e => setMakkahNights(e.target.value)}
+                          className="h-7 w-14 mx-auto text-center text-xs"
                           placeholder="0"
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <Input
                           type="number"
-                          value={hotel.rate}
-                          onChange={(e) => updateMakkahHotel(hotel.id, 'rate', e.target.value)}
-                          className="h-8 w-20 mx-auto text-center text-sm"
+                          value={makkahRate}
+                          onChange={e => setMakkahRate(e.target.value)}
+                          className="h-7 w-20 mx-auto text-center text-xs"
                           placeholder="0.00"
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">
-                        {getCurrencySymbol(hotelCurrency)}
+                      <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
+                        {hotelCurrency}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {hotel.nights && hotel.rate ? (
+                      <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                        {makkahCostPerPerson > 0 ? (
                           <div className="flex flex-col items-end">
-                            <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                            {hotel.rateMode === "room" && (
-                              <span className="text-[10px] text-muted-foreground">
-                                ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
+                            <span className="text-foreground">Rs {formatCurrency(makkahCostPerPerson)}</span>
+                            {makkahRateMode === "room" && (
+                              <span className="text-[10px] text-muted-foreground font-normal">
+                                ÷{OCCUPANCY_DIVISORS[makkahSharingType]}
                               </span>
                             )}
                           </div>
-                        ) : "-"}
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          onClick={() => removeMakkahHotel(hotel.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          disabled={isPresetLocked}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {makkahHotels.length > 0 && (
-                    <TableRow className="bg-muted/20">
-                      <TableCell colSpan={2} className="text-right text-xs font-medium text-muted-foreground">
-                        Makkah Total ({makkahHotels.length} hotel{makkahHotels.length > 1 ? 's' : ''})
-                      </TableCell>
-                      <TableCell className="text-center text-xs font-semibold">{makkahMultiNights} nights</TableCell>
-                      <TableCell colSpan={2}></TableCell>
-                      <TableCell className="text-right font-mono text-sm font-semibold text-primary">
-                        Rs {formatCurrency(makkahMultiTotal)}
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1.5 text-center">
                         <Button
                           onClick={addMakkahHotel}
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                           title="Add another Makkah hotel"
                           disabled={isPresetLocked}
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
                     </TableRow>
+                  ) : (
+                    <>
+                      {makkahHotels.map((hotel, index) => (
+                        <TableRow key={hotel.id} className="h-10 hover:bg-muted/20 border-b border-border/50">
+                          <TableCell className="font-medium text-xs py-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base shrink-0">🕋</span>
+                              <Input
+                                type="text"
+                                value={hotel.name}
+                                onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
+                                className="h-7 text-xs w-28 font-medium"
+                                placeholder={`Makkah ${index + 1}`}
+                                disabled={isPresetLocked}
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <SharingTypeSelect
+                              value={hotel.sharingType}
+                              onChange={v => updateMakkahHotel(hotel.id, "sharingType", v)}
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <RateModeSelect
+                              value={hotel.rateMode}
+                              onChange={v => updateMakkahHotel(hotel.id, "rateMode", v)}
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <Input
+                              type="number"
+                              value={hotel.nights}
+                              onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
+                              className="h-7 w-14 mx-auto text-center text-xs"
+                              placeholder="0"
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <Input
+                              type="number"
+                              value={hotel.rate}
+                              onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
+                              className="h-7 w-20 mx-auto text-center text-xs"
+                              placeholder="0.00"
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
+                            {hotelCurrency}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                            {getHotelRowTotal(hotel) > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span className="text-foreground">Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
+                                {hotel.rateMode === "room" && (
+                                  <span className="text-[10px] text-muted-foreground font-normal">
+                                    ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-center">
+                            <Button
+                              onClick={() => removeMakkahHotel(hotel.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                              disabled={isPresetLocked}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {makkahHotels.length > 0 && (
+                        <TableRow className="h-8 bg-muted/25 border-b border-border/50 text-[11px]">
+                          <TableCell colSpan={3} className="py-1 text-xs font-semibold text-muted-foreground pl-6">
+                            Makkah Total ({makkahHotels.length} hotel{makkahHotels.length > 1 ? "s" : ""})
+                          </TableCell>
+                          <TableCell className="text-center py-1 font-semibold text-foreground">
+                            {makkahMultiNights} nts
+                          </TableCell>
+                          <TableCell colSpan={2}></TableCell>
+                          <TableCell className="text-right font-mono text-xs font-bold text-primary py-1 pr-3">
+                            Rs {formatCurrency(makkahMultiTotal)}
+                          </TableCell>
+                          <TableCell className="py-1 text-center">
+                            <Button
+                              onClick={addMakkahHotel}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-primary"
+                              title="Add another Makkah hotel"
+                              disabled={isPresetLocked}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   )}
-                </>
-              )}
 
-              {/* Madinah Hotels Section */}
-              {!useMultiHotel ? (
-                <TableRow className="hover:bg-muted/30">
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>🕌</span>
-                      <span>Madinah Hotel</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <SharingTypeSelect 
-                      value={madinahSharingType} 
-                      onChange={(v) => setMadinahSharingType(v as HotelEntry['sharingType'])}
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <RateModeSelect
-                      value={madinahRateMode}
-                      onChange={handleMadinahRateModeChange}
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Input
-                      type="number"
-                      value={madinahNights}
-                      onChange={(e) => setMadinahNights(e.target.value)}
-                      className="h-8 w-16 mx-auto text-center text-sm"
-                      placeholder="0"
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Input
-                      type="number"
-                      value={madinahRate}
-                      onChange={(e) => setMadinahRate(e.target.value)}
-                      className="h-8 w-20 mx-auto text-center text-sm"
-                      placeholder="0.00"
-                      disabled={isPresetLocked}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground">
-                    {getCurrencySymbol(hotelCurrency)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {madinahNights && madinahRate ? (
-                      <div className="flex flex-col items-end">
-                        <span>Rs {formatCurrency(getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType))}</span>
-                        {madinahRateMode === "room" && (
-                          <span className="text-[10px] text-muted-foreground">
-                            ÷{OCCUPANCY_DIVISORS[madinahSharingType]}
-                          </span>
-                        )}
-                      </div>
-                    ) : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      onClick={addMadinahHotel}
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      title="Add another Madinah hotel"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <>
-                  {madinahHotels.map((hotel, index) => (
-                    <TableRow key={hotel.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">
+                  {/* 2. Madinah Hotel */}
+                  {!useMultiHotel ? (
+                    <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                      <TableCell className="font-medium text-xs py-1.5">
                         <div className="flex items-center gap-2">
-                          <span>🕌</span>
-                          <Input
-                            type="text"
-                            value={hotel.name}
-                            onChange={(e) => updateMadinahHotel(hotel.id, 'name', e.target.value)}
-                            className="h-7 text-xs w-28"
-                            placeholder={`Madinah Hotel ${index + 1}`}
-                            disabled={isPresetLocked}
-                          />
+                          <span className="text-base">🕌</span>
+                          <span className="font-semibold">Madinah Hotel</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <SharingTypeSelect 
-                          value={hotel.sharingType} 
-                          onChange={(v) => updateMadinahHotel(hotel.id, 'sharingType', v)}
+                      <TableCell className="text-center py-1.5">
+                        <SharingTypeSelect
+                          value={madinahSharingType}
+                          onChange={v => setMadinahSharingType(v as HotelEntry["sharingType"])}
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <RateModeSelect
-                          value={hotel.rateMode}
-                          onChange={(v) => updateMadinahHotel(hotel.id, 'rateMode', v)}
+                          value={madinahRateMode}
+                          onChange={handleMadinahRateModeChange}
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <Input
                           type="number"
-                          value={hotel.nights}
-                          onChange={(e) => updateMadinahHotel(hotel.id, 'nights', e.target.value)}
-                          className="h-8 w-16 mx-auto text-center text-sm"
+                          value={madinahNights}
+                          onChange={e => setMadinahNights(e.target.value)}
+                          className="h-7 w-14 mx-auto text-center text-xs"
                           placeholder="0"
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-1.5">
                         <Input
                           type="number"
-                          value={hotel.rate}
-                          onChange={(e) => updateMadinahHotel(hotel.id, 'rate', e.target.value)}
-                          className="h-8 w-20 mx-auto text-center text-sm"
+                          value={madinahRate}
+                          onChange={e => setMadinahRate(e.target.value)}
+                          className="h-7 w-20 mx-auto text-center text-xs"
                           placeholder="0.00"
                           disabled={isPresetLocked}
                         />
                       </TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">
-                        {getCurrencySymbol(hotelCurrency)}
+                      <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
+                        {hotelCurrency}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {hotel.nights && hotel.rate ? (
+                      <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                        {madinahCostPerPerson > 0 ? (
                           <div className="flex flex-col items-end">
-                            <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                            {hotel.rateMode === "room" && (
-                              <span className="text-[10px] text-muted-foreground">
-                                ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
+                            <span className="text-foreground">Rs {formatCurrency(madinahCostPerPerson)}</span>
+                            {madinahRateMode === "room" && (
+                              <span className="text-[10px] text-muted-foreground font-normal">
+                                ÷{OCCUPANCY_DIVISORS[madinahSharingType]}
                               </span>
                             )}
                           </div>
-                        ) : "-"}
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          onClick={() => removeMadinahHotel(hotel.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          disabled={isPresetLocked}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {madinahHotels.length > 0 && (
-                    <TableRow className="bg-muted/20">
-                      <TableCell colSpan={2} className="text-right text-xs font-medium text-muted-foreground">
-                        Madinah Total ({madinahHotels.length} hotel{madinahHotels.length > 1 ? 's' : ''})
-                      </TableCell>
-                      <TableCell className="text-center text-xs font-semibold">{madinahMultiNights} nights</TableCell>
-                      <TableCell colSpan={2}></TableCell>
-                      <TableCell className="text-right font-mono text-sm font-semibold text-primary">
-                        Rs {formatCurrency(madinahMultiTotal)}
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1.5 text-center">
                         <Button
                           onClick={addMadinahHotel}
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                           title="Add another Madinah hotel"
                           disabled={isPresetLocked}
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
                     </TableRow>
+                  ) : (
+                    <>
+                      {madinahHotels.map((hotel, index) => (
+                        <TableRow key={hotel.id} className="h-10 hover:bg-muted/20 border-b border-border/50">
+                          <TableCell className="font-medium text-xs py-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base shrink-0">🕌</span>
+                              <Input
+                                type="text"
+                                value={hotel.name}
+                                onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
+                                className="h-7 text-xs w-28 font-medium"
+                                placeholder={`Madinah ${index + 1}`}
+                                disabled={isPresetLocked}
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <SharingTypeSelect
+                              value={hotel.sharingType}
+                              onChange={v => updateMadinahHotel(hotel.id, "sharingType", v)}
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <RateModeSelect
+                              value={hotel.rateMode}
+                              onChange={v => updateMadinahHotel(hotel.id, "rateMode", v)}
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <Input
+                              type="number"
+                              value={hotel.nights}
+                              onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
+                              className="h-7 w-14 mx-auto text-center text-xs"
+                              placeholder="0"
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5">
+                            <Input
+                              type="number"
+                              value={hotel.rate}
+                              onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
+                              className="h-7 w-20 mx-auto text-center text-xs"
+                              placeholder="0.00"
+                              disabled={isPresetLocked}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
+                            {hotelCurrency}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                            {getHotelRowTotal(hotel) > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span className="text-foreground">Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
+                                {hotel.rateMode === "room" && (
+                                  <span className="text-[10px] text-muted-foreground font-normal">
+                                    ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-center">
+                            <Button
+                              onClick={() => removeMadinahHotel(hotel.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                              disabled={isPresetLocked}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {madinahHotels.length > 0 && (
+                        <TableRow className="h-8 bg-muted/25 border-b border-border/50 text-[11px]">
+                          <TableCell colSpan={3} className="py-1 text-xs font-semibold text-muted-foreground pl-6">
+                            Madinah Total ({madinahHotels.length} hotel{madinahHotels.length > 1 ? "s" : ""})
+                          </TableCell>
+                          <TableCell className="text-center py-1 font-semibold text-foreground">
+                            {madinahMultiNights} nts
+                          </TableCell>
+                          <TableCell colSpan={2}></TableCell>
+                          <TableCell className="text-right font-mono text-xs font-bold text-primary py-1 pr-3">
+                            Rs {formatCurrency(madinahMultiTotal)}
+                          </TableCell>
+                          <TableCell className="py-1 text-center">
+                            <Button
+                              onClick={addMadinahHotel}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-primary"
+                              title="Add another Madinah hotel"
+                              disabled={isPresetLocked}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   )}
-                </>
-              )}
 
-              {/* Airline Ticket */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>✈️</span>
-                    <span>Airline Ticket</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={ticketCost}
-                    onChange={(e) => setTicketCost(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {ticketCost ? `Rs ${formatCurrency(convertToPKR(parseValue(ticketCost), ticketCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
+                  {/* 3. Airline Ticket */}
+                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                    <TableCell className="font-medium text-xs py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">✈️</span>
+                        <span>Airline Ticket</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Input
+                        type="number"
+                        value={ticketCost}
+                        onChange={e => setTicketCost(e.target.value)}
+                        className="h-7 w-20 mx-auto text-center text-xs"
+                        placeholder="0.00"
+                      />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-[68px] mx-auto" />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                      {ticketPerPerson > 0 ? `Rs ${formatCurrency(ticketPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="py-1.5"></TableCell>
+                  </TableRow>
 
-              {/* Visa Fee */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>📋</span>
-                    <span>Visa Fee</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={visaFee}
-                    onChange={(e) => setVisaFee(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={visaCurrency} onChange={setVisaCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {visaFee ? `Rs ${formatCurrency(convertToPKR(parseValue(visaFee), visaCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
+                  {/* 4. Visa Fee */}
+                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                    <TableCell className="font-medium text-xs py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">📋</span>
+                        <span>Visa Fee</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Input
+                        type="number"
+                        value={visaFee}
+                        onChange={e => setVisaFee(e.target.value)}
+                        className="h-7 w-20 mx-auto text-center text-xs"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <CurrencySelect
+                        value={visaCurrency}
+                        onChange={setVisaCurrency}
+                        className="w-[68px] mx-auto"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                      {visaPerPerson > 0 ? `Rs ${formatCurrency(visaPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="py-1.5"></TableCell>
+                  </TableRow>
 
-              {/* Transport */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>🚌</span>
-                    <span>Transport</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={transport}
-                    onChange={(e) => setTransport(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {transport ? `Rs ${formatCurrency(convertToPKR(parseValue(transport), transportCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
+                  {/* 5. Transport */}
+                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                    <TableCell className="font-medium text-xs py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🚌</span>
+                        <span>Transport</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Input
+                        type="number"
+                        value={transport}
+                        onChange={e => setTransport(e.target.value)}
+                        className="h-7 w-20 mx-auto text-center text-xs"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <CurrencySelect
+                        value={transportCurrency}
+                        onChange={setTransportCurrency}
+                        className="w-[68px] mx-auto"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                      {transportPerPerson > 0 ? `Rs ${formatCurrency(transportPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="py-1.5"></TableCell>
+                  </TableRow>
 
-              {/* Ziyarat */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>🕌</span>
-                    <span>Ziyarat</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={ziyarat}
-                    onChange={(e) => setZiyarat(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={ziyaratCurrency} onChange={setZiyaratCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {ziyarat ? `Rs ${formatCurrency(convertToPKR(parseValue(ziyarat), ziyaratCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
+                  {/* 6. Ziyarat */}
+                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                    <TableCell className="font-medium text-xs py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🕌</span>
+                        <span>Ziyarat</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Input
+                        type="number"
+                        value={ziyarat}
+                        onChange={e => setZiyarat(e.target.value)}
+                        className="h-7 w-20 mx-auto text-center text-xs"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <CurrencySelect
+                        value={ziyaratCurrency}
+                        onChange={setZiyaratCurrency}
+                        className="w-[68px] mx-auto"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                      {ziyaratPerPerson > 0 ? `Rs ${formatCurrency(ziyaratPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="py-1.5"></TableCell>
+                  </TableRow>
 
-              {/* Food/Add-ons */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>🍽️</span>
-                    <span>Food/Add-ons</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={food}
-                    onChange={(e) => setFood(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={foodCurrency} onChange={setFoodCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {food ? `Rs ${formatCurrency(convertToPKR(parseValue(food), foodCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
-
-              {/* Service Charges */}
-              <TableRow className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>💼</span>
-                    <span>Service Charges</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center text-muted-foreground text-xs">—</TableCell>
-                <TableCell className="text-center">
-                  <Input
-                    type="number"
-                    value={serviceCharges}
-                    onChange={(e) => setServiceCharges(e.target.value)}
-                    className="h-8 w-24 mx-auto text-center text-sm"
-                    placeholder="0.00"
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-16 mx-auto" />
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {serviceCharges ? `Rs ${formatCurrency(convertToPKR(parseValue(serviceCharges), serviceChargesCurrency))}` : "-"}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-        )}
-
-        {/* Bottom Section: Passengers + Profit + Summary */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Passengers */}
-          <div className="p-4 rounded-lg border border-border bg-card">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <span>👥</span> Passengers
-            </h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Adults</label>
-                <Input
-                  type="number"
-                  value={adultCount}
-                  onChange={(e) => setAdultCount(e.target.value)}
-                  className="h-8 text-center text-sm"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Children</label>
-                <Input
-                  type="number"
-                  value={childCount}
-                  onChange={(e) => setChildCount(e.target.value)}
-                  className="h-8 text-center text-sm"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Infants</label>
-                <Input
-                  type="number"
-                  value={infantCount}
-                  onChange={(e) => setInfantCount(e.target.value)}
-                  className="h-8 text-center text-sm"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
+                  {/* 7. Food/Add-ons */}
+                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
+                    <TableCell className="font-medium text-xs py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🍽️</span>
+                        <span>Food / Add-ons</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Input
+                        type="number"
+                        value={food}
+                        onChange={e => setFood(e.target.value)}
+                        className="h-7 w-20 mx-auto text-center text-xs"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <CurrencySelect
+                        value={foodCurrency}
+                        onChange={setFoodCurrency}
+                        className="w-[68px] mx-auto"
+                        disabled={isPresetLocked}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
+                      {foodPerPerson > 0 ? `Rs ${formatCurrency(foodPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="py-1.5"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
-            {totalPassengers > 0 && (
-              <div className="mt-2 text-xs text-center text-muted-foreground bg-muted/50 py-1 rounded">
-                Total: <span className="font-semibold">{totalPassengers}</span> passengers
-              </div>
-            )}
-          </div>
 
-          {/* Profit Settings - Always editable */}
-          <div className="p-4 rounded-lg border border-border bg-card">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <span>💰</span> Profit Settings
-            </h3>
-            <div className="space-y-3">
-              <RadioGroup
-                value={profitType}
-                onValueChange={(v) => setProfitType(v as "percentage" | "fixed")}
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-1.5">
-                  <RadioGroupItem value="percentage" id="percentage" />
-                  <label htmlFor="percentage" className="text-xs cursor-pointer">Percentage</label>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <RadioGroupItem value="fixed" id="fixed" />
-                  <label htmlFor="fixed" className="text-xs cursor-pointer">Fixed Amount</label>
-                </div>
-              </RadioGroup>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Percentage (%)</label>
-                  <Input
-                    type="number"
-                    value={profitPercent}
-                    onChange={(e) => setProfitPercent(e.target.value)}
-                    className="h-8 text-sm"
-                    placeholder="0"
-                    disabled={profitType === "fixed"}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Fixed (PKR)</label>
-                  <Input
-                    type="number"
-                    value={profitFixed}
-                    onChange={(e) => setProfitFixed(e.target.value)}
-                    className="h-8 text-sm"
-                    placeholder="0.00"
-                    disabled={profitType === "percentage"}
-                  />
-                </div>
+            {/* Compact "Total per person" row at the bottom of the table */}
+            <div className="h-9 px-4 bg-muted/60 border-t border-border flex items-center justify-between text-xs shrink-0 font-semibold">
+              <span className="text-muted-foreground">Total Per Person (Base Costs)</span>
+              <div className="font-mono text-sm font-bold text-primary">
+                Rs {formatCurrency(tableBaseCostPerPerson)}
               </div>
             </div>
           </div>
 
-          {/* Results Summary */}
-          <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-primary">
-              <Calculator className="w-4 h-4" /> Summary
-            </h3>
-            {result ? (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Nights</span>
-                  <span className="font-medium">{result.nights}</span>
+          {/* RIGHT COLUMN (~35% / col-span-4): Sticky Card Stack (no scrolling) */}
+          <div className="col-span-4 flex flex-col h-full gap-2.5 justify-between overflow-hidden">
+            {/* Card 1: Passengers & Service Charges / Profit */}
+            <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs space-y-2.5 shrink-0">
+              {/* Passengers Steppers */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span>👥</span> Passengers
+                  </span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    Total: <strong className="text-foreground">{totalPassengers || 1}</strong> pax
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Base Total</span>
-                  <span className="font-mono">Rs {formatCurrency(result.baseTotal)}</span>
-                </div>
-                {result.profitAmount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>+ Profit</span>
-                    <span className="font-mono">Rs {formatCurrency(result.profitAmount)}</span>
-                  </div>
-                )}
-                <div className="border-t border-border pt-2 mt-2">
-                  <div className="flex justify-between font-semibold">
-                    <span>Final Total</span>
-                    <span className="font-mono text-primary">Rs {formatCurrency(result.finalTotal)}</span>
-                  </div>
-                  {result.totalPassengers > 0 && (
-                    <div className="flex justify-between mt-1.5 p-2 bg-primary/10 rounded">
-                      <span className="text-xs">Per Person ({result.totalPassengers})</span>
-                      <span className="font-mono font-bold text-primary">Rs {formatCurrency(result.perPerson)}</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Adults */}
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Adults</label>
+                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
+                      <button
+                        type="button"
+                        onClick={() => stepCount(adultCount, -1, setAdultCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={adultCount}
+                        onChange={e => setAdultCount(e.target.value)}
+                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => stepCount(adultCount, 1, setAdultCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
                     </div>
+                  </div>
+
+                  {/* Children */}
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Children</label>
+                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
+                      <button
+                        type="button"
+                        onClick={() => stepCount(childCount, -1, setChildCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={childCount}
+                        onChange={e => setChildCount(e.target.value)}
+                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => stepCount(childCount, 1, setChildCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Infants */}
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Infants</label>
+                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
+                      <button
+                        type="button"
+                        onClick={() => stepCount(infantCount, -1, setInfantCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={infantCount}
+                        onChange={e => setInfantCount(e.target.value)}
+                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => stepCount(infantCount, 1, setInfantCount)}
+                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Charges & Profit (Compact Inputs) */}
+              <div className="pt-2 border-t border-border/60 grid grid-cols-2 gap-2">
+                {/* Service Charges */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium text-muted-foreground block">Service Charges</label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      value={serviceCharges}
+                      onChange={e => setServiceCharges(e.target.value)}
+                      className="h-7 text-xs font-medium text-center"
+                      placeholder="0.00"
+                    />
+                    <CurrencySelect
+                      value={serviceChargesCurrency}
+                      onChange={setServiceChargesCurrency}
+                      className="w-[60px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Profit */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-medium text-muted-foreground">Profit / Markup</label>
+                    <div className="inline-flex rounded-md p-0.5 bg-muted/60 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setProfitType("percentage")}
+                        className={cn(
+                          "px-1.5 py-0.2 rounded font-medium transition-all",
+                          profitType === "percentage" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
+                        )}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfitType("fixed")}
+                        className={cn(
+                          "px-1.5 py-0.2 rounded font-medium transition-all",
+                          profitType === "fixed" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
+                        )}
+                      >
+                        PKR
+                      </button>
+                    </div>
+                  </div>
+
+                  {profitType === "percentage" ? (
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={profitPercent}
+                        onChange={e => setProfitPercent(e.target.value)}
+                        className="h-7 text-xs font-medium pr-5 text-center"
+                        placeholder="0"
+                      />
+                      <span className="absolute right-2 top-1.5 text-xs text-muted-foreground pointer-events-none">%</span>
+                    </div>
+                  ) : (
+                    <Input
+                      type="number"
+                      value={profitFixed}
+                      onChange={e => setProfitFixed(e.target.value)}
+                      className="h-7 text-xs font-medium text-center"
+                      placeholder="Fixed PKR"
+                    />
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground text-xs">
-                Click Calculate to see results
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Action Buttons - Inline */}
-        <div className="flex flex-wrap justify-center gap-2 pt-2 pb-4">
-          <Button onClick={handleCalculate} size="sm" className="gap-1.5 min-w-[120px]">
-            <Calculator className="w-4 h-4" />
-            Calculate
-          </Button>
-          <Button
-            onClick={() => {
-              if (!result) {
-                toast.error("Please click Calculate first");
-                return;
-              }
-              const hotels = useMultiHotel
-                ? [
-                    ...makkahHotels.map(h => ({ city: "Makkah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
-                    ...madinahHotels.map(h => ({ city: "Madinah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
-                  ]
-                : [
-                    { city: "Makkah" as const, name: "Makkah Hotel", sharingType: makkahSharingType, rateMode: makkahRateMode, rate: makkahRate, nights: makkahNights, currency: hotelCurrency },
-                    { city: "Madinah" as const, name: "Madinah Hotel", sharingType: madinahSharingType, rateMode: madinahRateMode, rate: madinahRate, nights: madinahNights, currency: hotelCurrency },
-                  ];
-              const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
-              try {
-                exportUmrahSummaryPdf({
-                  agencyName: agency?.name,
-                  agencyPhone: (agency as any)?.phone || (agency as any)?.contact_number || agency?.contact_info,
-                  agencyEmail: agency?.email || agency?.contact_email,
-                  agencyAddress: (agency as any)?.address,
-                  packageName: presetName,
-                  arrivalDate: arrivalDate || null,
-                  departureDate: departureDate || null,
-                  sarToPkrRate,
-                  hotels,
-                  visaFee, visaCurrency,
-                  ticketCost, ticketCurrency,
-                  transport, transportCurrency,
-                  ziyarat, ziyaratCurrency,
-                  food, foodCurrency,
-                  serviceCharges, serviceChargesCurrency,
-                  adultCount, childCount, infantCount,
-                  result,
-                });
-                toast.success("Summary PDF downloaded");
-              } catch (e) {
-                console.error(e);
-                toast.error("Failed to generate PDF");
-              }
-            }}
-            variant="default"
-            size="sm"
-            className="gap-1.5 min-w-[150px] bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            <FileDown className="w-4 h-4" />
-            Download Summary
-          </Button>
-          <Button onClick={handleSaveDraft} variant="outline" size="sm" className="gap-1.5 min-w-[110px]">
-            <Save className="w-4 h-4" />
-            Save Draft
-          </Button>
-          <Button
-            onClick={() => {
-              if (!result) { toast.error("Calculate first to create a quotation"); return; }
-              const perPerson = Math.round(result.perPerson);
-              navigate("/app/quotations", {
-                state: {
-                  prefill: {
-                    service_type: "umrah",
-                    title: `Umrah Package — ${result.nights} Nights`,
-                    description: `${result.totalPassengers} passenger(s). Per person: Rs ${perPerson.toLocaleString()}.`,
-                    currency: "PKR",
-                    items: [
-                      {
-                        description: `Umrah Package (per person) — ${result.nights} nights`,
-                        qty: result.totalPassengers,
-                        unit_price: perPerson,
-                        amount: perPerson * result.totalPassengers,
-                      },
-                    ],
-                    source: "umrah-calculator",
-                  },
-                },
-              });
-            }}
-            size="sm"
-            className="gap-1.5 min-w-[160px] bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <FileText className="w-4 h-4" />
-            Create Quotation
-          </Button>
-          <Button
-            onClick={() => {
-              if (!result) { toast.error("Calculate first to create a booking"); return; }
-              const perPerson = Math.round(result.perPerson);
-              navigate("/app/bookings?tab=clients", {
-                state: {
-                  openAddClient: true,
-                  prefill: {
-                    travel_type: "Umrah",
-                    selling_price: result.finalTotal,
-                    purchasing_price: result.baseTotal,
-                    group_size: result.totalPassengers,
-                    group_booking_type: result.totalPassengers > 1 ? "group" : "individual",
-                    flight_date: arrivalDate || "",
-                    return_date: departureDate || "",
-                    notes: `Umrah Package calculation (${result.nights} nights, ${result.totalPassengers} passengers). Cost per person: Rs ${perPerson.toLocaleString()}.`,
-                  },
-                },
-              });
-            }}
-            size="sm"
-            className="gap-1.5 min-w-[150px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            Create Booking
-          </Button>
-          <Button onClick={handleReset} variant="outline" size="sm" className="gap-1.5 min-w-[100px]">
-            <RotateCcw className="w-4 h-4" />
-            Reset
-          </Button>
+            {/* Card 2: SUMMARY card (highlighted, dark/gradient card, no scrolling) */}
+            <div className="rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-white dark:from-slate-950 dark:via-card dark:to-slate-900 shadow-md p-3.5 flex flex-col justify-between flex-1 min-h-0">
+              {/* Top part: Key breakdown */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Package Summary
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">
+                    {result?.nights || 0} Nights
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/10">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Per Person Cost</span>
+                    <span className="font-mono font-bold text-white text-sm">
+                      Rs {formatCurrency(result?.perPerson || 0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Total Passengers</span>
+                    <span className="font-semibold text-white">
+                      {result?.totalPassengers || 1} passenger{result?.totalPassengers !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Base Package Total</span>
+                    <span className="font-mono text-slate-200">
+                      Rs {formatCurrency(result?.baseTotal || 0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Profit / Markup</span>
+                    <span className="font-mono text-emerald-300">
+                      + Rs {formatCurrency(result?.profitAmount || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Center part: FINAL TOTAL in large bold text */}
+              <div className="my-2 p-2.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider block">
+                    Final Total (PKR)
+                  </span>
+                  <span className="text-2xl xl:text-3xl font-black text-emerald-400 font-mono tracking-tight">
+                    Rs {formatCurrency(result?.finalTotal || 0)}
+                  </span>
+                </div>
+                <Button
+                  onClick={handleCalculate}
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 px-2.5 text-xs gap-1 font-semibold bg-emerald-500 hover:bg-emerald-600 text-slate-950"
+                  title="Recalculate package"
+                >
+                  <Calculator className="w-3.5 h-3.5" />
+                  <span>Calc</span>
+                </Button>
+              </div>
+
+              {/* Bottom part: Action buttons */}
+              <div className="space-y-1.5 pt-1">
+                {/* Primary actions */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button
+                    onClick={handleCreateQuotation}
+                    size="sm"
+                    className="h-8 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Create Quotation</span>
+                  </Button>
+                  <Button
+                    onClick={handleCreateBooking}
+                    size="sm"
+                    className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Create Booking</span>
+                  </Button>
+                </div>
+
+                {/* Secondary utilities */}
+                <div className="grid grid-cols-4 gap-1 pt-0.5">
+                  <Button
+                    onClick={handleDownloadPdf}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
+                    title="Download Summary PDF"
+                  >
+                    <FileDown className="w-3 h-3" />
+                    <span>PDF</span>
+                  </Button>
+                  <Button
+                    onClick={handleSaveDraft}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
+                    title="Save Draft"
+                  >
+                    <Save className="w-3 h-3" />
+                    <span>Save</span>
+                  </Button>
+                  <Button
+                    onClick={handleCopyQuote}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
+                    title="Copy Quote text"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </Button>
+                  <Button
+                    onClick={handleReset}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
+                    title="Reset Calculator"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* =========================================================================
+          MOBILE LAYOUT (< 1024px)
+          Thumb-friendly, min touch target 44px, sticky bottom bar, accordion items
+         ========================================================================= */}
+      <div className="lg:hidden flex flex-col space-y-3 pb-44 px-1">
+        {/* Mobile Top Bar */}
+        <div className="flex items-center justify-between gap-2 pt-1 pb-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Calculator className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-foreground leading-tight">Umrah Calculator</h1>
+              <p className="text-[11px] text-muted-foreground">Instant Per Person Package</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {hasDraft && (
+              <Button
+                onClick={handleLoadDraft}
+                variant="outline"
+                size="sm"
+                className="h-9 px-2.5 text-xs min-h-[44px]"
+                title="Load Draft"
+              >
+                <Upload className="w-3.5 h-3.5" />
+              </Button>
+            )}
+
+            <Button
+              onClick={() => setMobilePresetSheetOpen(true)}
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 text-xs gap-1.5 min-h-[44px] font-medium"
+            >
+              <Package className="w-3.5 h-3.5 text-primary" />
+              <span>Presets</span>
+            </Button>
+
+            <Button
+              onClick={handleReset}
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0 text-muted-foreground min-h-[44px]"
+              title="Reset"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* 2-Column Compact Grid: Exchange Rate, Currency, Dates */}
+        <div className="rounded-xl border border-border bg-card p-3 shadow-xs space-y-2.5">
+          {/* Row 1: Rate + Currency */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">1 SAR (in PKR)</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={sarToPkrRate}
+                onChange={e => setSarToPkrRate(e.target.value)}
+                className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                placeholder="77.50"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Hotel Currency</label>
+              <Select value={hotelCurrency} onValueChange={setHotelCurrency}>
+                <SelectTrigger className="h-11 min-h-[44px] text-xs font-semibold bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SAR">SAR (Saudi Riyal)</SelectItem>
+                  <SelectItem value="PKR">PKR (Pak Rupee)</SelectItem>
+                  <SelectItem value="USD">USD (US Dollar)</SelectItem>
+                  <SelectItem value="EUR">EUR (Euro)</SelectItem>
+                  <SelectItem value="AED">AED (Dirham)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Row 2: Arrival + Departure */}
+          <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-border/50">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Arrival Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 min-h-[44px] w-full text-xs font-medium justify-between px-2.5 bg-background">
+                    <span>{arrivalDate ? format(arrivalDate, "dd MMM yyyy") : "Arrival"}</span>
+                    <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={arrivalDate}
+                    onSelect={setArrivalDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Departure Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 min-h-[44px] w-full text-xs font-medium justify-between px-2.5 bg-background">
+                    <span>{departureDate ? format(departureDate, "dd MMM yyyy") : "Departure"}</span>
+                    <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={departureDate}
+                    onSelect={setDepartureDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        </div>
+
+        {/* Cost items accordion list */}
+        <MobileUmrahCostCards
+          useMultiHotel={useMultiHotel}
+          makkahHotels={makkahHotels}
+          madinahHotels={madinahHotels}
+          makkahNights={makkahNights}
+          madinahNights={madinahNights}
+          makkahRate={makkahRate}
+          madinahRate={madinahRate}
+          makkahSharingType={makkahSharingType}
+          madinahSharingType={madinahSharingType}
+          makkahRateMode={makkahRateMode}
+          madinahRateMode={madinahRateMode}
+          hotelCurrency={hotelCurrency}
+          isPresetLocked={isPresetLocked}
+          setMakkahNights={setMakkahNights}
+          setMadinahNights={setMadinahNights}
+          setMakkahRate={setMakkahRate}
+          setMadinahRate={setMadinahRate}
+          setMakkahSharingType={setMakkahSharingType}
+          setMadinahSharingType={setMadinahSharingType}
+          handleMakkahRateModeChange={handleMakkahRateModeChange}
+          handleMadinahRateModeChange={handleMadinahRateModeChange}
+          addMakkahHotel={addMakkahHotel}
+          addMadinahHotel={addMadinahHotel}
+          updateMakkahHotel={updateMakkahHotel}
+          updateMadinahHotel={updateMadinahHotel}
+          removeMakkahHotel={removeMakkahHotel}
+          removeMadinahHotel={removeMadinahHotel}
+          ticketCost={ticketCost}
+          setTicketCost={setTicketCost}
+          ticketCurrency={ticketCurrency}
+          setTicketCurrency={setTicketCurrency}
+          visaFee={visaFee}
+          setVisaFee={setVisaFee}
+          visaCurrency={visaCurrency}
+          setVisaCurrency={setVisaCurrency}
+          transport={transport}
+          setTransport={setTransport}
+          transportCurrency={transportCurrency}
+          setTransportCurrency={setTransportCurrency}
+          ziyarat={ziyarat}
+          setZiyarat={setZiyarat}
+          ziyaratCurrency={ziyaratCurrency}
+          setZiyaratCurrency={setZiyaratCurrency}
+          food={food}
+          setFood={setFood}
+          foodCurrency={foodCurrency}
+          setFoodCurrency={setFoodCurrency}
+          parseValue={parseValue}
+          convertToPKR={convertToPKR}
+          formatCurrency={formatCurrency}
+          getCurrencySymbol={getCurrencySymbol}
+          getSingleHotelRowTotal={getSingleHotelRowTotal}
+          getHotelRowTotal={getHotelRowTotal}
+          makkahMultiTotal={makkahMultiTotal}
+          madinahMultiTotal={madinahMultiTotal}
+          makkahMultiNights={makkahMultiNights}
+          madinahMultiNights={madinahMultiNights}
+        />
+
+        {/* Passengers & Service Charges & Profit in one compact card */}
+        <div className="rounded-xl border border-border bg-card p-3.5 shadow-xs space-y-3.5">
+          {/* Passengers */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wide">
+                <span>👥</span> Passengers
+              </span>
+              <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                {totalPassengers || 1} Total Pax
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Adults */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Adults</label>
+                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(adultCount, -1, setAdultCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={adultCount}
+                    onChange={e => setAdultCount(e.target.value)}
+                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(adultCount, 1, setAdultCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Children */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Children</label>
+                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(childCount, -1, setChildCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={childCount}
+                    onChange={e => setChildCount(e.target.value)}
+                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(childCount, 1, setChildCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Infants */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Infants</label>
+                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(infantCount, -1, setInfantCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={infantCount}
+                    onChange={e => setInfantCount(e.target.value)}
+                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(infantCount, 1, setInfantCount)}
+                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Service Charges & Profit */}
+          <div className="pt-3 border-t border-border/60 space-y-3">
+            {/* Service Charges */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Service Charges (Per Person)</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={serviceCharges}
+                    onChange={e => setServiceCharges(e.target.value)}
+                    className="h-11 min-h-[44px] text-center font-bold bg-background"
+                    placeholder="0.00"
+                  />
+                </div>
+                <Select value={serviceChargesCurrency} onValueChange={setServiceChargesCurrency}>
+                  <SelectTrigger className="h-11 min-h-[44px] text-xs font-semibold bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PKR">PKR</SelectItem>
+                    <SelectItem value="SAR">SAR</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="AED">AED</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Profit Settings */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase">Profit / Markup</label>
+                <div className="inline-flex rounded-lg p-0.5 bg-muted border border-border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setProfitType("percentage")}
+                    className={cn(
+                      "px-3 py-1 rounded-md font-semibold transition-all",
+                      profitType === "percentage" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
+                    )}
+                  >
+                    % Percent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProfitType("fixed")}
+                    className={cn(
+                      "px-3 py-1 rounded-md font-semibold transition-all",
+                      profitType === "fixed" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
+                    )}
+                  >
+                    Fixed PKR
+                  </button>
+                </div>
+              </div>
+
+              {profitType === "percentage" ? (
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={profitPercent}
+                    onChange={e => setProfitPercent(e.target.value)}
+                    className="h-11 min-h-[44px] text-center font-bold text-base bg-background pr-8"
+                    placeholder="e.g. 10"
+                  />
+                  <span className="absolute right-3.5 top-3 text-sm font-bold text-muted-foreground pointer-events-none">%</span>
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={profitFixed}
+                  onChange={e => setProfitFixed(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                  placeholder="e.g. 15000"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* STICKY BOTTOM BAR (always visible on mobile) */}
+        <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 bg-slate-900 text-white dark:bg-card dark:text-foreground border-t border-border shadow-2xl px-4 py-2.5 flex items-center justify-between safe-area-bottom">
+          <div className="min-w-0">
+            <span className="text-[10px] font-medium text-slate-300 block">
+              Total ({totalPassengers || 1} pax)
+            </span>
+            <div className="text-lg font-black text-emerald-400 font-mono tracking-tight leading-tight truncate">
+              Rs {formatCurrency(result?.finalTotal || 0)}
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">
+              Rs {formatCurrency(result?.perPerson || 0)} / person
+            </span>
+          </div>
+
+          <Button
+            onClick={() => setMobileSummaryOpen(true)}
+            size="sm"
+            className="h-11 min-h-[44px] px-4 font-bold bg-emerald-500 hover:bg-emerald-600 text-slate-950 gap-1.5 shadow-md active:scale-95"
+          >
+            <span>Details</span>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Mobile Summary Bottom Sheet */}
+        <Sheet open={mobileSummaryOpen} onOpenChange={setMobileSummaryOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-4 safe-area-bottom">
+            <SheetHeader className="text-left pb-3 border-b">
+              <SheetTitle className="text-base font-bold flex items-center justify-between">
+                <span>Umrah Package Breakdown</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {result?.nights || 0} Nights
+                </span>
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="space-y-3 py-3 text-xs">
+              <div className="flex justify-between py-1 border-b border-border/50">
+                <span className="text-muted-foreground">Makkah Hotel</span>
+                <span className="font-mono font-medium">Rs {formatCurrency(result?.makkahCost || 0)}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/50">
+                <span className="text-muted-foreground">Madinah Hotel</span>
+                <span className="font-mono font-medium">Rs {formatCurrency(result?.madinahCost || 0)}</span>
+              </div>
+              {ticketCost && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Airline Ticket</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(ticketPerPerson * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              {visaFee && visaFee !== "0" && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Visa Fee</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(visaPerPerson * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              {transport && transport !== "0" && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Transport</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(transportPerPerson * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              {ziyarat && ziyarat !== "0" && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Ziyarat</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(ziyaratPerPerson * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              {food && food !== "0" && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Food</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(foodPerPerson * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              {serviceCharges && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Service Charges</span>
+                  <span className="font-mono font-medium">
+                    Rs {formatCurrency(convertToPKR(parseValue(serviceCharges), serviceChargesCurrency) * (result?.totalPassengers || 1))}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between py-1 border-b border-border/50 text-muted-foreground">
+                <span>Base Total</span>
+                <span className="font-mono">Rs {formatCurrency(result?.baseTotal || 0)}</span>
+              </div>
+              {result && result.profitAmount > 0 && (
+                <div className="flex justify-between py-1 border-b border-border/50 text-emerald-600 font-medium">
+                  <span>+ Profit / Markup</span>
+                  <span className="font-mono">+ Rs {formatCurrency(result.profitAmount)}</span>
+                </div>
+              )}
+
+              {/* Final Totals Box */}
+              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-semibold text-foreground">Final Total ({totalPassengers || 1} pax)</span>
+                  <span className="text-lg font-black font-mono text-primary">
+                    Rs {formatCurrency(result?.finalTotal || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Per Person</span>
+                  <span className="font-bold font-mono text-primary">
+                    Rs {formatCurrency(result?.perPerson || 0)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <Button
+                  onClick={() => {
+                    setMobileSummaryOpen(false);
+                    handleCreateQuotation();
+                  }}
+                  className="w-full h-11 min-h-[44px] text-xs font-semibold gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Create Quotation</span>
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setMobileSummaryOpen(false);
+                    handleCreateBooking();
+                  }}
+                  className="w-full h-11 min-h-[44px] text-xs font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Create Booking</span>
+                </Button>
+
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <Button
+                    onClick={handleDownloadPdf}
+                    variant="outline"
+                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    <span>PDF</span>
+                  </Button>
+                  <Button
+                    onClick={handleCopyQuote}
+                    variant="outline"
+                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </Button>
+                  <Button
+                    onClick={handleSaveDraft}
+                    variant="outline"
+                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Mobile Preset Selector Bottom Sheet */}
+        <Sheet open={mobilePresetSheetOpen} onOpenChange={setMobilePresetSheetOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-4 safe-area-bottom">
+            <SheetHeader className="text-left pb-3 border-b">
+              <SheetTitle className="text-base font-bold flex items-center justify-between">
+                <span>Select Package Preset</span>
+                <Button
+                  onClick={() => {
+                    setMobilePresetSheetOpen(false);
+                    setShowAddPresetDialog(true);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-primary" />
+                  <span>New</span>
+                </Button>
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="space-y-2 py-3">
+              <button
+                type="button"
+                onClick={() => {
+                  applyPreset("none");
+                  setMobilePresetSheetOpen(false);
+                }}
+                className={cn(
+                  "w-full min-h-[44px] p-3 rounded-xl border text-left flex items-center justify-between transition-colors",
+                  selectedPreset === "none" || !selectedPreset ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                )}
+              >
+                <div>
+                  <p className="font-semibold text-xs">Manual Entry (No Preset)</p>
+                  <p className="text-[11px] text-muted-foreground">Custom hotel rates & services</p>
+                </div>
+              </button>
+
+              {allPresets.map(preset => (
+                <div
+                  key={preset.id}
+                  className={cn(
+                    "w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-colors",
+                    selectedPreset === preset.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      applyPreset(preset.id);
+                      setMobilePresetSheetOpen(false);
+                    }}
+                    className="flex-1 text-left"
+                  >
+                    <p className="font-semibold text-xs text-foreground">
+                      {preset.name}
+                      {preset.id.startsWith("custom_") && " ⭐"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Makkah: {preset.makkahHotels?.[0]?.nights || 0}n • Madinah: {preset.madinahHotels?.[0]?.nights || 0}n
+                    </p>
+                  </button>
+
+                  {preset.id.startsWith("custom_") && (
+                    <Button
+                      onClick={() => deleteCustomPreset(preset.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Save as New Preset Dialog (Desktop & Mobile) */}
+      <Dialog open={showAddPresetDialog} onOpenChange={setShowAddPresetDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save as New Preset</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="preset-name">Preset Name</Label>
+              <Input
+                id="preset-name"
+                value={newPresetName}
+                onChange={e => setNewPresetName(e.target.value)}
+                placeholder="e.g., Package 5, Economy Special..."
+                className="h-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This will save your current hotel configurations, visa, transport, ziyarat, and food values as a reusable preset.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddPresetDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveAsPreset}>Save Preset</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

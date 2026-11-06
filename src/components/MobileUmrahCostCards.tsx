@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type RateMode = "sharing" | "room";
@@ -20,7 +21,7 @@ const OCCUPANCY_DIVISORS: Record<string, number> = {
   Quint: 5, Quad: 4, Triple: 3, Double: 2, Sharing: 1,
 };
 
-interface MobileUmrahCostCardsProps {
+export interface MobileUmrahCostCardsProps {
   // Hotel state
   useMultiHotel: boolean;
   makkahHotels: HotelEntry[];
@@ -61,8 +62,6 @@ interface MobileUmrahCostCardsProps {
   ziyaratCurrency: string; setZiyaratCurrency: (v: string) => void;
   food: string; setFood: (v: string) => void;
   foodCurrency: string; setFoodCurrency: (v: string) => void;
-  serviceCharges: string; setServiceCharges: (v: string) => void;
-  serviceChargesCurrency: string; setServiceChargesCurrency: (v: string) => void;
   // Helpers
   parseValue: (v: string) => number;
   convertToPKR: (amount: number, currency: string) => number;
@@ -76,9 +75,9 @@ interface MobileUmrahCostCardsProps {
   madinahMultiNights: number;
 }
 
-const CurrencySelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-  <Select value={value} onValueChange={onChange}>
-    <SelectTrigger className="h-9 text-xs w-full">
+const MobileCurrencySelect = ({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) => (
+  <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-background">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -91,9 +90,9 @@ const CurrencySelect = ({ value, onChange }: { value: string; onChange: (v: stri
   </Select>
 );
 
-const SharingTypeSelect = ({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) => (
+const MobileSharingTypeSelect = ({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) => (
   <Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger className="h-9 text-xs w-full">
+    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-background">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -104,170 +103,17 @@ const SharingTypeSelect = ({ value, onChange, disabled = false }: { value: strin
   </Select>
 );
 
-const RateModeSelect = ({ value, onChange, disabled = false }: { value: RateMode; onChange: (v: RateMode) => void; disabled?: boolean }) => (
+const MobileRateModeSelect = ({ value, onChange, disabled = false }: { value: RateMode; onChange: (v: RateMode) => void; disabled?: boolean }) => (
   <Select value={value} onValueChange={(v) => onChange(v as RateMode)} disabled={disabled}>
-    <SelectTrigger className="h-9 text-xs w-full">
+    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-background">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="sharing">Sharing</SelectItem>
-      <SelectItem value="room">Room</SelectItem>
+      <SelectItem value="sharing">Sharing (Per Person)</SelectItem>
+      <SelectItem value="room">Room (Divided by Type)</SelectItem>
     </SelectContent>
   </Select>
 );
-
-// A single hotel card (for both single and multi-hotel mode)
-function HotelCard({
-  icon,
-  label,
-  sharingType,
-  rateMode,
-  nights,
-  rate,
-  disabled,
-  total,
-  rateModeLabel,
-  onSharingChange,
-  onRateModeChange,
-  onNightsChange,
-  onRateChange,
-  onAdd,
-  onRemove,
-  nameInput,
-}: {
-  icon: string;
-  label: string;
-  sharingType: string;
-  rateMode: RateMode;
-  nights: string;
-  rate: string;
-  disabled: boolean;
-  total: string;
-  rateModeLabel?: string;
-  onSharingChange: (v: string) => void;
-  onRateModeChange: (v: RateMode) => void;
-  onNightsChange: (v: string) => void;
-  onRateChange: (v: string) => void;
-  onAdd?: () => void;
-  onRemove?: () => void;
-  nameInput?: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{icon}</span>
-          {nameInput || <span className="text-sm font-semibold text-foreground">{label}</span>}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {onAdd && (
-            <Button onClick={onAdd} variant="ghost" size="sm" className="h-7 w-7 p-0">
-              <Plus className="w-4 h-4" />
-            </Button>
-          )}
-          {onRemove && (
-            <Button onClick={onRemove} variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive">
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Type</label>
-          <SharingTypeSelect value={sharingType} onChange={onSharingChange} disabled={disabled} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Rate Mode</label>
-          <RateModeSelect value={rateMode} onChange={onRateModeChange} disabled={disabled} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Nights</label>
-          <Input
-            type="number"
-            value={nights}
-            onChange={(e) => onNightsChange(e.target.value)}
-            className="h-9 text-sm text-center"
-            placeholder="0"
-            disabled={disabled}
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Rate</label>
-          <Input
-            type="number"
-            value={rate}
-            onChange={(e) => onRateChange(e.target.value)}
-            className="h-9 text-sm text-center"
-            placeholder="0"
-            disabled={disabled}
-          />
-        </div>
-      </div>
-
-      {total !== "-" && (
-        <div className="flex items-center justify-between pt-2 border-t border-border/50">
-          <span className="text-[11px] text-muted-foreground">Per Person (PKR)</span>
-          <span className="text-sm font-bold font-mono text-primary">{total}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Simple charge card (no type/rate mode)
-function ChargeCard({
-  icon,
-  label,
-  amount,
-  currency,
-  disabled,
-  total,
-  onAmountChange,
-  onCurrencyChange,
-}: {
-  icon: string;
-  label: string;
-  amount: string;
-  currency: string;
-  disabled?: boolean;
-  total: string;
-  onAmountChange: (v: string) => void;
-  onCurrencyChange: (v: string) => void;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-3.5">
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="text-base">{icon}</span>
-        <span className="text-sm font-semibold text-foreground">{label}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Amount</label>
-          <Input
-            type="number"
-            value={amount}
-            onChange={(e) => onAmountChange(e.target.value)}
-            className="h-9 text-sm text-center"
-            placeholder="0"
-            disabled={disabled}
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Currency</label>
-          <CurrencySelect value={currency} onChange={onCurrencyChange} />
-        </div>
-      </div>
-      {total !== "-" && (
-        <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/50">
-          <span className="text-[11px] text-muted-foreground">PKR</span>
-          <span className="text-sm font-bold font-mono text-primary">{total}</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
   const {
@@ -286,208 +132,563 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
     transport, setTransport, transportCurrency, setTransportCurrency,
     ziyarat, setZiyarat, ziyaratCurrency, setZiyaratCurrency,
     food, setFood, foodCurrency, setFoodCurrency,
-    serviceCharges, setServiceCharges, serviceChargesCurrency, setServiceChargesCurrency,
     parseValue, convertToPKR, formatCurrency, getCurrencySymbol,
     getSingleHotelRowTotal, getHotelRowTotal,
     makkahMultiTotal, madinahMultiTotal, makkahMultiNights, madinahMultiNights,
   } = props;
 
-  const fmtTotal = (v: number) => v ? `Rs ${formatCurrency(v)}` : "-";
+  // Accordion open/close state: hotels expanded by default, others collapsed
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({
+    makkah: true,
+    madinah: true,
+    ticket: false,
+    visa: false,
+    transport: false,
+    ziyarat: false,
+    food: false,
+  });
+
+  const toggleItem = (key: string) => {
+    setOpenItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const fmtTotal = (v: number) => (v > 0 ? `Rs ${formatCurrency(v)}` : "—");
+
+  // Calculated per-person costs
+  const makkahCost = useMultiHotel
+    ? makkahMultiTotal
+    : (makkahNights && makkahRate ? getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType) : 0);
+
+  const madinahCost = useMultiHotel
+    ? madinahMultiTotal
+    : (madinahNights && madinahRate ? getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType) : 0);
+
+  const ticketPerPerson = ticketCost ? convertToPKR(parseValue(ticketCost), ticketCurrency) : 0;
+  const visaPerPerson = visaFee && visaFee !== "0" ? convertToPKR(parseValue(visaFee), visaCurrency) : 0;
+  const transportPerPerson = transport && transport !== "0" ? convertToPKR(parseValue(transport), transportCurrency) : 0;
+  const ziyaratPerPerson = ziyarat && ziyarat !== "0" ? convertToPKR(parseValue(ziyarat), ziyaratCurrency) : 0;
+  const foodPerPerson = food && food !== "0" ? convertToPKR(parseValue(food), foodCurrency) : 0;
 
   return (
-    <div className="space-y-3">
-      {/* Section Label */}
-      <div className="flex items-center gap-2 px-1">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Hotels</span>
-        <div className="h-px flex-1 bg-border" />
+    <div className="space-y-2.5">
+      {/* 1. Makkah Hotel Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("makkah")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">🕋</span>
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-foreground truncate block">Makkah Hotel</span>
+              <span className="text-[11px] text-muted-foreground">
+                {useMultiHotel ? `${makkahHotels.length} hotel(s) • ${makkahMultiNights} nights` : `${makkahNights || 0} nights • ${makkahSharingType}`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(makkahCost)}</span>
+            {openItems.makkah ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.makkah && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10 space-y-3">
+            {!useMultiHotel ? (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Type</label>
+                    <MobileSharingTypeSelect
+                      value={makkahSharingType}
+                      onChange={setMakkahSharingType}
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate Mode</label>
+                    <MobileRateModeSelect
+                      value={makkahRateMode}
+                      onChange={handleMakkahRateModeChange}
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nights</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={makkahNights}
+                      onChange={(e) => setMakkahNights(e.target.value)}
+                      className="h-11 min-h-[44px] text-center font-medium bg-background"
+                      placeholder="0"
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate ({hotelCurrency})</label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={makkahRate}
+                      onChange={(e) => setMakkahRate(e.target.value)}
+                      className="h-11 min-h-[44px] text-center font-medium bg-background"
+                      placeholder="0.00"
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={addMakkahHotel}
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 mt-1 border-dashed"
+                  disabled={isPresetLocked}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Multiple Makkah Hotels
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {makkahHotels.map((hotel, index) => (
+                  <div key={hotel.id} className="p-3 rounded-lg border border-border bg-background space-y-2.5 relative">
+                    <div className="flex items-center justify-between gap-2">
+                      <Input
+                        type="text"
+                        value={hotel.name}
+                        onChange={(e) => updateMakkahHotel(hotel.id, "name", e.target.value)}
+                        placeholder={`Makkah Hotel ${index + 1}`}
+                        className="h-8 text-xs font-semibold"
+                        disabled={isPresetLocked}
+                      />
+                      <Button
+                        onClick={() => removeMakkahHotel(hotel.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
+                        disabled={isPresetLocked}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <MobileSharingTypeSelect
+                        value={hotel.sharingType}
+                        onChange={(v) => updateMakkahHotel(hotel.id, "sharingType", v)}
+                        disabled={isPresetLocked}
+                      />
+                      <MobileRateModeSelect
+                        value={hotel.rateMode}
+                        onChange={(v) => updateMakkahHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={hotel.nights}
+                        onChange={(e) => updateMakkahHotel(hotel.id, "nights", e.target.value)}
+                        placeholder="Nights"
+                        className="h-10 text-center text-xs"
+                        disabled={isPresetLocked}
+                      />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={hotel.rate}
+                        onChange={(e) => updateMakkahHotel(hotel.id, "rate", e.target.value)}
+                        placeholder={`Rate (${hotelCurrency})`}
+                        className="h-10 text-center text-xs"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  onClick={addMakkahHotel}
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 text-xs gap-1.5"
+                  disabled={isPresetLocked}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Another Makkah Hotel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Makkah Hotels */}
-      {!useMultiHotel ? (
-        <HotelCard
-          icon="🕋"
-          label="Makkah Hotel"
-          sharingType={makkahSharingType}
-          rateMode={makkahRateMode}
-          nights={makkahNights}
-          rate={makkahRate}
-          disabled={isPresetLocked}
-          total={makkahNights && makkahRate ? fmtTotal(getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType)) : "-"}
-          onSharingChange={(v) => setMakkahSharingType(v)}
-          onRateModeChange={handleMakkahRateModeChange}
-          onNightsChange={setMakkahNights}
-          onRateChange={setMakkahRate}
-          onAdd={addMakkahHotel}
-        />
-      ) : (
-        <>
-          {makkahHotels.map((hotel, index) => (
-            <HotelCard
-              key={hotel.id}
-              icon="🕋"
-              label={`Makkah Hotel ${index + 1}`}
-              nameInput={
-                <Input
-                  type="text"
-                  value={hotel.name}
-                  onChange={(e) => updateMakkahHotel(hotel.id, 'name', e.target.value)}
-                  className="h-7 text-xs w-32"
-                  placeholder={`Makkah Hotel ${index + 1}`}
-                  disabled={isPresetLocked}
-                />
-              }
-              sharingType={hotel.sharingType}
-              rateMode={hotel.rateMode}
-              nights={hotel.nights}
-              rate={hotel.rate}
-              disabled={isPresetLocked}
-              total={hotel.nights && hotel.rate ? fmtTotal(getHotelRowTotal(hotel)) : "-"}
-              onSharingChange={(v) => updateMakkahHotel(hotel.id, 'sharingType', v)}
-              onRateModeChange={(v) => updateMakkahHotel(hotel.id, 'rateMode', v)}
-              onNightsChange={(v) => updateMakkahHotel(hotel.id, 'nights', v)}
-              onRateChange={(v) => updateMakkahHotel(hotel.id, 'rate', v)}
-              onRemove={() => removeMakkahHotel(hotel.id)}
-            />
-          ))}
-          {makkahHotels.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30">
-              <span className="text-xs text-muted-foreground">Makkah Total ({makkahMultiNights} nights)</span>
-              <span className="text-sm font-bold font-mono text-primary">Rs {formatCurrency(makkahMultiTotal)}</span>
+      {/* 2. Madinah Hotel Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("madinah")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">🕌</span>
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-foreground truncate block">Madinah Hotel</span>
+              <span className="text-[11px] text-muted-foreground">
+                {useMultiHotel ? `${madinahHotels.length} hotel(s) • ${madinahMultiNights} nights` : `${madinahNights || 0} nights • ${madinahSharingType}`}
+              </span>
             </div>
-          )}
-          <Button onClick={addMakkahHotel} variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" disabled={isPresetLocked}>
-            <Plus className="w-3.5 h-3.5" /> Add Makkah Hotel
-          </Button>
-        </>
-      )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(madinahCost)}</span>
+            {openItems.madinah ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
 
-      {/* Madinah Hotels */}
-      {!useMultiHotel ? (
-        <HotelCard
-          icon="🕌"
-          label="Madinah Hotel"
-          sharingType={madinahSharingType}
-          rateMode={madinahRateMode}
-          nights={madinahNights}
-          rate={madinahRate}
-          disabled={isPresetLocked}
-          total={madinahNights && madinahRate ? fmtTotal(getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType)) : "-"}
-          onSharingChange={(v) => setMadinahSharingType(v)}
-          onRateModeChange={handleMadinahRateModeChange}
-          onNightsChange={setMadinahNights}
-          onRateChange={setMadinahRate}
-          onAdd={addMadinahHotel}
-        />
-      ) : (
-        <>
-          {madinahHotels.map((hotel, index) => (
-            <HotelCard
-              key={hotel.id}
-              icon="🕌"
-              label={`Madinah Hotel ${index + 1}`}
-              nameInput={
-                <Input
-                  type="text"
-                  value={hotel.name}
-                  onChange={(e) => updateMadinahHotel(hotel.id, 'name', e.target.value)}
-                  className="h-7 text-xs w-32"
-                  placeholder={`Madinah Hotel ${index + 1}`}
+        {openItems.madinah && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10 space-y-3">
+            {!useMultiHotel ? (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Type</label>
+                    <MobileSharingTypeSelect
+                      value={madinahSharingType}
+                      onChange={setMadinahSharingType}
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate Mode</label>
+                    <MobileRateModeSelect
+                      value={madinahRateMode}
+                      onChange={handleMadinahRateModeChange}
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nights</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={madinahNights}
+                      onChange={(e) => setMadinahNights(e.target.value)}
+                      className="h-11 min-h-[44px] text-center font-medium bg-background"
+                      placeholder="0"
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate ({hotelCurrency})</label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={madinahRate}
+                      onChange={(e) => setMadinahRate(e.target.value)}
+                      className="h-11 min-h-[44px] text-center font-medium bg-background"
+                      placeholder="0.00"
+                      disabled={isPresetLocked}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={addMadinahHotel}
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 mt-1 border-dashed"
                   disabled={isPresetLocked}
-                />
-              }
-              sharingType={hotel.sharingType}
-              rateMode={hotel.rateMode}
-              nights={hotel.nights}
-              rate={hotel.rate}
-              disabled={isPresetLocked}
-              total={hotel.nights && hotel.rate ? fmtTotal(getHotelRowTotal(hotel)) : "-"}
-              onSharingChange={(v) => updateMadinahHotel(hotel.id, 'sharingType', v)}
-              onRateModeChange={(v) => updateMadinahHotel(hotel.id, 'rateMode', v)}
-              onNightsChange={(v) => updateMadinahHotel(hotel.id, 'nights', v)}
-              onRateChange={(v) => updateMadinahHotel(hotel.id, 'rate', v)}
-              onRemove={() => removeMadinahHotel(hotel.id)}
-            />
-          ))}
-          {madinahHotels.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30">
-              <span className="text-xs text-muted-foreground">Madinah Total ({madinahMultiNights} nights)</span>
-              <span className="text-sm font-bold font-mono text-primary">Rs {formatCurrency(madinahMultiTotal)}</span>
-            </div>
-          )}
-          <Button onClick={addMadinahHotel} variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" disabled={isPresetLocked}>
-            <Plus className="w-3.5 h-3.5" /> Add Madinah Hotel
-          </Button>
-        </>
-      )}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Multiple Madinah Hotels
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {madinahHotels.map((hotel, index) => (
+                  <div key={hotel.id} className="p-3 rounded-lg border border-border bg-background space-y-2.5 relative">
+                    <div className="flex items-center justify-between gap-2">
+                      <Input
+                        type="text"
+                        value={hotel.name}
+                        onChange={(e) => updateMadinahHotel(hotel.id, "name", e.target.value)}
+                        placeholder={`Madinah Hotel ${index + 1}`}
+                        className="h-8 text-xs font-semibold"
+                        disabled={isPresetLocked}
+                      />
+                      <Button
+                        onClick={() => removeMadinahHotel(hotel.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
+                        disabled={isPresetLocked}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
 
-      {/* Section Label */}
-      <div className="flex items-center gap-2 px-1 pt-1">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Charges</span>
-        <div className="h-px flex-1 bg-border" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <MobileSharingTypeSelect
+                        value={hotel.sharingType}
+                        onChange={(v) => updateMadinahHotel(hotel.id, "sharingType", v)}
+                        disabled={isPresetLocked}
+                      />
+                      <MobileRateModeSelect
+                        value={hotel.rateMode}
+                        onChange={(v) => updateMadinahHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={hotel.nights}
+                        onChange={(e) => updateMadinahHotel(hotel.id, "nights", e.target.value)}
+                        placeholder="Nights"
+                        className="h-10 text-center text-xs"
+                        disabled={isPresetLocked}
+                      />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={hotel.rate}
+                        onChange={(e) => updateMadinahHotel(hotel.id, "rate", e.target.value)}
+                        placeholder={`Rate (${hotelCurrency})`}
+                        className="h-10 text-center text-xs"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  onClick={addMadinahHotel}
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 text-xs gap-1.5"
+                  disabled={isPresetLocked}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Another Madinah Hotel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Charges Grid - 2 per row for compact layout */}
-      <div className="grid grid-cols-1 gap-3">
-        <ChargeCard
-          icon="✈️"
-          label="Airline Ticket"
-          amount={ticketCost}
-          currency={ticketCurrency}
-          total={ticketCost ? fmtTotal(convertToPKR(parseValue(ticketCost), ticketCurrency)) : "-"}
-          onAmountChange={setTicketCost}
-          onCurrencyChange={setTicketCurrency}
-        />
-        <ChargeCard
-          icon="📋"
-          label="Visa Fee"
-          amount={visaFee}
-          currency={visaCurrency}
-          disabled={isPresetLocked}
-          total={visaFee && visaFee !== "0" ? fmtTotal(convertToPKR(parseValue(visaFee), visaCurrency)) : "-"}
-          onAmountChange={setVisaFee}
-          onCurrencyChange={setVisaCurrency}
-        />
-        <ChargeCard
-          icon="🚌"
-          label="Transport"
-          amount={transport}
-          currency={transportCurrency}
-          disabled={isPresetLocked}
-          total={transport && transport !== "0" ? fmtTotal(convertToPKR(parseValue(transport), transportCurrency)) : "-"}
-          onAmountChange={setTransport}
-          onCurrencyChange={setTransportCurrency}
-        />
-        <ChargeCard
-          icon="🕌"
-          label="Ziyarat"
-          amount={ziyarat}
-          currency={ziyaratCurrency}
-          disabled={isPresetLocked}
-          total={ziyarat && ziyarat !== "0" ? fmtTotal(convertToPKR(parseValue(ziyarat), ziyaratCurrency)) : "-"}
-          onAmountChange={setZiyarat}
-          onCurrencyChange={setZiyaratCurrency}
-        />
-        <ChargeCard
-          icon="🍽️"
-          label="Food/Add-ons"
-          amount={food}
-          currency={foodCurrency}
-          disabled={isPresetLocked}
-          total={food && food !== "0" ? fmtTotal(convertToPKR(parseValue(food), foodCurrency)) : "-"}
-          onAmountChange={setFood}
-          onCurrencyChange={setFoodCurrency}
-        />
-        <ChargeCard
-          icon="💼"
-          label="Service Charges"
-          amount={serviceCharges}
-          currency={serviceChargesCurrency}
-          total={serviceCharges ? fmtTotal(convertToPKR(parseValue(serviceCharges), serviceChargesCurrency)) : "-"}
-          onAmountChange={setServiceCharges}
-          onCurrencyChange={setServiceChargesCurrency}
-        />
+      {/* 3. Airline Ticket Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("ticket")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">✈️</span>
+            <span className="text-sm font-semibold text-foreground truncate">Airline Ticket</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(ticketPerPerson)}</span>
+            {openItems.ticket ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.ticket && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Ticket Amount</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={ticketCost}
+                  onChange={(e) => setTicketCost(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-medium bg-background"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Currency</label>
+                <MobileCurrencySelect value={ticketCurrency} onChange={setTicketCurrency} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Visa Fee Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("visa")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">📋</span>
+            <span className="text-sm font-semibold text-foreground truncate">Visa Fee</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(visaPerPerson)}</span>
+            {openItems.visa ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.visa && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Visa Fee Amount</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={visaFee}
+                  onChange={(e) => setVisaFee(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-medium bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Currency</label>
+                <MobileCurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Transport Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("transport")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">🚌</span>
+            <span className="text-sm font-semibold text-foreground truncate">Transport</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(transportPerPerson)}</span>
+            {openItems.transport ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.transport && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Transport Cost</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={transport}
+                  onChange={(e) => setTransport(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-medium bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Currency</label>
+                <MobileCurrencySelect value={transportCurrency} onChange={setTransportCurrency} disabled={isPresetLocked} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Ziyarat Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("ziyarat")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">🕌</span>
+            <span className="text-sm font-semibold text-foreground truncate">Ziyarat</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(ziyaratPerPerson)}</span>
+            {openItems.ziyarat ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.ziyarat && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Ziyarat Amount</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={ziyarat}
+                  onChange={(e) => setZiyarat(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-medium bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Currency</label>
+                <MobileCurrencySelect value={ziyaratCurrency} onChange={setZiyaratCurrency} disabled={isPresetLocked} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 7. Food/Add-ons Accordion */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs transition-all">
+        <button
+          type="button"
+          onClick={() => toggleItem("food")}
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0">🍽️</span>
+            <span className="text-sm font-semibold text-foreground truncate">Food / Add-ons</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(foodPerPerson)}</span>
+            {openItems.food ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {openItems.food && (
+          <div className="p-3.5 pt-1 border-t border-border/60 bg-muted/10">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Food Amount</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={food}
+                  onChange={(e) => setFood(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-medium bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase">Currency</label>
+                <MobileCurrencySelect value={foodCurrency} onChange={setFoodCurrency} disabled={isPresetLocked} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
