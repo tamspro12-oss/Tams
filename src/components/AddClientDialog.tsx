@@ -571,7 +571,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
         if (prefillClient?.converted_from_query_id) {
           try {
             await (supabase as any)
-              .from('client_queries')
+              .from('queries')
               .update({ status: 'completed', converted_booking_id: newClient.id, updated_at: new Date().toISOString() })
               .eq('id', prefillClient.converted_from_query_id);
           } catch (e) {

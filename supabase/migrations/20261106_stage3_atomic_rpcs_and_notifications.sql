@@ -88,12 +88,12 @@ CREATE POLICY "Agencies manage their own whatsapp settings"
 -- 3. ADD CONVERTED_FROM COLUMNS (Additive tracking for 1-Click Conversions)
 DO $$
 BEGIN
-    -- Track source query or quote on bookings
+    -- Track source query or quote on bookings (table is public.queries)
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' AND table_name = 'clients' AND column_name = 'converted_from_query_id'
     ) THEN
-        ALTER TABLE public.clients ADD COLUMN converted_from_query_id UUID REFERENCES public.client_queries(id) ON DELETE SET NULL;
+        ALTER TABLE public.clients ADD COLUMN converted_from_query_id UUID REFERENCES public.queries(id) ON DELETE SET NULL;
     END IF;
 
     IF NOT EXISTS (
@@ -106,9 +106,9 @@ BEGIN
     -- Track booking conversion status on queries & quotations
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' AND table_name = 'client_queries' AND column_name = 'converted_booking_id'
+        WHERE table_schema = 'public' AND table_name = 'queries' AND column_name = 'converted_booking_id'
     ) THEN
-        ALTER TABLE public.client_queries ADD COLUMN converted_booking_id UUID REFERENCES public.clients(id) ON DELETE SET NULL;
+        ALTER TABLE public.queries ADD COLUMN converted_booking_id UUID REFERENCES public.clients(id) ON DELETE SET NULL;
     END IF;
 
     IF NOT EXISTS (
@@ -169,15 +169,13 @@ $$;
 
 
 -- 5. ATOMIC FUNCTION: RECORD CLIENT PAYMENT ATOMIC
--- Updates client payment balance, records payment history, logs bank/cash entry, and creates notification
 CREATE OR REPLACE FUNCTION public.record_client_payment_atomic(
     p_client_id UUID,
     p_amount NUMERIC,
     p_payment_mode TEXT, -- 'cash' or 'bank'
     p_bank_name TEXT DEFAULT NULL,
     p_payment_date DATE DEFAULT CURRENT_DATE,
-    p_notes TEXT DEFAULT NULL,
-    p_receipt_number TEXT DEFAULT NULL
+    p_notes TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -196,7 +194,6 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized: No active agency found for current user';
     END IF;
 
-    -- Verify client belongs to this agency
     SELECT * INTO v_client
     FROM public.clients
     WHERE id = p_client_id AND agency_id = v_agency_id;
@@ -205,7 +202,6 @@ BEGIN
         RAISE EXCEPTION 'Client booking not found or access denied';
     END IF;
 
-    -- Calculate updated paid amount
     v_new_amount_paid := COALESCE(v_client.amount_paid, 0) + p_amount;
     
     IF v_client.payment_amount IS NOT NULL AND v_client.payment_amount > 0 THEN
@@ -218,14 +214,12 @@ BEGIN
         v_payment_status := 'Paid';
     END IF;
 
-    -- Update client record
     UPDATE public.clients
     SET amount_paid = v_new_amount_paid,
         payment_status = v_payment_status,
         updated_at = now()
     WHERE id = p_client_id AND agency_id = v_agency_id;
 
-    -- Insert into client payment history
     INSERT INTO public.client_payment_history (
         client_id,
         agency_id,
@@ -247,7 +241,6 @@ BEGIN
     )
     RETURNING id INTO v_history_id;
 
-    -- Create notification
     PERFORM public.create_agency_notification(
         v_agency_id,
         'Payment Received: ' || v_client.name,
@@ -387,8 +380,9 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized: No active agency found for current user';
     END IF;
 
+    -- Query table is public.queries
     SELECT * INTO v_query
-    FROM public.client_queries
+    FROM public.queries
     WHERE id = p_query_id AND agency_id = v_agency_id;
 
     IF NOT FOUND THEN
@@ -404,19 +398,16 @@ BEGIN
         );
     END IF;
 
-    v_selling_amount := COALESCE(p_selling_price, v_query.budget, 0);
+    v_selling_amount := COALESCE(p_selling_price, 0);
 
     -- Insert new booking into clients table
     INSERT INTO public.clients (
         agency_id,
         name,
-        phone,
-        email,
-        passport_number,
+        contact_number,
         travel_type,
         destination,
-        travel_date,
-        return_date,
+        flight_date,
         payment_amount,
         amount_paid,
         payment_status,
@@ -428,13 +419,10 @@ BEGIN
     ) VALUES (
         v_agency_id,
         v_query.client_name,
-        v_query.client_phone,
-        v_query.client_email,
-        v_query.passport_number,
-        COALESCE(v_query.service_type, 'Ticket'),
-        v_query.destination,
-        v_query.travel_date,
-        v_query.return_date,
+        v_query.contact_number,
+        'Ticket',
+        NULL,
+        v_query.due_date,
         v_selling_amount,
         COALESCE(p_amount_paid, 0),
         CASE 
@@ -444,15 +432,16 @@ BEGIN
         END,
         p_vendor_id,
         p_query_id,
-        'Converted from Query #' || SUBSTRING(p_query_id::text, 1, 8) || COALESCE(E'\n' || v_query.notes, ''),
+        'Converted from Query #' || SUBSTRING(p_query_id::text, 1, 8) || COALESCE(E'\n' || v_query.query_text, '') || COALESCE(E'\n' || v_query.notes, ''),
         now(),
         now()
     )
     RETURNING id INTO v_booking_id;
 
     -- Update query status to completed & set converted_booking_id
-    UPDATE public.client_queries
+    UPDATE public.queries
     SET status = 'completed',
+        completed_at = now(),
         converted_booking_id = v_booking_id,
         updated_at = now()
     WHERE id = p_query_id AND agency_id = v_agency_id;
