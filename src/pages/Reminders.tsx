@@ -41,6 +41,7 @@ import { useReminders } from "@/hooks/useReminders";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { NewReminderDialog } from "@/components/NewReminderDialog";
 
 export default function Reminders() {
   const navigate = useNavigate();
@@ -409,95 +410,7 @@ export default function Reminders() {
       </Card>
 
       {/* Add Reminder Dialog */}
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5 text-primary" />
-              Add Reminder
-            </DialogTitle>
-            <DialogDescription>
-              Create a custom reminder or scheduled task for yourself or your agency.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateReminder} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Title *</Label>
-              <Input
-                placeholder="e.g. Call client regarding passport renewal"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                required
-                className="h-9 text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Remind Date</Label>
-                <Input
-                  type="date"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Time</Label>
-                <Input
-                  type="time"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Type</Label>
-              <Select value={newType} onValueChange={(val: any) => setNewType(val)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual Agency Task</SelectItem>
-                  <SelectItem value="flight">Flight Departure</SelectItem>
-                  <SelectItem value="umrah">Umrah Departure</SelectItem>
-                  <SelectItem value="daily_expense">Daily Expense / Ledger</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Notes (Optional)</Label>
-              <Textarea
-                placeholder="Additional instructions or notes..."
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                className="text-xs h-20"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/30">
-              <div className="text-xs">
-                <p className="font-semibold">Recurring Daily</p>
-                <p className="text-muted-foreground text-[11px]">Repeat this task every business day</p>
-              </div>
-              <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="font-semibold">
-                Save Reminder
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <NewReminderDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
 
       {/* Reminder Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>

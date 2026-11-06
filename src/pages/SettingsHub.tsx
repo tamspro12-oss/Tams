@@ -1,8 +1,8 @@
 import React from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Navigate } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings as SettingsIcon, MessageSquare, Bell, Mail, BookOpen } from "lucide-react";
+import { Settings as SettingsIcon, MessageSquare, Mail, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,22 +16,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { useReminders } from "@/hooks/useReminders";
 import { toast } from "sonner";
 
-type SettingsTab = "general" | "whatsapp" | "preferences" | "email-history" | "manual";
+type SettingsTab = "general" | "whatsapp" | "email-history" | "manual";
 
 export default function SettingsHub() {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Redirect old /app/settings?tab=preferences to /app/notifications?tab=preferences
+  if (searchParams.get("tab") === "preferences") {
+    return <Navigate to="/app/notifications?tab=preferences" replace />;
+  }
+
   const currentTab = (searchParams.get("tab") as SettingsTab) || "general";
-
-  const { settings, updateSettings } = useReminders();
-
-  const [flightAlerts, setFlightAlerts] = React.useState(settings?.flight_alerts_enabled ?? true);
-  const [umrahAlerts, setUmrahAlerts] = React.useState(settings?.umrah_alerts_enabled ?? true);
-  const [expenseAlerts, setExpenseAlerts] = React.useState(settings?.daily_expense_reminder_enabled ?? true);
-  const [openingTime, setOpeningTime] = React.useState(settings?.opening_time || "09:00:00");
-  const [closingTime, setClosingTime] = React.useState(settings?.closing_time || "20:00:00");
 
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
@@ -70,28 +67,8 @@ export default function SettingsHub() {
     }
   }, [waConfig]);
 
-  React.useEffect(() => {
-    if (settings) {
-      setFlightAlerts(settings.flight_alerts_enabled);
-      setUmrahAlerts(settings.umrah_alerts_enabled);
-      setExpenseAlerts(settings.daily_expense_reminder_enabled);
-      setOpeningTime(settings.opening_time);
-      setClosingTime(settings.closing_time);
-    }
-  }, [settings]);
-
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
-  };
-
-  const handleSaveNotificationPreferences = async () => {
-    await updateSettings.mutateAsync({
-      flight_alerts_enabled: flightAlerts,
-      umrah_alerts_enabled: umrahAlerts,
-      daily_expense_reminder_enabled: expenseAlerts,
-      opening_time: openingTime,
-      closing_time: closingTime,
-    });
   };
 
   const saveWhatsApp = useMutation({
@@ -148,10 +125,6 @@ export default function SettingsHub() {
             <TabsTrigger value="whatsapp" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
               <MessageSquare className="w-4 h-4 text-emerald-500" />
               WhatsApp Integration
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
-              <Bell className="w-4 h-4 text-amber-500" />
-              Notification Preferences
             </TabsTrigger>
             <TabsTrigger value="email-history" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
               <Mail className="w-4 h-4 text-blue-500" />
@@ -232,77 +205,6 @@ export default function SettingsHub() {
                   {saveWhatsApp.isPending ? "Saving..." : "Save WhatsApp Configuration"}
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentTab === "preferences" && (
-          <Card className="border max-w-3xl">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold flex items-center gap-2">
-                <Bell className="w-5 h-5 text-amber-500" />
-                Agency Notification & Operational Alert Rules
-              </CardTitle>
-              <CardDescription>
-                Configure automated flight departure alerts, Umrah group notices, and daily ledger closings.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3.5 rounded-lg border bg-card">
-                <div>
-                  <p className="font-semibold text-sm">Automated Flight Departure Alerts</p>
-                  <p className="text-xs text-muted-foreground">
-                    Alert team about flights departing Today and Tomorrow in the top notification bell
-                  </p>
-                </div>
-                <Switch checked={flightAlerts} onCheckedChange={setFlightAlerts} />
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-lg border bg-card">
-                <div>
-                  <p className="font-semibold text-sm">Umrah Group Departure Alerts</p>
-                  <p className="text-xs text-muted-foreground">
-                    Flag Umrah packages scheduled for travel with direct links to booking details
-                  </p>
-                </div>
-                <Switch checked={umrahAlerts} onCheckedChange={setUmrahAlerts} />
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-lg border bg-card">
-                <div>
-                  <p className="font-semibold text-sm">Daily Evening Expense & Closing Prompt</p>
-                  <p className="text-xs text-muted-foreground">
-                    Prompt agency team at end of day to record daily petty cash expenses and balance ledger
-                  </p>
-                </div>
-                <Switch checked={expenseAlerts} onCheckedChange={setExpenseAlerts} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Morning Operations Briefing Hour</Label>
-                  <Input
-                    type="time"
-                    value={openingTime.slice(0, 5)}
-                    onChange={(e) => setOpeningTime(`${e.target.value}:00`)}
-                    className="h-9 text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Evening Closing Hour</Label>
-                  <Input
-                    type="time"
-                    value={closingTime.slice(0, 5)}
-                    onChange={(e) => setClosingTime(`${e.target.value}:00`)}
-                    className="h-9 text-xs"
-                  />
-                </div>
-              </div>
-
-              <Button onClick={handleSaveNotificationPreferences} className="font-semibold text-xs h-9">
-                Save Notification Rules
-              </Button>
             </CardContent>
           </Card>
         )}

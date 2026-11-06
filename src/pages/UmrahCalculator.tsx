@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ import {
   Info,
   Unlock,
   ArrowRight,
-  Sparkles,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
@@ -32,19 +32,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -205,7 +198,8 @@ export default function UmrahCalculator() {
   const [showAddPresetDialog, setShowAddPresetDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
 
-  // Mobile Bottom Sheets
+  // Confirmation & Mobile Sheets
+  const [showResetConfirmDialog, setShowResetConfirmDialog] = useState(false);
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
   const [mobilePresetSheetOpen, setMobilePresetSheetOpen] = useState(false);
 
@@ -261,11 +255,11 @@ export default function UmrahCalculator() {
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  const convertToPKR = (amount: number, currency: string): number => {
+  const convertToPKR = useCallback((amount: number, currency: string): number => {
     if (currency === "PKR") return amount;
     if (currency === "SAR") return amount * parseValue(sarToPkrRate);
     return amount;
-  };
+  }, [sarToPkrRate]);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -427,15 +421,15 @@ export default function UmrahCalculator() {
   };
 
   // Calculation formulas (100% UNCHANGED)
-  const getHotelCostPerPerson = (rate: number, nights: number, rateMode: RateMode, sharingType: string): number => {
+  const getHotelCostPerPerson = useCallback((rate: number, nights: number, rateMode: RateMode, sharingType: string): number => {
     if (rateMode === "room") {
       const divisor = OCCUPANCY_DIVISORS[sharingType] || 1;
       return (rate / divisor) * nights;
     }
     return rate * nights;
-  };
+  }, []);
 
-  const calculateUmrah = () => {
+  const calculateUmrah = useCallback((): CalculationResult => {
     let makkahNightsCount: number;
     let madinahNightsCount: number;
     let makkahCostPerPerson: number;
@@ -504,14 +498,10 @@ export default function UmrahCalculator() {
       perPerson,
       totalPassengers,
     };
-  };
-
-  // Real-time calculation effect
-  useEffect(() => {
-    const res = calculateUmrah();
-    setResult(res);
   }, [
-    sarToPkrRate,
+    useMultiHotel,
+    makkahHotels,
+    madinahHotels,
     makkahNights,
     madinahNights,
     makkahRate,
@@ -521,9 +511,11 @@ export default function UmrahCalculator() {
     makkahRateMode,
     madinahRateMode,
     hotelCurrency,
-    useMultiHotel,
-    makkahHotels,
-    madinahHotels,
+    convertToPKR,
+    getHotelCostPerPerson,
+    adultCount,
+    childCount,
+    infantCount,
     visaFee,
     visaCurrency,
     ticketCost,
@@ -536,13 +528,16 @@ export default function UmrahCalculator() {
     foodCurrency,
     serviceCharges,
     serviceChargesCurrency,
-    adultCount,
-    childCount,
-    infantCount,
     profitType,
     profitPercent,
     profitFixed,
   ]);
+
+  // Real-time calculation effect
+  useEffect(() => {
+    const res = calculateUmrah();
+    setResult(res);
+  }, [calculateUmrah]);
 
   const handleCalculate = () => {
     const res = calculateUmrah();
@@ -591,7 +586,7 @@ export default function UmrahCalculator() {
     toast.success("Calculator reset successfully");
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = useCallback(() => {
     const draft = {
       sarToPkrRate,
       arrivalDate: arrivalDate?.toISOString(),
@@ -632,7 +627,41 @@ export default function UmrahCalculator() {
     sessionStorage.setItem("umrah_calculator_draft", JSON.stringify(draft));
     setHasDraft(true);
     toast.success("Draft saved to session");
-  };
+  }, [
+    sarToPkrRate,
+    arrivalDate,
+    departureDate,
+    makkahNights,
+    madinahNights,
+    makkahRate,
+    madinahRate,
+    hotelCurrency,
+    makkahSharingType,
+    madinahSharingType,
+    useMultiHotel,
+    makkahHotels,
+    madinahHotels,
+    selectedPreset,
+    visaFee,
+    visaCurrency,
+    ticketCost,
+    ticketCurrency,
+    transport,
+    transportCurrency,
+    ziyarat,
+    ziyaratCurrency,
+    food,
+    foodCurrency,
+    serviceCharges,
+    serviceChargesCurrency,
+    adultCount,
+    childCount,
+    infantCount,
+    profitType,
+    profitPercent,
+    profitFixed,
+    result,
+  ]);
 
   const handleLoadDraft = () => {
     const draft = sessionStorage.getItem("umrah_calculator_draft");
@@ -684,24 +713,54 @@ export default function UmrahCalculator() {
     }
   };
 
-  const handleCopyQuote = () => {
-    if (!result) return;
-    const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
-    const lines = [
-      `🕋 Umrah Package Quotation ${presetName ? `(${presetName})` : ""}`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━`,
-      arrivalDate && departureDate
-        ? `📅 Dates: ${format(arrivalDate, "dd MMM yyyy")} to ${format(departureDate, "dd MMM yyyy")} (${result.nights} Nights)`
-        : `📅 Duration: ${result.nights} Nights`,
-      `👥 Passengers: ${result.totalPassengers || 1} (${adultCount || 0} Adults, ${childCount || 0} Children${infantCount ? `, ${infantCount} Infants` : ""})`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `💰 Total Package: Rs ${formatCurrency(result.finalTotal)}`,
-      `👤 Cost Per Person: Rs ${formatCurrency(result.perPerson)}`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `Includes: Hotels (Makkah & Madinah), Visa, Tickets, Transport, Ziyarat & Services.`,
-    ];
-    navigator.clipboard.writeText(lines.join("\n"));
-    toast.success("Quote summary copied to clipboard!");
+  const handleCreateQuotation = useCallback(() => {
+    if (!result) {
+      toast.error("Calculate first to create a quotation");
+      return;
+    }
+    const perPerson = Math.round(result.perPerson);
+    navigate("/app/quotations", {
+      state: {
+        prefill: {
+          service_type: "umrah",
+          title: `Umrah Package — ${result.nights} Nights`,
+          description: `${result.totalPassengers} passenger(s). Per person: Rs ${perPerson.toLocaleString()}.`,
+          currency: "PKR",
+          items: [
+            {
+              description: `Umrah Package (per person) — ${result.nights} nights`,
+              qty: result.totalPassengers,
+              unit_price: perPerson,
+              amount: perPerson * result.totalPassengers,
+            },
+          ],
+          source: "umrah-calculator",
+        },
+      },
+    });
+  }, [navigate, result]);
+
+  const handleCreateBooking = () => {
+    if (!result) {
+      toast.error("Calculate first to create a booking");
+      return;
+    }
+    const perPerson = Math.round(result.perPerson);
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          travel_type: "Umrah",
+          selling_price: result.finalTotal,
+          purchasing_price: result.baseTotal,
+          group_size: result.totalPassengers,
+          group_booking_type: result.totalPassengers > 1 ? "group" : "individual",
+          flight_date: arrivalDate || "",
+          return_date: departureDate || "",
+          notes: `Umrah Package calculation (${result.nights} nights, ${result.totalPassengers} passengers). Cost per person: Rs ${perPerson.toLocaleString()}.`,
+        },
+      },
+    });
   };
 
   const handleDownloadPdf = () => {
@@ -754,55 +813,47 @@ export default function UmrahCalculator() {
     }
   };
 
-  const handleCreateQuotation = () => {
-    if (!result) {
-      toast.error("Calculate first to create a quotation");
-      return;
-    }
-    const perPerson = Math.round(result.perPerson);
-    navigate("/app/quotations", {
-      state: {
-        prefill: {
-          service_type: "umrah",
-          title: `Umrah Package — ${result.nights} Nights`,
-          description: `${result.totalPassengers} passenger(s). Per person: Rs ${perPerson.toLocaleString()}.`,
-          currency: "PKR",
-          items: [
-            {
-              description: `Umrah Package (per person) — ${result.nights} nights`,
-              qty: result.totalPassengers,
-              unit_price: perPerson,
-              amount: perPerson * result.totalPassengers,
-            },
-          ],
-          source: "umrah-calculator",
-        },
-      },
-    });
+  const handleCopyQuote = () => {
+    if (!result) return;
+    const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
+    const lines = [
+      `🕋 Umrah Package Quotation ${presetName ? `(${presetName})` : ""}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      arrivalDate && departureDate
+        ? `📅 Dates: ${format(arrivalDate, "dd MMM yyyy")} to ${format(departureDate, "dd MMM yyyy")} (${result.nights} Nights)`
+        : `📅 Duration: ${result.nights} Nights`,
+      `👥 Passengers: ${result.totalPassengers || 1} (${adultCount || 0} Adults, ${childCount || 0} Children${infantCount ? `, ${infantCount} Infants` : ""})`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `💰 Total Package: Rs ${formatCurrency(result.finalTotal)}`,
+      `👤 Cost Per Person: Rs ${formatCurrency(result.perPerson)}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `Includes: Hotels (Makkah & Madinah), Visa, Tickets, Transport, Ziyarat & Services.`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    toast.success("Quote summary copied to clipboard!");
   };
 
-  const handleCreateBooking = () => {
-    if (!result) {
-      toast.error("Calculate first to create a booking");
-      return;
-    }
-    const perPerson = Math.round(result.perPerson);
-    navigate("/app/bookings?tab=clients", {
-      state: {
-        openAddClient: true,
-        prefill: {
-          travel_type: "Umrah",
-          selling_price: result.finalTotal,
-          purchasing_price: result.baseTotal,
-          group_size: result.totalPassengers,
-          group_booking_type: result.totalPassengers > 1 ? "group" : "individual",
-          flight_date: arrivalDate || "",
-          return_date: departureDate || "",
-          notes: `Umrah Package calculation (${result.nights} nights, ${result.totalPassengers} passengers). Cost per person: Rs ${perPerson.toLocaleString()}.`,
-        },
-      },
-    });
-  };
+  // Keyboard Shortcuts: Ctrl/Cmd+S (Draft), Ctrl/Cmd+Enter (Quotation), Ctrl/Cmd+Shift+R (Reset)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+      if (modifier && e.key.toLowerCase() === "s" && !e.shiftKey) {
+        e.preventDefault();
+        handleSaveDraft();
+      } else if (modifier && e.key === "Enter") {
+        e.preventDefault();
+        handleCreateQuotation();
+      } else if (modifier && e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        setShowResetConfirmDialog(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSaveDraft, handleCreateQuotation]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-PK", {
@@ -811,18 +862,7 @@ export default function UmrahCalculator() {
     }).format(value);
   };
 
-  const getCurrencySymbol = (currency: string) => {
-    const symbols: Record<string, string> = {
-      SAR: "ر.س",
-      PKR: "Rs",
-      USD: "$",
-      EUR: "€",
-      AED: "د.إ",
-    };
-    return symbols[currency] || currency;
-  };
-
-  const getHotelRowTotal = (hotel: HotelEntry): number => {
+  const getHotelRowTotal = useCallback((hotel: HotelEntry): number => {
     const rate = parseValue(hotel.rate);
     const nights = parseValue(hotel.nights);
     if (hotel.rateMode === "room") {
@@ -830,9 +870,9 @@ export default function UmrahCalculator() {
       return convertToPKR((rate / divisor) * nights, hotelCurrency);
     }
     return convertToPKR(rate * nights, hotelCurrency);
-  };
+  }, [convertToPKR, hotelCurrency]);
 
-  const getSingleHotelRowTotal = (rate: string, nights: string, rateMode: RateMode, sharingType: string): number => {
+  const getSingleHotelRowTotal = useCallback((rate: string, nights: string, rateMode: RateMode, sharingType: string): number => {
     const r = parseValue(rate);
     const n = parseValue(nights);
     if (rateMode === "room") {
@@ -840,6 +880,13 @@ export default function UmrahCalculator() {
       return convertToPKR((r / divisor) * n, hotelCurrency);
     }
     return convertToPKR(r * n, hotelCurrency);
+  }, [convertToPKR, hotelCurrency]);
+
+  // Stepper helper
+  const stepCount = (current: string, delta: number, setter: (val: string) => void) => {
+    const curVal = parseInt(current) || 0;
+    const newVal = Math.max(0, curVal + delta);
+    setter(newVal === 0 ? "" : newVal.toString());
   };
 
   // Reusable currency select
@@ -855,7 +902,7 @@ export default function UmrahCalculator() {
     disabled?: boolean;
   }) => (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={cn("h-7 text-xs font-medium px-2 py-0", className)}>
+      <SelectTrigger className={cn("h-8 text-xs font-medium px-2 py-0 bg-background", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -878,7 +925,7 @@ export default function UmrahCalculator() {
     disabled?: boolean;
   }) => (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="h-7 text-xs w-[76px] px-1.5 py-0 mx-auto">
+      <SelectTrigger className="h-8 text-xs w-[84px] px-1.5 py-0 mx-auto bg-background">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -901,7 +948,7 @@ export default function UmrahCalculator() {
     disabled?: boolean;
   }) => (
     <Select value={value} onValueChange={v => onChange(v as RateMode)} disabled={disabled}>
-      <SelectTrigger className="h-7 text-xs w-[72px] px-1.5 py-0 mx-auto">
+      <SelectTrigger className="h-8 text-xs w-[80px] px-1.5 py-0 mx-auto bg-background">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -914,13 +961,6 @@ export default function UmrahCalculator() {
       </SelectContent>
     </Select>
   );
-
-  // Stepper helper
-  const stepCount = (current: string, delta: number, setter: (val: string) => void) => {
-    const curVal = parseInt(current) || 0;
-    const newVal = Math.max(0, curVal + delta);
-    setter(newVal === 0 ? "" : newVal.toString());
-  };
 
   const totalPassengers = parseValue(adultCount) + parseValue(childCount) + parseValue(infantCount);
 
@@ -958,14 +998,18 @@ export default function UmrahCalculator() {
     ziyaratPerPerson +
     foodPerPerson;
 
+  const serviceChargesTotal = serviceCharges
+    ? convertToPKR(parseValue(serviceCharges), serviceChargesCurrency) * (result?.totalPassengers || 1)
+    : 0;
+
   return (
     <div className="w-full">
       {/* =========================================================================
           DESKTOP LAYOUT (>= 1024px)
-          Fills remaining viewport height with ZERO vertical scroll on 1366x768 & 1440x900
+          ONE UNIFIED SHEET, TOP TO BOTTOM: Fits in ONE screen with ZERO vertical scroll
          ========================================================================= */}
       <div className="hidden lg:flex flex-col -m-2 md:-m-4 lg:-m-6 h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden p-3 lg:p-4 gap-2.5 bg-background">
-        {/* 1) TOP TOOLBAR (compact 2 rows, ~84px total) */}
+        {/* TOP TOOLBAR: KEPT EXACTLY AS IT IS */}
         <div className="shrink-0 space-y-2">
           {/* Row 1: Title on left, Presets on right */}
           <div className="flex items-center justify-between gap-3 h-8">
@@ -1074,6 +1118,7 @@ export default function UmrahCalculator() {
               <Input
                 type="number"
                 value={sarToPkrRate}
+                onFocus={e => e.target.select()}
                 onChange={e => setSarToPkrRate(e.target.value)}
                 className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center"
                 placeholder="77.50"
@@ -1131,889 +1176,809 @@ export default function UmrahCalculator() {
           </div>
         </div>
 
-        {/* 2) MAIN AREA = 2 COLUMNS (fills remaining height, overflow-hidden) */}
-        <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 overflow-hidden">
-          {/* LEFT COLUMN (~65% / col-span-8): "Costs" table */}
-          <div className="col-span-8 flex flex-col h-full rounded-xl border border-border/80 bg-card overflow-hidden shadow-xs">
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-muted/70 backdrop-blur-xs z-10">
-                  <TableRow className="h-8 border-b border-border/80 hover:bg-transparent">
-                    <TableHead className="w-[180px] font-semibold text-xs text-foreground py-1">Description</TableHead>
-                    <TableHead className="w-[85px] text-center font-semibold text-xs text-foreground py-1">Type</TableHead>
-                    <TableHead className="w-[80px] text-center font-semibold text-xs text-foreground py-1">Rate Mode</TableHead>
-                    <TableHead className="w-[70px] text-center font-semibold text-xs text-foreground py-1">Nights</TableHead>
-                    <TableHead className="w-[95px] text-center font-semibold text-xs text-foreground py-1">Rate/Amount</TableHead>
-                    <TableHead className="w-[75px] text-center font-semibold text-xs text-foreground py-1">Currency</TableHead>
-                    <TableHead className="w-[125px] text-right font-semibold text-xs text-foreground py-1 pr-3">Per Person (PKR)</TableHead>
-                    <TableHead className="w-[36px] py-1"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* 1. Makkah Hotel */}
-                  {!useMultiHotel ? (
-                    <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                      <TableCell className="font-medium text-xs py-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">🕋</span>
-                          <span className="font-semibold">Makkah Hotel</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <SharingTypeSelect
-                          value={makkahSharingType}
-                          onChange={v => setMakkahSharingType(v as HotelEntry["sharingType"])}
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <RateModeSelect
-                          value={makkahRateMode}
-                          onChange={handleMakkahRateModeChange}
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <Input
-                          type="number"
-                          value={makkahNights}
-                          onChange={e => setMakkahNights(e.target.value)}
-                          className="h-7 w-14 mx-auto text-center text-xs"
-                          placeholder="0"
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <Input
-                          type="number"
-                          value={makkahRate}
-                          onChange={e => setMakkahRate(e.target.value)}
-                          className="h-7 w-20 mx-auto text-center text-xs"
-                          placeholder="0.00"
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
-                        {hotelCurrency}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                        {makkahCostPerPerson > 0 ? (
-                          <div className="flex flex-col items-end">
-                            <span className="text-foreground">Rs {formatCurrency(makkahCostPerPerson)}</span>
-                            {makkahRateMode === "room" && (
-                              <span className="text-[10px] text-muted-foreground font-normal">
-                                ÷{OCCUPANCY_DIVISORS[makkahSharingType]}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-center">
-                        <Button
-                          onClick={addMakkahHotel}
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                          title="Add another Makkah hotel"
-                          disabled={isPresetLocked}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <>
-                      {makkahHotels.map((hotel, index) => (
-                        <TableRow key={hotel.id} className="h-10 hover:bg-muted/20 border-b border-border/50">
-                          <TableCell className="font-medium text-xs py-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-base shrink-0">🕋</span>
-                              <Input
-                                type="text"
-                                value={hotel.name}
-                                onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
-                                className="h-7 text-xs w-28 font-medium"
-                                placeholder={`Makkah ${index + 1}`}
-                                disabled={isPresetLocked}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <SharingTypeSelect
-                              value={hotel.sharingType}
-                              onChange={v => updateMakkahHotel(hotel.id, "sharingType", v)}
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <RateModeSelect
-                              value={hotel.rateMode}
-                              onChange={v => updateMakkahHotel(hotel.id, "rateMode", v)}
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <Input
-                              type="number"
-                              value={hotel.nights}
-                              onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
-                              className="h-7 w-14 mx-auto text-center text-xs"
-                              placeholder="0"
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <Input
-                              type="number"
-                              value={hotel.rate}
-                              onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
-                              className="h-7 w-20 mx-auto text-center text-xs"
-                              placeholder="0.00"
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
-                            {hotelCurrency}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                            {getHotelRowTotal(hotel) > 0 ? (
-                              <div className="flex flex-col items-end">
-                                <span className="text-foreground">Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                                {hotel.rateMode === "room" && (
-                                  <span className="text-[10px] text-muted-foreground font-normal">
-                                    ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-1.5 text-center">
-                            <Button
-                              onClick={() => removeMakkahHotel(hotel.id)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                              disabled={isPresetLocked}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {makkahHotels.length > 0 && (
-                        <TableRow className="h-8 bg-muted/25 border-b border-border/50 text-[11px]">
-                          <TableCell colSpan={3} className="py-1 text-xs font-semibold text-muted-foreground pl-6">
-                            Makkah Total ({makkahHotels.length} hotel{makkahHotels.length > 1 ? "s" : ""})
-                          </TableCell>
-                          <TableCell className="text-center py-1 font-semibold text-foreground">
-                            {makkahMultiNights} nts
-                          </TableCell>
-                          <TableCell colSpan={2}></TableCell>
-                          <TableCell className="text-right font-mono text-xs font-bold text-primary py-1 pr-3">
-                            Rs {formatCurrency(makkahMultiTotal)}
-                          </TableCell>
-                          <TableCell className="py-1 text-center">
-                            <Button
-                              onClick={addMakkahHotel}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-primary"
-                              title="Add another Makkah hotel"
-                              disabled={isPresetLocked}
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
-                  )}
-
-                  {/* 2. Madinah Hotel */}
-                  {!useMultiHotel ? (
-                    <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                      <TableCell className="font-medium text-xs py-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">🕌</span>
-                          <span className="font-semibold">Madinah Hotel</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <SharingTypeSelect
-                          value={madinahSharingType}
-                          onChange={v => setMadinahSharingType(v as HotelEntry["sharingType"])}
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <RateModeSelect
-                          value={madinahRateMode}
-                          onChange={handleMadinahRateModeChange}
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <Input
-                          type="number"
-                          value={madinahNights}
-                          onChange={e => setMadinahNights(e.target.value)}
-                          className="h-7 w-14 mx-auto text-center text-xs"
-                          placeholder="0"
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <Input
-                          type="number"
-                          value={madinahRate}
-                          onChange={e => setMadinahRate(e.target.value)}
-                          className="h-7 w-20 mx-auto text-center text-xs"
-                          placeholder="0.00"
-                          disabled={isPresetLocked}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
-                        {hotelCurrency}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                        {madinahCostPerPerson > 0 ? (
-                          <div className="flex flex-col items-end">
-                            <span className="text-foreground">Rs {formatCurrency(madinahCostPerPerson)}</span>
-                            {madinahRateMode === "room" && (
-                              <span className="text-[10px] text-muted-foreground font-normal">
-                                ÷{OCCUPANCY_DIVISORS[madinahSharingType]}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-center">
-                        <Button
-                          onClick={addMadinahHotel}
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                          title="Add another Madinah hotel"
-                          disabled={isPresetLocked}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <>
-                      {madinahHotels.map((hotel, index) => (
-                        <TableRow key={hotel.id} className="h-10 hover:bg-muted/20 border-b border-border/50">
-                          <TableCell className="font-medium text-xs py-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-base shrink-0">🕌</span>
-                              <Input
-                                type="text"
-                                value={hotel.name}
-                                onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
-                                className="h-7 text-xs w-28 font-medium"
-                                placeholder={`Madinah ${index + 1}`}
-                                disabled={isPresetLocked}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <SharingTypeSelect
-                              value={hotel.sharingType}
-                              onChange={v => updateMadinahHotel(hotel.id, "sharingType", v)}
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <RateModeSelect
-                              value={hotel.rateMode}
-                              onChange={v => updateMadinahHotel(hotel.id, "rateMode", v)}
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <Input
-                              type="number"
-                              value={hotel.nights}
-                              onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
-                              className="h-7 w-14 mx-auto text-center text-xs"
-                              placeholder="0"
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5">
-                            <Input
-                              type="number"
-                              value={hotel.rate}
-                              onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
-                              className="h-7 w-20 mx-auto text-center text-xs"
-                              placeholder="0.00"
-                              disabled={isPresetLocked}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center py-1.5 text-xs text-muted-foreground font-medium">
-                            {hotelCurrency}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                            {getHotelRowTotal(hotel) > 0 ? (
-                              <div className="flex flex-col items-end">
-                                <span className="text-foreground">Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                                {hotel.rateMode === "room" && (
-                                  <span className="text-[10px] text-muted-foreground font-normal">
-                                    ÷{OCCUPANCY_DIVISORS[hotel.sharingType]}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-1.5 text-center">
-                            <Button
-                              onClick={() => removeMadinahHotel(hotel.id)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                              disabled={isPresetLocked}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {madinahHotels.length > 0 && (
-                        <TableRow className="h-8 bg-muted/25 border-b border-border/50 text-[11px]">
-                          <TableCell colSpan={3} className="py-1 text-xs font-semibold text-muted-foreground pl-6">
-                            Madinah Total ({madinahHotels.length} hotel{madinahHotels.length > 1 ? "s" : ""})
-                          </TableCell>
-                          <TableCell className="text-center py-1 font-semibold text-foreground">
-                            {madinahMultiNights} nts
-                          </TableCell>
-                          <TableCell colSpan={2}></TableCell>
-                          <TableCell className="text-right font-mono text-xs font-bold text-primary py-1 pr-3">
-                            Rs {formatCurrency(madinahMultiTotal)}
-                          </TableCell>
-                          <TableCell className="py-1 text-center">
-                            <Button
-                              onClick={addMadinahHotel}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-primary"
-                              title="Add another Madinah hotel"
-                              disabled={isPresetLocked}
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
-                  )}
-
-                  {/* 3. Airline Ticket */}
-                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                    <TableCell className="font-medium text-xs py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">✈️</span>
-                        <span>Airline Ticket</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <Input
-                        type="number"
-                        value={ticketCost}
-                        onChange={e => setTicketCost(e.target.value)}
-                        className="h-7 w-20 mx-auto text-center text-xs"
-                        placeholder="0.00"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-[68px] mx-auto" />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                      {ticketPerPerson > 0 ? `Rs ${formatCurrency(ticketPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-1.5"></TableCell>
-                  </TableRow>
-
-                  {/* 4. Visa Fee */}
-                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                    <TableCell className="font-medium text-xs py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">📋</span>
-                        <span>Visa Fee</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <Input
-                        type="number"
-                        value={visaFee}
-                        onChange={e => setVisaFee(e.target.value)}
-                        className="h-7 w-20 mx-auto text-center text-xs"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <CurrencySelect
-                        value={visaCurrency}
-                        onChange={setVisaCurrency}
-                        className="w-[68px] mx-auto"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                      {visaPerPerson > 0 ? `Rs ${formatCurrency(visaPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-1.5"></TableCell>
-                  </TableRow>
-
-                  {/* 5. Transport */}
-                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                    <TableCell className="font-medium text-xs py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">🚌</span>
-                        <span>Transport</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <Input
-                        type="number"
-                        value={transport}
-                        onChange={e => setTransport(e.target.value)}
-                        className="h-7 w-20 mx-auto text-center text-xs"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <CurrencySelect
-                        value={transportCurrency}
-                        onChange={setTransportCurrency}
-                        className="w-[68px] mx-auto"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                      {transportPerPerson > 0 ? `Rs ${formatCurrency(transportPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-1.5"></TableCell>
-                  </TableRow>
-
-                  {/* 6. Ziyarat */}
-                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                    <TableCell className="font-medium text-xs py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">🕌</span>
-                        <span>Ziyarat</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <Input
-                        type="number"
-                        value={ziyarat}
-                        onChange={e => setZiyarat(e.target.value)}
-                        className="h-7 w-20 mx-auto text-center text-xs"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <CurrencySelect
-                        value={ziyaratCurrency}
-                        onChange={setZiyaratCurrency}
-                        className="w-[68px] mx-auto"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                      {ziyaratPerPerson > 0 ? `Rs ${formatCurrency(ziyaratPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-1.5"></TableCell>
-                  </TableRow>
-
-                  {/* 7. Food/Add-ons */}
-                  <TableRow className="h-10 hover:bg-muted/20 border-b border-border/50">
-                    <TableCell className="font-medium text-xs py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">🍽️</span>
-                        <span>Food / Add-ons</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5 text-muted-foreground text-xs">—</TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <Input
-                        type="number"
-                        value={food}
-                        onChange={e => setFood(e.target.value)}
-                        className="h-7 w-20 mx-auto text-center text-xs"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center py-1.5">
-                      <CurrencySelect
-                        value={foodCurrency}
-                        onChange={setFoodCurrency}
-                        className="w-[68px] mx-auto"
-                        disabled={isPresetLocked}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs font-semibold py-1.5 pr-3">
-                      {foodPerPerson > 0 ? `Rs ${formatCurrency(foodPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-1.5"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+        {/* ONE UNIFIED SHEET: Reads as a single continuous sheet with thin dividers */}
+        <div className="rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden flex flex-col divide-y divide-border/60">
+          {/* =====================================================================
+              (A) COST ROWS (4 rows instead of 7+), 12-column grid alignment
+             ===================================================================== */}
+          <div className="flex flex-col divide-y divide-border/50">
+            {/* Header row for Hotels */}
+            <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span>Description</span>
+              <span className="text-center">Type</span>
+              <span className="text-center">Rate Mode</span>
+              <span className="text-center">Nights</span>
+              <span className="text-center">Rate</span>
+              <span className="text-center">Currency</span>
+              <span className="text-right pr-2">Per Person (PKR)</span>
+              <span></span>
             </div>
 
-            {/* Compact "Total per person" row at the bottom of the table */}
-            <div className="h-9 px-4 bg-muted/60 border-t border-border flex items-center justify-between text-xs shrink-0 font-semibold">
-              <span className="text-muted-foreground">Total Per Person (Base Costs)</span>
-              <div className="font-mono text-sm font-bold text-primary">
-                Rs {formatCurrency(tableBaseCostPerPerson)}
+            {/* Row 1: Makkah Hotel */}
+            {!useMultiHotel ? (
+              <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">🕋</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Makkah Hotel</span>
+                </div>
+                <div>
+                  <SharingTypeSelect
+                    value={makkahSharingType}
+                    onChange={v => setMakkahSharingType(v as HotelEntry["sharingType"])}
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <RateModeSelect
+                    value={makkahRateMode}
+                    onChange={handleMakkahRateModeChange}
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    value={makkahNights}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setMakkahNights(e.target.value)}
+                    className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                    placeholder="0"
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    value={makkahRate}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setMakkahRate(e.target.value)}
+                    className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div className="text-center text-xs font-semibold text-muted-foreground">
+                  {hotelCurrency}
+                </div>
+                <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
+                  {makkahCostPerPerson > 0 ? (
+                    <span>Rs {formatCurrency(makkahCostPerPerson)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <Button
+                    onClick={addMakkahHotel}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    title="Add another Makkah hotel"
+                    disabled={isPresetLocked}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
+            ) : (
+              <>
+                {makkahHotels.map((hotel, index) => (
+                  <div key={hotel.id} className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-base shrink-0">🕋</span>
+                      <Input
+                        type="text"
+                        value={hotel.name}
+                        onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
+                        className="h-8 text-xs font-semibold w-36"
+                        placeholder={`Makkah ${index + 1}`}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <SharingTypeSelect
+                        value={hotel.sharingType}
+                        onChange={v => updateMakkahHotel(hotel.id, "sharingType", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <RateModeSelect
+                        value={hotel.rateMode}
+                        onChange={v => updateMakkahHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        value={hotel.nights}
+                        onFocus={e => e.target.select()}
+                        onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
+                        className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                        placeholder="0"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        value={hotel.rate}
+                        onFocus={e => e.target.select()}
+                        onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
+                        className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div className="text-center text-xs font-semibold text-muted-foreground">
+                      {hotelCurrency}
+                    </div>
+                    <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
+                      {getHotelRowTotal(hotel) > 0 ? (
+                        <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <Button
+                        onClick={() => removeMakkahHotel(hotel.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        disabled={isPresetLocked}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Row 2: Madinah Hotel */}
+            {!useMultiHotel ? (
+              <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">🕌</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Madinah Hotel</span>
+                </div>
+                <div>
+                  <SharingTypeSelect
+                    value={madinahSharingType}
+                    onChange={v => setMadinahSharingType(v as HotelEntry["sharingType"])}
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <RateModeSelect
+                    value={madinahRateMode}
+                    onChange={handleMadinahRateModeChange}
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    value={madinahNights}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setMadinahNights(e.target.value)}
+                    className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                    placeholder="0"
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    value={madinahRate}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setMadinahRate(e.target.value)}
+                    className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                </div>
+                <div className="text-center text-xs font-semibold text-muted-foreground">
+                  {hotelCurrency}
+                </div>
+                <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
+                  {madinahCostPerPerson > 0 ? (
+                    <span>Rs {formatCurrency(madinahCostPerPerson)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <Button
+                    onClick={addMadinahHotel}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    title="Add another Madinah hotel"
+                    disabled={isPresetLocked}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {madinahHotels.map((hotel, index) => (
+                  <div key={hotel.id} className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-base shrink-0">🕌</span>
+                      <Input
+                        type="text"
+                        value={hotel.name}
+                        onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
+                        className="h-8 text-xs font-semibold w-36"
+                        placeholder={`Madinah ${index + 1}`}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <SharingTypeSelect
+                        value={hotel.sharingType}
+                        onChange={v => updateMadinahHotel(hotel.id, "sharingType", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <RateModeSelect
+                        value={hotel.rateMode}
+                        onChange={v => updateMadinahHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        value={hotel.nights}
+                        onFocus={e => e.target.select()}
+                        onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
+                        className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                        placeholder="0"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        value={hotel.rate}
+                        onFocus={e => e.target.select()}
+                        onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
+                        className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                        placeholder="0.00"
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                    <div className="text-center text-xs font-semibold text-muted-foreground">
+                      {hotelCurrency}
+                    </div>
+                    <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
+                      {getHotelRowTotal(hotel) > 0 ? (
+                        <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <Button
+                        onClick={() => removeMadinahHotel(hotel.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        disabled={isPresetLocked}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Row 3: TWO items side by side (6 cols each): Airline Ticket & Visa Fee */}
+            <div className="grid grid-cols-2 divide-x divide-border/60">
+              {/* Airline Ticket */}
+              <div className="flex items-center justify-between gap-3 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">✈️</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Airline Ticket</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Input
+                    type="number"
+                    value={ticketCost}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setTicketCost(e.target.value)}
+                    className="h-8 w-28 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                  />
+                  <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-[66px] h-8" />
+                  <div className="w-[110px] text-right font-mono text-xs font-bold text-foreground">
+                    {ticketPerPerson > 0 ? `Rs ${formatCurrency(ticketPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Visa Fee */}
+              <div className="flex items-center justify-between gap-3 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">📋</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Visa Fee</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Input
+                    type="number"
+                    value={visaFee}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setVisaFee(e.target.value)}
+                    className="h-8 w-28 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                  <CurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} className="w-[66px] h-8" />
+                  <div className="w-[110px] text-right font-mono text-xs font-bold text-foreground">
+                    {visaPerPerson > 0 ? `Rs ${formatCurrency(visaPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 4: THREE items side by side (4 cols each): Transport, Ziyarat, Food */}
+            <div className="grid grid-cols-3 divide-x divide-border/60">
+              {/* Transport */}
+              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-base shrink-0">🚌</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Transport</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Input
+                    type="number"
+                    value={transport}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setTransport(e.target.value)}
+                    className="h-8 w-22 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                  <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
+                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
+                    {transportPerPerson > 0 ? `Rs ${formatCurrency(transportPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Ziyarat */}
+              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-base shrink-0">🕌</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Ziyarat</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Input
+                    type="number"
+                    value={ziyarat}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setZiyarat(e.target.value)}
+                    className="h-8 w-22 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                  <CurrencySelect value={ziyaratCurrency} onChange={setZiyaratCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
+                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
+                    {ziyaratPerPerson > 0 ? `Rs ${formatCurrency(ziyaratPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Food / Add-ons */}
+              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-base shrink-0">🍽️</span>
+                  <span className="text-xs font-semibold text-foreground truncate">Food</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Input
+                    type="number"
+                    value={food}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setFood(e.target.value)}
+                    className="h-8 w-22 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                    disabled={isPresetLocked}
+                  />
+                  <CurrencySelect value={foodCurrency} onChange={setFoodCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
+                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
+                    {foodPerPerson > 0 ? `Rs ${formatCurrency(foodPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Slim line: Total per person (base costs) */}
+            <div className="h-7 px-4 bg-muted/30 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+              <span>Total per person (base costs)</span>
+              <span className="font-mono text-xs font-bold text-primary">
+                Rs {formatCurrency(tableBaseCostPerPerson)}
+              </span>
             </div>
           </div>
 
-          {/* RIGHT COLUMN (~35% / col-span-4): Sticky Card Stack (no scrolling) */}
-          <div className="col-span-4 flex flex-col h-full gap-2.5 justify-between overflow-hidden">
-            {/* Card 1: Passengers & Service Charges / Profit */}
-            <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs space-y-2.5 shrink-0">
-              {/* Passengers Steppers */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <span>👥</span> Passengers
-                  </span>
-                  <span className="text-[11px] font-medium text-muted-foreground">
-                    Total: <strong className="text-foreground">{totalPassengers || 1}</strong> pax
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Adults */}
-                  <div className="space-y-0.5">
-                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Adults</label>
-                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => stepCount(adultCount, -1, setAdultCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={adultCount}
-                        onChange={e => setAdultCount(e.target.value)}
-                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="0"
-                        min="0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => stepCount(adultCount, 1, setAdultCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Children */}
-                  <div className="space-y-0.5">
-                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Children</label>
-                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => stepCount(childCount, -1, setChildCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={childCount}
-                        onChange={e => setChildCount(e.target.value)}
-                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="0"
-                        min="0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => stepCount(childCount, 1, setChildCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Infants */}
-                  <div className="space-y-0.5">
-                    <label className="text-[10px] font-medium text-muted-foreground block text-center">Infants</label>
-                    <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => stepCount(infantCount, -1, setInfantCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={infantCount}
-                        onChange={e => setInfantCount(e.target.value)}
-                        className="w-full text-center text-xs font-semibold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="0"
-                        min="0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => stepCount(infantCount, 1, setInfantCount)}
-                        className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
+          {/* =====================================================================
+              (B) PASSENGERS + CHARGES = ONE SINGLE ROW
+             ===================================================================== */}
+          <div className="px-4 py-2 bg-card flex items-center justify-between gap-4">
+            {/* Left: Adults | Children | Infants as 3 compact +/- steppers */}
+            <div className="flex items-center gap-3">
+              {/* Adults Stepper */}
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
+                  Adults
+                </span>
+                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(adultCount, -1, setAdultCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={adultCount}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setAdultCount(e.target.value)}
+                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                    min="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(adultCount, 1, setAdultCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
 
-              {/* Service Charges & Profit (Compact Inputs) */}
-              <div className="pt-2 border-t border-border/60 grid grid-cols-2 gap-2">
-                {/* Service Charges */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-medium text-muted-foreground block">Service Charges</label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      value={serviceCharges}
-                      onChange={e => setServiceCharges(e.target.value)}
-                      className="h-7 text-xs font-medium text-center"
-                      placeholder="0.00"
-                    />
-                    <CurrencySelect
-                      value={serviceChargesCurrency}
-                      onChange={setServiceChargesCurrency}
-                      className="w-[60px]"
-                    />
+              {/* Children Stepper */}
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
+                  Children
+                </span>
+                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(childCount, -1, setChildCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={childCount}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setChildCount(e.target.value)}
+                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                    min="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(childCount, 1, setChildCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Infants Stepper */}
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
+                  Infants
+                </span>
+                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+                  <button
+                    type="button"
+                    onClick={() => stepCount(infantCount, -1, setInfantCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={infantCount}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setInfantCount(e.target.value)}
+                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                    min="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => stepCount(infantCount, 1, setInfantCount)}
+                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Small "Total: N pax" badge */}
+              <div className="self-end mb-0.5 ml-1">
+                <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-bold tracking-tight">
+                  Total: {totalPassengers || 1} pax
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-border/80" />
+
+            {/* Right: Service Charges and Profit / Markup on SAME row */}
+            <div className="flex items-center gap-4">
+              {/* Service Charges */}
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-semibold text-muted-foreground block uppercase tracking-wide">
+                  Service Charges (per person)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    value={serviceCharges}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setServiceCharges(e.target.value)}
+                    className="h-8 w-24 text-center text-xs font-semibold"
+                    placeholder="0.00"
+                  />
+                  <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-[66px] h-8" />
+                </div>
+              </div>
+
+              <div className="h-8 w-px bg-border/80" />
+
+              {/* Profit / Markup with small segmented toggle % | PKR */}
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    Profit / Markup
+                  </span>
+                  <div className="inline-flex rounded-md p-0.5 bg-muted border border-border text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setProfitType("percentage")}
+                      className={cn(
+                        "px-1.5 py-0.2 rounded font-semibold transition-all",
+                        profitType === "percentage" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
+                      )}
+                    >
+                      %
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfitType("fixed")}
+                      className={cn(
+                        "px-1.5 py-0.2 rounded font-semibold transition-all",
+                        profitType === "fixed" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
+                      )}
+                    >
+                      PKR
+                    </button>
                   </div>
                 </div>
 
-                {/* Profit */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-medium text-muted-foreground">Profit / Markup</label>
-                    <div className="inline-flex rounded-md p-0.5 bg-muted/60 text-[10px]">
-                      <button
-                        type="button"
-                        onClick={() => setProfitType("percentage")}
-                        className={cn(
-                          "px-1.5 py-0.2 rounded font-medium transition-all",
-                          profitType === "percentage" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
-                        )}
-                      >
-                        %
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfitType("fixed")}
-                        className={cn(
-                          "px-1.5 py-0.2 rounded font-medium transition-all",
-                          profitType === "fixed" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
-                        )}
-                      >
-                        PKR
-                      </button>
-                    </div>
-                  </div>
-
+                <div>
                   {profitType === "percentage" ? (
                     <div className="relative">
                       <Input
                         type="number"
                         value={profitPercent}
+                        onFocus={e => e.target.select()}
                         onChange={e => setProfitPercent(e.target.value)}
-                        className="h-7 text-xs font-medium pr-5 text-center"
+                        className="h-8 w-28 text-center text-xs font-semibold pr-5"
                         placeholder="0"
                       />
-                      <span className="absolute right-2 top-1.5 text-xs text-muted-foreground pointer-events-none">%</span>
+                      <span className="absolute right-2 top-2 text-[10px] font-bold text-muted-foreground pointer-events-none">%</span>
                     </div>
                   ) : (
                     <Input
                       type="number"
                       value={profitFixed}
+                      onFocus={e => e.target.select()}
                       onChange={e => setProfitFixed(e.target.value)}
-                      className="h-7 text-xs font-medium text-center"
+                      className="h-8 w-28 text-center text-xs font-semibold"
                       placeholder="Fixed PKR"
                     />
                   )}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Card 2: SUMMARY card (highlighted, dark/gradient card, no scrolling) */}
-            <div className="rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-white dark:from-slate-950 dark:via-card dark:to-slate-900 shadow-md p-3.5 flex flex-col justify-between flex-1 min-h-0">
-              {/* Top part: Key breakdown */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> Package Summary
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">
-                    {result?.nights || 0} Nights
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/10">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Per Person Cost</span>
-                    <span className="font-mono font-bold text-white text-sm">
-                      Rs {formatCurrency(result?.perPerson || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Total Passengers</span>
-                    <span className="font-semibold text-white">
-                      {result?.totalPassengers || 1} passenger{result?.totalPassengers !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Base Package Total</span>
-                    <span className="font-mono text-slate-200">
-                      Rs {formatCurrency(result?.baseTotal || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Profit / Markup</span>
-                    <span className="font-mono text-emerald-300">
-                      + Rs {formatCurrency(result?.profitAmount || 0)}
-                    </span>
-                  </div>
-                </div>
+          {/* =====================================================================
+              (C) PACKAGE SUMMARY = SLIM STRIP DIRECTLY BELOW (B)
+             ===================================================================== */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white dark:from-slate-950 dark:via-card dark:to-slate-900 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
+            {/* Key figures across one row */}
+            <div className="flex items-center gap-4 text-xs min-w-0">
+              {/* Per Person Cost */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Per Person</span>
+                <span className="font-mono text-sm font-bold text-white">
+                  Rs {formatCurrency(result?.perPerson || 0)}
+                </span>
               </div>
 
-              {/* Center part: FINAL TOTAL in large bold text */}
-              <div className="my-2 p-2.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider block">
-                    Final Total (PKR)
-                  </span>
-                  <span className="text-2xl xl:text-3xl font-black text-emerald-400 font-mono tracking-tight">
-                    Rs {formatCurrency(result?.finalTotal || 0)}
-                  </span>
-                </div>
-                <Button
-                  onClick={handleCalculate}
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 px-2.5 text-xs gap-1 font-semibold bg-emerald-500 hover:bg-emerald-600 text-slate-950"
-                  title="Recalculate package"
-                >
-                  <Calculator className="w-3.5 h-3.5" />
-                  <span>Calc</span>
-                </Button>
+              <div className="h-6 w-px bg-white/15" />
+
+              {/* Total Passengers */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Passengers</span>
+                <span className="text-xs font-semibold text-slate-200">
+                  {result?.totalPassengers || 1} pax
+                </span>
               </div>
 
-              {/* Bottom part: Action buttons */}
-              <div className="space-y-1.5 pt-1">
-                {/* Primary actions */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button
-                    onClick={handleCreateQuotation}
-                    size="sm"
-                    className="h-8 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Create Quotation</span>
-                  </Button>
-                  <Button
-                    onClick={handleCreateBooking}
-                    size="sm"
-                    className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Create Booking</span>
-                  </Button>
-                </div>
+              <div className="h-6 w-px bg-white/15" />
 
-                {/* Secondary utilities */}
-                <div className="grid grid-cols-4 gap-1 pt-0.5">
-                  <Button
-                    onClick={handleDownloadPdf}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
-                    title="Download Summary PDF"
-                  >
-                    <FileDown className="w-3 h-3" />
-                    <span>PDF</span>
-                  </Button>
-                  <Button
-                    onClick={handleSaveDraft}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
-                    title="Save Draft"
-                  >
-                    <Save className="w-3 h-3" />
-                    <span>Save</span>
-                  </Button>
-                  <Button
-                    onClick={handleCopyQuote}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
-                    title="Copy Quote text"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>Copy</span>
-                  </Button>
-                  <Button
-                    onClick={handleReset}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/10 gap-1"
-                    title="Reset Calculator"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset</span>
-                  </Button>
-                </div>
+              {/* Nights */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Duration</span>
+                <span className="text-xs font-semibold text-slate-200">
+                  {result?.nights || 0} Nights
+                </span>
+              </div>
+
+              <div className="h-6 w-px bg-white/15" />
+
+              {/* Base Package Total */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Base Total</span>
+                <span className="font-mono text-xs font-semibold text-slate-200">
+                  Rs {formatCurrency(result?.baseTotal || 0)}
+                </span>
+              </div>
+
+              <div className="h-6 w-px bg-white/15" />
+
+              {/* Service Charges */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Services</span>
+                <span className="font-mono text-xs font-semibold text-slate-200">
+                  Rs {formatCurrency(serviceChargesTotal)}
+                </span>
+              </div>
+
+              <div className="h-6 w-px bg-white/15" />
+
+              {/* Profit / Markup */}
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Profit</span>
+                <span className="font-mono text-xs font-bold text-emerald-400">
+                  + Rs {formatCurrency(result?.profitAmount || 0)}
+                </span>
               </div>
             </div>
+
+            {/* FINAL TOTAL (largest, bold, PKR) */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
+                  FINAL TOTAL (PKR)
+                </span>
+                <span className="text-xl xl:text-2xl font-black text-emerald-400 font-mono tracking-tight leading-none">
+                  Rs {formatCurrency(result?.finalTotal || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* =====================================================================
+              (D) ACTION BUTTONS = ONE ROW AT THE BOTTOM OF THE STRIP (all h-10)
+             ===================================================================== */}
+          <div className="px-4 py-2.5 bg-card flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              {/* Calculate Button */}
+              <Button
+                onClick={handleCalculate}
+                className="h-10 px-4 gap-2 font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+              >
+                <Calculator className="w-4 h-4" />
+                <span>Calculate</span>
+              </Button>
+
+              {/* Create Quotation (PRIMARY, solid dark blue, white text) */}
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleCreateQuotation}
+                      className="h-10 px-5 gap-2 font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-primary dark:text-primary-foreground shadow-sm"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Create Quotation</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Create Quotation (Ctrl+Enter or ⌘Enter)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {/* Download Summary (solid green, white text) */}
+              <Button
+                onClick={handleDownloadPdf}
+                className="h-10 px-4 gap-2 font-semibold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Download Summary</span>
+              </Button>
+
+              {/* Save Draft (outlined, dark text, visible border) */}
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleSaveDraft}
+                      variant="outline"
+                      className="h-10 px-4 gap-2 font-semibold text-xs border-border/90 hover:bg-muted text-foreground shadow-2xs"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Save Draft</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Save Draft (Ctrl+S or ⌘S)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {/* Copy Quote Button */}
+              <Button
+                onClick={handleCopyQuote}
+                variant="outline"
+                className="h-10 px-3.5 gap-1.5 font-semibold text-xs border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground"
+                title="Copy formatted quotation text"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy Quote</span>
+              </Button>
+            </div>
+
+            {/* Reset Button (outlined RED/destructive style, asks for confirmation) */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => setShowResetConfirmDialog(true)}
+                    variant="outline"
+                    className="h-10 px-4 gap-2 font-bold text-xs border-red-500/80 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 shadow-2xs"
+                  >
+                    <RotateCcw className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    <span>Reset</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Reset Calculator (Ctrl+Shift+R or ⌘⇧R)
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
 
       {/* =========================================================================
           MOBILE LAYOUT (< 1024px)
-          Thumb-friendly, min touch target 44px, sticky bottom bar, accordion items
+          Compact app screen, separate layout, same state, no horizontal scroll
          ========================================================================= */}
       <div className="lg:hidden flex flex-col space-y-3 pb-44 px-1">
         {/* Mobile Top Bar */}
@@ -2052,10 +2017,10 @@ export default function UmrahCalculator() {
             </Button>
 
             <Button
-              onClick={handleReset}
-              variant="ghost"
+              onClick={() => setShowResetConfirmDialog(true)}
+              variant="outline"
               size="sm"
-              className="h-9 w-9 p-0 text-muted-foreground min-h-[44px]"
+              className="h-9 px-2 text-xs border-red-500/70 text-red-600 min-h-[44px]"
               title="Reset"
             >
               <RotateCcw className="w-4 h-4" />
@@ -2073,6 +2038,7 @@ export default function UmrahCalculator() {
                 type="number"
                 inputMode="decimal"
                 value={sarToPkrRate}
+                onFocus={e => e.target.select()}
                 onChange={e => setSarToPkrRate(e.target.value)}
                 className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
                 placeholder="77.50"
@@ -2141,7 +2107,7 @@ export default function UmrahCalculator() {
           </div>
         </div>
 
-        {/* Cost items accordion list */}
+        {/* Compact Cost Cards: Hotels (expanded), Airline+Visa (2 cols), Transport+Ziyarat+Food (3 tiles) */}
         <MobileUmrahCostCards
           useMultiHotel={useMultiHotel}
           makkahHotels={makkahHotels}
@@ -2193,7 +2159,7 @@ export default function UmrahCalculator() {
           parseValue={parseValue}
           convertToPKR={convertToPKR}
           formatCurrency={formatCurrency}
-          getCurrencySymbol={getCurrencySymbol}
+          getCurrencySymbol={() => "Rs"}
           getSingleHotelRowTotal={getSingleHotelRowTotal}
           getHotelRowTotal={getHotelRowTotal}
           makkahMultiTotal={makkahMultiTotal}
@@ -2202,127 +2168,128 @@ export default function UmrahCalculator() {
           madinahMultiNights={madinahMultiNights}
         />
 
-        {/* Passengers & Service Charges & Profit in one compact card */}
-        <div className="rounded-xl border border-border bg-card p-3.5 shadow-xs space-y-3.5">
-          {/* Passengers */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wide">
-                <span>👥</span> Passengers
-              </span>
-              <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                {totalPassengers || 1} Total Pax
-              </span>
+        {/* Passengers: Adults / Children / Infants as 3 compact steppers in ONE row */}
+        <div className="rounded-xl border border-border bg-card p-3 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground uppercase tracking-wide">
+              👥 Passengers
+            </span>
+            <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+              {totalPassengers || 1} Total Pax
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {/* Adults */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Adults</label>
+              <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                <button
+                  type="button"
+                  onClick={() => stepCount(adultCount, -1, setAdultCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={adultCount}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setAdultCount(e.target.value)}
+                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={() => stepCount(adultCount, 1, setAdultCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              {/* Adults */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Adults</label>
-                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
-                  <button
-                    type="button"
-                    onClick={() => stepCount(adultCount, -1, setAdultCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={adultCount}
-                    onChange={e => setAdultCount(e.target.value)}
-                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
-                    placeholder="0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepCount(adultCount, 1, setAdultCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
+            {/* Children */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Children</label>
+              <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                <button
+                  type="button"
+                  onClick={() => stepCount(childCount, -1, setChildCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={childCount}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setChildCount(e.target.value)}
+                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={() => stepCount(childCount, 1, setChildCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
               </div>
+            </div>
 
-              {/* Children */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Children</label>
-                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
-                  <button
-                    type="button"
-                    onClick={() => stepCount(childCount, -1, setChildCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={childCount}
-                    onChange={e => setChildCount(e.target.value)}
-                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
-                    placeholder="0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepCount(childCount, 1, setChildCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Infants */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Infants</label>
-                <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
-                  <button
-                    type="button"
-                    onClick={() => stepCount(infantCount, -1, setInfantCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={infantCount}
-                    onChange={e => setInfantCount(e.target.value)}
-                    className="w-full text-center text-sm font-bold bg-transparent border-0 focus:outline-none p-0"
-                    placeholder="0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepCount(infantCount, 1, setInfantCount)}
-                    className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
+            {/* Infants */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Infants</label>
+              <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
+                <button
+                  type="button"
+                  onClick={() => stepCount(infantCount, -1, setInfantCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={infantCount}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setInfantCount(e.target.value)}
+                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={() => stepCount(infantCount, 1, setInfantCount)}
+                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Service Charges & Profit */}
-          <div className="pt-3 border-t border-border/60 space-y-3">
+        {/* Service Charges and Profit / Markup in ONE row (2 columns) */}
+        <div className="rounded-xl border border-border bg-card p-3 shadow-xs">
+          <div className="grid grid-cols-2 gap-2.5">
             {/* Service Charges */}
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Service Charges (Per Person)</label>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={serviceCharges}
-                    onChange={e => setServiceCharges(e.target.value)}
-                    className="h-11 min-h-[44px] text-center font-bold bg-background"
-                    placeholder="0.00"
-                  />
-                </div>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Service Charges</label>
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={serviceCharges}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setServiceCharges(e.target.value)}
+                  className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                  placeholder="0.00"
+                />
                 <Select value={serviceChargesCurrency} onValueChange={setServiceChargesCurrency}>
-                  <SelectTrigger className="h-11 min-h-[44px] text-xs font-semibold bg-background">
+                  <SelectTrigger className="h-10 text-xs font-semibold bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2336,8 +2303,8 @@ export default function UmrahCalculator() {
               </div>
             </div>
 
-            {/* Profit Settings */}
-            <div className="space-y-1.5">
+            {/* Profit / Markup (segmented toggle % | PKR + single input) */}
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase">Profit / Markup</label>
                 <div className="inline-flex rounded-lg p-0.5 bg-muted border border-border text-xs">
@@ -2345,21 +2312,21 @@ export default function UmrahCalculator() {
                     type="button"
                     onClick={() => setProfitType("percentage")}
                     className={cn(
-                      "px-3 py-1 rounded-md font-semibold transition-all",
+                      "px-2 py-0.5 rounded font-semibold transition-all",
                       profitType === "percentage" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
                     )}
                   >
-                    % Percent
+                    %
                   </button>
                   <button
                     type="button"
                     onClick={() => setProfitType("fixed")}
                     className={cn(
-                      "px-3 py-1 rounded-md font-semibold transition-all",
+                      "px-2 py-0.5 rounded font-semibold transition-all",
                       profitType === "fixed" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
                     )}
                   >
-                    Fixed PKR
+                    PKR
                   </button>
                 </div>
               </div>
@@ -2370,6 +2337,7 @@ export default function UmrahCalculator() {
                     type="number"
                     inputMode="decimal"
                     value={profitPercent}
+                    onFocus={e => e.target.select()}
                     onChange={e => setProfitPercent(e.target.value)}
                     className="h-11 min-h-[44px] text-center font-bold text-base bg-background pr-8"
                     placeholder="e.g. 10"
@@ -2381,12 +2349,62 @@ export default function UmrahCalculator() {
                   type="number"
                   inputMode="decimal"
                   value={profitFixed}
+                  onFocus={e => e.target.select()}
                   onChange={e => setProfitFixed(e.target.value)}
                   className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
                   placeholder="e.g. 15000"
                 />
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Mobile Action Buttons */}
+        <div className="space-y-2 pt-1">
+          {/* Calculate Button (full-width solid blue) */}
+          <Button
+            onClick={handleCalculate}
+            className="w-full h-11 min-h-[44px] font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs"
+          >
+            <Calculator className="w-4 h-4 mr-1.5" />
+            <span>Calculate</span>
+          </Button>
+
+          {/* Create Quotation (full-width primary, 48px) */}
+          <Button
+            onClick={handleCreateQuotation}
+            className="w-full h-12 font-bold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-primary dark:text-primary-foreground rounded-xl shadow-sm"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            <span>Create Quotation</span>
+          </Button>
+
+          {/* Row of three equal buttons: Save Draft | Download | Reset */}
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              onClick={handleSaveDraft}
+              variant="outline"
+              className="h-11 min-h-[44px] text-xs font-semibold gap-1 px-1 rounded-xl"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save Draft</span>
+            </Button>
+            <Button
+              onClick={handleDownloadPdf}
+              variant="outline"
+              className="h-11 min-h-[44px] text-xs font-semibold gap-1 px-1 rounded-xl text-emerald-600 border-emerald-500/50"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Download</span>
+            </Button>
+            <Button
+              onClick={() => setShowResetConfirmDialog(true)}
+              variant="outline"
+              className="h-11 min-h-[44px] text-xs font-semibold gap-1 px-1 rounded-xl border-red-500/70 text-red-600"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </Button>
           </div>
         </div>
 
@@ -2479,7 +2497,7 @@ export default function UmrahCalculator() {
                 <div className="flex justify-between py-1 border-b border-border/50">
                   <span className="text-muted-foreground">Service Charges</span>
                   <span className="font-mono font-medium">
-                    Rs {formatCurrency(convertToPKR(parseValue(serviceCharges), serviceChargesCurrency) * (result?.totalPassengers || 1))}
+                    Rs {formatCurrency(serviceChargesTotal)}
                   </span>
                 </div>
               )}
@@ -2510,14 +2528,14 @@ export default function UmrahCalculator() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons inside Mobile Details */}
               <div className="space-y-2 pt-2">
                 <Button
                   onClick={() => {
                     setMobileSummaryOpen(false);
                     handleCreateQuotation();
                   }}
-                  className="w-full h-11 min-h-[44px] text-xs font-semibold gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full h-11 min-h-[44px] text-xs font-semibold gap-2 bg-slate-900 hover:bg-slate-800 text-white"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Create Quotation</span>
@@ -2534,30 +2552,22 @@ export default function UmrahCalculator() {
                   <span>Create Booking</span>
                 </Button>
 
-                <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   <Button
                     onClick={handleDownloadPdf}
                     variant="outline"
-                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
+                    className="h-11 min-h-[44px] text-xs gap-1"
                   >
                     <FileDown className="w-3.5 h-3.5" />
-                    <span>PDF</span>
+                    <span>Download PDF</span>
                   </Button>
                   <Button
                     onClick={handleCopyQuote}
                     variant="outline"
-                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
+                    className="h-11 min-h-[44px] text-xs gap-1"
                   >
                     <Copy className="w-3.5 h-3.5" />
-                    <span>Copy</span>
-                  </Button>
-                  <Button
-                    onClick={handleSaveDraft}
-                    variant="outline"
-                    className="h-11 min-h-[44px] text-xs gap-1 px-1"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save</span>
+                    <span>Copy Quote</span>
                   </Button>
                 </div>
               </div>
@@ -2646,7 +2656,7 @@ export default function UmrahCalculator() {
         </Sheet>
       </div>
 
-      {/* Save as New Preset Dialog (Desktop & Mobile) */}
+      {/* Save as New Preset Dialog */}
       <Dialog open={showAddPresetDialog} onOpenChange={setShowAddPresetDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2658,6 +2668,7 @@ export default function UmrahCalculator() {
               <Input
                 id="preset-name"
                 value={newPresetName}
+                onFocus={e => e.target.select()}
                 onChange={e => setNewPresetName(e.target.value)}
                 placeholder="e.g., Package 5, Economy Special..."
                 className="h-10"
@@ -2672,6 +2683,36 @@ export default function UmrahCalculator() {
               Cancel
             </Button>
             <Button onClick={saveAsPreset}>Save Preset</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Confirmation Dialog (Desktop & Mobile) */}
+      <Dialog open={showResetConfirmDialog} onOpenChange={setShowResetConfirmDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+              <span>Reset Umrah Calculator?</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Are you sure you want to reset all hotel configurations, tickets, visas, transports, and passengers back to default values? Any unsaved draft will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button variant="outline" onClick={() => setShowResetConfirmDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setShowResetConfirmDialog(false);
+                handleReset();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              Yes, Reset Everything
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

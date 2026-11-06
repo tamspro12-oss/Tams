@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.2.0'; // Update this with each deployment
+const CURRENT_VERSION = '3.2.1'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests

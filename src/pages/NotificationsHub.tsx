@@ -1,28 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell,
   CheckCircle2,
@@ -39,14 +21,17 @@ import {
   Building2,
   Trash2,
   Moon,
+  Sliders,
 } from "lucide-react";
 import { useReminders } from "@/hooks/useReminders";
 import { useNotifications } from "@/hooks/useNotifications";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { NotificationPreferences } from "@/components/NotificationPreferences";
+import { NewReminderDialog } from "@/components/NewReminderDialog";
 
-type NotificationTab = "all" | "travel" | "accounts" | "reminders";
+type NotificationTab = "all" | "travel" | "accounts" | "reminders" | "preferences";
 
 export default function NotificationsHub() {
   const navigate = useNavigate();
@@ -60,7 +45,6 @@ export default function NotificationsHub() {
     pendingRemindersCount,
     toggleReminderComplete,
     deleteReminder,
-    addReminder,
   } = useReminders();
 
   const {
@@ -76,11 +60,6 @@ export default function NotificationsHub() {
   const totalActiveCount = pendingRemindersCount + unreadCount;
 
   const [isAddReminderOpen, setIsAddReminderOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newType, setNewType] = useState<"manual" | "flight" | "umrah" | "daily_expense">("manual");
-  const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [newTime, setNewTime] = useState("09:00");
-  const [newNotes, setNewNotes] = useState("");
 
   // Snoozed items state (persisted locally until DB migration run)
   const [snoozedIds, setSnoozedIds] = useState<string[]>(() => {
@@ -101,27 +80,6 @@ export default function NotificationsHub() {
 
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
-  };
-
-  const handleCreateReminder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) {
-      toast.error("Please enter a reminder title");
-      return;
-    }
-
-    await addReminder.mutateAsync({
-      title: newTitle.trim(),
-      type: newType,
-      remind_date: newDate,
-      remind_time: newTime ? `${newTime}:00` : null,
-      is_completed: false,
-      notes: newNotes.trim() || null,
-    });
-
-    setNewTitle("");
-    setNewNotes("");
-    setIsAddReminderOpen(false);
   };
 
   const activeReminders = reminders.filter((r) => !r.is_completed);
@@ -180,6 +138,10 @@ export default function NotificationsHub() {
             <TabsTrigger value="reminders" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
               <Clock className="w-4 h-4 text-amber-500" />
               My Reminders ({activeReminders.length})
+            </TabsTrigger>
+            <TabsTrigger value="preferences" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
+              <Sliders className="w-4 h-4 text-purple-500" />
+              Preferences
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -569,61 +531,14 @@ export default function NotificationsHub() {
         </Card>
       )}
 
-      {/* Add Reminder Modal */}
-      <Dialog open={isAddReminderOpen} onOpenChange={setIsAddReminderOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5 text-primary" /> Add New Reminder
-            </DialogTitle>
-            <DialogDescription>Create an operational alert or scheduled task.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreateReminder} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Title *</Label>
-              <Input
-                placeholder="e.g. Call client regarding passport renewal"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                required
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Date</Label>
-                <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-9 text-xs" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Time</Label>
-                <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="h-9 text-xs" />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Category</Label>
-              <Select value={newType} onValueChange={(val: any) => setNewType(val)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">General Task</SelectItem>
-                  <SelectItem value="flight">Flight Departure</SelectItem>
-                  <SelectItem value="umrah">Umrah Package</SelectItem>
-                  <SelectItem value="daily_expense">Daily Expense / Ledger</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Notes (Optional)</Label>
-              <Textarea placeholder="Instructions..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="text-xs h-20" />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddReminderOpen(false)}>Cancel</Button>
-              <Button type="submit" className="font-semibold">Save</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Tab 5: Preferences */}
+      {currentTab === "preferences" && <NotificationPreferences />}
+
+      {/* New Reminder Dialog */}
+      <NewReminderDialog
+        open={isAddReminderOpen}
+        onOpenChange={setIsAddReminderOpen}
+      />
     </div>
   );
 }

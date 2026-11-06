@@ -1,10 +1,16 @@
 // Version control and update management
-const CURRENT_VERSION = '3.2.0';
+const CURRENT_VERSION = '3.2.1';
 const VERSION_KEY = 'travelpro_app_version';
 const CHANGELOG_KEY = 'travelpro_changelog';
 const LAST_CHECK_KEY = 'travelpro_last_version_check';
 
 export const VERSION_CHANGELOG = {
+  '3.2.1': [
+    'Unified single-screen Umrah Package Calculator layout',
+    'Keyboard-first data entry and shortcuts (Ctrl+S, Ctrl+Enter, Ctrl+Shift+R)',
+    'Enhanced mobile app calculator layout with compact cost tiles',
+    'Reset confirmation protection and high-contrast action buttons'
+  ],
   '3.2.0': [
     'Professional update system with iOS PWA support',
     'Auto-sync and pull-to-refresh gestures with haptic feedback',
