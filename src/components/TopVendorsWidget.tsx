@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, TrendingUp, Clock, AlertTriangle, ArrowRight } from "lucide-react";
+import { Building2, TrendingUp, Clock, AlertTriangle, ArrowRight, Plus } from "lucide-react";
 import { useVendors, useClients } from "@/hooks/useStorage";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,11 @@ interface TopVendor {
   paymentStatus: 'Paid' | 'Partial' | 'Pending';
 }
 
-export function TopVendorsWidget() {
+interface TopVendorsWidgetProps {
+  onPayVendor?: () => void;
+}
+
+export function TopVendorsWidget({ onPayVendor }: TopVendorsWidgetProps = {}) {
   const { vendors, isLoading: loadingVendors } = useVendors();
   const { clients, isLoading: loadingClients } = useClients();
   const navigate = useNavigate();
@@ -94,38 +98,45 @@ export function TopVendorsWidget() {
 
   if (topVendors.length === 0) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="h-full flex flex-col justify-between">
+        <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg">Top Vendor Payables</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Top Vendor Payables</CardTitle>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="text-center py-6 text-muted-foreground">
-            <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-20" />
-            <p className="text-sm">No outstanding vendor payments</p>
-            <p className="text-xs mt-1">All vendors are paid up!</p>
-          </div>
+        <CardContent className="flex-1 flex flex-col items-center justify-center py-6 text-muted-foreground text-center">
+          <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-20" />
+          <p className="text-sm font-medium">No outstanding vendor payments</p>
+          <p className="text-xs mt-1 text-muted-foreground/80">All vendors are fully settled</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3 text-xs gap-1.5 h-8 border-dashed"
+            onClick={() => (onPayVendor ? onPayVendor() : navigate("/app/bookings?tab=vendors"))}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            + Pay Vendor
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg">Top Vendor Payables</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Top Vendor Payables</CardTitle>
           </div>
           <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">
             ₨ {(totalOutstanding / 1000).toFixed(0)}K Total
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 flex-1 max-h-[300px] overflow-y-auto">
         {topVendors.map((vendor, index) => (
           <div
             key={vendor.id}

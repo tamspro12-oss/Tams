@@ -67,8 +67,9 @@ const OCCUPANCY_DIVISORS: Record<string, number> = {
 };
 
 // Types for multi-hotel support
-interface HotelEntry {
+export interface HotelEntry {
   id: string;
+  city: "makkah" | "madinah";
   name: string;
   sharingType: "Quint" | "Quad" | "Triple" | "Double" | "Sharing";
   rateMode: RateMode;
@@ -79,13 +80,34 @@ interface HotelEntry {
 interface PresetPackage {
   id: string;
   name: string;
-  makkahHotels: Omit<HotelEntry, "id">[];
-  madinahHotels: Omit<HotelEntry, "id">[];
+  makkahHotels: Omit<HotelEntry, "id" | "city">[];
+  madinahHotels: Omit<HotelEntry, "id" | "city">[];
   visaFee?: string;
   transport?: string;
   ziyarat?: string;
   food?: string;
 }
+
+const createDefaultHotels = (): HotelEntry[] => [
+  {
+    id: "makkah-1",
+    city: "makkah",
+    name: "Makkah Hotel",
+    sharingType: "Sharing",
+    rateMode: "sharing",
+    rate: "",
+    nights: "12",
+  },
+  {
+    id: "madinah-1",
+    city: "madinah",
+    name: "Madinah Hotel",
+    sharingType: "Sharing",
+    rateMode: "sharing",
+    rate: "",
+    nights: "8",
+  },
+];
 
 interface CalculationResult {
   nights: number;
@@ -151,44 +173,72 @@ export default function UmrahCalculator() {
   // Exchange Rate
   const [sarToPkrRate, setSarToPkrRate] = useState("77.50");
 
-  // Travel & Hotels
+  // Travel Dates
   const [arrivalDate, setArrivalDate] = useState<Date | undefined>(undefined);
   const [departureDate, setDepartureDate] = useState<Date | undefined>(undefined);
-  const [makkahNights, setMakkahNights] = useState("12");
-  const [madinahNights, setMadinahNights] = useState("8");
-  const [makkahRate, setMakkahRate] = useState("");
-  const [madinahRate, setMadinahRate] = useState("");
   const [hotelCurrency, setHotelCurrency] = useState("SAR");
 
-  // Multi-hotel support
-  const [useMultiHotel, setUseMultiHotel] = useState(false);
-  const [makkahHotels, setMakkahHotels] = useState<HotelEntry[]>([]);
-  const [madinahHotels, setMadinahHotels] = useState<HotelEntry[]>([]);
+  // Hotels (Single source of truth: 1 array containing all hotels for Makkah & Madinah)
+  const [hotels, setHotels] = useState<HotelEntry[]>(createDefaultHotels);
 
-  // Sharing type labels for single hotel mode
-  const [makkahSharingType, setMakkahSharingType] = useState<HotelEntry["sharingType"]>("Sharing");
-  const [madinahSharingType, setMadinahSharingType] = useState<HotelEntry["sharingType"]>("Sharing");
-
-  // Rate mode for single hotel mode
-  const [makkahRateMode, setMakkahRateMode] = useState<RateMode>("sharing");
-  const [madinahRateMode, setMadinahRateMode] = useState<RateMode>("sharing");
-
-  const handleMakkahRateModeChange = (mode: RateMode) => {
-    setMakkahRateMode(mode);
-    if (mode === "sharing") {
-      setMakkahSharingType("Sharing");
-    } else if (mode === "room") {
-      setMakkahSharingType("Quad");
-    }
+  const addMakkahHotel = () => {
+    const mHotels = hotels.filter(h => h.city === "makkah");
+    const newNum = mHotels.length + 1;
+    const newHotel: HotelEntry = {
+      id: generateId(),
+      city: "makkah",
+      name: `Makkah Hotel ${newNum}`,
+      sharingType: "Sharing",
+      rateMode: "sharing",
+      rate: "",
+      nights: "",
+    };
+    setHotels(prev => [...prev, newHotel]);
   };
 
-  const handleMadinahRateModeChange = (mode: RateMode) => {
-    setMadinahRateMode(mode);
-    if (mode === "sharing") {
-      setMadinahSharingType("Sharing");
-    } else if (mode === "room") {
-      setMadinahSharingType("Quad");
-    }
+  const addMadinahHotel = () => {
+    const mdHotels = hotels.filter(h => h.city === "madinah");
+    const newNum = mdHotels.length + 1;
+    const newHotel: HotelEntry = {
+      id: generateId(),
+      city: "madinah",
+      name: `Madinah Hotel ${newNum}`,
+      sharingType: "Sharing",
+      rateMode: "sharing",
+      rate: "",
+      nights: "",
+    };
+    setHotels(prev => [...prev, newHotel]);
+  };
+
+  const updateHotel = (id: string, field: keyof HotelEntry, value: any) => {
+    setHotels(prev =>
+      prev.map(h => {
+        if (h.id !== id) return h;
+        if (field === "rateMode") {
+          const newMode = value as RateMode;
+          return {
+            ...h,
+            rateMode: newMode,
+            sharingType: newMode === "sharing" ? "Sharing" : "Quad",
+          };
+        }
+        return { ...h, [field]: value };
+      })
+    );
+  };
+
+  const removeHotel = (id: string) => {
+    setHotels(prev => {
+      const target = prev.find(h => h.id === id);
+      if (!target) return prev;
+      const sameCity = prev.filter(h => h.city === target.city);
+      if (sameCity.length <= 1) {
+        toast.info(`You must keep at least one ${target.city === "makkah" ? "Makkah" : "Madinah"} hotel`);
+        return prev;
+      }
+      return prev.filter(h => h.id !== id);
+    });
   };
 
   // Presets
@@ -234,11 +284,6 @@ export default function UmrahCalculator() {
   const [childCount, setChildCount] = useState("");
   const [infantCount, setInfantCount] = useState("");
 
-  // Profit
-  const [profitType, setProfitType] = useState<"percentage" | "fixed">("percentage");
-  const [profitPercent, setProfitPercent] = useState("");
-  const [profitFixed, setProfitFixed] = useState("");
-
   // Results & Draft
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [hasDraft, setHasDraft] = useState(false);
@@ -263,87 +308,6 @@ export default function UmrahCalculator() {
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
-  // Multi-hotel handlers
-  const addMakkahHotel = () => {
-    if (!useMultiHotel) {
-      const existingHotel: HotelEntry = {
-        id: generateId(),
-        name: "Hotel Makkah 1",
-        sharingType: makkahSharingType,
-        rateMode: makkahRateMode,
-        rate: makkahRate,
-        nights: makkahNights,
-      };
-      setMakkahHotels(makkahRate || makkahNights ? [existingHotel] : []);
-      setUseMultiHotel(true);
-    }
-    setMakkahHotels(prev => [
-      ...prev,
-      {
-        id: generateId(),
-        name: "",
-        sharingType: "Sharing",
-        rateMode: "sharing",
-        rate: "",
-        nights: "",
-      },
-    ]);
-  };
-
-  const addMadinahHotel = () => {
-    if (!useMultiHotel) {
-      const existingHotel: HotelEntry = {
-        id: generateId(),
-        name: "Hotel Madinah 1",
-        sharingType: madinahSharingType,
-        rateMode: madinahRateMode,
-        rate: madinahRate,
-        nights: madinahNights,
-      };
-      setMadinahHotels(madinahRate || madinahNights ? [existingHotel] : []);
-      setUseMultiHotel(true);
-    }
-    setMadinahHotels(prev => [
-      ...prev,
-      {
-        id: generateId(),
-        name: "",
-        sharingType: "Sharing",
-        rateMode: "sharing",
-        rate: "",
-        nights: "",
-      },
-    ]);
-  };
-
-  const updateMakkahHotel = (id: string, field: keyof HotelEntry, value: string) => {
-    setMakkahHotels(prev => prev.map(h => (h.id === id ? { ...h, [field]: value } : h)));
-  };
-
-  const updateMadinahHotel = (id: string, field: keyof HotelEntry, value: string) => {
-    setMadinahHotels(prev => prev.map(h => (h.id === id ? { ...h, [field]: value } : h)));
-  };
-
-  const removeMakkahHotel = (id: string) => {
-    setMakkahHotels(prev => {
-      const newList = prev.filter(h => h.id !== id);
-      if (newList.length === 0 && madinahHotels.length === 0) {
-        setUseMultiHotel(false);
-      }
-      return newList;
-    });
-  };
-
-  const removeMadinahHotel = (id: string) => {
-    setMadinahHotels(prev => {
-      const newList = prev.filter(h => h.id !== id);
-      if (newList.length === 0 && makkahHotels.length === 0) {
-        setUseMultiHotel(false);
-      }
-      return newList;
-    });
-  };
-
   // Presets list
   const allPresets = useMemo(() => [...DEFAULT_PRESETS, ...customPresets], [customPresets]);
 
@@ -351,19 +315,33 @@ export default function UmrahCalculator() {
     if (presetId === "none") {
       setSelectedPreset("none");
       setIsPresetLocked(false);
-      setUseMultiHotel(false);
-      setMakkahHotels([]);
-      setMadinahHotels([]);
+      setHotels(createDefaultHotels());
+      return;
+    }
+    if (presetId === "__add_new__") {
+      setShowAddPresetDialog(true);
       return;
     }
 
     const preset = allPresets.find(p => p.id === presetId);
     if (!preset) return;
 
-    setUseMultiHotel(true);
-    setMakkahHotels(preset.makkahHotels.map(h => ({ ...h, id: generateId() })));
-    setMadinahHotels(preset.madinahHotels.map(h => ({ ...h, id: generateId() })));
+    const newHotels: HotelEntry[] = [
+      ...preset.makkahHotels.map((h, i) => ({
+        ...h,
+        id: generateId(),
+        city: "makkah" as const,
+        name: h.name || `Makkah Hotel ${i + 1}`,
+      })),
+      ...preset.madinahHotels.map((h, i) => ({
+        ...h,
+        id: generateId(),
+        city: "madinah" as const,
+        name: h.name || `Madinah Hotel ${i + 1}`,
+      })),
+    ];
 
+    setHotels(newHotels);
     if (preset.visaFee !== undefined) setVisaFee(preset.visaFee);
     if (preset.transport !== undefined) setTransport(preset.transport);
     if (preset.ziyarat !== undefined) setZiyarat(preset.ziyarat);
@@ -371,7 +349,7 @@ export default function UmrahCalculator() {
 
     setSelectedPreset(presetId);
     setIsPresetLocked(true);
-    toast.success(`${preset.name} applied! Ticket, profit & passengers remain editable.`);
+    toast.success(`${preset.name} applied! Ticket, service charges & passengers remain editable.`);
   };
 
   const unlockPreset = () => {
@@ -386,15 +364,26 @@ export default function UmrahCalculator() {
       return;
     }
 
+    const mHotels = hotels.filter(h => h.city === "makkah");
+    const mdHotels = hotels.filter(h => h.city === "madinah");
+
     const newPreset: PresetPackage = {
       id: `custom_${Date.now()}`,
       name: newPresetName.trim(),
-      makkahHotels: useMultiHotel
-        ? makkahHotels.map(h => ({ name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights }))
-        : [{ name: "Makkah Hotel", sharingType: makkahSharingType, rateMode: makkahRateMode, rate: makkahRate, nights: makkahNights }],
-      madinahHotels: useMultiHotel
-        ? madinahHotels.map(h => ({ name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights }))
-        : [{ name: "Madinah Hotel", sharingType: madinahSharingType, rateMode: madinahRateMode, rate: madinahRate, nights: madinahNights }],
+      makkahHotels: mHotels.map(h => ({
+        name: h.name,
+        sharingType: h.sharingType,
+        rateMode: h.rateMode,
+        rate: h.rate,
+        nights: h.nights,
+      })),
+      madinahHotels: mdHotels.map(h => ({
+        name: h.name,
+        sharingType: h.sharingType,
+        rateMode: h.rateMode,
+        rate: h.rate,
+        nights: h.nights,
+      })),
       visaFee: visaFee || undefined,
       transport: transport || undefined,
       ziyarat: ziyarat || undefined,
@@ -420,7 +409,7 @@ export default function UmrahCalculator() {
     toast.success("Preset deleted");
   };
 
-  // Calculation formulas (100% UNCHANGED)
+  // Calculation formulas
   const getHotelCostPerPerson = useCallback((rate: number, nights: number, rateMode: RateMode, sharingType: string): number => {
     if (rateMode === "room") {
       const divisor = OCCUPANCY_DIVISORS[sharingType] || 1;
@@ -429,38 +418,30 @@ export default function UmrahCalculator() {
     return rate * nights;
   }, []);
 
-  const calculateUmrah = useCallback((): CalculationResult => {
-    let makkahNightsCount: number;
-    let madinahNightsCount: number;
-    let makkahCostPerPerson: number;
-    let madinahCostPerPerson: number;
-
-    if (useMultiHotel) {
-      makkahNightsCount = makkahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
-      madinahNightsCount = madinahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
-
-      makkahCostPerPerson = makkahHotels.reduce(
-        (sum, h) =>
-          sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency),
-        0
-      );
-      madinahCostPerPerson = madinahHotels.reduce(
-        (sum, h) =>
-          sum + convertToPKR(getHotelCostPerPerson(parseValue(h.rate), parseValue(h.nights), h.rateMode, h.sharingType), hotelCurrency),
-        0
-      );
-    } else {
-      makkahNightsCount = parseValue(makkahNights);
-      madinahNightsCount = parseValue(madinahNights);
-      makkahCostPerPerson = convertToPKR(
-        getHotelCostPerPerson(parseValue(makkahRate), makkahNightsCount, makkahRateMode, makkahSharingType),
-        hotelCurrency
-      );
-      madinahCostPerPerson = convertToPKR(
-        getHotelCostPerPerson(parseValue(madinahRate), madinahNightsCount, madinahRateMode, madinahSharingType),
-        hotelCurrency
-      );
+  const getHotelRowTotal = useCallback((hotel: HotelEntry): number => {
+    const rate = parseValue(hotel.rate);
+    const nights = parseValue(hotel.nights);
+    if (hotel.rateMode === "room") {
+      const divisor = OCCUPANCY_DIVISORS[hotel.sharingType] || 1;
+      return convertToPKR((rate / divisor) * nights, hotelCurrency);
     }
+    return convertToPKR(rate * nights, hotelCurrency);
+  }, [convertToPKR, hotelCurrency]);
+
+  const calculateUmrah = useCallback((): CalculationResult => {
+    const makkahNightsCount = hotels
+      .filter(h => h.city === "makkah")
+      .reduce((sum, h) => sum + parseValue(h.nights), 0);
+    const madinahNightsCount = hotels
+      .filter(h => h.city === "madinah")
+      .reduce((sum, h) => sum + parseValue(h.nights), 0);
+
+    const makkahCostPerPerson = hotels
+      .filter(h => h.city === "makkah")
+      .reduce((sum, h) => sum + getHotelRowTotal(h), 0);
+    const madinahCostPerPerson = hotels
+      .filter(h => h.city === "madinah")
+      .reduce((sum, h) => sum + getHotelRowTotal(h), 0);
 
     const totalNights = makkahNightsCount + madinahNightsCount;
     const totalPassengers = parseValue(adultCount) + parseValue(childCount) + parseValue(infantCount);
@@ -477,16 +458,9 @@ export default function UmrahCalculator() {
       convertToPKR(parseValue(serviceCharges), serviceChargesCurrency);
 
     const baseTotal = costPerPerson * passengerMultiplier;
-
-    let profitAmount = 0;
-    if (profitType === "percentage") {
-      profitAmount = baseTotal * (parseValue(profitPercent) / 100);
-    } else {
-      profitAmount = parseValue(profitFixed);
-    }
-
+    const profitAmount = 0; // Profit removed per Master Task 2
     const finalTotal = baseTotal + profitAmount;
-    const perPerson = costPerPerson + profitAmount / passengerMultiplier;
+    const perPerson = costPerPerson;
 
     return {
       nights: totalNights,
@@ -499,20 +473,9 @@ export default function UmrahCalculator() {
       totalPassengers,
     };
   }, [
-    useMultiHotel,
-    makkahHotels,
-    madinahHotels,
-    makkahNights,
-    madinahNights,
-    makkahRate,
-    madinahRate,
-    makkahSharingType,
-    madinahSharingType,
-    makkahRateMode,
-    madinahRateMode,
-    hotelCurrency,
+    hotels,
+    getHotelRowTotal,
     convertToPKR,
-    getHotelCostPerPerson,
     adultCount,
     childCount,
     infantCount,
@@ -528,9 +491,6 @@ export default function UmrahCalculator() {
     foodCurrency,
     serviceCharges,
     serviceChargesCurrency,
-    profitType,
-    profitPercent,
-    profitFixed,
   ]);
 
   // Real-time calculation effect
@@ -538,7 +498,7 @@ export default function UmrahCalculator() {
     const res = calculateUmrah();
     setResult(res);
     try {
-      if (res && res.totalPackageCost > 0) {
+      if (res && res.baseTotal > 0) {
         localStorage.setItem(
           "tams_latest_umrah_calc",
           JSON.stringify({
@@ -575,18 +535,8 @@ export default function UmrahCalculator() {
     setSarToPkrRate("77.50");
     setArrivalDate(undefined);
     setDepartureDate(undefined);
-    setMakkahNights("12");
-    setMadinahNights("8");
-    setMakkahRate("");
-    setMadinahRate("");
+    setHotels(createDefaultHotels());
     setHotelCurrency("SAR");
-    setMakkahSharingType("Sharing");
-    setMadinahSharingType("Sharing");
-    setMakkahRateMode("sharing");
-    setMadinahRateMode("sharing");
-    setUseMultiHotel(false);
-    setMakkahHotels([]);
-    setMadinahHotels([]);
     setSelectedPreset("none");
     setIsPresetLocked(false);
     setVisaFee("0");
@@ -604,9 +554,6 @@ export default function UmrahCalculator() {
     setAdultCount("");
     setChildCount("");
     setInfantCount("");
-    setProfitType("percentage");
-    setProfitPercent("");
-    setProfitFixed("");
     sessionStorage.removeItem("umrah_calculator_draft");
     setHasDraft(false);
     toast.success("Calculator reset successfully");
@@ -617,16 +564,8 @@ export default function UmrahCalculator() {
       sarToPkrRate,
       arrivalDate: arrivalDate?.toISOString(),
       departureDate: departureDate?.toISOString(),
-      makkahNights,
-      madinahNights,
-      makkahRate,
-      madinahRate,
+      hotels,
       hotelCurrency,
-      makkahSharingType,
-      madinahSharingType,
-      useMultiHotel,
-      makkahHotels,
-      madinahHotels,
       selectedPreset,
       visaFee,
       visaCurrency,
@@ -643,9 +582,6 @@ export default function UmrahCalculator() {
       adultCount,
       childCount,
       infantCount,
-      profitType,
-      profitPercent,
-      profitFixed,
       result,
       savedAt: new Date().toISOString(),
     };
@@ -657,16 +593,8 @@ export default function UmrahCalculator() {
     sarToPkrRate,
     arrivalDate,
     departureDate,
-    makkahNights,
-    madinahNights,
-    makkahRate,
-    madinahRate,
+    hotels,
     hotelCurrency,
-    makkahSharingType,
-    madinahSharingType,
-    useMultiHotel,
-    makkahHotels,
-    madinahHotels,
     selectedPreset,
     visaFee,
     visaCurrency,
@@ -683,9 +611,6 @@ export default function UmrahCalculator() {
     adultCount,
     childCount,
     infantCount,
-    profitType,
-    profitPercent,
-    profitFixed,
     result,
   ]);
 
@@ -701,16 +626,46 @@ export default function UmrahCalculator() {
       setSarToPkrRate(data.sarToPkrRate || "77.50");
       if (data.arrivalDate) setArrivalDate(new Date(data.arrivalDate));
       if (data.departureDate) setDepartureDate(new Date(data.departureDate));
-      setMakkahNights(data.makkahNights || "");
-      setMadinahNights(data.madinahNights || "");
-      setMakkahRate(data.makkahRate || "");
-      setMadinahRate(data.madinahRate || "");
       setHotelCurrency(data.hotelCurrency || "SAR");
-      setMakkahSharingType(data.makkahSharingType || "Sharing");
-      setMadinahSharingType(data.madinahSharingType || "Sharing");
-      setUseMultiHotel(data.useMultiHotel || false);
-      setMakkahHotels(data.makkahHotels || []);
-      setMadinahHotels(data.madinahHotels || []);
+
+      if (Array.isArray(data.hotels) && data.hotels.length > 0) {
+        setHotels(data.hotels);
+      } else {
+        // Backwards compatibility with previous draft structure
+        const restored: HotelEntry[] = [];
+        if (Array.isArray(data.makkahHotels) && data.makkahHotels.length > 0) {
+          data.makkahHotels.forEach((h: any) => {
+            restored.push({ ...h, city: "makkah", id: h.id || generateId() });
+          });
+        } else {
+          restored.push({
+            id: generateId(),
+            city: "makkah",
+            name: "Makkah Hotel",
+            sharingType: data.makkahSharingType || "Sharing",
+            rateMode: data.makkahRateMode || "sharing",
+            rate: data.makkahRate || "",
+            nights: data.makkahNights || "12",
+          });
+        }
+        if (Array.isArray(data.madinahHotels) && data.madinahHotels.length > 0) {
+          data.madinahHotels.forEach((h: any) => {
+            restored.push({ ...h, city: "madinah", id: h.id || generateId() });
+          });
+        } else {
+          restored.push({
+            id: generateId(),
+            city: "madinah",
+            name: "Madinah Hotel",
+            sharingType: data.madinahSharingType || "Sharing",
+            rateMode: data.madinahRateMode || "sharing",
+            rate: data.madinahRate || "",
+            nights: data.madinahNights || "8",
+          });
+        }
+        setHotels(restored);
+      }
+
       setSelectedPreset(data.selectedPreset || "");
       setVisaFee(data.visaFee || "");
       setVisaCurrency(data.visaCurrency || "SAR");
@@ -727,9 +682,6 @@ export default function UmrahCalculator() {
       setAdultCount(data.adultCount || "");
       setChildCount(data.childCount || "");
       setInfantCount(data.infantCount || "");
-      setProfitType(data.profitType || "percentage");
-      setProfitPercent(data.profitPercent || "");
-      setProfitFixed(data.profitFixed || "");
       setResult(data.result || null);
 
       const savedDate = new Date(data.savedAt);
@@ -794,15 +746,15 @@ export default function UmrahCalculator() {
       toast.error("Please calculate first");
       return;
     }
-    const hotels = useMultiHotel
-      ? [
-          ...makkahHotels.map(h => ({ city: "Makkah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
-          ...madinahHotels.map(h => ({ city: "Madinah" as const, name: h.name, sharingType: h.sharingType, rateMode: h.rateMode, rate: h.rate, nights: h.nights, currency: hotelCurrency })),
-        ]
-      : [
-          { city: "Makkah" as const, name: "Makkah Hotel", sharingType: makkahSharingType, rateMode: makkahRateMode, rate: makkahRate, nights: makkahNights, currency: hotelCurrency },
-          { city: "Madinah" as const, name: "Madinah Hotel", sharingType: madinahSharingType, rateMode: madinahRateMode, rate: madinahRate, nights: madinahNights, currency: hotelCurrency },
-        ];
+    const formattedHotels = hotels.map(h => ({
+      city: (h.city === "makkah" ? "Makkah" : "Madinah") as "Makkah" | "Madinah",
+      name: h.name || (h.city === "makkah" ? "Makkah Hotel" : "Madinah Hotel"),
+      sharingType: h.sharingType,
+      rateMode: h.rateMode,
+      rate: h.rate,
+      nights: h.nights,
+      currency: hotelCurrency,
+    }));
     const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
     try {
       exportUmrahSummaryPdf({
@@ -814,7 +766,7 @@ export default function UmrahCalculator() {
         arrivalDate: arrivalDate || null,
         departureDate: departureDate || null,
         sarToPkrRate,
-        hotels,
+        hotels: formattedHotels,
         visaFee,
         visaCurrency,
         ticketCost,
@@ -887,26 +839,6 @@ export default function UmrahCalculator() {
       maximumFractionDigits: 0,
     }).format(value);
   };
-
-  const getHotelRowTotal = useCallback((hotel: HotelEntry): number => {
-    const rate = parseValue(hotel.rate);
-    const nights = parseValue(hotel.nights);
-    if (hotel.rateMode === "room") {
-      const divisor = OCCUPANCY_DIVISORS[hotel.sharingType] || 1;
-      return convertToPKR((rate / divisor) * nights, hotelCurrency);
-    }
-    return convertToPKR(rate * nights, hotelCurrency);
-  }, [convertToPKR, hotelCurrency]);
-
-  const getSingleHotelRowTotal = useCallback((rate: string, nights: string, rateMode: RateMode, sharingType: string): number => {
-    const r = parseValue(rate);
-    const n = parseValue(nights);
-    if (rateMode === "room") {
-      const divisor = OCCUPANCY_DIVISORS[sharingType] || 1;
-      return convertToPKR((r / divisor) * n, hotelCurrency);
-    }
-    return convertToPKR(r * n, hotelCurrency);
-  }, [convertToPKR, hotelCurrency]);
 
   // Stepper helper
   const stepCount = (current: string, delta: number, setter: (val: string) => void) => {
@@ -995,22 +927,13 @@ export default function UmrahCalculator() {
   const totalPassengers = parseValue(adultCount) + parseValue(childCount) + parseValue(infantCount);
 
   // Totals for table
-  const makkahMultiTotal = makkahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
-  const madinahMultiTotal = madinahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
-  const makkahMultiNights = makkahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
-  const madinahMultiNights = madinahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
+  const makkahCostPerPerson = hotels
+    .filter(h => h.city === "makkah")
+    .reduce((sum, h) => sum + getHotelRowTotal(h), 0);
 
-  const makkahCostPerPerson = useMultiHotel
-    ? makkahMultiTotal
-    : makkahNights && makkahRate
-    ? getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType)
-    : 0;
-
-  const madinahCostPerPerson = useMultiHotel
-    ? madinahMultiTotal
-    : madinahNights && madinahRate
-    ? getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType)
-    : 0;
+  const madinahCostPerPerson = hotels
+    .filter(h => h.city === "madinah")
+    .reduce((sum, h) => sum + getHotelRowTotal(h), 0);
 
   const ticketPerPerson = ticketCost ? convertToPKR(parseValue(ticketCost), ticketCurrency) : 0;
   const visaPerPerson = visaFee ? convertToPKR(parseValue(visaFee), visaCurrency) : 0;
@@ -1039,131 +962,32 @@ export default function UmrahCalculator() {
           ONE UNIFIED SHEET, TOP TO BOTTOM: Fits in ONE screen with ZERO vertical scroll
          ========================================================================= */}
       <div className="calc-desktop-view flex-col w-full gap-2 bg-background">
-        {/* TOP TOOLBAR: KEPT EXACTLY AS IT IS */}
-        <div className="shrink-0 space-y-1.5">
-          {/* Row 1: Title on left, Presets on right */}
-          <div className="flex items-center justify-between gap-3 h-8">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Calculator className="w-4 h-4 text-primary" />
-              </div>
-              <h1 className="text-lg font-bold tracking-tight text-foreground truncate">
-                Umrah Package Calculator
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {hasDraft && (
-                <Button
-                  onClick={handleLoadDraft}
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Load Draft</span>
-                </Button>
-              )}
-
-              {/* Quick Preset Selector with Tooltip */}
-              <div className="flex items-center gap-1.5 bg-card border border-border/80 rounded-lg px-2 py-0.5 shadow-2xs">
-                <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs font-medium text-muted-foreground hidden xl:inline">Quick Preset:</span>
-
-                <Select value={selectedPreset} onValueChange={applyPreset}>
-                  <SelectTrigger className="h-7 w-[160px] text-xs border-0 bg-transparent shadow-none px-1 focus:ring-0">
-                    <SelectValue placeholder="Select package..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (Manual Entry)</SelectItem>
-                    {allPresets.map(preset => (
-                      <SelectItem key={preset.id} value={preset.id}>
-                        {preset.name}
-                        {preset.id.startsWith("custom_") && " ⭐"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <TooltipProvider delayDuration={150}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                        aria-label="Preset information"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs max-w-xs">
-                      Presets auto-fill hotels & services. Ticket, profit & passengers remain editable.
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {isPresetLocked && (
-                  <Button
-                    onClick={unlockPreset}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 text-[11px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 gap-1"
-                  >
-                    <Unlock className="w-3 h-3" />
-                    <span>Unlock</span>
-                  </Button>
-                )}
-
-                {selectedPreset && selectedPreset.startsWith("custom_") && (
-                  <Button
-                    onClick={() => deleteCustomPreset(selectedPreset)}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                    title="Delete preset"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                )}
-              </div>
-
-              <Button
-                onClick={() => setShowAddPresetDialog(true)}
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 gap-1.5 text-xs font-medium shadow-2xs"
-                title="Save current config as Preset"
-              >
-                <PlusCircle className="w-3.5 h-3.5 text-primary" />
-                <span>Add Preset</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Row 2: Slim bar containing Exchange Rate, Dates, Hotel Currency */}
-          <div className="h-9 px-3 rounded-lg bg-card border border-border/80 flex items-center justify-between gap-3 text-xs shadow-2xs">
-            {/* Exchange rate */}
+        {/* TOP TOOLBAR: SINGLE COMPACT CONTROL BAR (Task 1) */}
+        <div className="shrink-0 h-9 px-3 rounded-xl bg-card border border-border/80 flex items-center justify-between gap-2.5 text-xs shadow-2xs">
+          {/* Left controls: Rate, Dates, Hotel Currency */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {/* 1) Exchange rate */}
             <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-              <span className="font-semibold text-foreground">1 SAR =</span>
+              <span className="font-semibold text-foreground text-xs">1 SAR =</span>
               <Input
                 type="number"
                 value={sarToPkrRate}
                 onFocus={e => e.target.select()}
                 onChange={e => setSarToPkrRate(e.target.value)}
-                className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center tabular-nums"
+                className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center tabular-nums bg-background"
                 placeholder="77.50"
               />
-              <span className="font-medium text-muted-foreground">PKR</span>
+              <span className="font-medium text-muted-foreground text-[11px]">PKR</span>
             </div>
 
-            <div className="h-4 w-px bg-border/80" />
+            <div className="h-4 w-px bg-border/80 shrink-0" />
 
-            {/* Dates: Arrival -> Departure */}
-            <div className="flex items-center gap-2 shrink-0">
-              <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
+            {/* 2) Dates: Arrival -> Departure */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-7 text-xs w-[115px] justify-start px-2 font-normal">
+                  <Button variant="outline" size="sm" className="h-7 text-xs w-[112px] justify-start px-2 font-normal">
                     {arrivalDate ? format(arrivalDate, "dd MMM yyyy") : "Arrival Date"}
                   </Button>
                 </PopoverTrigger>
@@ -1177,10 +1001,10 @@ export default function UmrahCalculator() {
                   />
                 </PopoverContent>
               </Popover>
-              <ArrowRight className="w-3 h-3 text-muted-foreground" />
+              <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-7 text-xs w-[115px] justify-start px-2 font-normal">
+                  <Button variant="outline" size="sm" className="h-7 text-xs w-[112px] justify-start px-2 font-normal">
                     {departureDate ? format(departureDate, "dd MMM yyyy") : "Departure Date"}
                   </Button>
                 </PopoverTrigger>
@@ -1196,12 +1020,106 @@ export default function UmrahCalculator() {
               </Popover>
             </div>
 
-            <div className="h-4 w-px bg-border/80" />
+            <div className="h-4 w-px bg-border/80 shrink-0" />
 
-            {/* Hotel Currency */}
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-muted-foreground font-medium">Hotel Currency:</span>
-              <CurrencySelect value={hotelCurrency} onChange={setHotelCurrency} className="w-[75px] h-7" />
+            {/* 3) Hotel Currency */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-muted-foreground font-medium text-xs whitespace-nowrap">Hotel Currency:</span>
+              <CurrencySelect value={hotelCurrency} onChange={setHotelCurrency} className="w-[72px] h-7" />
+            </div>
+          </div>
+
+          {/* Right: Quick Preset dropdown & compact actions */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {hasDraft && (
+              <Button
+                onClick={handleLoadDraft}
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                title="Load saved draft"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Draft</span>
+              </Button>
+            )}
+
+            {/* Quick Preset Selector with Tooltip */}
+            <div className="flex items-center gap-1 bg-muted/40 border border-border/80 rounded-lg px-1.5 py-0.5">
+              <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground hidden xl:inline">Preset:</span>
+
+              <Select value={selectedPreset} onValueChange={applyPreset}>
+                <SelectTrigger className="h-6 w-[145px] text-xs border-0 bg-transparent shadow-none px-1 focus:ring-0">
+                  <SelectValue placeholder="Quick Preset..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (Manual)</SelectItem>
+                  {allPresets.map(preset => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      {preset.name}
+                      {preset.id.startsWith("custom_") && " ⭐"}
+                    </SelectItem>
+                  ))}
+                  <div className="h-px bg-border my-1" />
+                  <SelectItem value="__add_new__" className="text-primary font-medium focus:text-primary">
+                    + Add Current as Preset...
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                      aria-label="Preset information"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-xs">
+                    Presets auto-fill hotels & services. Ticket, service charges & passengers remain editable.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {isPresetLocked && (
+                <Button
+                  onClick={unlockPreset}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[11px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 gap-1"
+                  title="Unlock preset to edit fields"
+                >
+                  <Unlock className="w-3 h-3" />
+                  <span>Unlock</span>
+                </Button>
+              )}
+
+              {selectedPreset && selectedPreset.startsWith("custom_") && (
+                <Button
+                  onClick={() => deleteCustomPreset(selectedPreset)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                  title="Delete custom preset"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              )}
+
+              {/* Icon-only + Add Preset button */}
+              <Button
+                onClick={() => setShowAddPresetDialog(true)}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                title="Save current config as Preset"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+              </Button>
             </div>
           </div>
         </div>
@@ -1209,7 +1127,7 @@ export default function UmrahCalculator() {
         {/* ONE UNIFIED CONTINUOUS SHEET */}
         <div className="rounded-2xl border border-border/80 bg-card shadow-xs overflow-hidden flex flex-col gap-2 p-2.5">
           {/* =====================================================================
-              === 1) HOTEL TABLE (Makkah, Madinah), one shared grid ===
+              === 1) HOTEL TABLE (Makkah, Madinah), one shared grid (Task 3) ===
              ===================================================================== */}
           <div className="rounded-xl overflow-hidden border border-border/60 divide-y divide-border/40">
             {/* Header: ONE line, 11px, uppercase, letter-spacing wide, slate-600 text on a soft slate-100 band */}
@@ -1224,35 +1142,45 @@ export default function UmrahCalculator() {
             </div>
 
             {/* Makkah Hotel Row(s) */}
-            {!useMultiHotel ? (
-              <div className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center">
+            {hotels.filter(h => h.city === "makkah").map((hotel, index, arr) => (
+              <div
+                key={hotel.id}
+                className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center"
+              >
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
                     🕋
                   </div>
-                  <span className="text-sm font-semibold text-foreground truncate">Makkah Hotel</span>
+                  <Input
+                    type="text"
+                    value={hotel.name}
+                    onChange={e => updateHotel(hotel.id, "name", e.target.value)}
+                    className="h-8 text-xs font-semibold flex-1 min-w-0"
+                    placeholder={arr.length > 1 ? `Makkah Hotel ${index + 1}` : "Makkah Hotel"}
+                    disabled={isPresetLocked}
+                  />
                 </div>
                 <div>
                   <SharingTypeSelect
-                    value={makkahSharingType}
-                    onChange={v => setMakkahSharingType(v as HotelEntry["sharingType"])}
+                    value={hotel.sharingType}
+                    onChange={v => updateHotel(hotel.id, "sharingType", v)}
                     disabled={isPresetLocked}
                   />
                 </div>
                 <div>
                   <RateModeSelect
-                    value={makkahRateMode}
-                    onChange={handleMakkahRateModeChange}
+                    value={hotel.rateMode}
+                    onChange={v => updateHotel(hotel.id, "rateMode", v)}
                     disabled={isPresetLocked}
                   />
                 </div>
                 <div>
                   <Input
                     type="number"
-                    value={makkahNights}
+                    value={hotel.nights}
                     onFocus={e => e.target.select()}
-                    onChange={e => setMakkahNights(e.target.value)}
+                    onChange={e => updateHotel(hotel.id, "nights", e.target.value)}
                     className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0"
                     disabled={isPresetLocked}
@@ -1261,9 +1189,9 @@ export default function UmrahCalculator() {
                 <div>
                   <Input
                     type="number"
-                    value={makkahRate}
+                    value={hotel.rate}
                     onFocus={e => e.target.select()}
-                    onChange={e => setMakkahRate(e.target.value)}
+                    onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
                     className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0.00"
                     disabled={isPresetLocked}
@@ -1274,139 +1202,79 @@ export default function UmrahCalculator() {
                 </div>
                 <div className="flex items-center justify-end gap-1.5 pr-2">
                   <span className="font-mono text-xs font-bold text-foreground tabular-nums">
-                    {makkahCostPerPerson > 0 ? `Rs ${formatCurrency(makkahCostPerPerson)}` : "—"}
+                    {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
                   </span>
-                  <Button
-                    onClick={addMakkahHotel}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
-                    title="Add another Makkah hotel"
-                    disabled={isPresetLocked}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
+                  {arr.length > 1 && (
+                    <Button
+                      onClick={() => removeHotel(hotel.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      disabled={isPresetLocked}
+                      title="Remove hotel"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {index === arr.length - 1 && (
+                    <Button
+                      onClick={addMakkahHotel}
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
+                      title="Add another Makkah hotel"
+                      disabled={isPresetLocked}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            ) : (
-              <>
-                {makkahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
-                      <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
-                        🕋
-                      </div>
-                      <Input
-                        type="text"
-                        value={hotel.name}
-                        onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
-                        className="h-8 text-xs font-semibold flex-1 min-w-0"
-                        placeholder={`Makkah ${index + 1}`}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <SharingTypeSelect
-                        value={hotel.sharingType}
-                        onChange={v => updateMakkahHotel(hotel.id, "sharingType", v)}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <RateModeSelect
-                        value={hotel.rateMode}
-                        onChange={v => updateMakkahHotel(hotel.id, "rateMode", v)}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={hotel.nights}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
-                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
-                        placeholder="0"
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={hotel.rate}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
-                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div className="text-center text-xs font-semibold text-muted-foreground">
-                      {hotelCurrency}
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5 pr-2">
-                      <span className="font-mono text-xs font-bold text-foreground tabular-nums">
-                        {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
-                      </span>
-                      <Button
-                        onClick={() => removeMakkahHotel(hotel.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                        disabled={isPresetLocked}
-                        title="Remove hotel"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <div className="px-4 py-1 bg-emerald-50/40 dark:bg-emerald-950/10 flex justify-end">
-                  <Button
-                    onClick={addMakkahHotel}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 gap-1"
-                    disabled={isPresetLocked}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add Makkah Hotel</span>
-                  </Button>
-                </div>
-              </>
-            )}
+            ))}
 
             {/* Madinah Hotel Row(s) */}
-            {!useMultiHotel ? (
-              <div className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center border-t border-emerald-200/50 dark:border-emerald-900/30">
+            {hotels.filter(h => h.city === "madinah").map((hotel, index, arr) => (
+              <div
+                key={hotel.id}
+                className={cn(
+                  "calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center",
+                  index === 0 && "border-t border-emerald-200/50 dark:border-emerald-900/30"
+                )}
+              >
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
                     🕌
                   </div>
-                  <span className="text-sm font-semibold text-foreground truncate">Madinah Hotel</span>
+                  <Input
+                    type="text"
+                    value={hotel.name}
+                    onChange={e => updateHotel(hotel.id, "name", e.target.value)}
+                    className="h-8 text-xs font-semibold flex-1 min-w-0"
+                    placeholder={arr.length > 1 ? `Madinah Hotel ${index + 1}` : "Madinah Hotel"}
+                    disabled={isPresetLocked}
+                  />
                 </div>
                 <div>
                   <SharingTypeSelect
-                    value={madinahSharingType}
-                    onChange={v => setMadinahSharingType(v as HotelEntry["sharingType"])}
+                    value={hotel.sharingType}
+                    onChange={v => updateHotel(hotel.id, "sharingType", v)}
                     disabled={isPresetLocked}
                   />
                 </div>
                 <div>
                   <RateModeSelect
-                    value={madinahRateMode}
-                    onChange={handleMadinahRateModeChange}
+                    value={hotel.rateMode}
+                    onChange={v => updateHotel(hotel.id, "rateMode", v)}
                     disabled={isPresetLocked}
                   />
                 </div>
                 <div>
                   <Input
                     type="number"
-                    value={madinahNights}
+                    value={hotel.nights}
                     onFocus={e => e.target.select()}
-                    onChange={e => setMadinahNights(e.target.value)}
+                    onChange={e => updateHotel(hotel.id, "nights", e.target.value)}
                     className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0"
                     disabled={isPresetLocked}
@@ -1415,9 +1283,9 @@ export default function UmrahCalculator() {
                 <div>
                   <Input
                     type="number"
-                    value={madinahRate}
+                    value={hotel.rate}
                     onFocus={e => e.target.select()}
-                    onChange={e => setMadinahRate(e.target.value)}
+                    onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
                     className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0.00"
                     disabled={isPresetLocked}
@@ -1428,108 +1296,35 @@ export default function UmrahCalculator() {
                 </div>
                 <div className="flex items-center justify-end gap-1.5 pr-2">
                   <span className="font-mono text-xs font-bold text-foreground tabular-nums">
-                    {madinahCostPerPerson > 0 ? `Rs ${formatCurrency(madinahCostPerPerson)}` : "—"}
+                    {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
                   </span>
-                  <Button
-                    onClick={addMadinahHotel}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
-                    title="Add another Madinah hotel"
-                    disabled={isPresetLocked}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
+                  {arr.length > 1 && (
+                    <Button
+                      onClick={() => removeHotel(hotel.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      disabled={isPresetLocked}
+                      title="Remove hotel"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {index === arr.length - 1 && (
+                    <Button
+                      onClick={addMadinahHotel}
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
+                      title="Add another Madinah hotel"
+                      disabled={isPresetLocked}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            ) : (
-              <>
-                {madinahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center border-t border-emerald-200/50 dark:border-emerald-900/30">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
-                      <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
-                        🕌
-                      </div>
-                      <Input
-                        type="text"
-                        value={hotel.name}
-                        onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
-                        className="h-8 text-xs font-semibold flex-1 min-w-0"
-                        placeholder={`Madinah ${index + 1}`}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <SharingTypeSelect
-                        value={hotel.sharingType}
-                        onChange={v => updateMadinahHotel(hotel.id, "sharingType", v)}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <RateModeSelect
-                        value={hotel.rateMode}
-                        onChange={v => updateMadinahHotel(hotel.id, "rateMode", v)}
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={hotel.nights}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
-                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
-                        placeholder="0"
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={hotel.rate}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
-                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
-                        placeholder="0.00"
-                        disabled={isPresetLocked}
-                      />
-                    </div>
-                    <div className="text-center text-xs font-semibold text-muted-foreground">
-                      {hotelCurrency}
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5 pr-2">
-                      <span className="font-mono text-xs font-bold text-foreground tabular-nums">
-                        {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
-                      </span>
-                      <Button
-                        onClick={() => removeMadinahHotel(hotel.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                        disabled={isPresetLocked}
-                        title="Remove hotel"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <div className="px-4 py-1 bg-emerald-50/40 dark:bg-emerald-950/10 flex justify-end">
-                  <Button
-                    onClick={addMadinahHotel}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 gap-1"
-                    disabled={isPresetLocked}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add Madinah Hotel</span>
-                  </Button>
-                </div>
-              </>
-            )}
+            ))}
           </div>
 
           {/* =====================================================================
@@ -1795,75 +1590,19 @@ export default function UmrahCalculator() {
             {/* Thin vertical divider */}
             <div className="h-7 w-px bg-slate-300 dark:bg-slate-700 hidden lg:block" />
 
-            {/* Right: Charges group */}
-            <div className="flex items-center gap-3 calc-charges-subgroup shrink-0 flex-wrap">
-              {/* Service Charges */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Service Charges:</span>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    value={serviceCharges}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setServiceCharges(e.target.value)}
-                    className="h-8 w-20 text-center text-xs font-semibold tabular-nums bg-background"
-                    placeholder="0.00"
-                  />
-                  <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-[66px] h-8 bg-background" />
-                </div>
-              </div>
-
-              {/* Thin divider */}
-              <div className="h-6 w-px bg-slate-300 dark:bg-slate-700" />
-
-              {/* Profit / Markup */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Profit:</span>
-                <div className="inline-flex rounded-lg p-0.5 bg-background border border-border text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setProfitType("percentage")}
-                    className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-all",
-                      profitType === "percentage" ? "bg-primary text-primary-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProfitType("fixed")}
-                    className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-all",
-                      profitType === "fixed" ? "bg-primary text-primary-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    PKR
-                  </button>
-                </div>
-
-                {profitType === "percentage" ? (
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      value={profitPercent}
-                      onFocus={e => e.target.select()}
-                      onChange={e => setProfitPercent(e.target.value)}
-                      className="h-8 w-20 text-center text-xs font-semibold tabular-nums bg-background pr-5"
-                      placeholder="0"
-                    />
-                    <span className="absolute right-2 top-2 text-[10px] font-bold text-muted-foreground pointer-events-none">%</span>
-                  </div>
-                ) : (
-                  <Input
-                    type="number"
-                    value={profitFixed}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setProfitFixed(e.target.value)}
-                    className="h-8 w-24 text-center text-xs font-semibold tabular-nums bg-background"
-                    placeholder="Fixed PKR"
-                  />
-                )}
+            {/* Right: Service Charges (Profit removed per Task 2) */}
+            <div className="flex items-center gap-1.5 calc-charges-subgroup shrink-0">
+              <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Service Charges:</span>
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  value={serviceCharges}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setServiceCharges(e.target.value)}
+                  className="h-8 w-24 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                />
+                <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-[66px] h-8 bg-background" />
               </div>
             </div>
           </div>
@@ -2161,33 +1900,14 @@ export default function UmrahCalculator() {
 
         {/* Compact Cost Cards: Hotels (expanded), Airline+Visa (2 cols), Transport+Ziyarat+Food (3 tiles) */}
         <MobileUmrahCostCards
-          useMultiHotel={useMultiHotel}
-          makkahHotels={makkahHotels}
-          madinahHotels={madinahHotels}
-          makkahNights={makkahNights}
-          madinahNights={madinahNights}
-          makkahRate={makkahRate}
-          madinahRate={madinahRate}
-          makkahSharingType={makkahSharingType}
-          madinahSharingType={madinahSharingType}
-          makkahRateMode={makkahRateMode}
-          madinahRateMode={madinahRateMode}
+          makkahHotels={hotels.filter(h => h.city === "makkah")}
+          madinahHotels={hotels.filter(h => h.city === "madinah")}
           hotelCurrency={hotelCurrency}
           isPresetLocked={isPresetLocked}
-          setMakkahNights={setMakkahNights}
-          setMadinahNights={setMadinahNights}
-          setMakkahRate={setMakkahRate}
-          setMadinahRate={setMadinahRate}
-          setMakkahSharingType={setMakkahSharingType}
-          setMadinahSharingType={setMadinahSharingType}
-          handleMakkahRateModeChange={handleMakkahRateModeChange}
-          handleMadinahRateModeChange={handleMadinahRateModeChange}
           addMakkahHotel={addMakkahHotel}
           addMadinahHotel={addMadinahHotel}
-          updateMakkahHotel={updateMakkahHotel}
-          updateMadinahHotel={updateMadinahHotel}
-          removeMakkahHotel={removeMakkahHotel}
-          removeMadinahHotel={removeMadinahHotel}
+          updateHotel={updateHotel}
+          removeHotel={removeHotel}
           ticketCost={ticketCost}
           setTicketCost={setTicketCost}
           ticketCurrency={ticketCurrency}
@@ -2212,12 +1932,7 @@ export default function UmrahCalculator() {
           convertToPKR={convertToPKR}
           formatCurrency={formatCurrency}
           getCurrencySymbol={() => "Rs"}
-          getSingleHotelRowTotal={getSingleHotelRowTotal}
           getHotelRowTotal={getHotelRowTotal}
-          makkahMultiTotal={makkahMultiTotal}
-          madinahMultiTotal={madinahMultiTotal}
-          makkahMultiNights={makkahMultiNights}
-          madinahMultiNights={madinahMultiNights}
         />
 
         {/* Passengers: Adults / Children / Infants as 3 compact steppers in ONE row */}
@@ -2324,89 +2039,32 @@ export default function UmrahCalculator() {
           </div>
         </div>
 
-        {/* Service Charges and Profit / Markup in ONE row (2 columns) */}
+        {/* Service Charges (Profit removed per Task 2) */}
         <div className="rounded-xl border border-border bg-card p-3 shadow-xs">
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Service Charges */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Service Charges</label>
-              <div className="space-y-1">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={serviceCharges}
-                  onFocus={e => e.target.select()}
-                  onChange={e => setServiceCharges(e.target.value)}
-                  className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
-                  placeholder="0.00"
-                />
-                <Select value={serviceChargesCurrency} onValueChange={setServiceChargesCurrency}>
-                  <SelectTrigger className="h-10 text-xs font-semibold bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PKR">PKR</SelectItem>
-                    <SelectItem value="SAR">SAR</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="AED">AED</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Profit / Markup (segmented toggle % | PKR + single input) */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase">Profit / Markup</label>
-                <div className="inline-flex rounded-lg p-0.5 bg-muted border border-border text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setProfitType("percentage")}
-                    className={cn(
-                      "px-2 py-0.5 rounded font-semibold transition-all",
-                      profitType === "percentage" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
-                    )}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProfitType("fixed")}
-                    className={cn(
-                      "px-2 py-0.5 rounded font-semibold transition-all",
-                      profitType === "fixed" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"
-                    )}
-                  >
-                    PKR
-                  </button>
-                </div>
-              </div>
-
-              {profitType === "percentage" ? (
-                <div className="relative">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={profitPercent}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setProfitPercent(e.target.value)}
-                    className="h-11 min-h-[44px] text-center font-bold text-base bg-background pr-8"
-                    placeholder="e.g. 10"
-                  />
-                  <span className="absolute right-3.5 top-3 text-sm font-bold text-muted-foreground pointer-events-none">%</span>
-                </div>
-              ) : (
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={profitFixed}
-                  onFocus={e => e.target.select()}
-                  onChange={e => setProfitFixed(e.target.value)}
-                  className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
-                  placeholder="e.g. 15000"
-                />
-              )}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase">Service Charges</label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={serviceCharges}
+                onFocus={e => e.target.select()}
+                onChange={e => setServiceCharges(e.target.value)}
+                className="h-11 min-h-[44px] text-center font-bold text-base bg-background flex-1"
+                placeholder="0.00"
+              />
+              <Select value={serviceChargesCurrency} onValueChange={setServiceChargesCurrency}>
+                <SelectTrigger className="h-11 w-24 text-xs font-semibold bg-background min-h-[44px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PKR">PKR</SelectItem>
+                  <SelectItem value="SAR">SAR</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="AED">AED</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -2557,12 +2215,6 @@ export default function UmrahCalculator() {
                 <span>Base Total</span>
                 <span className="font-mono">Rs {formatCurrency(result?.baseTotal || 0)}</span>
               </div>
-              {result && result.profitAmount > 0 && (
-                <div className="flex justify-between py-1 border-b border-border/50 text-emerald-600 font-medium">
-                  <span>+ Profit / Markup</span>
-                  <span className="font-mono">+ Rs {formatCurrency(result.profitAmount)}</span>
-                </div>
-              )}
 
               {/* Final Totals Box */}
               <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 space-y-1">

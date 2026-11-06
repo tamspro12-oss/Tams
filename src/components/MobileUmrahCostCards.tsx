@@ -126,33 +126,14 @@ const MobileRateModeSelect = ({
 
 export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
   const {
-    useMultiHotel,
     makkahHotels,
     madinahHotels,
-    makkahNights,
-    madinahNights,
-    makkahRate,
-    madinahRate,
-    makkahSharingType,
-    madinahSharingType,
-    makkahRateMode,
-    madinahRateMode,
     hotelCurrency,
     isPresetLocked,
-    setMakkahNights,
-    setMadinahNights,
-    setMakkahRate,
-    setMadinahRate,
-    setMakkahSharingType,
-    setMadinahSharingType,
-    handleMakkahRateModeChange,
-    handleMadinahRateModeChange,
     addMakkahHotel,
     addMadinahHotel,
-    updateMakkahHotel,
-    updateMadinahHotel,
-    removeMakkahHotel,
-    removeMadinahHotel,
+    updateHotel,
+    removeHotel,
     ticketCost,
     setTicketCost,
     ticketCurrency,
@@ -176,12 +157,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
     parseValue,
     convertToPKR,
     formatCurrency,
-    getSingleHotelRowTotal,
     getHotelRowTotal,
-    makkahMultiTotal,
-    madinahMultiTotal,
-    makkahMultiNights,
-    madinahMultiNights,
   } = props;
 
   // Hotels expanded by default
@@ -190,17 +166,10 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
   const fmtTotal = (v: number) => (v > 0 ? `Rs ${formatCurrency(v)}` : "—");
 
-  const makkahCost = useMultiHotel
-    ? makkahMultiTotal
-    : makkahNights && makkahRate
-    ? getSingleHotelRowTotal(makkahRate, makkahNights, makkahRateMode, makkahSharingType)
-    : 0;
-
-  const madinahCost = useMultiHotel
-    ? madinahMultiTotal
-    : madinahNights && madinahRate
-    ? getSingleHotelRowTotal(madinahRate, madinahNights, madinahRateMode, madinahSharingType)
-    : 0;
+  const makkahCost = makkahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
+  const madinahCost = madinahHotels.reduce((sum, h) => sum + getHotelRowTotal(h), 0);
+  const makkahNights = makkahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
+  const madinahNights = madinahHotels.reduce((sum, h) => sum + parseValue(h.nights), 0);
 
   const ticketPerPerson = ticketCost ? convertToPKR(parseValue(ticketCost), ticketCurrency) : 0;
   const visaPerPerson = visaFee ? convertToPKR(parseValue(visaFee), visaCurrency) : 0;
@@ -224,7 +193,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             <div className="min-w-0">
               <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block">Makkah Hotel</span>
               <span className="text-[10px] text-slate-600 dark:text-slate-400">
-                {useMultiHotel ? `${makkahHotels.length} hotel(s) • ${makkahMultiNights} nights` : `${makkahNights || 0} nights • ${makkahSharingType}`}
+                {makkahHotels.length} hotel{makkahHotels.length > 1 ? "s" : ""} • {makkahNights} nights
               </span>
             </div>
           </div>
@@ -236,140 +205,98 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
         {makkahExpanded && (
           <div className="p-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-2.5">
-            {!useMultiHotel ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
-                    <MobileSharingTypeSelect
-                      value={makkahSharingType}
-                      onChange={setMakkahSharingType}
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
-                    <MobileRateModeSelect
-                      value={makkahRateMode}
-                      onChange={handleMakkahRateModeChange}
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      value={makkahNights}
-                      onFocus={e => e.target.select()}
-                      onChange={e => setMakkahNights(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                      placeholder="0"
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={makkahRate}
-                      onFocus={e => e.target.select()}
-                      onChange={e => setMakkahRate(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                      placeholder="0.00"
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={addMakkahHotel}
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
-                  disabled={isPresetLocked}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Multiple Makkah Hotels
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {makkahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
-                    <div className="flex items-center justify-between gap-2">
+            {makkahHotels.map((hotel, index) => {
+              const defaultLabel = makkahHotels.length > 1 ? `Makkah Hotel ${index + 1}` : "Makkah Hotel";
+              return (
+                <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
+                  <div className="flex items-center justify-between gap-2">
+                    {makkahHotels.length > 1 ? (
                       <Input
                         type="text"
                         value={hotel.name}
-                        onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
-                        placeholder={`Makkah Hotel ${index + 1}`}
+                        onChange={e => updateHotel(hotel.id, "name", e.target.value)}
+                        placeholder={defaultLabel}
                         className="h-8 text-xs font-semibold"
                         disabled={isPresetLocked}
                       />
+                    ) : (
+                      <span className="text-xs font-bold text-slate-900">{hotel.name || defaultLabel}</span>
+                    )}
+                    {makkahHotels.length > 1 && (
                       <Button
-                        onClick={() => removeMakkahHotel(hotel.id)}
+                        onClick={() => removeHotel(hotel.id)}
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
                         disabled={isPresetLocked}
+                        title="Remove hotel"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                    </div>
+                    )}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
                       <MobileSharingTypeSelect
                         value={hotel.sharingType}
-                        onChange={v => updateMakkahHotel(hotel.id, "sharingType", v)}
-                        disabled={isPresetLocked}
-                      />
-                      <MobileRateModeSelect
-                        value={hotel.rateMode}
-                        onChange={v => updateMakkahHotel(hotel.id, "rateMode", v)}
+                        onChange={v => updateHotel(hotel.id, "sharingType", v)}
                         disabled={isPresetLocked}
                       />
                     </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
+                      <MobileRateModeSelect
+                        value={hotel.rateMode}
+                        onChange={v => updateHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
                       <Input
                         type="number"
                         inputMode="numeric"
                         value={hotel.nights}
                         onFocus={e => e.target.select()}
-                        onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
+                        onChange={e => updateHotel(hotel.id, "nights", e.target.value)}
                         placeholder="Nights"
-                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
+                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                         disabled={isPresetLocked}
                       />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
                       <Input
                         type="number"
                         inputMode="decimal"
                         value={hotel.rate}
                         onFocus={e => e.target.select()}
-                        onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
+                        onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
                         placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
+                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                         disabled={isPresetLocked}
                       />
                     </div>
                   </div>
-                ))}
+                </div>
+              );
+            })}
 
-                <Button
-                  onClick={addMakkahHotel}
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 text-xs gap-1.5"
-                  disabled={isPresetLocked}
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Another Makkah Hotel
-                </Button>
-              </div>
-            )}
+            <Button
+              onClick={addMakkahHotel}
+              variant="outline"
+              size="sm"
+              className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
+              disabled={isPresetLocked}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {makkahHotels.length === 1 ? "Add Multiple Makkah Hotels" : "Add Another Makkah Hotel"}
+            </Button>
           </div>
         )}
       </div>
@@ -388,7 +315,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             <div className="min-w-0">
               <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block">Madinah Hotel</span>
               <span className="text-[10px] text-slate-600 dark:text-slate-400">
-                {useMultiHotel ? `${madinahHotels.length} hotel(s) • ${madinahMultiNights} nights` : `${madinahNights || 0} nights • ${madinahSharingType}`}
+                {madinahHotels.length} hotel{madinahHotels.length > 1 ? "s" : ""} • {madinahNights} nights
               </span>
             </div>
           </div>
@@ -400,140 +327,98 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
         {madinahExpanded && (
           <div className="p-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-2.5">
-            {!useMultiHotel ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
-                    <MobileSharingTypeSelect
-                      value={madinahSharingType}
-                      onChange={setMadinahSharingType}
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
-                    <MobileRateModeSelect
-                      value={madinahRateMode}
-                      onChange={handleMadinahRateModeChange}
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      value={madinahNights}
-                      onFocus={e => e.target.select()}
-                      onChange={e => setMadinahNights(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                      placeholder="0"
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={madinahRate}
-                      onFocus={e => e.target.select()}
-                      onChange={e => setMadinahRate(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                      placeholder="0.00"
-                      disabled={isPresetLocked}
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={addMadinahHotel}
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
-                  disabled={isPresetLocked}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Multiple Madinah Hotels
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {madinahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
-                    <div className="flex items-center justify-between gap-2">
+            {madinahHotels.map((hotel, index) => {
+              const defaultLabel = madinahHotels.length > 1 ? `Madinah Hotel ${index + 1}` : "Madinah Hotel";
+              return (
+                <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
+                  <div className="flex items-center justify-between gap-2">
+                    {madinahHotels.length > 1 ? (
                       <Input
                         type="text"
                         value={hotel.name}
-                        onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
-                        placeholder={`Madinah Hotel ${index + 1}`}
+                        onChange={e => updateHotel(hotel.id, "name", e.target.value)}
+                        placeholder={defaultLabel}
                         className="h-8 text-xs font-semibold"
                         disabled={isPresetLocked}
                       />
+                    ) : (
+                      <span className="text-xs font-bold text-slate-900">{hotel.name || defaultLabel}</span>
+                    )}
+                    {madinahHotels.length > 1 && (
                       <Button
-                        onClick={() => removeMadinahHotel(hotel.id)}
+                        onClick={() => removeHotel(hotel.id)}
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
                         disabled={isPresetLocked}
+                        title="Remove hotel"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                    </div>
+                    )}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
                       <MobileSharingTypeSelect
                         value={hotel.sharingType}
-                        onChange={v => updateMadinahHotel(hotel.id, "sharingType", v)}
-                        disabled={isPresetLocked}
-                      />
-                      <MobileRateModeSelect
-                        value={hotel.rateMode}
-                        onChange={v => updateMadinahHotel(hotel.id, "rateMode", v)}
+                        onChange={v => updateHotel(hotel.id, "sharingType", v)}
                         disabled={isPresetLocked}
                       />
                     </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
+                      <MobileRateModeSelect
+                        value={hotel.rateMode}
+                        onChange={v => updateHotel(hotel.id, "rateMode", v)}
+                        disabled={isPresetLocked}
+                      />
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
                       <Input
                         type="number"
                         inputMode="numeric"
                         value={hotel.nights}
                         onFocus={e => e.target.select()}
-                        onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
+                        onChange={e => updateHotel(hotel.id, "nights", e.target.value)}
                         placeholder="Nights"
-                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
+                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                         disabled={isPresetLocked}
                       />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
                       <Input
                         type="number"
                         inputMode="decimal"
                         value={hotel.rate}
                         onFocus={e => e.target.select()}
-                        onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
+                        onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
                         placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
+                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                         disabled={isPresetLocked}
                       />
                     </div>
                   </div>
-                ))}
+                </div>
+              );
+            })}
 
-                <Button
-                  onClick={addMadinahHotel}
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 text-xs gap-1.5"
-                  disabled={isPresetLocked}
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Another Madinah Hotel
-                </Button>
-              </div>
-            )}
+            <Button
+              onClick={addMadinahHotel}
+              variant="outline"
+              size="sm"
+              className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
+              disabled={isPresetLocked}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {madinahHotels.length === 1 ? "Add Multiple Madinah Hotels" : "Add Another Madinah Hotel"}
+            </Button>
           </div>
         )}
       </div>

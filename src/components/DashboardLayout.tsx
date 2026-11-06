@@ -14,6 +14,7 @@ import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PageTransition } from "@/components/PageTransition";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   LayoutDashboard,
   Calendar,
@@ -279,6 +280,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
               <OfflineIndicator />
               <NotificationBell />
+              <ThemeToggle />
             </div>
 
             {/* === DESKTOP HEADER LAYOUT === */}
@@ -295,6 +297,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="hidden md:flex items-center gap-2.5 flex-shrink-0">
               <NotificationBell />
               <OfflineIndicator />
+              <ThemeToggle />
               <SyncIndicator />
               <SidebarTrigger className="h-9 w-9 hover:bg-accent/10 active:bg-accent/10 rounded-xl inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation flex-shrink-0 border border-border/40">
                 <Menu className="h-4.5 w-4.5" />

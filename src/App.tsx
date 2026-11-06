@@ -176,7 +176,7 @@ const App = () => {
                   <Route path="/app/opening-balances" element={<Navigate to="/app/accounts?tab=opening-balances" replace />} />
 
                   <Route path="/app/reminders" element={<Navigate to="/app/notifications?tab=reminders" replace />} />
-                  <Route path="/app/email-history" element={<Navigate to="/app/settings?tab=email-history" replace />} />
+                  <Route path="/app/email-history" element={<Navigate to="/app/settings?tab=email-integration" replace />} />
                   <Route path="/app/user-manual" element={<Navigate to="/app/settings?tab=manual" replace />} />
                   
                   <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />

@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, Monitor, Smartphone } from "lucide-react";
-import { useViewMode } from "@/contexts/ViewModeContext";
+import { Plane } from "lucide-react";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
@@ -26,7 +25,6 @@ const loginSchema = z.object({
 export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { viewMode, toggleViewMode } = useViewMode();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 

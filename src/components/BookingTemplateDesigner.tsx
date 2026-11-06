@@ -4,12 +4,16 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Save, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAgency } from "@/hooks/useAgency";
+import { useAuth } from "@/hooks/useAuth";
 
 export function BookingTemplateDesigner() {
   const { toast } = useToast();
+  const { data: agency } = useAgency();
+  const { user } = useAuth();
+
   const [agencyName, setAgencyName] = useState("");
   const [agencyPhone, setAgencyPhone] = useState("");
   const [agencyEmail, setAgencyEmail] = useState("");
@@ -24,6 +28,15 @@ export function BookingTemplateDesigner() {
   useEffect(() => {
     loadBookingTemplate();
   }, []);
+
+  // Auto-populate from signup/account profile if empty
+  useEffect(() => {
+    if (agency) {
+      setAgencyName((prev) => prev || agency.name || "");
+      setAgencyPhone((prev) => prev || agency.phone_number || "");
+      setAgencyEmail((prev) => prev || agency.email || user?.email || "");
+    }
+  }, [agency, user]);
 
   const loadBookingTemplate = () => {
     try {
@@ -86,162 +99,200 @@ export function BookingTemplateDesigner() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="w-5 h-5" />
-          Booking Template Designer
-        </CardTitle>
-        <CardDescription>
-          Customize your booking confirmation template for client communications
-        </CardDescription>
+    <Card className="border shadow-xs">
+      <CardHeader className="py-3 px-4 sm:px-5 border-b">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              Booking Confirmation Template Designer
+            </CardTitle>
+            <CardDescription className="text-xs mt-0.5">
+              Customize booking confirmation vouchers and itinerary headers
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreview(!showPreview)}
+              className="h-8 text-xs gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>{showPreview ? "Hide Preview" : "Live Preview"}</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveTemplate}
+              disabled={isSaving || !agencyName.trim()}
+              className="h-8 text-xs font-semibold gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? "Saving..." : "Save Template"}</span>
+            </Button>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Agency Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="booking-agency-name">Agency Name *</Label>
+
+      <CardContent className="p-4 sm:p-5 space-y-4">
+        {/* Compact Grid: Auto-filled Agency details */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="booking-agency-name" className="text-xs font-semibold">
+              Agency Name *
+            </Label>
             <Input
               id="booking-agency-name"
               value={agencyName}
               onChange={(e) => setAgencyName(e.target.value)}
               placeholder="Your Agency Name"
+              className="h-8.5 text-xs"
             />
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="booking-phone">Phone Number</Label>
+
+          <div className="space-y-1">
+            <Label htmlFor="booking-phone" className="text-xs font-semibold">
+              Phone Number
+            </Label>
             <Input
               id="booking-phone"
               value={agencyPhone}
               onChange={(e) => setAgencyPhone(e.target.value)}
               placeholder="+92 300 1234567"
+              className="h-8.5 text-xs"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="booking-email">Email</Label>
+          <div className="space-y-1">
+            <Label htmlFor="booking-email" className="text-xs font-semibold">
+              Email Address
+            </Label>
             <Input
               id="booking-email"
               type="email"
               value={agencyEmail}
               onChange={(e) => setAgencyEmail(e.target.value)}
               placeholder="info@agency.com"
+              className="h-8.5 text-xs"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="booking-prefix">Booking Prefix</Label>
+          <div className="space-y-1">
+            <Label htmlFor="booking-prefix" className="text-xs font-semibold">
+              Booking Prefix
+            </Label>
             <Input
               id="booking-prefix"
               value={bookingPrefix}
               onChange={(e) => setBookingPrefix(e.target.value.toUpperCase())}
               placeholder="BKG"
               maxLength={10}
+              className="h-8.5 text-xs font-mono uppercase"
             />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="booking-address">Address</Label>
-          <Textarea
-            id="booking-address"
-            value={agencyAddress}
-            onChange={(e) => setAgencyAddress(e.target.value)}
-            placeholder="Enter your complete business address"
-            rows={3}
-          />
-        </div>
-
-        {/* Template Customization */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="header-text">Header Text</Label>
+        {/* Row 2: Address, Header, Color, Footer */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="header-text" className="text-xs font-semibold">
+              Header Title Text
+            </Label>
             <Input
               id="header-text"
               value={headerText}
               onChange={(e) => setHeaderText(e.target.value)}
               placeholder="BOOKING CONFIRMATION"
+              className="h-8.5 text-xs"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="theme-color">Theme Color</Label>
+          <div className="space-y-1">
+            <Label htmlFor="theme-color" className="text-xs font-semibold">
+              Brand Accent Color
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="theme-color"
                 type="color"
                 value={themeColor}
                 onChange={(e) => setThemeColor(e.target.value)}
-                className="w-20 h-10 cursor-pointer"
+                className="w-12 h-8.5 p-1 cursor-pointer"
               />
               <Input
                 type="text"
                 value={themeColor}
                 onChange={(e) => setThemeColor(e.target.value)}
                 placeholder="#1e40af"
-                className="flex-1"
+                className="flex-1 h-8.5 text-xs font-mono"
               />
             </div>
           </div>
+
+          <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+            <Label htmlFor="footer-text" className="text-xs font-semibold">
+              Footer Note / Salutation
+            </Label>
+            <Input
+              id="footer-text"
+              value={footerText}
+              onChange={(e) => setFooterText(e.target.value)}
+              placeholder="Thank you for booking with us!"
+              className="h-8.5 text-xs"
+            />
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="footer-text">Footer Text</Label>
-          <Textarea
-            id="footer-text"
-            value={footerText}
-            onChange={(e) => setFooterText(e.target.value)}
-            placeholder="Thank you for booking with us!"
-            rows={2}
+        <div className="space-y-1">
+          <Label htmlFor="booking-address" className="text-xs font-semibold">
+            Office Business Address
+          </Label>
+          <Input
+            id="booking-address"
+            value={agencyAddress}
+            onChange={(e) => setAgencyAddress(e.target.value)}
+            placeholder="Complete office address, city, country"
+            className="h-8.5 text-xs"
           />
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3 pt-4 border-t">
-          <Button 
-            onClick={handleSaveTemplate}
-            disabled={isSaving || !agencyName.trim()}
-            className="gap-2"
-          >
-            <Save className="w-4 h-4" />
-            {isSaving ? "Saving..." : "Save Template"}
-          </Button>
-          <Button 
-            onClick={() => setShowPreview(!showPreview)}
-            variant="outline"
-            className="gap-2"
-          >
-            <Eye className="w-4 h-4" />
-            {showPreview ? "Hide Preview" : "Show Preview"}
-          </Button>
-        </div>
-
-        {/* Preview */}
+        {/* Preview Panel */}
         {showPreview && (
-          <div className="mt-6 p-6 border rounded-lg bg-background">
-            <div className="max-w-2xl mx-auto space-y-4">
-              <div className="text-center space-y-2" style={{ borderBottom: `2px solid ${themeColor}`, paddingBottom: '1rem' }}>
-                <h2 className="text-2xl font-bold" style={{ color: themeColor }}>
-                  {headerText || "BOOKING CONFIRMATION"}
-                </h2>
-                <p className="text-lg font-semibold">{agencyName || "Your Agency Name"}</p>
-                {agencyPhone && <p className="text-sm text-muted-foreground">{agencyPhone}</p>}
-                {agencyEmail && <p className="text-sm text-muted-foreground">{agencyEmail}</p>}
-                {agencyAddress && <p className="text-sm text-muted-foreground">{agencyAddress}</p>}
-              </div>
-              
-              <div className="py-4 space-y-2">
-                <p className="text-sm"><strong>Booking ID:</strong> {bookingPrefix}-2025-001</p>
-                <p className="text-sm"><strong>Client Name:</strong> Sample Client</p>
-                <p className="text-sm"><strong>Flight Date:</strong> {new Date().toLocaleDateString()}</p>
-                <p className="text-sm"><strong>PNR:</strong> ABC123</p>
-              </div>
-
-              <div className="text-center pt-4 border-t">
-                <p className="text-sm text-muted-foreground">{footerText}</p>
+          <div className="p-4 border rounded-lg bg-card/60 backdrop-blur-xs space-y-3">
+            <div className="text-center pb-3 space-y-1 border-b-2" style={{ borderColor: themeColor }}>
+              <h3 className="text-base font-bold tracking-wide" style={{ color: themeColor }}>
+                {headerText || "BOOKING CONFIRMATION"}
+              </h3>
+              <p className="text-sm font-semibold text-foreground">{agencyName || "Your Agency Name"}</p>
+              <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+                {agencyPhone && <span>Tel: {agencyPhone}</span>}
+                {agencyEmail && <span>Email: {agencyEmail}</span>}
+                {agencyAddress && <span>{agencyAddress}</span>}
               </div>
             </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs p-2.5 bg-muted/40 rounded-md">
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Booking Ref</span>
+                <span className="font-semibold">{bookingPrefix}-2026-001</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Client</span>
+                <span className="font-semibold">Sample Passenger</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Flight Date</span>
+                <span className="font-semibold">{new Date().toLocaleDateString()}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Status</span>
+                <span className="text-emerald-600 font-semibold">Confirmed</span>
+              </div>
+            </div>
+
+            <p className="text-center text-xs text-muted-foreground italic pt-1">
+              {footerText}
+            </p>
           </div>
         )}
       </CardContent>

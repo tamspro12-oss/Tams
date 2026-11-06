@@ -12,66 +12,74 @@ const ViewModeContext = createContext<ViewModeContextType | undefined>(undefined
 
 // Detect if running as standalone PWA
 function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false;
   return window.matchMedia('(display-mode: standalone)').matches ||
          (window.navigator as any).standalone === true;
 }
 
 // Detect mobile device via User Agent
 function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
   return /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Smart device detection for default view mode
-function getDefaultViewMode(): ViewMode {
-  return isMobileDevice() ? 'mobile' : 'desktop';
+// Automatic responsive view mode detection:
+// Desktop screens (>= 768px without mobile user-agent) default to desktop view.
+// Mobile screens (< 768px or mobile devices) default to mobile view.
+function getAutomaticViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'desktop';
+  const isSmallScreen = window.innerWidth < 768;
+  if (isMobileDevice() || isSmallScreen) {
+    return 'mobile';
+  }
+  return 'desktop';
 }
 
 export function ViewModeProvider({ children }: { children: ReactNode }) {
-  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
-    const mobile = isMobileDevice();
-    const standalone = isStandalonePwa();
-    
-    // For Mobile PWA: Always force mobile view (ignore old localStorage)
-    if (mobile && standalone) {
-      localStorage.setItem('viewMode', 'mobile');
-      return 'mobile';
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => getAutomaticViewMode());
+
+  const applyViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('view-desktop', 'view-mobile');
+      document.body.classList.add(`view-${mode}`);
     }
-    
-    // For Desktop PWA: Always force desktop view
-    if (!mobile && standalone) {
-      localStorage.setItem('viewMode', 'desktop');
-      return 'desktop';
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
     }
-    
-    // For regular browser: Check localStorage first, then smart detect
-    const stored = localStorage.getItem('viewMode');
-    if (stored === 'desktop' || stored === 'mobile') {
-      return stored;
-    }
-    
-    return getDefaultViewMode();
-  });
+  };
 
   const setViewMode = (mode: ViewMode) => {
-    setViewModeState(mode);
-    localStorage.setItem('viewMode', mode);
-    // Apply class to body for global styling
-    document.body.classList.remove('view-desktop', 'view-mobile');
-    document.body.classList.add(`view-${mode}`);
-    
-    // Dispatch custom event for hooks (like useIsMobile) to react immediately
-    window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
+    applyViewMode(mode);
   };
 
   const toggleViewMode = () => {
-    setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop');
+    applyViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop');
   };
 
   useEffect(() => {
-    // Apply initial class
-    document.body.classList.add(`view-${viewMode}`);
+    // Apply initial responsive view mode
+    const initialMode = getAutomaticViewMode();
+    applyViewMode(initialMode);
+
+    // Automatically respond to window resize across desktop and mobile screens
+    const handleResize = () => {
+      const currentMode = getAutomaticViewMode();
+      setViewModeState((prev) => {
+        if (prev !== currentMode) {
+          applyViewMode(currentMode);
+          return currentMode;
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
     return () => {
-      document.body.classList.remove('view-desktop', 'view-mobile');
+      window.removeEventListener('resize', handleResize);
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('view-desktop', 'view-mobile');
+      }
     };
   }, []);
 

@@ -727,7 +727,7 @@ const sections: Section[] = [
             <li><strong>4. Accounts Hub (`/app/accounts`):</strong> Complete financial ledger featuring <em>Bank & Cash Manager</em>, <em>Expenses</em>, <em>Refunds</em>, <em>Financial Reports</em>, and <em>Opening Balances</em>.</li>
             <li><strong>5. Notifications Hub (`/app/notifications`):</strong> Unified alert center combining upcoming flight and Umrah departures, daily closing expense prompts, and system notifications.</li>
             <li><strong>6. Umrah Calculator (`/app/umrah-calculator`):</strong> Real-time dynamic Umrah package cost estimation with 1-click Quotation and Booking generation.</li>
-            <li><strong>7. Settings Hub (`/app/settings`):</strong> Agency profile branding, Meta WhatsApp Business configuration, notification rules, email dispatch history, and system user manual.</li>
+            <li><strong>7. Settings (`/app/settings`):</strong> Account security, agency branding templates, email integration, storage quota, and system user manual.</li>
           </ul>
         </div>
 
@@ -777,31 +777,6 @@ const sections: Section[] = [
             <li><strong>Opening Balances Hub:</strong> View, reconcile, export to Excel/PDF, and audit all agency opening balances anytime under Accounts Hub → Opening Balances tab.</li>
           </ul>
         </div>
-      </div>
-    )
-  },
-  {
-    id: "whatsapp-integration",
-    title: "Meta WhatsApp Business API Integration",
-    icon: MessageSquare,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          Send automated service vouchers, booking confirmations, e-tickets, and payment receipts directly to client WhatsApp numbers using your own Meta WhatsApp Business Cloud credentials:
-        </p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Step-by-Step WhatsApp Setup</h4>
-          <StepList steps={[
-            "Create a Meta Developer account at developers.facebook.com and configure a WhatsApp Business app.",
-            "Navigate to Settings Hub → WhatsApp Integration tab.",
-            "Toggle 'Enable WhatsApp Automated Messaging' to active.",
-            "Enter your Meta Phone Number ID, WhatsApp Business Account ID (WABA ID), and System User Permanent Access Token.",
-            "Click 'Save WhatsApp Configuration'. Your credentials are encrypted and stored with strict multi-tenant row-level security."
-          ]} />
-        </div>
-
-        <TipBox>Once configured, you can share vouchers and payment receipts with one click via official Meta cloud channels.</TipBox>
       </div>
     )
   }
