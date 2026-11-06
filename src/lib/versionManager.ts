@@ -1,10 +1,16 @@
 // Version control and update management
-const CURRENT_VERSION = '3.5.0';
+const CURRENT_VERSION = '3.5.1';
 const VERSION_KEY = 'travelpro_app_version';
 const CHANGELOG_KEY = 'travelpro_changelog';
 const LAST_CHECK_KEY = 'travelpro_last_version_check';
 
 export const VERSION_CHANGELOG = {
+  '3.5.1': [
+    'Refactored Dashboard to ultra-clean, high-contrast SaaS layout (Linear/Stripe standard)',
+    'Top KPI Metric Cards: balanced 3-column row (Total Bookings, Clients Pending Payment, Vendors Pending Payment) with aggregated B2C + B2B totals',
+    'Quick Action Buttons: 2-row x 3-column responsive grid with new Umrah Calculator trigger',
+    'New full-width Notifications Center with unread count badge, category icons, timestamps, and direct operational actions'
+  ],
   '3.5.0': [
     'Complete Settings Redesign: clean zero-scroll layout with 5 prominent top tabs (Account, Branding, Email Integration, Storage & Backup, User Manual)',
     'Global removal of WhatsApp Integration, Meta credentials, and WhatsApp Business Number fields',

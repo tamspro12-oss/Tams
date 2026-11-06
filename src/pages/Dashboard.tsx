@@ -1,32 +1,30 @@
-import { StatCard } from "@/components/StatCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
   Banknote,
   Plane,
-  TrendingUp,
   RefreshCw,
-  Building2,
   Wallet,
   FileText,
   UserPlus,
   Receipt,
   AlertCircle,
   ArrowRight,
-  Plus,
+  Bell,
+  Calculator,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { TopVendorsWidget } from "@/components/TopVendorsWidget";
-import { useClients, useBookings, useExpenses, useVendors, useQueries } from "@/hooks/useStorage";
+import { useClients, useExpenses, useVendors, useQueries } from "@/hooks/useStorage";
 import { useB2BBookings } from "@/hooks/useB2BBookings";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
-import { useActionableAlerts } from "@/hooks/useActionableAlerts";
+import { useB2BLedger } from "@/hooks/useB2BLedger";
+import { useNotifications } from "@/hooks/useNotifications";
 import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, startOfDay, startOfMonth, endOfMonth } from "date-fns";
+import { format } from "date-fns";
 import {
   Popover,
   PopoverContent,
@@ -44,15 +42,59 @@ import { QuickPaymentDialog } from "@/components/QuickPaymentDialog";
 import { ClientPaymentDialog } from "@/components/ClientPaymentDialog";
 import { VendorPaymentDialog } from "@/components/VendorPaymentDialog";
 
+interface DashboardNotificationItem {
+  id: string;
+  title: string;
+  description: string;
+  type: "info" | "warning" | "success";
+  timestamp: string;
+  rawDate: number;
+  isRead: boolean;
+  link?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+}
+
+function getRelativeTime(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return "Recently";
+  try {
+    const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return "Recently";
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs < 0) return "Upcoming";
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return "Just now";
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return format(d, "MMM d");
+  } catch {
+    return "Recently";
+  }
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { clients = [], isLoading: loadingClients } = useClients();
-  const { bookings = [], isLoading: loadingBookings } = useBookings();
   const { expenses = [], isLoading: loadingExpenses } = useExpenses();
   const { vendors = [], isLoading: loadingVendors } = useVendors();
   const { queries = [], isLoading: loadingQueries } = useQueries();
   const { bookings: b2bBookings = [], isLoading: loadingB2BBookings } = useB2BBookings();
   const { agents: b2bAgents = [], isLoading: loadingB2BAgents } = useB2BAgents();
+  const { ledgerEntries: b2bLedger = [], isLoading: loadingB2BLedger } = useB2BLedger();
+  const {
+    notifications = [],
+    unreadNotifications = [],
+    unreadCount = 0,
+    markAsRead,
+  } = useNotifications();
+
   const queryClient = useQueryClient();
 
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
@@ -65,9 +107,6 @@ export default function Dashboard() {
   const [selectedClientForPayment, setSelectedClientForPayment] = useState<any>(null);
   const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
 
-  // Centralized actionable alerts for slim banner & top navbar bell
-  const { urgentCount, summaryText } = useActionableAlerts();
-
   // Pull-to-refresh functionality
   const handleRefresh = async () => {
     await Promise.all([
@@ -78,6 +117,8 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['queries'] }),
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] }),
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] }),
+      queryClient.invalidateQueries({ queryKey: ['b2b_ledger'] }),
+      queryClient.invalidateQueries({ queryKey: ['agency_notifications'] }),
     ]);
     toast.success("Dashboard refreshed");
   };
@@ -111,6 +152,9 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_agents' }, () => {
         queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_ledger' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['b2b_ledger'] });
+      })
       .subscribe();
 
     return () => {
@@ -118,13 +162,12 @@ export default function Dashboard() {
     };
   }, [queryClient]);
 
-  // Aggregate stats: B2C + B2B combined by default
-  const stats = useMemo(() => {
-    const monthStart = startOfMonth(selectedMonth);
-    const monthEnd = endOfMonth(selectedMonth);
+  // Aggregate stats: Strictly B2C + B2B combined
+  const totalBookingsCount = clients.length + b2bBookings.length;
 
-    // B2C Pending Payments across all time
-    const b2cPendingPayments = clients
+  // B2C Pending Payments across all time
+  const b2cPendingPayments = useMemo(() => {
+    return clients
       .filter((c: any) => {
         const total = Number(c.selling_price) || 0;
         const paid = Number(c.amount_paid) || 0;
@@ -135,118 +178,260 @@ export default function Dashboard() {
         const paid = Number(c.amount_paid) || 0;
         return sum + (total - paid);
       }, 0);
+  }, [clients]);
 
-    // Monthly bookings - clients with flight_date in selected month
-    const monthlyClients = clients.filter((c: any) => {
-      if (!c.flight_date) return false;
-      const flightDate = new Date(c.flight_date);
-      return flightDate >= monthStart && flightDate <= monthEnd;
-    });
+  // B2B Pending Client Receivables across all time
+  const b2bPendingReceivables = useMemo(() => {
+    if (b2bLedger.length > 0) {
+      const agentBalances = new Map<string, number>();
+      b2bLedger.forEach((entry: any) => {
+        if (!entry.agent_id) return;
+        const current = agentBalances.get(entry.agent_id) || 0;
+        const amt = Number(entry.amount) || 0;
+        if (entry.entry_type === 'debit') {
+          agentBalances.set(entry.agent_id, current + amt);
+        } else if (entry.entry_type === 'credit') {
+          agentBalances.set(entry.agent_id, current - amt);
+        }
+      });
 
-    const b2cMonthlyBookings = monthlyClients.length;
+      let totalPending = 0;
+      agentBalances.forEach((balance) => {
+        if (balance > 0) {
+          totalPending += balance;
+        }
+      });
+      return totalPending;
+    }
 
-    // Monthly revenue
-    const b2cMonthlyRevenue = monthlyClients.reduce((sum: number, c: any) => {
-      return sum + (Number(c.amount_paid) || 0);
-    }, 0);
+    // Fallback from B2B bookings if no ledger entries exist
+    return b2bBookings
+      .filter((b: any) => b.payment_status !== 'paid')
+      .reduce((sum: number, b: any) => {
+        const selling = Number(b.selling_price) || 0;
+        const comm = Number(b.commission_amount) || 0;
+        return sum + Math.max(0, selling - comm);
+      }, 0);
+  }, [b2bLedger, b2bBookings]);
 
-    // Monthly vendor costs
-    const b2cMonthlyVendorCosts = monthlyClients.reduce((sum: number, c: any) => {
-      return sum + (Number(c.purchasing_price) || 0);
-    }, 0);
+  // Combined Clients Pending Receivables (B2B + B2C)
+  const totalClientsPending = b2cPendingPayments + b2bPendingReceivables;
 
-    // Monthly operating expenses
-    const monthlyExpenses = expenses
-      .filter((e: any) => {
-        const date = new Date(e.expense_date);
-        return date >= monthStart && date <= monthEnd;
-      })
-      .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
-
-    // Total vendor payables across all time
-    const vendorPayables = vendors.reduce((sum: number, v: any) => {
+  // Total Vendor Payables across all time
+  const vendorPayables = useMemo(() => {
+    return vendors.reduce((sum: number, v: any) => {
       const vendorClients = clients.filter((c: any) => c.vendor_id === v.id);
       const fromBookingsTotal = vendorClients.reduce((s: number, c: any) => s + (Number(c.purchasing_price) || 0), 0);
       const vendorDirectAmount = Number(v.payment_amount) || 0;
       const totalPayable = fromBookingsTotal + vendorDirectAmount;
       const paid = Number(v.amount_paid) || 0;
-      return sum + (totalPayable - paid);
+      return sum + Math.max(0, totalPayable - paid);
     }, 0);
+  }, [vendors, clients]);
 
-    // B2B Stats for current month
-    const b2bMonthlyBookings = b2bBookings.filter((b: any) => {
-      if (!b.created_at) return false;
-      const bookingDate = new Date(b.created_at);
-      return bookingDate >= monthStart && bookingDate <= monthEnd;
+  // Currency Formatter: Rs format matching tabular spec
+  const formatCurrency = (val: number) => {
+    const num = Number(val) || 0;
+    if (num === 0) return "Rs 0";
+    if (num >= 1000) {
+      return `Rs ${(num / 1000).toFixed(0)}K`;
+    }
+    return `Rs ${Math.round(num).toLocaleString()}`;
+  };
+
+  // Recent notifications list combining database notifications and live operational events
+  const recentNotifications = useMemo<DashboardNotificationItem[]>(() => {
+    const list: DashboardNotificationItem[] = [];
+
+    // 1. Notifications from database notifications table
+    (notifications || []).forEach((notif) => {
+      let type: "info" | "warning" | "success" = "info";
+      const cat = (notif.category || "").toLowerCase();
+      const titleLower = (notif.title || "").toLowerCase();
+
+      if (
+        cat.includes("payment") ||
+        cat.includes("overdue") ||
+        cat.includes("due") ||
+        titleLower.includes("pending") ||
+        titleLower.includes("alert")
+      ) {
+        type = "warning";
+      } else if (
+        cat.includes("booking") ||
+        cat.includes("confirm") ||
+        cat.includes("voucher") ||
+        titleLower.includes("received") ||
+        titleLower.includes("confirmed")
+      ) {
+        type = "success";
+      }
+
+      list.push({
+        id: notif.id,
+        title: notif.title,
+        description: notif.message,
+        type,
+        timestamp: getRelativeTime(notif.created_at),
+        rawDate: notif.created_at ? new Date(notif.created_at).getTime() : 0,
+        isRead: notif.is_read,
+        link: notif.link || undefined,
+        action: notif.link
+          ? {
+              label: "View Details",
+              onClick: () => navigate(notif.link!),
+            }
+          : undefined,
+      });
     });
 
-    const b2bBookingsCount = b2bMonthlyBookings.length;
-    const b2bTotalSales = b2bMonthlyBookings.reduce((sum: number, b: any) => sum + (Number(b.selling_price) || 0), 0);
-    const b2bTotalProfit = b2bMonthlyBookings.reduce((sum: number, b: any) => sum + (Number(b.profit) || 0), 0);
-    const b2bVendorCosts = b2bMonthlyBookings.reduce((sum: number, b: any) => sum + (Number(b.purchasing_price) || 0), 0);
-
-    // Combined stats: Aggregated B2C + B2B by default
-    const combinedBookings = b2cMonthlyBookings + b2bBookingsCount;
-    const combinedRevenue = b2cMonthlyRevenue + b2bTotalSales;
-    const combinedVendorCosts = b2cMonthlyVendorCosts + b2bVendorCosts;
-    const combinedProfit = (b2cMonthlyRevenue - b2cMonthlyVendorCosts - monthlyExpenses) + b2bTotalProfit;
-
-    const monthlyProfit = combinedProfit;
-    const profitMargin = combinedRevenue > 0 ? ((monthlyProfit / combinedRevenue) * 100).toFixed(1) : '0.0';
-
-    return {
-      totalBookingsCount: clients.length + b2bBookings.length,
-      pendingPayments: b2cPendingPayments,
-      vendorPayables,
-      monthlyBookings: combinedBookings,
-      monthlyRevenue: combinedRevenue,
-      monthlyVendorCosts: combinedVendorCosts,
-      monthlyExpenses,
-      monthlyProfit,
-      profitMargin,
-      pendingPaymentCount: clients.filter((c: any) => {
-        const total = Number(c.selling_price) || 0;
-        const paid = Number(c.amount_paid) || 0;
-        return paid < total;
-      }).length,
-      // B2B breakdown
-      b2bBookingsCount,
-      b2bTotalSales,
-      b2bTotalProfit,
-      b2bAgentsCount: b2bAgents.length,
-    };
-  }, [clients, bookings, expenses, vendors, selectedMonth, b2bBookings, b2bAgents]);
-
-  // Clients with remaining payments due today
-  const clientsWithPaymentDueToday = useMemo(() => {
-    const today = startOfDay(new Date());
-
-    return clients
+    // 2. High-priority real-time operational notifications
+    // A. Pending client payment reminders
+    const pendingClients = clients
       .filter((c: any) => {
         const total = Number(c.selling_price) || 0;
         const paid = Number(c.amount_paid) || 0;
-        const hasRemainingPayment = paid < total;
-
-        if (!c.remaining_payment_date || !hasRemainingPayment) return false;
-
-        const paymentDate = startOfDay(new Date(c.remaining_payment_date));
-        return paymentDate.getTime() === today.getTime();
+        return paid < total;
       })
       .sort((a: any, b: any) => {
-        const remainingA = (Number(a.selling_price) || 0) - (Number(a.amount_paid) || 0);
-        const remainingB = (Number(b.selling_price) || 0) - (Number(b.amount_paid) || 0);
-        return remainingB - remainingA;
+        if (a.remaining_payment_date && !b.remaining_payment_date) return -1;
+        if (!a.remaining_payment_date && b.remaining_payment_date) return 1;
+        const remA = (Number(a.selling_price) || 0) - (Number(a.amount_paid) || 0);
+        const remB = (Number(b.selling_price) || 0) - (Number(b.amount_paid) || 0);
+        return remB - remA;
       });
-  }, [clients]);
+
+    pendingClients.slice(0, 3).forEach((client: any) => {
+      const total = Number(client.selling_price) || 0;
+      const paid = Number(client.amount_paid) || 0;
+      const remaining = total - paid;
+      const id = `pending-client-${client.id}`;
+
+      if (!list.some((n) => n.id === id || n.title.includes(client.name))) {
+        list.push({
+          id,
+          title: `Pending Client Payment: ${client.name}`,
+          description: `Remaining balance of Rs ${remaining.toLocaleString()} due for booking #${client.pnr || client.destination || String(client.id).slice(0, 6)}`,
+          type: "warning",
+          timestamp: client.remaining_payment_date ? getRelativeTime(client.remaining_payment_date) : "Action Required",
+          rawDate: client.remaining_payment_date ? new Date(client.remaining_payment_date).getTime() : Date.now(),
+          isRead: false,
+          action: {
+            label: "Receive Payment",
+            onClick: () => setSelectedClientForPayment(client),
+          },
+        });
+      }
+    });
+
+    // B. Vendor payable alerts
+    const pendingVendors = vendors
+      .map((v: any) => {
+        const vendorClients = clients.filter((c: any) => c.vendor_id === v.id);
+        const fromBookingsTotal = vendorClients.reduce((s: number, c: any) => s + (Number(c.purchasing_price) || 0), 0);
+        const vendorDirectAmount = Number(v.payment_amount) || 0;
+        const totalPayable = fromBookingsTotal + vendorDirectAmount;
+        const paid = Number(v.amount_paid) || 0;
+        const pending = totalPayable - paid;
+        return { vendor: v, pending };
+      })
+      .filter((item) => item.pending > 0)
+      .sort((a, b) => b.pending - a.pending);
+
+    pendingVendors.slice(0, 2).forEach(({ vendor, pending }) => {
+      const id = `pending-vendor-${vendor.id}`;
+      if (!list.some((n) => n.id === id || n.title.includes(vendor.name))) {
+        list.push({
+          id,
+          title: `Vendor Payable Alert: ${vendor.name}`,
+          description: `Outstanding payable balance of Rs ${pending.toLocaleString()} on supplier ledger`,
+          type: "warning",
+          timestamp: "Due Soon",
+          rawDate: Date.now() - 3600000,
+          isRead: false,
+          action: {
+            label: "Pay Vendor",
+            onClick: () => {
+              setQuickPaymentTab('vendor');
+              setSelectedVendorForPayment(vendor);
+              setIsQuickPaymentOpen(true);
+            },
+          },
+        });
+      }
+    });
+
+    // C. Recent booking confirmations
+    const recentBookings = [...clients].sort((a: any, b: any) => {
+      const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tB - tA;
+    });
+
+    recentBookings.slice(0, 2).forEach((booking: any) => {
+      const id = `recent-booking-${booking.id}`;
+      if (!list.some((n) => n.id === id || n.title.includes(booking.name))) {
+        list.push({
+          id,
+          title: `New Booking Confirmed: ${booking.name}`,
+          description: `${booking.travel_type || 'Ticket'} booking to ${booking.destination || 'Destination'} (PNR: ${booking.pnr || 'N/A'}) confirmed`,
+          type: "success",
+          timestamp: getRelativeTime(booking.created_at),
+          rawDate: booking.created_at ? new Date(booking.created_at).getTime() : 0,
+          isRead: true,
+          action: {
+            label: "View Booking",
+            onClick: () => navigate("/app/bookings?tab=clients"),
+          },
+        });
+      }
+    });
+
+    // D. B2B updates
+    const recentB2B = [...b2bBookings].sort((a: any, b: any) => {
+      const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tB - tA;
+    });
+
+    recentB2B.slice(0, 2).forEach((b2b: any) => {
+      const id = `b2b-update-${b2b.id}`;
+      if (!list.some((n) => n.id === id || n.title.includes(b2b.passenger_name))) {
+        list.push({
+          id,
+          title: `B2B Booking Update: ${b2b.passenger_name}`,
+          description: `Partner agency booking to ${b2b.destination || 'Destination'} (PNR: ${b2b.pnr || 'N/A'}) registered`,
+          type: "info",
+          timestamp: getRelativeTime(b2b.created_at),
+          rawDate: b2b.created_at ? new Date(b2b.created_at).getTime() : 0,
+          isRead: true,
+          action: {
+            label: "View B2B",
+            onClick: () => navigate("/app/bookings?tab=b2b-agents"),
+          },
+        });
+      }
+    });
+
+    // Sort by rawDate descending
+    list.sort((a, b) => b.rawDate - a.rawDate);
+
+    return list.slice(0, 10);
+  }, [notifications, clients, vendors, b2bBookings, navigate]);
+
+  const unreadCountBadge = useMemo(() => {
+    if (unreadCount > 0) return unreadCount;
+    return recentNotifications.filter((n) => !n.isRead).length;
+  }, [unreadCount, recentNotifications]);
 
   const isLoading =
     loadingClients ||
-    loadingBookings ||
     loadingExpenses ||
     loadingVendors ||
     loadingQueries ||
     loadingB2BBookings ||
-    loadingB2BAgents;
+    loadingB2BAgents ||
+    loadingB2BLedger;
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -272,14 +457,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="space-y-3 sm:space-y-4 animate-fade-in max-w-7xl mx-auto">
-        {/* 1. HEADER: Clean, streamlined without B2B toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Main Dashboard Container: Exact vertical space-y-8 hierarchy */}
+      <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
+        {/* 1. DASHBOARD HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-heading tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white font-heading tracking-tight">
               Dashboard
             </h1>
-            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">
               Welcome back! Here's your agency performance & daily operations overview
             </p>
           </div>
@@ -287,8 +473,12 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 font-medium shadow-2xs">
-                  <Calendar className="w-4 h-4 mr-2 text-primary" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 font-medium shadow-xs bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50"
+                >
+                  <Calendar className="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400" />
                   {format(selectedMonth, 'MMMM yyyy')}
                 </Button>
               </PopoverTrigger>
@@ -307,310 +497,252 @@ export default function Dashboard() {
               variant="outline"
               size="icon"
               onClick={handleRefresh}
-              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+              className="h-9 w-9 shrink-0 text-slate-500 hover:text-slate-900 bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800"
               title="Refresh Dashboard"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </div>
 
-        {/* 2. QUICK ACTIONS BAR: High-priority daily workflow triggers */}
-        <div className="bg-card/90 backdrop-blur-xs border border-border/70 rounded-xl p-2 sm:p-2.5 shadow-xs">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 w-full">
-            {/* Action 1: + Create Booking */}
-            <Button
-              onClick={() => setIsAddBookingOpen(true)}
-              className="col-span-2 sm:col-span-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs gap-2 h-9 sm:h-10 text-xs sm:text-sm active:scale-98 transition-all"
-            >
-              <Plane className="w-4 h-4 shrink-0" />
-              <span>+ Create Booking</span>
-            </Button>
+        {/* 2. TOP KPI METRIC CARDS (3-Column Row Placed Immediately Below Header) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: TOTAL BOOKINGS */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
+            <div>
+              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
+                TOTAL BOOKINGS
+              </p>
+              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
+                {totalBookingsCount.toLocaleString()}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Calendar className="w-6 h-6" />
+            </div>
+          </div>
 
-            {/* Action 2: + Add Payment */}
-            <Button
-              variant="outline"
-              onClick={() => {
-                setQuickPaymentTab('client');
-                setIsQuickPaymentOpen(true);
-              }}
-              className="bg-background hover:bg-muted/80 border-border/80 font-medium gap-2 h-9 sm:h-10 text-xs sm:text-sm active:scale-98 transition-all"
-            >
-              <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>+ Add Payment</span>
-            </Button>
+          {/* Card 2: CLIENTS PENDING PAYMENT */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
+            <div>
+              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
+                CLIENTS PENDING PAYMENT
+              </p>
+              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
+                {formatCurrency(totalClientsPending)}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Wallet className="w-6 h-6" />
+            </div>
+          </div>
 
-            {/* Action 3: + Add Quotation */}
-            <Button
-              variant="outline"
-              onClick={() => navigate("/app/leads-quotes/quotations/new")}
-              className="bg-background hover:bg-muted/80 border-border/80 font-medium gap-2 h-9 sm:h-10 text-xs sm:text-sm active:scale-98 transition-all"
-            >
-              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-              <span>+ Add Quotation</span>
-            </Button>
-
-            {/* Action 4: + New Client Query */}
-            <Button
-              variant="outline"
-              onClick={() => navigate("/app/leads-quotes/queries/new")}
-              className="bg-background hover:bg-muted/80 border-border/80 font-medium gap-2 h-9 sm:h-10 text-xs sm:text-sm active:scale-98 transition-all"
-            >
-              <UserPlus className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-              <span>+ New Client Query</span>
-            </Button>
-
-            {/* Action 5: + Add Expense / Vendor Bill */}
-            <Button
-              variant="outline"
-              onClick={() => setIsAddExpenseOpen(true)}
-              className="col-span-2 sm:col-span-1 lg:col-span-1 bg-background hover:bg-muted/80 border-border/80 font-medium gap-2 h-9 sm:h-10 text-xs sm:text-sm active:scale-98 transition-all"
-            >
-              <Receipt className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>+ Add Expense / Bill</span>
-            </Button>
+          {/* Card 3: VENDORS PENDING PAYMENT */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
+            <div>
+              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
+                VENDORS PENDING PAYMENT
+              </p>
+              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
+                {formatCurrency(vendorPayables)}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <Banknote className="w-6 h-6" />
+            </div>
           </div>
         </div>
 
-        {/* 4. CONDITIONAL "TODAY'S ACTIONABLE ALERTS" SLIM BANNER */}
-        {/* Hidden completely if urgentCount === 0 */}
-        {urgentCount > 0 && (
-          <div className="flex items-center justify-between gap-3 px-3.5 py-2 sm:py-2.5 rounded-xl border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/80 dark:bg-amber-950/30 text-foreground shadow-xs animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <AlertCircle className="w-4 h-4" />
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap sm:flex-nowrap">
-                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 shrink-0">
-                  Today's Actionable Alerts:
-                </span>
-                <span className="text-xs sm:text-sm font-medium text-foreground/90 truncate">
-                  {summaryText}
-                </span>
-              </div>
+        {/* 3. QUICK ACTION BUTTONS (2 Rows x 3 Columns - World-Class Aesthetic) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Row 1 - Action 1: + Create Booking (Primary Action Button) */}
+          <button
+            type="button"
+            onClick={() => setIsAddBookingOpen(true)}
+            className="h-14 rounded-xl px-5 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm shadow-slate-900/10 flex items-center justify-start gap-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 text-sm font-semibold cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-white/10 dark:bg-slate-900/10 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
+              <Plane className="w-4 h-4 text-white dark:text-slate-900" />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/app/notifications")}
-              className="h-7 px-2.5 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-500/20 shrink-0 gap-1"
-            >
-              <span>View Details</span>
-              <ArrowRight className="w-3 h-3" />
-            </Button>
-          </div>
-        )}
+            <span>+ Create Booking</span>
+          </button>
 
-        {/* 5. ROW 1: PRIMARY FINANCIAL & BOOKINGS KPI CARDS (4 Cards) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-          <StatCard
-            title="Total Bookings (B2C + B2B)"
-            value={stats.totalBookingsCount}
-            icon={Calendar}
-            variant="accent"
-          />
-          <StatCard
-            title="Clients Pending Payment"
-            value={`₨ ${(stats.pendingPayments / 1000).toFixed(0)}K`}
-            icon={Banknote}
-            variant="warning"
-          />
-          <StatCard
-            title="Vendors Pending Payment"
-            value={`₨ ${(stats.vendorPayables / 1000).toFixed(0)}K`}
-            icon={Banknote}
-            variant="warning"
-          />
-          <StatCard
-            title={`Net Profit (${format(selectedMonth, 'MMM')})`}
-            value={`₨ ${(stats.monthlyProfit / 1000).toFixed(0)}K`}
-            icon={TrendingUp}
-            variant={stats.monthlyProfit >= 0 ? "success" : "warning"}
-          />
-        </div>
-
-        {/* 5. ROW 2: B2B SUMMARY (Compact Horizontal Strip) */}
-        <Card className="border-purple-200/80 dark:border-purple-800/60 bg-gradient-to-r from-purple-50/60 via-purple-50/30 to-blue-50/40 dark:from-purple-950/20 dark:via-purple-950/10 dark:to-blue-950/20 shadow-xs">
-          <div className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2.5 border-b border-purple-100 dark:border-purple-900/50">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <h3 className="text-sm font-bold text-foreground">
-                  B2B Summary ({format(selectedMonth, 'MMMM yyyy')})
-                </h3>
-              </div>
-              <span className="text-[11px] text-muted-foreground">
-                Wholesale agency & partner ledger breakdown
-              </span>
+          {/* Row 1 - Action 2: Umrah Calculator */}
+          <button
+            type="button"
+            onClick={() => navigate("/app/umrah-calculator")}
+            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400 transition-colors group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/40">
+              <Calculator className="w-4 h-4" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2.5">
-              <div>
-                <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">B2B Agents</p>
-                <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">
-                  {stats.b2bAgentsCount}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">B2B Bookings</p>
-                <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">
-                  {stats.b2bBookingsCount}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">B2B Sales</p>
-                <p className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                  ₨ {(stats.b2bTotalSales / 1000).toFixed(0)}K
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">B2B Profit</p>
-                <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">
-                  ₨ {(stats.b2bTotalProfit / 1000).toFixed(0)}K
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
+            <span>Umrah Calculator</span>
+          </button>
 
-        {/* 5. ROW 3: FINANCIALS & PAYABLES (Clean 3-Column Grid Above The Fold) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-          {/* Card 1: Monthly Financial Summary */}
-          <Card className="h-full flex flex-col justify-between">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-accent" />
-                {format(selectedMonth, 'MMMM yyyy')} Financial Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3.5 flex-1 flex flex-col justify-between">
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Total Bookings</span>
-                  <span className="font-semibold">{stats.monthlyBookings}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Revenue Collected</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    ₨ {(stats.monthlyRevenue / 1000).toFixed(0)}K
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Vendor Service Costs</span>
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">
-                    ₨ {(stats.monthlyVendorCosts / 1000).toFixed(0)}K
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Operating Expenses</span>
-                  <span className="font-semibold text-destructive">
-                    ₨ {(stats.monthlyExpenses / 1000).toFixed(0)}K
-                  </span>
-                </div>
-              </div>
-              <div className="pt-2.5 border-t">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold">Net Profit</span>
-                  <span
-                    className={`font-bold text-lg ${
-                      stats.monthlyProfit >= 0 ? 'text-primary' : 'text-destructive'
-                    }`}
-                  >
-                    ₨ {(stats.monthlyProfit / 1000).toFixed(0)}K
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Profit Margin: {stats.profitMargin}%
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 2: Client Today Remaining Alert */}
-          <Card className="h-full flex flex-col justify-between">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <Banknote className="w-5 h-5 text-destructive" />
-                  Client Today Remaining Alert
-                </CardTitle>
-                {clientsWithPaymentDueToday.length > 0 && (
-                  <Badge variant="destructive" className="text-xs h-5 px-1.5 font-bold">
-                    {clientsWithPaymentDueToday.length} Due
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-between">
-              {clientsWithPaymentDueToday.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
-                  <Banknote className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm font-medium">No pending payments due today</p>
-                  <p className="text-xs mt-1 text-muted-foreground/80">All scheduled collections are up to date</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-3 text-xs gap-1.5 h-8 border-dashed"
-                    onClick={() => {
-                      setQuickPaymentTab('client');
-                      setIsQuickPaymentOpen(true);
-                    }}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    + Receive Payment
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-                  {clientsWithPaymentDueToday.map((client: any) => {
-                    const total = Number(client.selling_price) || 0;
-                    const paid = Number(client.amount_paid) || 0;
-                    const remaining = total - paid;
-
-                    return (
-                      <div
-                        key={client.id}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm truncate">{client.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Amount Due: ₨ {remaining.toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            <p className="font-bold text-destructive text-sm">
-                              ₨ {remaining.toFixed(0)}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">Due Today</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2"
-                            onClick={() => setSelectedClientForPayment(client)}
-                          >
-                            Receive
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 3: Top Vendor Payables */}
-          <TopVendorsWidget
-            onPayVendor={() => {
-              setQuickPaymentTab('vendor');
+          {/* Row 1 - Action 3: + Add Payment */}
+          <button
+            type="button"
+            onClick={() => {
+              setQuickPaymentTab('client');
               setIsQuickPaymentOpen(true);
             }}
-          />
+            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/40">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <span>+ Add Payment</span>
+          </button>
+
+          {/* Row 2 - Action 4: + Add Quotation */}
+          <button
+            type="button"
+            onClick={() => navigate("/app/leads-quotes/quotations/new")}
+            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400 transition-colors group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40">
+              <FileText className="w-4 h-4" />
+            </div>
+            <span>+ Add Quotation</span>
+          </button>
+
+          {/* Row 2 - Action 5: + New Client Query */}
+          <button
+            type="button"
+            onClick={() => navigate("/app/leads-quotes/queries/new")}
+            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-400 transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-950/40">
+              <UserPlus className="w-4 h-4" />
+            </div>
+            <span>+ New Client Query</span>
+          </button>
+
+          {/* Row 2 - Action 6: + Add Expense / Bill */}
+          <button
+            type="button"
+            onClick={() => setIsAddExpenseOpen(true)}
+            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 transition-colors group-hover:bg-amber-50 dark:group-hover:bg-amber-950/40">
+              <Receipt className="w-4 h-4" />
+            </div>
+            <span>+ Add Expense / Bill</span>
+          </button>
+        </div>
+
+        {/* 4. NOTIFICATIONS CENTER (Full-Width Premium Card Below Quick Action Buttons) */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          {/* Section Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                  Notifications
+                </h2>
+                {unreadCountBadge > 0 && (
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+                    {unreadCountBadge} new
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/app/notifications")}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50/60 hover:bg-indigo-50 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <span>View All Notifications</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Notification List Body */}
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[380px] overflow-y-auto">
+            {recentNotifications.length === 0 ? (
+              <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3 border border-slate-100 dark:border-slate-700">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  No notifications right now
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+                  All client collections, vendor payables, and operational alerts are up to date.
+                </p>
+              </div>
+            ) : (
+              recentNotifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  onClick={() => {
+                    if (notif.action) {
+                      notif.action.onClick();
+                    } else if (notif.link) {
+                      navigate(notif.link);
+                    }
+                    if (!notif.isRead && markAsRead) {
+                      markAsRead.mutate(notif.id);
+                    }
+                  }}
+                  className="px-6 py-4 flex items-start justify-between gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <div className="shrink-0 mt-0.5">
+                      {notif.type === "warning" ? (
+                        <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center">
+                          <AlertCircle className="w-4 h-4" />
+                        </div>
+                      ) : notif.type === "success" ? (
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center">
+                          <Info className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                        {notif.title}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                        {notif.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                      {notif.timestamp}
+                    </span>
+                    {notif.action && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          notif.action!.onClick();
+                        }}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 inline-flex items-center gap-1 transition-colors"
+                      >
+                        <span>{notif.action.label}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Dynamic Action Modals */}
+      {/* Dynamic Action Modals (Preserved Without Breaking Existing Workflows) */}
       <AddClientDialog
         open={isAddBookingOpen}
         onOpenChange={setIsAddBookingOpen}

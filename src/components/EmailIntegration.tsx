@@ -63,3 +63,4 @@ export function EmailIntegration({ initialSubTab = "config" }: EmailIntegrationP
   );
 }
 export default EmailIntegration;
+

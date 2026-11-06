@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.5.0'; // Update this with each deployment
+const CURRENT_VERSION = '3.5.1'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,12 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.5.1': [
+          'Refactored Dashboard to ultra-clean, high-contrast SaaS layout (Linear/Stripe standard)',
+          'Top KPI Metric Cards: balanced 3-column row (Total Bookings, Clients Pending Payment, Vendors Pending Payment) with aggregated B2C + B2B totals',
+          'Quick Action Buttons: 2-row x 3-column responsive grid with new Umrah Calculator trigger',
+          'New full-width Notifications Center with unread count badge, category icons, timestamps, and direct operational actions',
+        ],
         '3.5.0': [
           'Complete Settings Redesign: clean zero-scroll layout with 5 prominent top tabs (Account, Branding, Email Integration, Storage & Backup, User Manual)',
           'Global removal of WhatsApp Integration, Meta credentials, and WhatsApp Business Number fields',
