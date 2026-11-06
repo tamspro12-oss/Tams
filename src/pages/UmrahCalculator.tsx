@@ -1033,14 +1033,14 @@ export default function UmrahCalculator() {
     : 0;
 
   return (
-    <div className="w-full">
+    <div className="w-full umrah-calc-wrapper py-1">
       {/* =========================================================================
-          DESKTOP LAYOUT (>= 1024px)
+          DESKTOP LAYOUT (Container query: >= 640px)
           ONE UNIFIED SHEET, TOP TO BOTTOM: Fits in ONE screen with ZERO vertical scroll
          ========================================================================= */}
-      <div className="hidden lg:flex flex-col -m-2 md:-m-4 lg:-m-6 h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden p-3 lg:p-4 gap-2.5 bg-background">
+      <div className="calc-desktop-view flex-col w-full gap-2 bg-background">
         {/* TOP TOOLBAR: KEPT EXACTLY AS IT IS */}
-        <div className="shrink-0 space-y-2">
+        <div className="shrink-0 space-y-1.5">
           {/* Row 1: Title on left, Presets on right */}
           <div className="flex items-center justify-between gap-3 h-8">
             <div className="flex items-center gap-2 min-w-0">
@@ -1150,7 +1150,7 @@ export default function UmrahCalculator() {
                 value={sarToPkrRate}
                 onFocus={e => e.target.select()}
                 onChange={e => setSarToPkrRate(e.target.value)}
-                className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center"
+                className="w-16 h-7 text-xs font-semibold px-1 py-0 text-center tabular-nums"
                 placeholder="77.50"
               />
               <span className="font-medium text-muted-foreground">PKR</span>
@@ -1206,30 +1206,32 @@ export default function UmrahCalculator() {
           </div>
         </div>
 
-        {/* ONE UNIFIED SHEET: Reads as a single continuous sheet with thin dividers */}
-        <div className="rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden flex flex-col divide-y divide-border/60">
+        {/* ONE UNIFIED CONTINUOUS SHEET */}
+        <div className="rounded-2xl border border-border/80 bg-card shadow-xs overflow-hidden flex flex-col gap-2 p-2.5">
           {/* =====================================================================
-              (A) COST ROWS (4 rows instead of 7+), 12-column grid alignment
+              === 1) HOTEL TABLE (Makkah, Madinah), one shared grid ===
              ===================================================================== */}
-          <div className="flex flex-col divide-y divide-border/50">
-            {/* Header row for Hotels */}
-            <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <span>Description</span>
+          <div className="rounded-xl overflow-hidden border border-border/60 divide-y divide-border/40">
+            {/* Header: ONE line, 11px, uppercase, letter-spacing wide, slate-600 text on a soft slate-100 band */}
+            <div className="calc-hotel-grid h-9 px-4 bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+              <span className="text-left">Description</span>
               <span className="text-center">Type</span>
               <span className="text-center">Rate Mode</span>
               <span className="text-center">Nights</span>
-              <span className="text-center">Rate</span>
+              <span className="text-center">Rate/Amount</span>
               <span className="text-center">Currency</span>
               <span className="text-right pr-2">Per Person (PKR)</span>
-              <span></span>
             </div>
 
-            {/* Row 1: Makkah Hotel */}
+            {/* Makkah Hotel Row(s) */}
             {!useMultiHotel ? (
-              <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+              <div className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">🕋</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Makkah Hotel</span>
+                  <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
+                    🕋
+                  </div>
+                  <span className="text-sm font-semibold text-foreground truncate">Makkah Hotel</span>
                 </div>
                 <div>
                   <SharingTypeSelect
@@ -1251,7 +1253,7 @@ export default function UmrahCalculator() {
                     value={makkahNights}
                     onFocus={e => e.target.select()}
                     onChange={e => setMakkahNights(e.target.value)}
-                    className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                    className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0"
                     disabled={isPresetLocked}
                   />
@@ -1262,7 +1264,7 @@ export default function UmrahCalculator() {
                     value={makkahRate}
                     onFocus={e => e.target.select()}
                     onChange={e => setMakkahRate(e.target.value)}
-                    className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                    className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0.00"
                     disabled={isPresetLocked}
                   />
@@ -1270,19 +1272,15 @@ export default function UmrahCalculator() {
                 <div className="text-center text-xs font-semibold text-muted-foreground">
                   {hotelCurrency}
                 </div>
-                <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
-                  {makkahCostPerPerson > 0 ? (
-                    <span>Rs {formatCurrency(makkahCostPerPerson)}</span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </div>
-                <div className="text-center">
+                <div className="flex items-center justify-end gap-1.5 pr-2">
+                  <span className="font-mono text-xs font-bold text-foreground tabular-nums">
+                    {makkahCostPerPerson > 0 ? `Rs ${formatCurrency(makkahCostPerPerson)}` : "—"}
+                  </span>
                   <Button
                     onClick={addMakkahHotel}
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
                     title="Add another Makkah hotel"
                     disabled={isPresetLocked}
                   >
@@ -1293,14 +1291,17 @@ export default function UmrahCalculator() {
             ) : (
               <>
                 {makkahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-base shrink-0">🕋</span>
+                  <div key={hotel.id} className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
+                        🕋
+                      </div>
                       <Input
                         type="text"
                         value={hotel.name}
                         onChange={e => updateMakkahHotel(hotel.id, "name", e.target.value)}
-                        className="h-8 text-xs font-semibold w-36"
+                        className="h-8 text-xs font-semibold flex-1 min-w-0"
                         placeholder={`Makkah ${index + 1}`}
                         disabled={isPresetLocked}
                       />
@@ -1325,7 +1326,7 @@ export default function UmrahCalculator() {
                         value={hotel.nights}
                         onFocus={e => e.target.select()}
                         onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
-                        className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                         placeholder="0"
                         disabled={isPresetLocked}
                       />
@@ -1336,7 +1337,7 @@ export default function UmrahCalculator() {
                         value={hotel.rate}
                         onFocus={e => e.target.select()}
                         onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
-                        className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                         placeholder="0.00"
                         disabled={isPresetLocked}
                       />
@@ -1344,35 +1345,47 @@ export default function UmrahCalculator() {
                     <div className="text-center text-xs font-semibold text-muted-foreground">
                       {hotelCurrency}
                     </div>
-                    <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
-                      {getHotelRowTotal(hotel) > 0 ? (
-                        <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </div>
-                    <div className="text-center">
+                    <div className="flex items-center justify-end gap-1.5 pr-2">
+                      <span className="font-mono text-xs font-bold text-foreground tabular-nums">
+                        {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
+                      </span>
                       <Button
                         onClick={() => removeMakkahHotel(hotel.id)}
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         disabled={isPresetLocked}
+                        title="Remove hotel"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
                 ))}
+                <div className="px-4 py-1 bg-emerald-50/40 dark:bg-emerald-950/10 flex justify-end">
+                  <Button
+                    onClick={addMakkahHotel}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 gap-1"
+                    disabled={isPresetLocked}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Makkah Hotel</span>
+                  </Button>
+                </div>
               </>
             )}
 
-            {/* Row 2: Madinah Hotel */}
+            {/* Madinah Hotel Row(s) */}
             {!useMultiHotel ? (
-              <div className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
+              <div className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center border-t border-emerald-200/50 dark:border-emerald-900/30">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">🕌</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Madinah Hotel</span>
+                  <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
+                    🕌
+                  </div>
+                  <span className="text-sm font-semibold text-foreground truncate">Madinah Hotel</span>
                 </div>
                 <div>
                   <SharingTypeSelect
@@ -1394,7 +1407,7 @@ export default function UmrahCalculator() {
                     value={madinahNights}
                     onFocus={e => e.target.select()}
                     onChange={e => setMadinahNights(e.target.value)}
-                    className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                    className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0"
                     disabled={isPresetLocked}
                   />
@@ -1405,7 +1418,7 @@ export default function UmrahCalculator() {
                     value={madinahRate}
                     onFocus={e => e.target.select()}
                     onChange={e => setMadinahRate(e.target.value)}
-                    className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                    className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                     placeholder="0.00"
                     disabled={isPresetLocked}
                   />
@@ -1413,19 +1426,15 @@ export default function UmrahCalculator() {
                 <div className="text-center text-xs font-semibold text-muted-foreground">
                   {hotelCurrency}
                 </div>
-                <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
-                  {madinahCostPerPerson > 0 ? (
-                    <span>Rs {formatCurrency(madinahCostPerPerson)}</span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </div>
-                <div className="text-center">
+                <div className="flex items-center justify-end gap-1.5 pr-2">
+                  <span className="font-mono text-xs font-bold text-foreground tabular-nums">
+                    {madinahCostPerPerson > 0 ? `Rs ${formatCurrency(madinahCostPerPerson)}` : "—"}
+                  </span>
                   <Button
                     onClick={addMadinahHotel}
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-emerald-600 transition-colors"
                     title="Add another Madinah hotel"
                     disabled={isPresetLocked}
                   >
@@ -1436,14 +1445,17 @@ export default function UmrahCalculator() {
             ) : (
               <>
                 {madinahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="grid grid-cols-[1fr_84px_80px_70px_100px_60px_130px_32px] items-center gap-2 px-4 py-1.5 hover:bg-muted/15 transition-colors">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-base shrink-0">🕌</span>
+                  <div key={hotel.id} className="calc-hotel-grid h-12 px-4 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 transition-colors whitespace-nowrap items-center border-t border-emerald-200/50 dark:border-emerald-900/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-1 h-7 rounded-full bg-emerald-500 shrink-0" />
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-sm">
+                        🕌
+                      </div>
                       <Input
                         type="text"
                         value={hotel.name}
                         onChange={e => updateMadinahHotel(hotel.id, "name", e.target.value)}
-                        className="h-8 text-xs font-semibold w-36"
+                        className="h-8 text-xs font-semibold flex-1 min-w-0"
                         placeholder={`Madinah ${index + 1}`}
                         disabled={isPresetLocked}
                       />
@@ -1468,7 +1480,7 @@ export default function UmrahCalculator() {
                         value={hotel.nights}
                         onFocus={e => e.target.select()}
                         onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
-                        className="h-8 w-16 mx-auto text-center text-xs font-semibold"
+                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                         placeholder="0"
                         disabled={isPresetLocked}
                       />
@@ -1479,7 +1491,7 @@ export default function UmrahCalculator() {
                         value={hotel.rate}
                         onFocus={e => e.target.select()}
                         onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
-                        className="h-8 w-22 mx-auto text-center text-xs font-semibold"
+                        className="h-8 w-full text-center text-xs font-semibold tabular-nums"
                         placeholder="0.00"
                         disabled={isPresetLocked}
                       />
@@ -1487,174 +1499,208 @@ export default function UmrahCalculator() {
                     <div className="text-center text-xs font-semibold text-muted-foreground">
                       {hotelCurrency}
                     </div>
-                    <div className="text-right font-mono text-xs font-bold text-foreground pr-2">
-                      {getHotelRowTotal(hotel) > 0 ? (
-                        <span>Rs {formatCurrency(getHotelRowTotal(hotel))}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </div>
-                    <div className="text-center">
+                    <div className="flex items-center justify-end gap-1.5 pr-2">
+                      <span className="font-mono text-xs font-bold text-foreground tabular-nums">
+                        {getHotelRowTotal(hotel) > 0 ? `Rs ${formatCurrency(getHotelRowTotal(hotel))}` : "—"}
+                      </span>
                       <Button
                         onClick={() => removeMadinahHotel(hotel.id)}
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         disabled={isPresetLocked}
+                        title="Remove hotel"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
                 ))}
+                <div className="px-4 py-1 bg-emerald-50/40 dark:bg-emerald-950/10 flex justify-end">
+                  <Button
+                    onClick={addMadinahHotel}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 gap-1"
+                    disabled={isPresetLocked}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Madinah Hotel</span>
+                  </Button>
+                </div>
               </>
             )}
+          </div>
 
-            {/* Row 3: TWO items side by side (6 cols each): Airline Ticket & Visa Fee */}
-            <div className="grid grid-cols-2 divide-x divide-border/60">
-              {/* Airline Ticket */}
-              <div className="flex items-center justify-between gap-3 px-4 py-1.5 hover:bg-muted/15 transition-colors">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">✈️</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Airline Ticket</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Input
-                    type="number"
-                    value={ticketCost}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setTicketCost(e.target.value)}
-                    className="h-8 w-28 text-center text-xs font-semibold"
-                    placeholder="0.00"
-                  />
-                  <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-[66px] h-8" />
-                  <div className="w-[110px] text-right font-mono text-xs font-bold text-foreground">
-                    {ticketPerPerson > 0 ? `Rs ${formatCurrency(ticketPerPerson)}` : <span className="text-muted-foreground">—</span>}
+          {/* =====================================================================
+              === 2) OTHER COSTS: 5 EQUAL, PERFECTLY ALIGNED CARDS ===
+             ===================================================================== */}
+          {/* Row A: 2 equal cards (Airline Ticket | Visa Fee), tinted sky-50 */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* Airline Ticket */}
+            <div className="rounded-xl p-2.5 bg-sky-50/70 dark:bg-sky-950/20 ring-1 ring-sky-200 dark:ring-sky-900/50 flex flex-col justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-md bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 flex items-center justify-center text-xs shrink-0">
+                    ✈️
                   </div>
+                  <span className="text-[13px] font-medium text-foreground truncate">Airline Ticket</span>
                 </div>
+                <span className="text-[13px] font-semibold font-mono text-foreground tabular-nums shrink-0">
+                  {ticketPerPerson > 0 ? `Rs ${formatCurrency(ticketPerPerson)}` : "—"}
+                </span>
               </div>
-
-              {/* Visa Fee */}
-              <div className="flex items-center justify-between gap-3 px-4 py-1.5 hover:bg-muted/15 transition-colors">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">📋</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Visa Fee</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Input
-                    type="number"
-                    value={visaFee}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setVisaFee(e.target.value)}
-                    className="h-8 w-28 text-center text-xs font-semibold"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                  <CurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} className="w-[66px] h-8" />
-                  <div className="w-[110px] text-right font-mono text-xs font-bold text-foreground">
-                    {visaPerPerson > 0 ? `Rs ${formatCurrency(visaPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={ticketCost}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setTicketCost(e.target.value)}
+                  className="flex-1 h-8 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                />
+                <CurrencySelect value={ticketCurrency} onChange={setTicketCurrency} className="w-20 h-8 shrink-0 bg-background" />
               </div>
             </div>
 
-            {/* Row 4: THREE items side by side (4 cols each): Transport, Ziyarat, Food */}
-            <div className="grid grid-cols-3 divide-x divide-border/60">
-              {/* Transport */}
-              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
+            {/* Visa Fee */}
+            <div className="rounded-xl p-2.5 bg-sky-50/70 dark:bg-sky-950/20 ring-1 ring-sky-200 dark:ring-sky-900/50 flex flex-col justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-base shrink-0">🚌</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Transport</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Input
-                    type="number"
-                    value={transport}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setTransport(e.target.value)}
-                    className="h-8 w-22 text-center text-xs font-semibold"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                  <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
-                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
-                    {transportPerPerson > 0 ? `Rs ${formatCurrency(transportPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  <div className="w-6 h-6 rounded-md bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 flex items-center justify-center text-xs shrink-0">
+                    📋
                   </div>
+                  <span className="text-[13px] font-medium text-foreground truncate">Visa Fee</span>
                 </div>
+                <span className="text-[13px] font-semibold font-mono text-foreground tabular-nums shrink-0">
+                  {visaPerPerson > 0 ? `Rs ${formatCurrency(visaPerPerson)}` : "—"}
+                </span>
               </div>
-
-              {/* Ziyarat */}
-              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-base shrink-0">🕌</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Ziyarat</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Input
-                    type="number"
-                    value={ziyarat}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setZiyarat(e.target.value)}
-                    className="h-8 w-22 text-center text-xs font-semibold"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                  <CurrencySelect value={ziyaratCurrency} onChange={setZiyaratCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
-                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
-                    {ziyaratPerPerson > 0 ? `Rs ${formatCurrency(ziyaratPerPerson)}` : <span className="text-muted-foreground">—</span>}
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={visaFee}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setVisaFee(e.target.value)}
+                  className="flex-1 h-8 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+                <CurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} className="w-20 h-8 shrink-0 bg-background" />
               </div>
+            </div>
+          </div>
 
-              {/* Food / Add-ons */}
-              <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 hover:bg-muted/15 transition-colors">
+          {/* Row B: 3 equal cards (Transport | Ziyarat | Food / Add-ons), tinted amber-50 */}
+          <div className="grid grid-cols-3 gap-2">
+            {/* Transport */}
+            <div className="rounded-xl p-2.5 bg-amber-50/70 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-900/50 flex flex-col justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-base shrink-0">🍽️</span>
-                  <span className="text-xs font-semibold text-foreground truncate">Food</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Input
-                    type="number"
-                    value={food}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setFood(e.target.value)}
-                    className="h-8 w-22 text-center text-xs font-semibold"
-                    placeholder="0.00"
-                    disabled={isPresetLocked}
-                  />
-                  <CurrencySelect value={foodCurrency} onChange={setFoodCurrency} disabled={isPresetLocked} className="w-[62px] h-8" />
-                  <div className="w-[85px] text-right font-mono text-xs font-bold text-foreground truncate">
-                    {foodPerPerson > 0 ? `Rs ${formatCurrency(foodPerPerson)}` : <span className="text-muted-foreground">—</span>}
+                  <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs shrink-0">
+                    🚌
                   </div>
+                  <span className="text-[13px] font-medium text-foreground truncate">Transport</span>
                 </div>
+                <span className="text-[13px] font-semibold font-mono text-foreground tabular-nums shrink-0">
+                  {transportPerPerson > 0 ? `Rs ${formatCurrency(transportPerPerson)}` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={transport}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setTransport(e.target.value)}
+                  className="flex-1 h-8 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+                <CurrencySelect value={transportCurrency} onChange={setTransportCurrency} disabled={isPresetLocked} className="w-20 h-8 shrink-0 bg-background" />
               </div>
             </div>
 
-            {/* Slim line: Total per person (base costs) */}
-            <div className="h-7 px-4 bg-muted/30 flex items-center justify-between text-xs font-semibold text-muted-foreground">
-              <span>Total per person (base costs)</span>
-              <span className="font-mono text-xs font-bold text-primary">
-                Rs {formatCurrency(tableBaseCostPerPerson)}
-              </span>
+            {/* Ziyarat */}
+            <div className="rounded-xl p-2.5 bg-amber-50/70 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-900/50 flex flex-col justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs shrink-0">
+                    🕌
+                  </div>
+                  <span className="text-[13px] font-medium text-foreground truncate">Ziyarat</span>
+                </div>
+                <span className="text-[13px] font-semibold font-mono text-foreground tabular-nums shrink-0">
+                  {ziyaratPerPerson > 0 ? `Rs ${formatCurrency(ziyaratPerPerson)}` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={ziyarat}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setZiyarat(e.target.value)}
+                  className="flex-1 h-8 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+                <CurrencySelect value={ziyaratCurrency} onChange={setZiyaratCurrency} disabled={isPresetLocked} className="w-20 h-8 shrink-0 bg-background" />
+              </div>
+            </div>
+
+            {/* Food / Add-ons */}
+            <div className="rounded-xl p-2.5 bg-amber-50/70 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-900/50 flex flex-col justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs shrink-0">
+                    🍽️
+                  </div>
+                  <span className="text-[13px] font-medium text-foreground truncate">Food / Add-ons</span>
+                </div>
+                <span className="text-[13px] font-semibold font-mono text-foreground tabular-nums shrink-0">
+                  {foodPerPerson > 0 ? `Rs ${formatCurrency(foodPerPerson)}` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={food}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setFood(e.target.value)}
+                  className="flex-1 h-8 text-center text-xs font-semibold tabular-nums bg-background"
+                  placeholder="0.00"
+                  disabled={isPresetLocked}
+                />
+                <CurrencySelect value={foodCurrency} onChange={setFoodCurrency} disabled={isPresetLocked} className="w-20 h-8 shrink-0 bg-background" />
+              </div>
             </div>
           </div>
 
           {/* =====================================================================
-              (B) PASSENGERS + CHARGES = ONE SINGLE ROW
+              === 3) TOTAL BAR (under other costs) ===
              ===================================================================== */}
-          <div className="px-4 py-2 bg-card flex items-center justify-between gap-4">
-            {/* Left: Adults | Children | Infants as 3 compact +/- steppers */}
-            <div className="flex items-center gap-3">
-              {/* Adults Stepper */}
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
-                  Adults
-                </span>
-                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+          <div className="h-10 px-4 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 ring-1 ring-blue-200 dark:ring-blue-800/50 flex items-center justify-between shadow-2xs">
+            <span className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wide">
+              Total per person (base costs)
+            </span>
+            <span className="text-base font-bold font-mono text-blue-900 dark:text-blue-100 tabular-nums">
+              Rs {formatCurrency(tableBaseCostPerPerson)}
+            </span>
+          </div>
+
+          {/* =====================================================================
+              === 4) PASSENGERS + CHARGES (one single row) ===
+             ===================================================================== */}
+          <div className="calc-passengers-charges-row min-h-[48px] px-3.5 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between gap-3 shadow-2xs">
+            {/* Left: Passengers group */}
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              {/* Adults */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-0.5">Adults</span>
+                <div className="flex items-center bg-background rounded-full border border-border p-0.5 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => stepCount(adultCount, -1, setAdultCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
@@ -1664,30 +1710,28 @@ export default function UmrahCalculator() {
                     value={adultCount}
                     onFocus={e => e.target.select()}
                     onChange={e => setAdultCount(e.target.value)}
-                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-9 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="0"
                     min="0"
                   />
                   <button
                     type="button"
                     onClick={() => stepCount(adultCount, 1, setAdultCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Plus className="w-3 h-3" />
                   </button>
                 </div>
               </div>
 
-              {/* Children Stepper */}
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
-                  Children
-                </span>
-                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+              {/* Children */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-0.5">Children</span>
+                <div className="flex items-center bg-background rounded-full border border-border p-0.5 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => stepCount(childCount, -1, setChildCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
@@ -1697,30 +1741,28 @@ export default function UmrahCalculator() {
                     value={childCount}
                     onFocus={e => e.target.select()}
                     onChange={e => setChildCount(e.target.value)}
-                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-9 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="0"
                     min="0"
                   />
                   <button
                     type="button"
                     onClick={() => stepCount(childCount, 1, setChildCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Plus className="w-3 h-3" />
                   </button>
                 </div>
               </div>
 
-              {/* Infants Stepper */}
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-semibold text-muted-foreground block text-center uppercase tracking-wide">
-                  Infants
-                </span>
-                <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-8">
+              {/* Infants */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-0.5">Infants</span>
+                <div className="flex items-center bg-background rounded-full border border-border p-0.5 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => stepCount(infantCount, -1, setInfantCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
@@ -1730,192 +1772,172 @@ export default function UmrahCalculator() {
                     value={infantCount}
                     onFocus={e => e.target.select()}
                     onChange={e => setInfantCount(e.target.value)}
-                    className="w-10 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-9 text-center text-xs font-bold bg-transparent border-0 focus:outline-none p-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="0"
                     min="0"
                   />
                   <button
                     type="button"
                     onClick={() => stepCount(infantCount, 1, setInfantCount)}
-                    className="h-full px-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Plus className="w-3 h-3" />
                   </button>
                 </div>
               </div>
 
-              {/* Small "Total: N pax" badge */}
-              <div className="self-end mb-0.5 ml-1">
-                <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-bold tracking-tight">
-                  Total: {totalPassengers || 1} pax
-                </span>
+              {/* Compact "Total: N pax" pill */}
+              <div className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-tight whitespace-nowrap">
+                Total: {totalPassengers || 1} pax
               </div>
             </div>
 
-            <div className="h-8 w-px bg-border/80" />
+            {/* Thin vertical divider */}
+            <div className="h-7 w-px bg-slate-300 dark:bg-slate-700 hidden lg:block" />
 
-            {/* Right: Service Charges and Profit / Markup on SAME row */}
-            <div className="flex items-center gap-4">
+            {/* Right: Charges group */}
+            <div className="flex items-center gap-3 calc-charges-subgroup shrink-0 flex-wrap">
               {/* Service Charges */}
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-semibold text-muted-foreground block uppercase tracking-wide">
-                  Service Charges (per person)
-                </span>
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Service Charges:</span>
+                <div className="flex items-center gap-1">
                   <Input
                     type="number"
                     value={serviceCharges}
                     onFocus={e => e.target.select()}
                     onChange={e => setServiceCharges(e.target.value)}
-                    className="h-8 w-24 text-center text-xs font-semibold"
+                    className="h-8 w-20 text-center text-xs font-semibold tabular-nums bg-background"
                     placeholder="0.00"
                   />
-                  <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-[66px] h-8" />
+                  <CurrencySelect value={serviceChargesCurrency} onChange={setServiceChargesCurrency} className="w-[66px] h-8 bg-background" />
                 </div>
               </div>
 
-              <div className="h-8 w-px bg-border/80" />
+              {/* Thin divider */}
+              <div className="h-6 w-px bg-slate-300 dark:bg-slate-700" />
 
-              {/* Profit / Markup with small segmented toggle % | PKR */}
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                    Profit / Markup
-                  </span>
-                  <div className="inline-flex rounded-md p-0.5 bg-muted border border-border text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => setProfitType("percentage")}
-                      className={cn(
-                        "px-1.5 py-0.2 rounded font-semibold transition-all",
-                        profitType === "percentage" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
-                      )}
-                    >
-                      %
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProfitType("fixed")}
-                      className={cn(
-                        "px-1.5 py-0.2 rounded font-semibold transition-all",
-                        profitType === "fixed" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground"
-                      )}
-                    >
-                      PKR
-                    </button>
-                  </div>
+              {/* Profit / Markup */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Profit:</span>
+                <div className="inline-flex rounded-lg p-0.5 bg-background border border-border text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setProfitType("percentage")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-all",
+                      profitType === "percentage" ? "bg-primary text-primary-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProfitType("fixed")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-all",
+                      profitType === "fixed" ? "bg-primary text-primary-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    PKR
+                  </button>
                 </div>
 
-                <div>
-                  {profitType === "percentage" ? (
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        value={profitPercent}
-                        onFocus={e => e.target.select()}
-                        onChange={e => setProfitPercent(e.target.value)}
-                        className="h-8 w-28 text-center text-xs font-semibold pr-5"
-                        placeholder="0"
-                      />
-                      <span className="absolute right-2 top-2 text-[10px] font-bold text-muted-foreground pointer-events-none">%</span>
-                    </div>
-                  ) : (
+                {profitType === "percentage" ? (
+                  <div className="relative">
                     <Input
                       type="number"
-                      value={profitFixed}
+                      value={profitPercent}
                       onFocus={e => e.target.select()}
-                      onChange={e => setProfitFixed(e.target.value)}
-                      className="h-8 w-28 text-center text-xs font-semibold"
-                      placeholder="Fixed PKR"
+                      onChange={e => setProfitPercent(e.target.value)}
+                      className="h-8 w-20 text-center text-xs font-semibold tabular-nums bg-background pr-5"
+                      placeholder="0"
                     />
-                  )}
-                </div>
+                    <span className="absolute right-2 top-2 text-[10px] font-bold text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                ) : (
+                  <Input
+                    type="number"
+                    value={profitFixed}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setProfitFixed(e.target.value)}
+                    className="h-8 w-24 text-center text-xs font-semibold tabular-nums bg-background"
+                    placeholder="Fixed PKR"
+                  />
+                )}
               </div>
             </div>
           </div>
 
           {/* =====================================================================
-              (C) PACKAGE SUMMARY = SLIM STRIP DIRECTLY BELOW (B)
+              === 5) SUMMARY STRIP (below passengers + charges) ===
              ===================================================================== */}
-          <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white dark:from-slate-950 dark:via-card dark:to-slate-900 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
+          <div className="rounded-xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white px-4 py-2.5 flex items-center justify-between gap-3 shadow-md border border-slate-700/50">
             {/* Key figures across one row */}
-            <div className="flex items-center gap-4 text-xs min-w-0">
+            <div className="flex items-center gap-4 text-xs min-w-0 flex-wrap sm:flex-nowrap">
               {/* Per Person Cost */}
               <div>
                 <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Per Person</span>
-                <span className="font-mono text-sm font-bold text-white">
+                <span className="font-mono text-sm font-bold text-white tabular-nums">
                   Rs {formatCurrency(result?.perPerson || 0)}
                 </span>
               </div>
 
-              <div className="h-6 w-px bg-white/15" />
+              <div className="h-6 w-px bg-white/15 hidden sm:block" />
 
               {/* Total Passengers */}
               <div>
                 <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Passengers</span>
-                <span className="text-xs font-semibold text-slate-200">
+                <span className="text-xs font-semibold text-slate-200 tabular-nums">
                   {result?.totalPassengers || 1} pax
                 </span>
               </div>
 
-              <div className="h-6 w-px bg-white/15" />
+              <div className="h-6 w-px bg-white/15 hidden sm:block" />
 
               {/* Nights */}
               <div>
                 <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Duration</span>
-                <span className="text-xs font-semibold text-slate-200">
+                <span className="text-xs font-semibold text-slate-200 tabular-nums">
                   {result?.nights || 0} Nights
                 </span>
               </div>
 
-              <div className="h-6 w-px bg-white/15" />
+              <div className="h-6 w-px bg-white/15 hidden sm:block" />
 
               {/* Base Package Total */}
               <div>
                 <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Base Total</span>
-                <span className="font-mono text-xs font-semibold text-slate-200">
+                <span className="font-mono text-xs font-semibold text-slate-200 tabular-nums">
                   Rs {formatCurrency(result?.baseTotal || 0)}
                 </span>
               </div>
 
-              <div className="h-6 w-px bg-white/15" />
+              <div className="h-6 w-px bg-white/15 hidden sm:block" />
 
               {/* Service Charges */}
               <div>
                 <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Services</span>
-                <span className="font-mono text-xs font-semibold text-slate-200">
+                <span className="font-mono text-xs font-semibold text-slate-200 tabular-nums">
                   Rs {formatCurrency(serviceChargesTotal)}
-                </span>
-              </div>
-
-              <div className="h-6 w-px bg-white/15" />
-
-              {/* Profit / Markup */}
-              <div>
-                <span className="text-[10px] font-medium text-slate-400 block uppercase tracking-wider">Profit</span>
-                <span className="font-mono text-xs font-bold text-emerald-400">
-                  + Rs {formatCurrency(result?.profitAmount || 0)}
                 </span>
               </div>
             </div>
 
-            {/* FINAL TOTAL (largest, bold, PKR) */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="text-right">
-                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
-                  FINAL TOTAL (PKR)
-                </span>
-                <span className="text-xl xl:text-2xl font-black text-emerald-400 font-mono tracking-tight leading-none">
-                  Rs {formatCurrency(result?.finalTotal || 0)}
-                </span>
-              </div>
+            {/* FINAL TOTAL (largest, bold, emerald-400, tabular-nums) */}
+            <div className="text-right shrink-0">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
+                FINAL TOTAL (PKR)
+              </span>
+              <span className="text-xl xl:text-2xl font-black text-emerald-400 font-mono tracking-tight tabular-nums leading-none">
+                Rs {formatCurrency(result?.finalTotal || 0)}
+              </span>
             </div>
           </div>
 
           {/* =====================================================================
-              (D) ACTION BUTTONS = ONE ROW AT THE BOTTOM OF THE STRIP (all h-10)
+              === 6) ACTION BUTTONS (all h-10) ===
              ===================================================================== */}
-          <div className="px-4 py-2.5 bg-card flex items-center justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2.5 pt-0.5">
             <div className="flex items-center gap-2">
               {/* Calculate Button */}
               <Button
@@ -2007,10 +2029,10 @@ export default function UmrahCalculator() {
       </div>
 
       {/* =========================================================================
-          MOBILE LAYOUT (< 1024px)
+          MOBILE LAYOUT (Container query: < 640px)
           Compact app screen, separate layout, same state, no horizontal scroll
          ========================================================================= */}
-      <div className="lg:hidden flex flex-col space-y-3 pb-44 px-1">
+      <div className="calc-mobile-view flex-col space-y-3 pb-44 px-1 w-full">
         {/* Mobile Top Bar */}
         <div className="flex items-center justify-between gap-2 pt-1 pb-2 border-b border-border">
           <div className="flex items-center gap-2">
