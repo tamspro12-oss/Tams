@@ -10,45 +10,75 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Setup auth state change listener FIRST
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      
-      // Handle session events
-      if (event === 'SIGNED_IN' && newSession?.user) {
-        sessionManager.startSession(newSession.user.id);
-        toast({
-          title: "Welcome back!",
-          description: "Your session has been restored.",
-        });
-      } else if (event === 'SIGNED_OUT') {
-        sessionManager.endSession();
-      } else if (event === 'TOKEN_REFRESHED') {
-        // Update last activity on token refresh
-        if (newSession?.user) {
-          sessionManager.startSession(newSession.user.id);
-        }
-      }
-    });
+    let isMounted = true;
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      setSession(existingSession);
-      setUser(existingSession?.user ?? null);
-      
-      if (existingSession?.user) {
-        sessionManager.startSession(existingSession.user.id);
+    // Safety fallback: ensure loading never hangs indefinitely in production
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
       }
-      
-      setLoading(false);
-    });
+    }, 3500);
+
+    // Setup auth state change listener FIRST
+    let unsubscribe = () => {};
+    try {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, newSession) => {
+        if (!isMounted) return;
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        
+        // Handle session events
+        if (event === 'SIGNED_IN' && newSession?.user) {
+          sessionManager.startSession(newSession.user.id);
+          toast({
+            title: "Welcome back!",
+            description: "Your session has been restored.",
+          });
+        } else if (event === 'SIGNED_OUT') {
+          sessionManager.endSession();
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Update last activity on token refresh
+          if (newSession?.user) {
+            sessionManager.startSession(newSession.user.id);
+          }
+        }
+      });
+      unsubscribe = () => subscription.unsubscribe();
+    } catch (err) {
+      console.error('[useAuth] onAuthStateChange setup error:', err);
+    }
+
+    // THEN check for existing session with comprehensive error catching
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: existingSession } }) => {
+        if (!isMounted) return;
+        setSession(existingSession);
+        setUser(existingSession?.user ?? null);
+
+        if (existingSession?.user) {
+          sessionManager.startSession(existingSession.user.id);
+        }
+      })
+      .catch((err) => {
+        console.error('[useAuth] getSession error:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          clearTimeout(safetyTimer);
+          setLoading(false);
+        }
+      });
 
     // Setup session timeout handler
     sessionManager.setOnTimeout(async () => {
-      await supabase.auth.signOut({ scope: 'local' });
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (err) {
+        console.error('[useAuth] signOut error:', err);
+      }
       sessionManager.endSession();
       toast({
         title: "Session Expired",
@@ -58,7 +88,11 @@ export function useAuth() {
       window.location.href = '/login';
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   return { user, session, loading };

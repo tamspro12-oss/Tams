@@ -122,6 +122,23 @@
       <div class="splash-bar"><div class="splash-bar-fill"></div></div>
     </div>
 
+    <script>
+      (function() {
+        var dismiss = function() {
+          var s = document.getElementById('tams-splash');
+          if (s) {
+            s.style.transition = 'opacity 0.3s ease';
+            s.style.opacity = '0';
+            setTimeout(function() { if (s && s.parentNode) s.parentNode.removeChild(s); }, 300);
+          }
+        };
+        // Auto-dismiss failsafe: guaranteed removal after 3.5s max
+        setTimeout(dismiss, 3500);
+        window.addEventListener('error', dismiss);
+        window.addEventListener('unhandledrejection', dismiss);
+      })();
+    </script>
+
 
     <div id="root"></div>
 

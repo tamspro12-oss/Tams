@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+secrets.env
 
 # Logs
 logs
@@ -28,3 +29,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*
+supabase/.temp
+

@@ -1,3 +1,2 @@
-INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'admin'::app_role FROM auth.users WHERE email = 'usmn4u@gmail.com'
-ON CONFLICT (user_id, role) DO NOTHING;
+-- Admin role seed moved to supabase/seed_after_signup.sql
+-- (Previously seeded an old project user into public.user_roles)
