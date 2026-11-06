@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   ArrowRightCircle,
   Download,
-  Eye,
   Hash,
   Calendar,
   CalendarDays,
@@ -426,8 +425,8 @@ export default function QuotationFormPage() {
       onKeyDown={handleKeyDown}
       className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-7xl mx-auto overflow-hidden bg-background"
     >
-      {/* 1. Global Header Bar: Back, Title, Action Group: Save & PDF -> Save Quotation -> X */}
-      <div className="h-12 md:h-14 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-30">
+      {/* 1. Global Header Bar: ONLY Back arrow + Title on left, and X (close icon) on far right */}
+      <div className="h-11 md:h-12 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-30">
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
             type="button"
@@ -439,86 +438,51 @@ export default function QuotationFormPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-base sm:text-lg font-bold text-foreground truncate">
+          <h1 className="text-sm sm:text-base font-bold text-foreground truncate">
             {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
           </h1>
         </div>
 
-        {/* Action Group: Save & PDF -> Save Quotation -> X */}
-        <div className="flex items-center gap-2 shrink-0">
-          {isEdit && !convertedBookingId && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleConvertToBooking}
-              className="hidden md:inline-flex h-8 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            >
-              <ArrowRightCircle className="w-3.5 h-3.5" />
-              <span>Convert to Booking</span>
-            </Button>
-          )}
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            tabIndex={13}
-            onClick={() => handleSave(true)}
-            disabled={isSubmitting}
-            className="h-8 px-3 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
-            title="Save and download PDF (Ctrl+Shift+Enter)"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Save & PDF</span>
-            <span className="sm:hidden">PDF</span>
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            tabIndex={14}
-            onClick={() => handleSave(false)}
-            disabled={isSubmitting}
-            className="h-8 px-3.5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Save Quotation (Ctrl+Enter)"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
-          </Button>
-
-          {/* Compact X Icon Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tabIndex={15}
-            onClick={handleClose}
-            aria-label="Cancel and close"
-            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Cancel and close (Esc)"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+        {/* Far Right: ONLY compact X (close/cancel) button */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleClose}
+          aria-label="Cancel and close"
+          className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+          title="Cancel and close (Esc)"
+        >
+          <X className="w-4 h-4" />
+        </Button>
       </div>
 
       {/* Main Content: Single Screen Card Layout, No Page Scrolling */}
-      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
+      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2.5 sm:p-4 flex flex-col justify-between gap-2.5 min-w-0">
         
-        {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4) */}
-        <div className="bg-card rounded-2xl border border-border/70 shadow-sm p-3 sm:p-4 shrink-0 min-w-0">
-          <div className="grid grid-cols-12 gap-2.5 min-w-0">
-            
-            {/* ROW 1 (3 columns): Quotation # (col-span-3), Date * (col-span-4), Valid Until (col-span-5) */}
-            <div className="col-span-12 md:col-span-3 space-y-1 min-w-0">
-              <Label htmlFor="quote_num" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+        {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4 with explicit CSS Grid) */}
+        <div
+          className="bg-card rounded-2xl border border-border/70 shadow-sm p-3 sm:p-3.5 shrink-0 min-w-0"
+          style={{ width: "100%", gap: "10px", display: "flex", flexDirection: "column" }}
+        >
+          {/* ROW 1 (3 Columns on SAME line): Quotation # * | Date * | Valid Until (with +7d, +14d, +30d buttons) */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1.2fr",
+              gap: "12px",
+              width: "100%",
+            }}
+          >
+            {/* Column 1: Quotation # * */}
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label htmlFor="quote_num" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Quotation # <span className="text-destructive">*</span></span>
                 {errors.quotationNumber && (
                   <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.quotationNumber}</span>
                 )}
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <Hash className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="quote_num"
@@ -532,13 +496,14 @@ export default function QuotationFormPage() {
                   onBlur={(e) => checkQuotationNumberUniqueness(e.target.value)}
                   placeholder="e.g. QT-2026-089"
                   className={cn(
-                    "pl-9 h-9 text-base sm:text-xs font-semibold rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
+                    "pl-9 h-8 sm:h-8.5 text-sm font-semibold rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
                     errors.quotationNumber && "border-destructive focus-visible:ring-destructive"
                   )}
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
               {mostRecentQuotationNumber && !quotationNumber && (
-                <p className="text-[10px] text-muted-foreground truncate">
+                <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                   Last used:{" "}
                   <button
                     type="button"
@@ -554,11 +519,12 @@ export default function QuotationFormPage() {
               )}
             </div>
 
-            <div className="col-span-6 md:col-span-4 space-y-1 min-w-0">
-              <Label htmlFor="quote_date" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            {/* Column 2: Date * */}
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label htmlFor="quote_date" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Date <span className="text-destructive">*</span>
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="quote_date"
@@ -567,14 +533,16 @@ export default function QuotationFormPage() {
                   type="date"
                   value={quotationDate}
                   onChange={(e) => setQuotationDate(e.target.value)}
-                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
 
-            <div className="col-span-6 md:col-span-5 space-y-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="valid_until" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            {/* Column 3: Valid Until (with +7d, +14d, +30d quick buttons in header) */}
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="valid_until" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                   Valid Until
                 </Label>
                 <div className="flex items-center gap-1">
@@ -582,7 +550,7 @@ export default function QuotationFormPage() {
                     type="button"
                     tabIndex={4}
                     onClick={() => applyValidUntilChip(7)}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
                     +7d
                   </button>
@@ -590,7 +558,7 @@ export default function QuotationFormPage() {
                     type="button"
                     tabIndex={5}
                     onClick={() => applyValidUntilChip(14)}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
                     +14d
                   </button>
@@ -598,13 +566,13 @@ export default function QuotationFormPage() {
                     type="button"
                     tabIndex={6}
                     onClick={() => applyValidUntilChip(30)}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
                     +30d
                   </button>
                 </div>
               </div>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <CalendarDays className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="valid_until"
@@ -613,20 +581,31 @@ export default function QuotationFormPage() {
                   type="date"
                   value={validUntil}
                   onChange={(e) => setValidUntil(e.target.value)}
-                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
+          </div>
 
-            {/* ROW 2 (2 columns, col-span-6 each): Service Type * and Status */}
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {/* ROW 2 (2 Equal 50%/50% Columns on SAME line): Service Type * & Status */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "12px",
+              width: "100%",
+            }}
+          >
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Service Type <span className="text-destructive">*</span>
               </Label>
               <Select value={serviceType} onValueChange={(v: ServiceType) => setServiceType(v)}>
                 <SelectTrigger
                   tabIndex={7}
-                  className="h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 >
                   <div className="flex items-center gap-1.5 truncate">
                     <Briefcase className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -643,14 +622,15 @@ export default function QuotationFormPage() {
               </Select>
             </div>
 
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Status
               </Label>
               <Select value={status} onValueChange={(v: Status) => setStatus(v)}>
                 <SelectTrigger
                   tabIndex={8}
-                  className="h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 >
                   <div className="flex items-center gap-1.5 truncate">
                     <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -666,16 +646,25 @@ export default function QuotationFormPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {/* ROW 3 (2 columns, col-span-6 each): Client / Recipient Name * and Email Address */}
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0 relative">
-              <Label htmlFor="client_name" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+          {/* ROW 3 (2 Equal 50%/50% Columns on SAME line): Client / Recipient Name * & Email Address */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "12px",
+              width: "100%",
+            }}
+          >
+            <div style={{ width: "100%", minWidth: 0, position: "relative" }}>
+              <Label htmlFor="client_name" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Client / Recipient Name <span className="text-destructive">*</span></span>
                 {errors.clientName && (
                   <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.clientName}</span>
                 )}
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="client_name"
@@ -688,11 +677,12 @@ export default function QuotationFormPage() {
                     if (errors.clientName) setErrors((prev) => ({ ...prev, clientName: undefined }));
                   }}
                   onFocus={() => setShowClientSuggestions(true)}
-                  placeholder="Client name (type to search clients)..."
+                  placeholder="Client name (type to search)..."
                   className={cn(
-                    "pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
+                    "pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
                     errors.clientName && "border-destructive focus-visible:ring-destructive"
                   )}
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
 
@@ -707,7 +697,7 @@ export default function QuotationFormPage() {
                       key={c.id}
                       type="button"
                       onClick={() => handleSelectClient(c)}
-                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex items-center justify-between transition-colors border-b last:border-b-0 focus-visible:bg-muted focus-visible:outline-none"
+                      className="w-full text-left px-3 py-1.5 hover:bg-muted/70 flex items-center justify-between transition-colors border-b last:border-b-0 focus-visible:bg-muted focus-visible:outline-none"
                     >
                       <div>
                         <p className="font-semibold text-foreground">{c.name}</p>
@@ -720,11 +710,11 @@ export default function QuotationFormPage() {
               )}
             </div>
 
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-              <Label htmlFor="client_email" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label htmlFor="client_email" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Email Address
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="client_email"
@@ -733,18 +723,28 @@ export default function QuotationFormPage() {
                   type="email"
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="client@example.com (for direct PDF dispatch)"
-                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  placeholder="client@example.com (for PDF sending)"
+                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
+          </div>
 
-            {/* ROW 4 (2 columns, col-span-6 each): Phone Number and Title / Subject */}
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-              <Label htmlFor="client_phone" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {/* ROW 4 (2 Equal 50%/50% Columns on SAME line): Phone Number & Quotation Title / Subject */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "12px",
+              width: "100%",
+            }}
+          >
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label htmlFor="client_phone" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Phone Number
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="client_phone"
@@ -755,16 +755,17 @@ export default function QuotationFormPage() {
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
                   placeholder="+92 300 1234567"
-                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
 
-            <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-              <Label htmlFor="quote_title" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div style={{ width: "100%", minWidth: 0 }}>
+              <Label htmlFor="quote_title" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Quotation Title / Subject
               </Label>
-              <div className="relative">
+              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
                 <FileText className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="quote_title"
@@ -772,21 +773,28 @@ export default function QuotationFormPage() {
                   tabIndex={12}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. 14-Day Umrah Package / Executive Ticket"
-                  className="pl-9 h-9 text-base sm:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  placeholder="e.g. 14-Day Umrah Package / Executive Flight"
+                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
-
           </div>
         </div>
 
         {/* 2 ZONES: MIDDLE LINE ITEMS (~65% -> 8 cols) & RIGHT TOTALS/TERMS (~35% -> 4 cols) */}
-        <div className="flex-1 min-h-0 grid grid-cols-12 gap-2.5">
-          
-          {/* MIDDLE: Quotation Line Items Table */}
-          <div className="col-span-12 lg:col-span-8 flex flex-col min-h-0 bg-card rounded-2xl border border-border/70 overflow-hidden shadow-sm">
-            <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between shrink-0">
+        <div
+          className="flex-1 min-h-0"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 1.2fr)",
+            gap: "12px",
+            width: "100%",
+          }}
+        >
+          {/* LEFT: Quotation Line Items Table */}
+          <div className="flex flex-col min-h-0 bg-card rounded-2xl border border-border/70 overflow-hidden shadow-sm" style={{ minWidth: 0 }}>
+            <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xs uppercase tracking-wider text-foreground">Line Items</span>
                 <span className="text-[11px] text-muted-foreground">({items.length} {items.length === 1 ? "line" : "lines"})</span>
@@ -796,15 +804,15 @@ export default function QuotationFormPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => addItem(true)}
-                className="h-7 px-2.5 text-xs gap-1 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                className="h-6 px-2 text-xs gap-1 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3 h-3" />
                 <span>Add line</span>
               </Button>
             </div>
 
             {/* Table Header */}
-            <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/60 text-[11px] font-semibold text-muted-foreground border-b shrink-0">
+            <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-1 bg-muted/60 text-[11px] font-semibold text-muted-foreground border-b shrink-0">
               <div className="col-span-6">Description *</div>
               <div className="col-span-2 text-center">Qty</div>
               <div className="col-span-2 text-right">Unit Price ({currency})</div>
@@ -812,13 +820,13 @@ export default function QuotationFormPage() {
             </div>
 
             {/* Internal Scroll Rows Container */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-2.5 space-y-1.5">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {items.map((it, idx) => {
                 const isLast = idx === items.length - 1;
                 return (
                   <div
                     key={idx}
-                    className="grid grid-cols-12 gap-1.5 sm:gap-2 items-center bg-muted/10 p-2 sm:p-0 rounded-lg sm:rounded-none border sm:border-0"
+                    className="grid grid-cols-12 gap-1.5 sm:gap-2 items-center bg-muted/10 p-1.5 sm:p-0 rounded-lg sm:rounded-none border sm:border-0"
                   >
                     <div className="col-span-12 sm:col-span-6">
                       <Input
@@ -826,7 +834,7 @@ export default function QuotationFormPage() {
                         placeholder="Item or service description..."
                         value={it.description}
                         onChange={(e) => updateItem(idx, { description: e.target.value })}
-                        className="h-8 text-base sm:text-xs rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                        className="h-7 sm:h-8 text-sm rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-4 sm:col-span-2">
@@ -837,7 +845,7 @@ export default function QuotationFormPage() {
                         placeholder="Qty"
                         value={it.qty}
                         onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })}
-                        className="h-8 text-base sm:text-xs rounded-md text-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                        className="h-7 sm:h-8 text-sm rounded-md text-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-4 sm:col-span-2">
@@ -856,7 +864,7 @@ export default function QuotationFormPage() {
                             addItem(true);
                           }
                         }}
-                        className="h-8 text-base sm:text-xs rounded-md text-right font-mono focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                        className="h-7 sm:h-8 text-sm rounded-md text-right font-mono focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                       />
                     </div>
                     <div className="col-span-3 sm:col-span-1 text-right text-xs font-bold font-mono truncate">
@@ -869,10 +877,10 @@ export default function QuotationFormPage() {
                         size="icon"
                         disabled={items.length <= 1}
                         onClick={() => removeItem(idx)}
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                         title="Delete line"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
                   </div>
@@ -882,13 +890,13 @@ export default function QuotationFormPage() {
           </div>
 
           {/* RIGHT: Totals Card, Notes & Terms */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col justify-between gap-2 bg-card rounded-2xl border border-border/70 p-3 overflow-y-auto shadow-sm">
-            <div className="space-y-2">
+          <div className="flex flex-col justify-between gap-1.5 bg-card rounded-2xl border border-border/70 p-2.5 overflow-y-auto shadow-sm" style={{ minWidth: 0 }}>
+            <div className="space-y-1.5">
               {/* Currency & Subtotal */}
-              <div className="flex items-center justify-between pb-1.5 border-b">
+              <div className="flex items-center justify-between pb-1 border-b">
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase">Currency</span>
                 <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-7 w-24 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none">
+                  <SelectTrigger className="h-6.5 w-20 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-50 text-xs">
@@ -915,7 +923,7 @@ export default function QuotationFormPage() {
                   inputMode="decimal"
                   value={discount}
                   onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="h-7 w-28 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-6.5 w-24 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
@@ -929,21 +937,21 @@ export default function QuotationFormPage() {
                   inputMode="decimal"
                   value={tax}
                   onChange={(e) => setTax(Number(e.target.value))}
-                  className="h-7 w-28 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-6.5 w-24 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
               {/* TOTAL (large bold) */}
-              <div className="pt-2 border-t flex items-baseline justify-between bg-primary/5 p-2 rounded-xl border border-primary/20">
-                <span className="font-bold text-xs uppercase tracking-wide text-foreground">TOTAL:</span>
-                <span className="text-xl sm:text-2xl font-black text-primary font-mono tracking-tight">
+              <div className="pt-1.5 border-t flex items-baseline justify-between bg-primary/5 p-1.5 rounded-xl border border-primary/20">
+                <span className="font-bold text-[11px] uppercase tracking-wide text-foreground">TOTAL:</span>
+                <span className="text-lg sm:text-xl font-black text-primary font-mono tracking-tight">
                   {currency} {total.toLocaleString()}
                 </span>
               </div>
 
               {/* Notes */}
-              <div className="space-y-1 pt-1">
-                <Label htmlFor="notes" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="space-y-0.5 pt-0.5">
+                <Label htmlFor="notes" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                   Notes (Client facing)
                 </Label>
                 <Textarea
@@ -952,13 +960,13 @@ export default function QuotationFormPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Included baggage, flight transit notes, payment terms..."
-                  className="min-h-[44px] text-base sm:text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="min-h-[38px] text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
 
               {/* Terms */}
-              <div className="space-y-1">
-                <Label htmlFor="terms" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="space-y-0.5">
+                <Label htmlFor="terms" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                   Terms & Conditions
                 </Label>
                 <Textarea
@@ -967,37 +975,65 @@ export default function QuotationFormPage() {
                   value={terms}
                   onChange={(e) => setTerms(e.target.value)}
                   placeholder="Terms of quotation..."
-                  className="min-h-[44px] text-base sm:text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="min-h-[38px] text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                 />
               </div>
             </div>
-
-            {/* Mobile Bottom Bar */}
-            <div className="lg:hidden sticky bottom-0 left-0 right-0 pt-2 pb-[env(safe-area-inset-bottom,0.75rem)] bg-background/95 backdrop-blur border-t mt-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] text-muted-foreground">Total Amount</p>
-                <p className="font-bold text-sm text-primary truncate">{currency} {total.toLocaleString()}</p>
-              </div>
-              <div className="flex gap-1.5 shrink-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  className="min-h-[40px] px-3 text-xs"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleSave(false)}
-                  disabled={isSubmitting}
-                  className="min-h-[40px] px-3.5 text-xs font-semibold shadow-md"
-                >
-                  {isSubmitting ? "Saving..." : isEdit ? "Update" : "Save Quotation"}
-                </Button>
-              </div>
-            </div>
           </div>
+        </div>
+
+        {/* Bottom Footer Bar: Placed at the Bottom Right Side-by-Side: Save & PDF + Save Quotation */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: "8px",
+            paddingTop: "8px",
+            borderTop: "1px solid hsl(var(--border) / 0.6)",
+            width: "100%",
+          }}
+          className="shrink-0"
+        >
+          {isEdit && !convertedBookingId && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleConvertToBooking}
+              className="mr-auto h-8 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+            >
+              <ArrowRightCircle className="w-3.5 h-3.5" />
+              <span>Convert to Booking</span>
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            tabIndex={13}
+            onClick={() => handleSave(true)}
+            disabled={isSubmitting}
+            className="h-8 sm:h-9 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
+            title="Save and download PDF (Ctrl+Shift+Enter)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Save & PDF</span>
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            tabIndex={14}
+            onClick={() => handleSave(false)}
+            disabled={isSubmitting}
+            className="h-8 sm:h-9 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+            title="Save Quotation (Ctrl+Enter)"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
+          </Button>
         </div>
       </div>
     </div>
