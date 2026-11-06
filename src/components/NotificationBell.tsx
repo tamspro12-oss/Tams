@@ -18,6 +18,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useReminders } from "@/hooks/useReminders";
+import { useNotifications } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
 
 export function NotificationBell() {
@@ -30,7 +31,9 @@ export function NotificationBell() {
     pendingRemindersCount,
     toggleReminderComplete,
   } = useReminders();
+  const { unreadCount, unreadNotifications } = useNotifications();
 
+  const totalDueCount = pendingRemindersCount + unreadCount;
   const activeReminders = reminders.filter((r) => !r.is_completed);
 
   return (
@@ -42,9 +45,9 @@ export function NotificationBell() {
           aria-label="Open notifications"
         >
           <Bell className="h-4.5 w-4.5" />
-          {pendingRemindersCount > 0 && (
+          {totalDueCount > 0 && (
             <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-xs animate-in zoom-in-50">
-              {pendingRemindersCount > 99 ? "99+" : pendingRemindersCount}
+              {totalDueCount > 99 ? "99+" : totalDueCount}
             </span>
           )}
         </button>
@@ -59,14 +62,14 @@ export function NotificationBell() {
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-primary" />
             <h3 className="font-bold text-sm text-foreground">Reminders & Alerts</h3>
-            {pendingRemindersCount > 0 && (
+            {totalDueCount > 0 && (
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">
-                {pendingRemindersCount} Due
+                {totalDueCount} Due
               </Badge>
             )}
           </div>
           <Link
-            to="/app/reminders"
+            to="/app/notifications"
             onClick={() => setOpen(false)}
             className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
           >

@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useVendors } from "@/hooks/useStorage";
 import { useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
+import { useOpeningBalances } from "@/hooks/useOpeningBalances";
 import { useAgency } from "@/hooks/useAgency";
-import { Plus, Store, User, Phone, Mail, Briefcase, Calendar, Banknote, FileText, Maximize2, Minimize2 } from "lucide-react";
+import { Plus, Store, User, Phone, Mail, Briefcase, Calendar, Banknote, FileText, Maximize2, Minimize2, Scale } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
@@ -38,8 +40,15 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
   const [isFullScreen, setIsFullScreen] = useState(false);
   const { addVendor, updateVendor } = useVendors();
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
+  const { balances, upsertBalance } = useOpeningBalances();
   const { data: agency } = useAgency();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const existingOpeningBalance = editVendor
+    ? balances.find((b) => b.party_type === "vendor" && b.party_id === editVendor.id)
+    : null;
+  const [openingBalanceAmount, setOpeningBalanceAmount] = useState<string>("");
+  const [openingBalanceType, setOpeningBalanceType] = useState<"payable" | "receivable">("payable");
 
   const isOpen = open !== undefined ? open : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
@@ -52,13 +61,25 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
   useEffect(() => {
     if (editVendor && isOpen) {
       setFormData(getInitialFormData(editVendor));
+      if (existingOpeningBalance) {
+        setOpeningBalanceAmount(String(existingOpeningBalance.amount));
+        setOpeningBalanceType(existingOpeningBalance.balance_type);
+      } else {
+        setOpeningBalanceAmount("");
+        setOpeningBalanceType("payable");
+      }
+    } else if (!editVendor) {
+      setOpeningBalanceAmount("");
+      setOpeningBalanceType("payable");
     }
-  }, [editVendor, isOpen]);
+  }, [editVendor, isOpen, existingOpeningBalance]);
 
   // Reset form when dialog closes (for new vendor creation)
   useEffect(() => {
     if (!isOpen && !editVendor) {
       setFormData(getInitialFormData());
+      setOpeningBalanceAmount("");
+      setOpeningBalanceType("payable");
     }
   }, [isOpen, editVendor]);
 
@@ -84,10 +105,12 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
         notes: formData.notes,
       };
 
+      let targetVendorId = editVendor?.id;
       if (editVendor) {
         await updateVendor.mutateAsync({ id: editVendor.id, vendor: vendorData });
       } else {
         const newVendor = await addVendor.mutateAsync(vendorData);
+        targetVendorId = newVendor.id;
         
         if (amountPaid > 0 && agency?.id) {
           const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
@@ -100,6 +123,19 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
             notes: `Initial payment of PKR ${amountPaid.toLocaleString()}`,
           });
         }
+      }
+
+      // Record optional Opening Balance
+      const opBalNum = parseFloat(openingBalanceAmount);
+      if (targetVendorId && !isNaN(opBalNum) && opBalNum > 0) {
+        await upsertBalance.mutateAsync({
+          party_type: "vendor",
+          party_id: targetVendorId,
+          balance_type: openingBalanceType,
+          amount: opBalNum,
+          as_of_date: new Date().toISOString().split("T")[0],
+          notes: "Initial brought-forward opening balance",
+        });
       }
 
       setIsOpen(false);
@@ -361,6 +397,45 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
                     <p className="text-xs text-muted-foreground/70">
                       Remaining will be calculated automatically
                     </p>
+                  </div>
+                </div>
+
+                {/* Optional Opening Balance Section */}
+                <div className="p-3.5 rounded-lg border border-amber-200/60 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-amber-600" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">Opening Balance (Optional Brought-Forward)</p>
+                      <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">Historical balance prior to software start. Does not affect P&L or sales.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Opening Balance (PKR)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={openingBalanceAmount}
+                        onChange={(e) => setOpeningBalanceAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="h-9 text-xs enterprise-input"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Balance Type</Label>
+                      <Select
+                        value={openingBalanceType}
+                        onValueChange={(val: any) => setOpeningBalanceType(val)}
+                      >
+                        <SelectTrigger className="h-9 text-xs enterprise-input">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="payable">Payable (Agency owes Vendor)</SelectItem>
+                          <SelectItem value="receivable">Advance / Credit (Vendor owes Agency)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 

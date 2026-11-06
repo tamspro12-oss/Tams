@@ -21,7 +21,11 @@ import {
   ArrowLeft,
   Ticket,
   Bell,
-  Eye
+  Eye,
+  Compass,
+  Scale,
+  MessageSquare,
+  CheckCircle2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -694,6 +698,110 @@ const sections: Section[] = [
         </div>
 
         <TipBox>Renew before expiry to avoid any interruption in service.</TipBox>
+      </div>
+    )
+  },
+  {
+    id: "7-hub-navigation",
+    title: "The 7-Hub Navigation & Workspace Map",
+    icon: Compass,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+          To provide a clutter-free, fast desktop and mobile workspace, TAMS Pro consolidates all agency tools into exactly <strong>7 Clean Hubs</strong> with instant-switching horizontal tabs:
+        </p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">Hub-by-Hub Navigation Map</h4>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>1. Dashboard (`/app/dashboard`):</strong> Executive overview of daily sales, live booking counts, pending queries, cash/bank totals, and top notification bell.</li>
+            <li><strong>2. Bookings Hub (`/app/bookings`):</strong> Consolidated travel bookings under 4 instant tabs:
+              <ul className="list-circle list-inside ml-5 mt-1 space-y-1">
+                <li><em>Direct Clients:</em> Retail customer passenger files, e-tickets, invoices, and payments.</li>
+                <li><em>B2B Agents:</em> Partner agency accounts, wholesale passenger bookings, and agent ledgers.</li>
+                <li><em>Vendors:</em> Service suppliers (airlines, Umrah operators, hotels) and payable ledgers.</li>
+                <li><em>Vouchers:</em> Service vouchers (UV Umrah, HV Hotel, TV Transport) with PDF, Print, and WhatsApp sharing.</li>
+              </ul>
+            </li>
+            <li><strong>3. Queries & Quotes Hub (`/app/leads-quotes`):</strong> Lead pipeline with <em>Client Queries</em> and <em>Quotations</em> tabs, equipped with 1-click booking approval.</li>
+            <li><strong>4. Accounts Hub (`/app/accounts`):</strong> Complete financial ledger featuring <em>Bank & Cash Manager</em>, <em>Expenses</em>, <em>Refunds</em>, <em>Financial Reports</em>, and <em>Opening Balances</em>.</li>
+            <li><strong>5. Notifications Hub (`/app/notifications`):</strong> Unified alert center combining upcoming flight and Umrah departures, daily closing expense prompts, and system notifications.</li>
+            <li><strong>6. Umrah Calculator (`/app/umrah-calculator`):</strong> Real-time dynamic Umrah package cost estimation with 1-click Quotation and Booking generation.</li>
+            <li><strong>7. Settings Hub (`/app/settings`):</strong> Agency profile branding, Meta WhatsApp Business configuration, notification rules, email dispatch history, and system user manual.</li>
+          </ul>
+        </div>
+
+        <TipBox>All your bookmarks and previous links (e.g. `/app/expenses`, `/app/vendors`, `/app/vouchers`) automatically and smoothly redirect to the correct hub and active tab without page reloads.</TipBox>
+      </div>
+    )
+  },
+  {
+    id: "1-click-conversions",
+    title: "1-Click Approvals & Automated Booking Conversion",
+    icon: CheckCircle2,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Eliminate manual re-typing. TAMS Pro provides instantaneous 1-click pipelines from inquiries and quotes directly into confirmed client bookings:
+        </p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">How to Convert Inquiries & Quotes</h4>
+          <StepList steps={[
+            "From Client Queries: On any active query card, click 'Convert to Booking'. The booking dialog opens with the client name, phone number, destination, and budget automatically pre-filled.",
+            "From Quotations: On any sent or accepted quotation, click 'Convert to Booking'. All quoted line items, client details, and total selling amounts are pre-filled instantly.",
+            "From Umrah Calculator: After calculating group or individual passenger costs, click 'Create Booking'. Group size, travel dates, package cost, and selling price pre-populate immediately.",
+            "Save Booking: Review the pre-filled fields, assign a vendor if needed, and click 'Add Booking'. The source query is automatically marked Completed, and the quotation is marked Accepted."
+          ]} />
+        </div>
+
+        <TipBox>Built-in idempotency ensures you never create duplicate bookings accidentally from the same query or quote.</TipBox>
+      </div>
+    )
+  },
+  {
+    id: "opening-balances",
+    title: "Opening Balances & Accounting Engine",
+    icon: Scale,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Migrating existing customer or supplier balances into TAMS Pro is simple and safe:
+        </p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">Key Accounting Principles</h4>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>Brought-Forward Only:</strong> Opening balances represent historical debt or credit prior to using the software. They <em>never</em> count as sales revenue, income, or operational expense in your P&L reports.</li>
+            <li><strong>Modal Integration:</strong> When creating a new Bank Account, setting your Cash Drawer Float, or adding a new Direct Client, B2B Agent, or Vendor, an optional 'Opening Balance' section lets you enter brought-forward amounts with 1 step.</li>
+            <li><strong>Opening Balances Hub:</strong> View, reconcile, export to Excel/PDF, and audit all agency opening balances anytime under Accounts Hub → Opening Balances tab.</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: "whatsapp-integration",
+    title: "Meta WhatsApp Business API Integration",
+    icon: MessageSquare,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Send automated service vouchers, booking confirmations, e-tickets, and payment receipts directly to client WhatsApp numbers using your own Meta WhatsApp Business Cloud credentials:
+        </p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">Step-by-Step WhatsApp Setup</h4>
+          <StepList steps={[
+            "Create a Meta Developer account at developers.facebook.com and configure a WhatsApp Business app.",
+            "Navigate to Settings Hub → WhatsApp Integration tab.",
+            "Toggle 'Enable WhatsApp Automated Messaging' to active.",
+            "Enter your Meta Phone Number ID, WhatsApp Business Account ID (WABA ID), and System User Permanent Access Token.",
+            "Click 'Save WhatsApp Configuration'. Your credentials are encrypted and stored with strict multi-tenant row-level security."
+          ]} />
+        </div>
+
+        <TipBox>Once configured, you can share vouchers and payment receipts with one click via official Meta cloud channels.</TipBox>
       </div>
     )
   }

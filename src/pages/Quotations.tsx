@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, FileText, Download, Mail, Pencil, Trash2, RefreshCw, Search, Banknote, Loader2, Eye, Sparkles,
+  Plus, FileText, Download, Mail, Pencil, Trash2, RefreshCw, Search, Banknote, Loader2, Eye, Sparkles, CheckCircle2, ArrowRightCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -137,6 +137,23 @@ export default function Quotations() {
     const acceptedTotal = accepted.reduce((s, q) => s + Number(q.total || 0), 0);
     return { count: quotations.length, total, accepted: accepted.length, acceptedTotal };
   }, [quotations]);
+
+  const handleConvertToBooking = (q: Quotation) => {
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          name: q.client_name,
+          contact_number: (q as any).client_phone || "",
+          email: (q as any).client_email || "",
+          travel_type: q.service_type === "umrah" ? "Umrah" : q.service_type === "visa" ? "Custom" : "Ticket",
+          selling_price: q.total,
+          notes: `Converted from Quotation #${q.quotation_number}${q.title ? ` — ${q.title}` : ""}\nQuotation Total: ${q.currency} ${Number(q.total).toLocaleString()}`,
+          converted_from_quote_id: q.id,
+        },
+      },
+    });
+  };
 
   const recalc = (next: QuotationInput): QuotationInput => {
     const items = next.items.map((it) => ({
@@ -418,6 +435,21 @@ export default function Quotations() {
                       </SelectContent>
                     </Select>
                     <div className="flex-1" />
+                    {(q as any).converted_booking_id ? (
+                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-300 gap-1 h-9 px-2.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Booked
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 px-2.5 text-xs gap-1.5 text-primary hover:bg-primary/10 border-primary/30 font-semibold"
+                        onClick={() => handleConvertToBooking(q)}
+                      >
+                        <ArrowRightCircle className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Convert to </span>Booking
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => openPreview(q, null)}>
                       <Eye className="w-4 h-4 md:mr-1" /> <span className="hidden md:inline">Preview</span>
                     </Button>

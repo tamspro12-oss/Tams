@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, RotateCcw, Calendar as CalendarIcon, Save, Upload, Maximize2, Minimize2, Plus, Trash2, Package, PlusCircle, FileDown, FileText } from "lucide-react";
+import { Calculator, RotateCcw, Calendar as CalendarIcon, Save, Upload, Maximize2, Minimize2, Plus, Trash2, Package, PlusCircle, FileDown, FileText, CheckCircle2 } from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
 import { format } from "date-fns";
@@ -1708,6 +1708,32 @@ export default function UmrahCalculator() {
           >
             <FileText className="w-4 h-4" />
             Create Quotation
+          </Button>
+          <Button
+            onClick={() => {
+              if (!result) { toast.error("Calculate first to create a booking"); return; }
+              const perPerson = Math.round(result.perPerson);
+              navigate("/app/bookings?tab=clients", {
+                state: {
+                  openAddClient: true,
+                  prefill: {
+                    travel_type: "Umrah",
+                    selling_price: result.finalTotal,
+                    purchasing_price: result.baseTotal,
+                    group_size: result.totalPassengers,
+                    group_booking_type: result.totalPassengers > 1 ? "group" : "individual",
+                    flight_date: arrivalDate || "",
+                    return_date: departureDate || "",
+                    notes: `Umrah Package calculation (${result.nights} nights, ${result.totalPassengers} passengers). Cost per person: Rs ${perPerson.toLocaleString()}.`,
+                  },
+                },
+              });
+            }}
+            size="sm"
+            className="gap-1.5 min-w-[150px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Create Booking
           </Button>
           <Button onClick={handleReset} variant="outline" size="sm" className="gap-1.5 min-w-[100px]">
             <RotateCcw className="w-4 h-4" />

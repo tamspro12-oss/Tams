@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useClients, useVendors } from "@/hooks/useStorage";
 import { useClientPaymentHistoryLocal, useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
+import { useOpeningBalances } from "@/hooks/useOpeningBalances";
 import { useAgency } from "@/hooks/useAgency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, User, Plus, Store, Search, Filter, Pencil, Maximize2, Minimize2, Plane, Hotel, Bus, ArrowLeftRight, AlertCircle, Trash2, Clock, Route, FileText } from "lucide-react";
+import { Users, User, Plus, Store, Search, Filter, Pencil, Maximize2, Minimize2, Plane, Hotel, Bus, ArrowLeftRight, AlertCircle, Trash2, Clock, Route, FileText, Scale } from "lucide-react";
 import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
 import { useVouchers } from "@/hooks/useVouchers";
 import { cn } from "@/lib/utils";
@@ -37,18 +39,20 @@ interface AddClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editClient?: any;
+  prefillClient?: any;
 }
 
-export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDialogProps) {
+export function AddClientDialog({ open, onOpenChange, editClient, prefillClient }: AddClientDialogProps) {
+  const initialData = editClient || prefillClient;
   const [loading, setLoading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const { addVoucher } = useVouchers();
-  const [groupBookingType, setGroupBookingType] = useState(editClient?.group_booking_type || "individual");
-  const [groupSize, setGroupSize] = useState(editClient?.group_size || 1);
+  const [groupBookingType, setGroupBookingType] = useState(initialData?.group_booking_type || "individual");
+  const [groupSize, setGroupSize] = useState(initialData?.group_size || 1);
   const [showQuickVendorAdd, setShowQuickVendorAdd] = useState(false);
   const [showQuickVendorEdit, setShowQuickVendorEdit] = useState(false);
-  const [selectedVendorId, setSelectedVendorId] = useState(editClient?.vendor_id || "none");
+  const [selectedVendorId, setSelectedVendorId] = useState(initialData?.vendor_id || "none");
   const [vendorSearchOpen, setVendorSearchOpen] = useState(false);
   const [vendorSearchTerm, setVendorSearchTerm] = useState("");
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all");
@@ -56,7 +60,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
   const [missingFields, setMissingFields] = useState<string[]>([]);
   
   // Service type and trip type states
-  const [serviceType, setServiceType] = useState(editClient?.travel_type || "Ticket");
+  const [serviceType, setServiceType] = useState(initialData?.travel_type || initialData?.service_type || "Ticket");
   const [tripType, setTripType] = useState<'one_way' | 'return' | 'multi_city'>('one_way');
   const [transportIncluded, setTransportIncluded] = useState(false);
   
@@ -77,7 +81,24 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
   const { vendors, addVendor, updateVendor } = useVendors();
   const { addPaymentHistory } = useClientPaymentHistoryLocal();
   const { addPaymentHistory: addVendorPaymentHistory } = useVendorPaymentHistoryLocal();
+  const { balances, upsertBalance } = useOpeningBalances();
   const { data: agency } = useAgency();
+
+  const existingClientBalance = editClient
+    ? balances.find((b) => b.party_type === "client" && b.party_id === editClient.id)
+    : null;
+  const [openingBalanceAmount, setOpeningBalanceAmount] = useState<string>("");
+  const [openingBalanceType, setOpeningBalanceType] = useState<"receivable" | "payable">("receivable");
+
+  useEffect(() => {
+    if (existingClientBalance) {
+      setOpeningBalanceAmount(String(existingClientBalance.amount));
+      setOpeningBalanceType(existingClientBalance.balance_type);
+    } else {
+      setOpeningBalanceAmount("");
+      setOpeningBalanceType("receivable");
+    }
+  }, [existingClientBalance]);
   const quickVendorFormRef = useRef<HTMLFormElement | null>(null);
   
   // Scroll animation hook
@@ -492,11 +513,24 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
       payment_status: paymentStatus,
       vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
       group_booking_type: groupBookingType,
+      converted_from_query_id: prefillClient?.converted_from_query_id || editClient?.converted_from_query_id || null,
+      converted_from_quote_id: prefillClient?.converted_from_quote_id || editClient?.converted_from_quote_id || null,
     };
 
     if (editClient) {
       updateClient.mutate({ id: editClient.id, client: finalClientData }, {
-        onSuccess: () => {
+        onSuccess: async () => {
+          const opBalNum = parseFloat(openingBalanceAmount);
+          if (editClient.id && !isNaN(opBalNum) && opBalNum > 0) {
+            await upsertBalance.mutateAsync({
+              party_type: "client",
+              party_id: editClient.id,
+              balance_type: openingBalanceType,
+              amount: opBalNum,
+              as_of_date: new Date().toISOString().split("T")[0],
+              notes: "Client opening balance brought forward",
+            });
+          }
           setLoading(false);
           onOpenChange(false);
         },
@@ -518,6 +552,43 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
             payment_mode: paymentMode,
             bank_name: paymentMode === 'bank' ? bankName : null,
           });
+        }
+
+        // Record optional Opening Balance
+        const opBalNum = parseFloat(openingBalanceAmount);
+        if (newClient?.id && !isNaN(opBalNum) && opBalNum > 0) {
+          await upsertBalance.mutateAsync({
+            party_type: "client",
+            party_id: newClient.id,
+            balance_type: openingBalanceType,
+            amount: opBalNum,
+            as_of_date: new Date().toISOString().split("T")[0],
+            notes: "Client opening balance brought forward",
+          });
+        }
+
+        // If converted from a Query, mark query completed
+        if (prefillClient?.converted_from_query_id) {
+          try {
+            await (supabase as any)
+              .from('client_queries')
+              .update({ status: 'completed', converted_booking_id: newClient.id, updated_at: new Date().toISOString() })
+              .eq('id', prefillClient.converted_from_query_id);
+          } catch (e) {
+            console.warn("Failed to update source query status", e);
+          }
+        }
+
+        // If converted from a Quotation, mark quotation accepted
+        if (prefillClient?.converted_from_quote_id) {
+          try {
+            await (supabase as any)
+              .from('quotations')
+              .update({ status: 'accepted', converted_booking_id: newClient.id, updated_at: new Date().toISOString() })
+              .eq('id', prefillClient.converted_from_quote_id);
+          } catch (e) {
+            console.warn("Failed to update source quotation status", e);
+          }
         }
         
         setLoading(false);
@@ -672,11 +743,11 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-sm font-medium">Contact Name *</Label>
-                <Input id="name" name="name" required defaultValue={editClient?.name || ''} className="enterprise-input" placeholder="Full name" />
+                <Input id="name" name="name" required defaultValue={initialData?.name || initialData?.client_name || ''} className="enterprise-input" placeholder="Full name" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="contactNumber" className="text-sm font-medium">Contact Number</Label>
-                <Input id="contactNumber" name="contactNumber" defaultValue={editClient?.contact_number || ''} className="enterprise-input" placeholder="03001234567" />
+                <Input id="contactNumber" name="contactNumber" defaultValue={initialData?.contact_number || initialData?.phone || ''} className="enterprise-input" placeholder="03001234567" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="email" className="text-sm font-medium">Client Email</Label>
@@ -685,7 +756,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
                   name="email" 
                   type="email"
                   placeholder="client@example.com"
-                  defaultValue={editClient?.email || ''} 
+                  defaultValue={initialData?.email || initialData?.client_email || ''} 
                   className="enterprise-input"
                 />
               </div>
@@ -1329,7 +1400,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6">
               <div className="space-y-2">
                 <Label htmlFor="purchasingPrice" className="text-sm font-medium">Purchasing Price (PKR)</Label>
-                <Input id="purchasingPrice" name="purchasingPrice" type="number" step="0.01" placeholder="Cost price" defaultValue={editClient?.purchasing_price || ''} className="enterprise-input" />
+                <Input id="purchasingPrice" name="purchasingPrice" type="number" step="0.01" placeholder="Cost price" defaultValue={initialData?.purchasing_price || ''} className="enterprise-input" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="sellingPrice" className="text-sm font-medium">Total Amount (PKR) *</Label>
@@ -1340,7 +1411,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
                   step="0.01" 
                   required 
                   placeholder="Total amount" 
-                  defaultValue={editClient?.selling_price || ''} 
+                  defaultValue={initialData?.selling_price || initialData?.payment_amount || ''} 
                   className="enterprise-input"
                 />
               </div>
@@ -1353,13 +1424,13 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
                   step="0.01" 
                   required
                   placeholder="Paid amount" 
-                  defaultValue={editClient?.amount_paid || 0} 
+                  defaultValue={initialData?.amount_paid || 0} 
                   className="enterprise-input"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="remainingPaymentDate" className="text-sm font-medium">Remaining Payment Due</Label>
-                <Input id="remainingPaymentDate" name="remainingPaymentDate" type="date" defaultValue={editClient?.remaining_payment_date || ''} className="enterprise-input" />
+                <Input id="remainingPaymentDate" name="remainingPaymentDate" type="date" defaultValue={initialData?.remaining_payment_date || ''} className="enterprise-input" />
               </div>
               {!editClient && (
                 <div className="space-y-2 sm:col-span-2">
@@ -1372,6 +1443,45 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
                   />
                 </div>
               )}
+
+              {/* Optional Opening Balance Section */}
+              <div className="sm:col-span-2 p-3.5 rounded-lg border border-amber-200/60 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-amber-600" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">Opening Balance (Optional Brought-Forward)</p>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">Historical balance prior to software start. Does not affect P&L or sales revenue.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Opening Balance (PKR)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={openingBalanceAmount}
+                      onChange={(e) => setOpeningBalanceAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="h-9 text-xs enterprise-input"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Balance Type</Label>
+                    <Select
+                      value={openingBalanceType}
+                      onValueChange={(val: any) => setOpeningBalanceType(val)}
+                    >
+                      <SelectTrigger className="h-9 text-xs enterprise-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="receivable">Receivable (Client owes Agency)</SelectItem>
+                        <SelectItem value="payable">Advance / Credit (Agency owes Client)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
           </div>
@@ -1616,7 +1726,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
           <div ref={setSectionRef(5)} className={cn("scroll-reveal", isVisible(5) && "is-visible")}>
           <div className="space-y-2 lg:col-span-2 xl:col-span-3">
             <Label htmlFor="notes" className="text-sm font-medium">Additional Notes</Label>
-            <Textarea id="notes" name="notes" rows={3} placeholder="Any additional information about this booking..." defaultValue={editClient?.notes || ''} className="enterprise-input min-h-[80px] resize-none" />
+            <Textarea id="notes" name="notes" rows={3} placeholder="Any additional information about this booking..." defaultValue={initialData?.notes || ''} className="enterprise-input min-h-[80px] resize-none" />
           </div>
           </div>
           </div>

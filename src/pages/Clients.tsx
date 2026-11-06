@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,9 +58,21 @@ import { toast } from "sonner";
 import { PermissionGate } from "@/components/PermissionGate";
 
 export default function Clients() {
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<any>(null);
+  const [prefillClient, setPrefillClient] = useState<any>(null);
+
+  useEffect(() => {
+    if (location.state?.openAddClient) {
+      if (location.state.prefill) {
+        setPrefillClient(location.state.prefill);
+      }
+      setShowAddDialog(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentClient, setPaymentClient] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -416,6 +429,7 @@ export default function Clients() {
   const handleDialogClose = () => {
     setShowAddDialog(false);
     setEditingClient(null);
+    setPrefillClient(null);
   };
 
   const handlePayment = (client: any) => {
@@ -1108,6 +1122,7 @@ export default function Clients() {
         open={showAddDialog}
         onOpenChange={handleDialogClose}
         editClient={editingClient}
+        prefillClient={prefillClient}
       />
       <ClientPaymentDialog
         client={paymentClient}

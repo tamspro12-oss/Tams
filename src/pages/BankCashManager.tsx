@@ -55,6 +55,8 @@ export default function BankCashManager() {
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showAddBank, setShowAddBank] = useState(false);
   const [entryType, setEntryType] = useState<'cash_in' | 'cash_out' | 'bank_in' | 'bank_out'>('cash_in');
+  const [entryCategory, setEntryCategory] = useState<string>('');
+  const [entryDescription, setEntryDescription] = useState<string>('');
 
   // Calculate cash totals from all sources (filtered by date)
   const cashSummary = useMemo(() => {
@@ -373,7 +375,25 @@ export default function BankCashManager() {
             <Building2 className="w-4 h-4 mr-2" />
             Add Bank
           </Button>
-          <Button onClick={() => setShowAddEntry(true)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setEntryType('cash_in');
+              setEntryCategory('Opening Balance');
+              setEntryDescription('Initial Cash Float / Brought-Forward Cash');
+              setShowAddEntry(true);
+            }}
+          >
+            <Banknote className="w-4 h-4 mr-2 text-emerald-600" />
+            Set Cash Float
+          </Button>
+          <Button
+            onClick={() => {
+              setEntryCategory('');
+              setEntryDescription('');
+              setShowAddEntry(true);
+            }}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add Entry
           </Button>
@@ -810,6 +830,8 @@ export default function BankCashManager() {
               <Input
                 id="category"
                 name="category"
+                value={entryCategory}
+                onChange={(e) => setEntryCategory(e.target.value)}
                 placeholder="e.g., Office Supplies, Salary, etc."
               />
             </div>
@@ -819,6 +841,8 @@ export default function BankCashManager() {
               <Textarea
                 id="description"
                 name="description"
+                value={entryDescription}
+                onChange={(e) => setEntryDescription(e.target.value)}
                 placeholder="Additional details..."
                 rows={2}
               />

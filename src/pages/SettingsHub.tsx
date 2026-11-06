@@ -3,6 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings as SettingsIcon, MessageSquare, Bell, Mail, BookOpen } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Existing sub-modules (100% preserved)
 import Settings from "@/pages/Settings";
@@ -30,11 +33,42 @@ export default function SettingsHub() {
   const [openingTime, setOpeningTime] = React.useState(settings?.opening_time || "09:00:00");
   const [closingTime, setClosingTime] = React.useState(settings?.closing_time || "20:00:00");
 
+  const queryClient = useQueryClient();
+  const { data: agencyId } = useCurrentAgencyId();
+
   // WhatsApp settings local state
   const [waPhoneNumberId, setWaPhoneNumberId] = React.useState("");
   const [waBusinessAccountId, setWaBusinessAccountId] = React.useState("");
   const [waAccessToken, setWaAccessToken] = React.useState("");
   const [waIsActive, setWaIsActive] = React.useState(false);
+
+  const { data: waConfig } = useQuery({
+    queryKey: ["agency_whatsapp_settings", agencyId],
+    queryFn: async () => {
+      if (!agencyId) return null;
+      try {
+        const { data, error } = await supabase
+          .from("agency_whatsapp_settings" as any)
+          .select("*")
+          .eq("agency_id", agencyId)
+          .maybeSingle();
+        if (error && error.code !== "42P01") throw error;
+        return data as any;
+      } catch (e) {
+        return null;
+      }
+    },
+    enabled: !!agencyId,
+  });
+
+  React.useEffect(() => {
+    if (waConfig) {
+      setWaPhoneNumberId(waConfig.phone_number_id || "");
+      setWaBusinessAccountId(waConfig.waba_id || "");
+      setWaAccessToken(waConfig.access_token || "");
+      setWaIsActive(waConfig.is_active ?? false);
+    }
+  }, [waConfig]);
 
   React.useEffect(() => {
     if (settings) {
@@ -60,9 +94,39 @@ export default function SettingsHub() {
     });
   };
 
+  const saveWhatsApp = useMutation({
+    mutationFn: async () => {
+      if (!agencyId) throw new Error("No agency active");
+      const { data, error } = await supabase
+        .from("agency_whatsapp_settings" as any)
+        .upsert(
+          {
+            agency_id: agencyId,
+            phone_number_id: waPhoneNumberId.trim() || null,
+            waba_id: waBusinessAccountId.trim() || null,
+            access_token: waAccessToken.trim() || null,
+            is_active: waIsActive,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "agency_id" }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agency_whatsapp_settings", agencyId] });
+      toast.success("WhatsApp configuration saved securely");
+    },
+    onError: (e: any) => {
+      toast.error("Failed to save WhatsApp settings", { description: e.message });
+    },
+  });
+
   const handleSaveWhatsAppSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("WhatsApp configuration saved securely");
+    saveWhatsApp.mutate();
   };
 
   return (
@@ -164,8 +228,8 @@ export default function SettingsHub() {
                   </p>
                 </div>
 
-                <Button type="submit" className="font-semibold text-xs h-9">
-                  Save WhatsApp Configuration
+                <Button type="submit" disabled={saveWhatsApp.isPending} className="font-semibold text-xs h-9">
+                  {saveWhatsApp.isPending ? "Saving..." : "Save WhatsApp Configuration"}
                 </Button>
               </form>
             </CardContent>
@@ -249,3 +313,4 @@ export default function SettingsHub() {
     </div>
   );
 }
+

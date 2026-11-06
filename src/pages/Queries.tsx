@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Trash2, Pencil, CheckCircle2, Clock, AlertCircle, PhoneCall, Calendar as CalendarIcon, RefreshCw, X, ChevronDown } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, CheckCircle2, Clock, AlertCircle, PhoneCall, Calendar as CalendarIcon, RefreshCw, X, ChevronDown, ArrowRightCircle } from "lucide-react";
 import { useQueries } from "@/hooks/useStorage";
 import { AddQueryDialog } from "@/components/AddQueryDialog";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ interface QueryCardProps {
   onEdit: (query: any) => void;
   onDelete: (id: string) => void;
   onStatusChange: (id: string, status: string) => void;
+  onConvertToBooking: (query: any) => void;
 }
 
 const getPriorityColor = (priority: string) => {
@@ -42,7 +44,7 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange }: QueryCardProps) => (
+const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange, onConvertToBooking }: QueryCardProps) => (
   <Card key={query.id} className="hover:shadow-sm transition-shadow border-border/60">
     <CardHeader className="pb-2.5 pt-3.5 px-3.5 sm:p-4">
       <div className="flex items-start justify-between gap-3">
@@ -52,6 +54,11 @@ const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange }: Query
             <Badge variant="outline" className={`text-[10px] font-semibold py-0 px-2 h-5 ${getPriorityColor(query.priority)}`}>
               {query.priority}
             </Badge>
+            {query.converted_booking_id && (
+              <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-300 gap-1 h-5 px-1.5">
+                <CheckCircle2 className="w-3 h-3" /> Booked
+              </Badge>
+            )}
           </div>
           {query.contact_number && (
             <CardDescription className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -93,7 +100,7 @@ const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange }: Query
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2">
+      <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2 flex-wrap sm:flex-nowrap">
         <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0 flex-1">
           {query.due_date && (
             <div className="flex items-center gap-1 text-[11px] shrink-0">
@@ -107,20 +114,35 @@ const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange }: Query
             </Badge>
           )}
         </div>
-        <Select
-          value={query.status}
-          onValueChange={(value) => onStatusChange(query.id, value)}
-        >
-          <SelectTrigger className="h-7 w-[115px] sm:w-[130px] text-xs shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-background z-50">
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {!query.converted_booking_id && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onConvertToBooking(query)}
+              className="h-7 text-xs px-2.5 gap-1 text-primary hover:bg-primary/10 border-primary/30 font-semibold"
+            >
+              <ArrowRightCircle className="w-3.5 h-3.5" />
+              Convert to Booking
+            </Button>
+          )}
+
+          <Select
+            value={query.status}
+            onValueChange={(value) => onStatusChange(query.id, value)}
+          >
+            <SelectTrigger className="h-7 w-[105px] sm:w-[120px] text-xs shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-50">
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </CardContent>
   </Card>
@@ -129,6 +151,7 @@ const QueryCard = React.memo(({ query, onEdit, onDelete, onStatusChange }: Query
 QueryCard.displayName = "QueryCard";
 
 export default function Queries() {
+  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -140,6 +163,25 @@ export default function Queries() {
 
   const { queries, isLoading, deleteQuery, updateQuery } = useQueries();
   const queryClient = useQueryClient();
+
+  const handleConvertToBooking = useCallback((query: any) => {
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          name: query.client_name,
+          contact_number: query.contact_number,
+          travel_type: query.service_type || "Ticket",
+          destination: query.destination || "",
+          flight_date: query.travel_date || "",
+          return_date: query.return_date || "",
+          selling_price: query.budget || "",
+          notes: `Converted from Query #${query.id.slice(0, 8)}${query.query_text ? `\nQuery: ${query.query_text}` : ""}${query.notes ? `\nNotes: ${query.notes}` : ""}`,
+          converted_from_query_id: query.id,
+        },
+      },
+    });
+  }, [navigate]);
 
   // 300ms Debounced search input
   useEffect(() => {
@@ -297,6 +339,7 @@ export default function Queries() {
               onEdit={handleEdit}
               onDelete={handleDeleteConfirm}
               onStatusChange={handleStatusChange}
+              onConvertToBooking={handleConvertToBooking}
             />
           ))}
         </div>

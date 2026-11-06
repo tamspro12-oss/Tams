@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useB2BAgents, B2BAgent } from "@/hooks/useB2BAgents";
+import { useOpeningBalances } from "@/hooks/useOpeningBalances";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Users, Building2, Phone, Mail, MapPin, Percent, DollarSign, Maximize2, Minimize2 } from "lucide-react";
+import { Users, Building2, Phone, Mail, MapPin, Percent, DollarSign, Maximize2, Minimize2, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AddB2BAgentDialogProps {
@@ -21,14 +22,30 @@ export function AddB2BAgentDialog({ open, onOpenChange, editAgent }: AddB2BAgent
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [commissionType, setCommissionType] = useState(editAgent?.commission_type || "percentage");
   const { addAgent, updateAgent } = useB2BAgents();
+  const { balances, upsertBalance } = useOpeningBalances();
+
+  const existingOpeningBalance = editAgent
+    ? balances.find((b) => b.party_type === "b2b_agent" && b.party_id === editAgent.id)
+    : null;
+  const [openingBalanceAmount, setOpeningBalanceAmount] = useState<string>("");
+  const [openingBalanceType, setOpeningBalanceType] = useState<"receivable" | "payable">("receivable");
 
   useEffect(() => {
     if (editAgent) {
       setCommissionType(editAgent.commission_type || "percentage");
+      if (existingOpeningBalance) {
+        setOpeningBalanceAmount(String(existingOpeningBalance.amount));
+        setOpeningBalanceType(existingOpeningBalance.balance_type);
+      } else {
+        setOpeningBalanceAmount("");
+        setOpeningBalanceType("receivable");
+      }
     } else {
       setCommissionType("percentage");
+      setOpeningBalanceAmount("");
+      setOpeningBalanceType("receivable");
     }
-  }, [editAgent]);
+  }, [editAgent, existingOpeningBalance]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,11 +66,27 @@ export function AddB2BAgentDialog({ open, onOpenChange, editAgent }: AddB2BAgent
     };
 
     try {
+      let targetAgentId = editAgent?.id;
       if (editAgent) {
         await updateAgent.mutateAsync({ id: editAgent.id, agent: agentData });
       } else {
-        await addAgent.mutateAsync(agentData);
+        const newAgent = await addAgent.mutateAsync(agentData);
+        targetAgentId = newAgent.id;
       }
+
+      // Record optional Opening Balance
+      const opBalNum = parseFloat(openingBalanceAmount);
+      if (targetAgentId && !isNaN(opBalNum) && opBalNum > 0) {
+        await upsertBalance.mutateAsync({
+          party_type: "b2b_agent",
+          party_id: targetAgentId,
+          balance_type: openingBalanceType,
+          amount: opBalNum,
+          as_of_date: new Date().toISOString().split("T")[0],
+          notes: "Initial brought-forward opening balance",
+        });
+      }
+
       setLoading(false);
       onOpenChange(false);
     } catch (error) {
@@ -258,6 +291,50 @@ export function AddB2BAgentDialog({ open, onOpenChange, editAgent }: AddB2BAgent
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="blocked">Blocked</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Opening Balance (Brought Forward) */}
+            <Card className="form-card form-card-amber">
+              <CardHeader className="pb-4 pt-5">
+                <div className="form-section-header">
+                  <div className="form-section-icon form-section-icon-amber">
+                    <Scale className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="form-section-title text-amber-700 dark:text-amber-400">Opening Balance (Optional)</h3>
+                    <p className="form-section-description">Record existing balance brought forward (does not impact sales or P&L)</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6">
+                <div className="space-y-2">
+                  <Label htmlFor="opening_balance_amount" className="text-sm font-medium">Opening Balance Amount (PKR)</Label>
+                  <Input
+                    id="opening_balance_amount"
+                    type="number"
+                    step="0.01"
+                    value={openingBalanceAmount}
+                    onChange={(e) => setOpeningBalanceAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="enterprise-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Balance Type</Label>
+                  <Select
+                    value={openingBalanceType}
+                    onValueChange={(val: any) => setOpeningBalanceType(val)}
+                  >
+                    <SelectTrigger className="enterprise-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="receivable">Receivable (Agent owes Agency)</SelectItem>
+                      <SelectItem value="payable">Advance / Credit (Agency owes Agent)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
