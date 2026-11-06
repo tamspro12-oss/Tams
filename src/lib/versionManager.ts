@@ -1,10 +1,17 @@
 // Version control and update management
-const CURRENT_VERSION = '3.3.0';
+const CURRENT_VERSION = '3.3.1';
 const VERSION_KEY = 'travelpro_app_version';
 const CHANGELOG_KEY = 'travelpro_changelog';
 const LAST_CHECK_KEY = 'travelpro_last_version_check';
 
 export const VERSION_CHANGELOG = {
+  '3.3.1': [
+    'Sidebar-proof Umrah Calculator redesign using container queries',
+    'Fintech-style unified layout with soft tints and tabular figures',
+    'Shared hotel grid aligning Makkah & Madinah columns with header',
+    'Equal 5-card layout for tickets, visas, transport, ziyarat & food',
+    'Streamlined summary strip with prominent Final Total'
+  ],
   '3.3.0': [
     'Redesigned Queries & Quotes Hub with primary Quotations tab and segmented pill switcher',
     'Full-page keyboard-first New Quotation & Query creation forms with shortcuts (Tab, Ctrl+Enter, Esc)',

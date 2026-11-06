@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.3.0'; // Update this with each deployment
+const CURRENT_VERSION = '3.3.1'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,13 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.3.1': [
+          'Sidebar-proof Umrah Calculator redesign using container queries',
+          'Fintech-style unified layout with soft tints and tabular figures',
+          'Shared hotel grid aligning Makkah & Madinah columns with header',
+          'Equal 5-card layout for tickets, visas, transport, ziyarat & food',
+          'Streamlined summary strip with prominent Final Total',
+        ],
         '3.3.0': [
           'Redesigned Queries & Quotes Hub with primary Quotations tab and segmented pill switcher',
           'Full-page keyboard-first New Quotation & Query creation forms with shortcuts',
