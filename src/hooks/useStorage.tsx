@@ -581,6 +581,9 @@ export function useQueries() {
     queryFn: async () => {
       return await cloudStorage.getQueries();
     },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Setup realtime listener

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, ArrowLeft, UserPlus, Check, Crown, Zap, Star, Mail } from "lucide-react";
+import { Plane, ArrowLeft, UserPlus, Check, Crown, Zap, Star, Mail, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +53,7 @@ export default function SignupPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("free");
+  const [showPassword, setShowPassword] = useState(false);
   const [showVerifyMessage, setShowVerifyMessage] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
 
@@ -76,23 +77,59 @@ export default function SignupPage() {
 
     const { fullName, agencyName, email, password } = result.data;
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, agency_name: agencyName, subscription_plan: selectedPlan },
-        emailRedirectTo: window.location.origin + "/login",
-      },
-    });
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, agency_name: agencyName, subscription_plan: selectedPlan },
+          emailRedirectTo: window.location.origin + "/login",
+        },
+      });
 
-    if (error) {
-      toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
-    } else {
+      if (signUpError) {
+        toast({ title: "Sign up failed", description: signUpError.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      // Check if session is already granted (Supabase email confirmations disabled or instant trial)
+      if (signUpData?.session) {
+        toast({
+          title: "Account Created!",
+          description: "Welcome to TAMS Pro! Redirecting to your dashboard...",
+        });
+        navigate("/app/dashboard", { replace: true });
+        return;
+      }
+
+      // Try automatic immediate sign-in
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!signInError && signInData?.session) {
+        toast({
+          title: "Welcome to TAMS Pro!",
+          description: "Your account is ready. Redirecting to dashboard...",
+        });
+        navigate("/app/dashboard", { replace: true });
+        return;
+      }
+
+      // If email confirmation is required by Supabase backend:
       setVerifyEmail(email);
       setShowVerifyMessage(true);
+    } catch (err: any) {
+      toast({
+        title: "Registration error",
+        description: err?.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   // Email verification success screen
@@ -233,7 +270,26 @@ export default function SignupPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="signup-password" className="text-xs font-semibold">Password</Label>
-                <Input id="signup-password" name="password" type="password" placeholder="Min. 6 characters" className="h-10" required autoComplete="new-password" />
+                <div className="relative">
+                  <Input
+                    id="signup-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min. 6 characters"
+                    className="h-10 pr-10"
+                    required
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <Button type="submit" className="w-full h-11 font-semibold" disabled={loading}>

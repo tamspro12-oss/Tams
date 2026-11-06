@@ -9,7 +9,9 @@ import { useClients, useVendors } from "@/hooks/useStorage";
 import { useClientPaymentHistoryLocal, useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useAgency } from "@/hooks/useAgency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, User, Plus, Store, Search, Filter, Pencil, Maximize2, Minimize2, Plane, Hotel, Bus, ArrowLeftRight, AlertCircle, Trash2, Clock, Route } from "lucide-react";
+import { Users, User, Plus, Store, Search, Filter, Pencil, Maximize2, Minimize2, Plane, Hotel, Bus, ArrowLeftRight, AlertCircle, Trash2, Clock, Route, FileText } from "lucide-react";
+import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
+import { useVouchers } from "@/hooks/useVouchers";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -40,6 +42,8 @@ interface AddClientDialogProps {
 export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDialogProps) {
   const [loading, setLoading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const { addVoucher } = useVouchers();
   const [groupBookingType, setGroupBookingType] = useState(editClient?.group_booking_type || "individual");
   const [groupSize, setGroupSize] = useState(editClient?.group_size || 1);
   const [showQuickVendorAdd, setShowQuickVendorAdd] = useState(false);
@@ -557,7 +561,7 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
       <DialogContent className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-screen !rounded-none border-0" 
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
           : "w-[95vw] max-w-4xl max-h-[85vh]"
       )}>
         <DialogHeader className="pb-3 border-b shrink-0">
@@ -571,16 +575,31 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
                 <DialogDescription className="text-muted-foreground/80">Fill client and booking details. For group bookings, enter details for each passenger.</DialogDescription>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsFullScreen(!isFullScreen)}
-              className="h-8 w-8 shrink-0"
-              title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
-            >
-              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              {editClient && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVoucherModal(true)}
+                  className="h-8 text-xs gap-1.5 font-medium border-primary/40 text-primary hover:bg-primary/5"
+                  title="Generate Voucher for this booking"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Create Voucher
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="h-8 w-8 shrink-0"
+                title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
+              >
+                {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
         </DialogHeader>
         
@@ -1615,6 +1634,17 @@ export function AddClientDialog({ open, onOpenChange, editClient }: AddClientDia
             </Button>
           </div>
         </form>
+
+        {showVoucherModal && (
+          <CreateVoucherDialog
+            open={showVoucherModal}
+            onOpenChange={setShowVoucherModal}
+            initialBookingData={editClient}
+            onSave={async (v) => {
+              await addVoucher.mutateAsync({ ...v, booking_id: editClient?.id });
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

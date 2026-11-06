@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Trash2, Pencil, DollarSign, CheckSquare, Square, ChevronDown, ChevronUp, History, Users, RefreshCw, AlertTriangle, Plane as PlaneIcon, Calendar as CalendarIcon, X } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, DollarSign, CheckSquare, Square, ChevronDown, ChevronUp, History, Users, RefreshCw, AlertTriangle, Plane as PlaneIcon, Calendar as CalendarIcon, X, SlidersHorizontal, Check } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { AddClientDialog } from "@/components/AddClientDialog";
@@ -18,7 +19,7 @@ import { ExportBookingMenu } from "@/components/ExportBookingMenu";
 import { MobileClientCard } from "@/components/MobileClientCard";
 import { useToast } from "@/hooks/use-toast";
 import { useClients } from "@/hooks/useStorage";
-import { isWithinInterval, parseISO, startOfMonth, endOfMonth, addMonths, format, isToday, isTomorrow, addDays } from "date-fns";
+import { isWithinInterval, parseISO, startOfMonth, endOfMonth, addMonths, format, isToday, isTomorrow, addDays, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DateFilterSelector } from "@/components/DateFilterSelector";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -69,10 +70,27 @@ export default function Clients() {
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
-  const [mobileFilter, setMobileFilter] = useState("all");
-  const [mobileDatePreset, setMobileDatePreset] = useState<"all_time" | "current_month" | "last_month" | "last_3_months" | "year_to_date" | "custom">("all_time");
+
+  // Mobile Filters & Bottom Sheet States
+  const [mobileStatus, setMobileStatus] = useState<"all" | "pending" | "paid" | "partial">("all");
+  const [mobileType, setMobileType] = useState<"all" | "ticket" | "umrah">("all");
+  const [mobileDatePreset, setMobileDatePreset] = useState<"all_time" | "today" | "this_week" | "current_month" | "last_month" | "custom">("all_time");
   const [mobileDateRange, setMobileDateRange] = useState<DateRange | undefined>();
-  const [showMobileDateDialog, setShowMobileDateDialog] = useState(false);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+
+  // Draft filters for bottom sheet
+  const [draftStatus, setDraftStatus] = useState<"all" | "pending" | "paid" | "partial">("all");
+  const [draftType, setDraftType] = useState<"all" | "ticket" | "umrah">("all");
+  const [draftDatePreset, setDraftDatePreset] = useState<"all_time" | "today" | "this_week" | "current_month" | "last_month" | "custom">("all_time");
+  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>();
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (mobileStatus !== "all") count++;
+    if (mobileType !== "all") count++;
+    if (mobileDatePreset !== "all_time") count++;
+    return count;
+  }, [mobileStatus, mobileType, mobileDatePreset]);
   const { toast } = useToast();
   const { clients, isLoading, deleteClient } = useClients();
   const { vendors } = useVendors();
@@ -139,13 +157,22 @@ export default function Clients() {
       });
     }
 
-    // Apply mobile filter chips
-    if (isMobile && mobileFilter !== "all") {
+    // Apply mobile status filter
+    if (isMobile && mobileStatus !== "all") {
       filtered = filtered.filter((c: any) => {
-        switch (mobileFilter) {
+        switch (mobileStatus) {
           case "pending": return c.payment_status === "pending" || !c.payment_status;
           case "paid": return c.payment_status === "paid";
           case "partial": return c.payment_status === "partial";
+          default: return true;
+        }
+      });
+    }
+
+    // Apply mobile travel type filter
+    if (isMobile && mobileType !== "all") {
+      filtered = filtered.filter((c: any) => {
+        switch (mobileType) {
           case "ticket": return c.travel_type?.toLowerCase().includes("ticket");
           case "umrah": return c.travel_type?.toLowerCase().includes("umrah");
           default: return true;
@@ -158,22 +185,22 @@ export default function Clients() {
       const now = new Date();
       let mStart: Date | null = null;
       let mEnd: Date | null = null;
-      if (mobileDatePreset === "current_month") {
+      if (mobileDatePreset === "today") {
+        mStart = startOfDay(now);
+        mEnd = endOfDay(now);
+      } else if (mobileDatePreset === "this_week") {
+        mStart = startOfWeek(now, { weekStartsOn: 1 });
+        mEnd = endOfWeek(now, { weekStartsOn: 1 });
+      } else if (mobileDatePreset === "current_month") {
         mStart = startOfMonth(now);
         mEnd = endOfMonth(now);
       } else if (mobileDatePreset === "last_month") {
         const lm = addMonths(now, -1);
         mStart = startOfMonth(lm);
         mEnd = endOfMonth(lm);
-      } else if (mobileDatePreset === "last_3_months") {
-        mStart = startOfMonth(addMonths(now, -2));
-        mEnd = endOfMonth(now);
-      } else if (mobileDatePreset === "year_to_date") {
-        mStart = new Date(now.getFullYear(), 0, 1);
-        mEnd = endOfMonth(now);
       } else if (mobileDatePreset === "custom" && mobileDateRange?.from) {
-        mStart = mobileDateRange.from;
-        mEnd = mobileDateRange.to || mobileDateRange.from;
+        mStart = startOfDay(mobileDateRange.from);
+        mEnd = endOfDay(mobileDateRange.to || mobileDateRange.from);
       }
       if (mStart && mEnd) {
         filtered = filtered.filter((c: any) => {
@@ -189,7 +216,7 @@ export default function Clients() {
       const dateB = b.flight_date || b.created_at;
       return new Date(dateB).getTime() - new Date(dateA).getTime();
     });
-  }, [clients, searchQuery, filter, isMobile, mobileFilter, mobileDatePreset, mobileDateRange]);
+  }, [clients, searchQuery, filter, isMobile, mobileStatus, mobileType, mobileDatePreset, mobileDateRange]);
 
   // Mobile alert stats
   const pendingPaymentsCount = useMemo(() => {
@@ -468,165 +495,291 @@ export default function Clients() {
 
       {/* ======================== MOBILE VIEW ======================== */}
       {isMobile ? (
-        <div className="space-y-3">
-          {/* Mobile Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-accent/10 rounded-xl flex items-center justify-center">
-                <Users className="w-4.5 h-4.5 text-accent" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">Bookings</h1>
-                <p className="text-[11px] text-muted-foreground">{filteredClients.length} records</p>
-              </div>
+        <div className="space-y-3 px-1 sm:px-2">
+          {/* 1. Compact Header */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-foreground">Bookings</h1>
+              <span className="text-xs font-medium text-muted-foreground">
+                {filteredClients.length} {filteredClients.length === 1 ? "record" : "records"}
+              </span>
             </div>
-          </div>
-
-          {/* Alert Notifications */}
-          {(pendingPaymentsCount > 0 || tomorrowFlightsCount > 0) && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {pendingPaymentsCount > 0 && (
-                <div className="flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-lg px-2.5 py-1.5 text-xs font-medium flex-shrink-0 border border-destructive/20">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  {pendingPaymentsCount} pending payments
-                </div>
-              )}
-              {tomorrowFlightsCount > 0 && (
-                <div className="flex items-center gap-1.5 bg-accent/10 text-accent rounded-lg px-2.5 py-1.5 text-xs font-medium flex-shrink-0 border border-accent/20">
-                  <PlaneIcon className="h-3.5 w-3.5" />
-                  {tomorrowFlightsCount} flights tomorrow
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Mobile Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search name, passport, PNR, vendor..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10"
-            />
-          </div>
-
-          {/* Filter Chips */}
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-            {filterChips.map(chip => (
-              <button
-                key={chip.key}
-                onClick={() => setMobileFilter(chip.key)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 transition-all duration-200 border",
-                  "min-h-[32px] touch-manipulation",
-                  mobileFilter === chip.key
-                    ? "bg-accent text-accent-foreground border-accent shadow-sm"
-                    : "bg-card text-muted-foreground border-border/60 hover:border-accent/40"
-                )}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Advanced Date Filter */}
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs flex-1 justify-between h-9">
-                  <div className="flex items-center gap-1.5">
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    <span>
-                      {mobileDatePreset === "all_time" ? "All Time" :
-                       mobileDatePreset === "current_month" ? "This Month" :
-                       mobileDatePreset === "last_month" ? "Last Month" :
-                       mobileDatePreset === "last_3_months" ? "Last 3 Months" :
-                       mobileDatePreset === "year_to_date" ? "Year to Date" :
-                       mobileDateRange?.from ? `${format(mobileDateRange.from, "MMM dd")}${mobileDateRange.to ? ` - ${format(mobileDateRange.to, "MMM dd")}` : ""}` : "Custom Range"}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem onClick={() => { setMobileDatePreset("current_month"); }}>This Month</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setMobileDatePreset("last_month"); }}>Last Month</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setMobileDatePreset("last_3_months"); }}>Last 3 Months</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setMobileDatePreset("year_to_date"); }}>Year to Date</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { setMobileDatePreset("all_time"); setMobileDateRange(undefined); }}>All Time</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { setShowMobileDateDialog(true); }}>Custom Range...</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {mobileDatePreset !== "all_time" && (
-              <button
-                onClick={() => { setMobileDatePreset("all_time"); setMobileDateRange(undefined); }}
-                className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors touch-manipulation"
-              >
-                <X className="h-4 w-4" />
-              </button>
+            {pendingPaymentsCount > 0 && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-destructive/10 text-destructive border border-destructive/20 shrink-0">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>{pendingPaymentsCount} pending</span>
+              </div>
             )}
           </div>
 
-          {/* Custom Date Range Dialog */}
-          <Dialog open={showMobileDateDialog} onOpenChange={setShowMobileDateDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Select Custom Date Range</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <Calendar
-                  mode="range"
-                  selected={mobileDateRange}
-                  onSelect={setMobileDateRange}
-                  numberOfMonths={1}
-                  className="pointer-events-auto"
-                />
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-muted-foreground">
-                    {mobileDateRange?.from && (
-                      <>
-                        {format(mobileDateRange.from, "MMM dd, yyyy")}
-                        {mobileDateRange.to && ` - ${format(mobileDateRange.to, "MMM dd, yyyy")}`}
-                      </>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setShowMobileDateDialog(false)}>Cancel</Button>
-                    <Button size="sm" onClick={() => { setMobileDatePreset("custom"); setShowMobileDateDialog(false); }} disabled={!mobileDateRange?.from}>Apply</Button>
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {/* Tomorrow flight alert (compact pill) */}
+          {tomorrowFlightsCount > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-accent/10 text-accent border border-accent/20 w-fit">
+              <PlaneIcon className="h-3.5 w-3.5" />
+              <span>{tomorrowFlightsCount} flight{tomorrowFlightsCount > 1 ? "s" : ""} tomorrow</span>
+            </div>
+          )}
 
-          {/* Mobile Stats Row */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-card rounded-xl p-2.5 border border-border/40 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Revenue</p>
-              <p className="text-sm font-bold text-foreground mt-0.5">{totalRevenue.toLocaleString()}</p>
+          {/* 2. Search + Single Filter Trigger */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name, passport, PNR, vendor..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-10 bg-card/60 border-border/60 rounded-xl text-sm placeholder:text-muted-foreground/70"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <div className="bg-card rounded-xl p-2.5 border border-border/40 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Profit</p>
-              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{totalProfit.toLocaleString()}</p>
+            <Button
+              variant={activeFilterCount > 0 ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setDraftStatus(mobileStatus);
+                setDraftType(mobileType);
+                setDraftDatePreset(mobileDatePreset);
+                setDraftDateRange(mobileDateRange);
+                setIsFilterSheetOpen(true);
+              }}
+              className={cn(
+                "h-10 px-3.5 rounded-xl gap-1.5 shrink-0 font-medium text-xs border transition-all",
+                activeFilterCount > 0
+                  ? "bg-accent text-accent-foreground border-accent shadow-sm"
+                  : "bg-card text-muted-foreground border-border/60 hover:text-foreground"
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-accent-foreground text-accent text-[10px] font-bold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </div>
+
+          {/* 4. Active Filter Chips (Removable) */}
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide text-xs">
+              {mobileStatus !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 font-medium shrink-0">
+                  Status: {mobileStatus}
+                  <button onClick={() => setMobileStatus("all")} className="hover:opacity-75">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {mobileType !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 font-medium shrink-0">
+                  Type: {mobileType}
+                  <button onClick={() => setMobileType("all")} className="hover:opacity-75">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {mobileDatePreset !== "all_time" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 font-medium shrink-0">
+                  {mobileDatePreset === "today" ? "Today" :
+                   mobileDatePreset === "this_week" ? "This Week" :
+                   mobileDatePreset === "current_month" ? "This Month" :
+                   mobileDatePreset === "last_month" ? "Last Month" :
+                   mobileDateRange?.from ? `${format(mobileDateRange.from, "MMM d")}${mobileDateRange.to ? ` - ${format(mobileDateRange.to, "MMM d")}` : ""}` : "Custom"}
+                  <button onClick={() => { setMobileDatePreset("all_time"); setMobileDateRange(undefined); }} className="hover:opacity-75">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setMobileStatus("all");
+                  setMobileType("all");
+                  setMobileDatePreset("all_time");
+                  setMobileDateRange(undefined);
+                }}
+                className="text-[11px] text-muted-foreground hover:text-destructive underline px-1 shrink-0"
+              >
+                Clear all
+              </button>
             </div>
-            <div className="bg-card rounded-xl p-2.5 border border-border/40 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pending</p>
-              <p className="text-sm font-bold text-destructive mt-0.5">{totalPending.toLocaleString()}</p>
+          )}
+
+          {/* 5. Compact Summary Row */}
+          <div className="grid grid-cols-3 gap-2 bg-card rounded-xl p-2.5 border border-border/50 shadow-soft-sm">
+            <div className="text-center px-1">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Revenue</p>
+              <p className="text-xs sm:text-sm font-bold text-foreground truncate mt-0.5">
+                Rs {totalRevenue.toLocaleString()}
+              </p>
+            </div>
+            <div className="text-center px-1 border-x border-border/40">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Profit</p>
+              <p className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
+                Rs {totalProfit.toLocaleString()}
+              </p>
+            </div>
+            <div className="text-center px-1">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Pending</p>
+              <p className="text-xs sm:text-sm font-bold text-destructive truncate mt-0.5">
+                Rs {totalPending.toLocaleString()}
+              </p>
             </div>
           </div>
+
+          {/* 3. Filters Bottom Sheet */}
+          <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
+            <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto px-5 pb-6 pt-4">
+              <SheetHeader className="pb-3 border-b border-border/50 text-left">
+                <SheetTitle className="text-base font-bold">Filter Bookings</SheetTitle>
+              </SheetHeader>
+
+              <div className="space-y-5 py-4">
+                {/* Status Chips */}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                    Payment Status
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: "all", label: "All Statuses" },
+                      { key: "pending", label: "Pending" },
+                      { key: "paid", label: "Paid" },
+                      { key: "partial", label: "Partial" },
+                    ].map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setDraftStatus(s.key as any)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors touch-manipulation",
+                          draftStatus === s.key
+                            ? "bg-accent text-accent-foreground border-accent font-semibold shadow-sm"
+                            : "bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted"
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Booking Type Chips */}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                    Booking Type
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: "all", label: "All Types" },
+                      { key: "ticket", label: "Ticket" },
+                      { key: "umrah", label: "Umrah" },
+                    ].map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setDraftType(t.key as any)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors touch-manipulation",
+                          draftType === t.key
+                            ? "bg-accent text-accent-foreground border-accent font-semibold shadow-sm"
+                            : "bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted"
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date Chips */}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                    Date Range
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: "all_time", label: "All Time" },
+                      { key: "today", label: "Today" },
+                      { key: "this_week", label: "This Week" },
+                      { key: "current_month", label: "This Month" },
+                      { key: "last_month", label: "Last Month" },
+                      { key: "custom", label: "Custom Range" },
+                    ].map((d) => (
+                      <button
+                        key={d.key}
+                        type="button"
+                        onClick={() => setDraftDatePreset(d.key as any)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors touch-manipulation",
+                          draftDatePreset === d.key
+                            ? "bg-accent text-accent-foreground border-accent font-semibold shadow-sm"
+                            : "bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted"
+                        )}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {draftDatePreset === "custom" && (
+                    <div className="mt-3 p-3 bg-muted/30 rounded-xl border border-border/50">
+                      <Calendar
+                        mode="range"
+                        selected={draftDateRange}
+                        onSelect={setDraftDateRange}
+                        numberOfMonths={1}
+                        className="pointer-events-auto mx-auto"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <SheetFooter className="flex flex-row gap-2 pt-2 border-t border-border/50">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDraftStatus("all");
+                    setDraftType("all");
+                    setDraftDatePreset("all_time");
+                    setDraftDateRange(undefined);
+                  }}
+                  className="flex-1 rounded-xl h-10 text-xs font-medium"
+                >
+                  Reset
+                </Button>
+                <Button
+                  onClick={() => {
+                    setMobileStatus(draftStatus);
+                    setMobileType(draftType);
+                    setMobileDatePreset(draftDatePreset);
+                    setMobileDateRange(draftDateRange);
+                    setIsFilterSheetOpen(false);
+                  }}
+                  className="flex-1 rounded-xl h-10 text-xs font-semibold bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  Apply Filters
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
 
           {/* Mobile Card List */}
           {isLoading ? (
             <div className="text-center py-12 text-sm text-muted-foreground">Loading bookings...</div>
           ) : filteredClients.length === 0 ? (
              <div className="text-center py-12 text-muted-foreground text-sm">
-              {searchQuery || mobileFilter !== "all" || mobileDatePreset !== "all_time" ? "No bookings match your filters" : "No bookings yet"}
+              {searchQuery || activeFilterCount > 0 ? "No bookings match your filters" : "No bookings yet"}
             </div>
           ) : (
-            <div className="space-y-2.5 pb-20">
+            <div className="space-y-2.5 pb-24">
               {filteredClients.map((client: any) => (
                 <MobileClientCard
                   key={client.id}
@@ -640,11 +793,12 @@ export default function Clients() {
             </div>
           )}
 
-          {/* Floating Action Button */}
+          {/* 6. Floating Action Button anchored cleanly above bottom nav */}
           <PermissionGate module="clients" action="write">
             <button
               onClick={handleAddNew}
-              className="fixed bottom-20 right-4 z-40 w-14 h-14 bg-accent text-accent-foreground rounded-2xl shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-transform touch-manipulation"
+              className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+72px)] right-4 z-40 w-14 h-14 bg-accent text-accent-foreground rounded-2xl shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-transform touch-manipulation"
+              aria-label="Add Booking"
             >
               <Plus className="w-6 h-6" />
             </button>

@@ -18,7 +18,10 @@ import {
   CreditCard,
   AlertTriangle,
   Lightbulb,
-  ArrowLeft
+  ArrowLeft,
+  Ticket,
+  Bell,
+  Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -199,12 +202,24 @@ const sections: Section[] = [
         </div>
 
         <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Agent Dashboard Overview</h4>
-          <p className="text-sm text-muted-foreground">Click "View" button on any agent card to access their dashboard with 4 tabs:</p>
+          <h4 className="font-semibold text-base">B. Unified Agent & Booking Search</h4>
+          <p className="text-sm text-muted-foreground">The search bar on the B2B Agents page searches both agents AND their individual bookings simultaneously:</p>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li>Search by <strong>Agent Name, Business Name, or City</strong> to locate agent records.</li>
+            <li>Search by <strong>Passenger Name, Passport Number, PNR, or Voucher Code</strong> to instantly locate specific B2B bookings.</li>
+            <li>Use the category chips (<strong>All, Agents, Bookings</strong>) to quickly focus your search results.</li>
+            <li>Tap any booking card in the results to view or edit full booking and passenger details.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">C. Agent Dashboard Overview</h4>
+          <p className="text-sm text-muted-foreground">Click "View" button on any agent card to access their dashboard with 5 tabs:</p>
           <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
             <li><strong>Summary:</strong> Financial overview with debit, credit, balance, and profit stats</li>
             <li><strong>Bookings:</strong> All bookings for this agent with payment tracking</li>
             <li><strong>Ledger:</strong> Complete account statement with running balance</li>
+            <li><strong>Vouchers:</strong> Generate branded vouchers and configure agent voucher permissions</li>
             <li><strong>Reports:</strong> Export sales, commission, and ledger reports</li>
           </ul>
         </div>
@@ -478,39 +493,115 @@ const sections: Section[] = [
     )
   },
   {
+    id: "vouchers-module",
+    title: "Vouchers & Itineraries",
+    icon: Ticket,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">Generate, print, and share branded service vouchers for Umrah packages, hotel reservations, and airline tickets.</p>
+        
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">A. Supported Voucher Types</h4>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>Umrah Package Voucher (UV-xxxx):</strong> Full package details including dual hotels (Makkah & Madinah), check-in/out dates, nights, room configuration, meal plan, transport/transfer arrangements, ziyarat services, and visa status.</li>
+            <li><strong>Hotel Accommodation Voucher (HV-xxxx):</strong> Hotel name, destination city, check-in, check-out, room category, meal plan, and supplier confirmation code.</li>
+            <li><strong>Flight / Ticket Voucher (TV-xxxx):</strong> Airline, flight number, sector route, departure & arrival timings, cabin class, PNR, e-ticket number, and baggage allowance.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">B. Generating a Voucher</h4>
+          <StepList steps={[
+            "Go to Vouchers from the sidebar menu, or click 'Create Voucher' directly from any open client booking",
+            "Choose your voucher type: Umrah Package, Hotel Only, or Flight / Ticket",
+            "Select an existing booking from the 'Auto-fill from Booking' dropdown to populate passenger details, passport, airline, and dates instantly",
+            "Add additional traveling passengers (adults, children, infants) as needed",
+            "Verify hotel confirmation numbers, meal plans, or transport notes",
+            "Click 'Issue Voucher' to generate a unique sequential voucher number"
+          ]} />
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">C. Sharing & Exporting Vouchers</h4>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>Download PDF:</strong> Generates a high-resolution, agency-branded PDF complete with your logo, contact numbers, detailed itinerary, terms, and signature block.</li>
+            <li><strong>WhatsApp Share:</strong> Pre-formats a formatted summary with dates, hotel names, confirmation numbers, and emergency contact details ready to send with 1 click.</li>
+            <li><strong>Print Voucher:</strong> Opens your browser's native print preview dialog for physical copy generation.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">D. B2B Agent Voucher Permissions</h4>
+          <p className="text-sm text-muted-foreground">Admins can control which B2B agents are permitted to issue branded vouchers directly by opening the agent's profile and toggling the <strong>'Agent Voucher Privileges'</strong> switch.</p>
+        </div>
+
+        <TipBox>Vouchers auto-calculate hotel nights based on check-in and check-out dates, eliminating manual calculation errors.</TipBox>
+      </div>
+    )
+  },
+  {
+    id: "reminders-module",
+    title: "Smart Reminders & Operational Alerts",
+    icon: Bell,
+    content: (
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">Never miss a passenger departure, Umrah group flight, or end-of-day ledger reconciliation with automated operational reminders.</p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">A. Automated Departure Alerts (Today & Tomorrow)</h4>
+          <p className="text-sm text-muted-foreground">TAMS automatically scans all active bookings and alerts you to:</p>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>Flights Departing Today:</strong> Highlighted in red with passenger name, PNR, and airline.</li>
+            <li><strong>Flights Departing Tomorrow:</strong> Highlighted in amber to give you advance notice to issue tickets, verify visas, or re-confirm timings.</li>
+            <li><strong>Umrah Departures:</strong> Group departures flagged with Umrah icons and direct 1-tap links to open the booking.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">B. Daily Operational Prompts</h4>
+          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+            <li><strong>Morning Review (09:00):</strong> Prompts the agency team to check today's scheduled departures, passenger queries, and pending tasks.</li>
+            <li><strong>Evening Closing (20:00):</strong> Prompts you to record daily expenses and balance cash/bank ledger before closing for the night.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">C. Header Notification Bell</h4>
+          <p className="text-sm text-muted-foreground">A live notification bell sits in the top header on both desktop and mobile:</p>
+          <StepList steps={[
+            "The red counter badge reflects your total active departures and due reminders",
+            "Clicking the bell opens a compact 3-tab drawer: Departures, Daily Tasks, and Reminders",
+            "Mark tasks completed with 1 click, or click 'Manage' to visit the full Reminders dashboard"
+          ]} />
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">D. Custom Reminders & Settings</h4>
+          <p className="text-sm text-muted-foreground">Create custom reminders with specific dates, times, notes, and daily recurring options. Use Reminder Settings to configure morning/evening prompt hours or toggle alert categories.</p>
+        </div>
+      </div>
+    )
+  },
+  {
     id: "smart-calculators",
-    title: "Smart Calculators",
+    title: "Umrah Package Calculator",
     icon: Calculator,
     content: (
       <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Specialized calculators for travel agency calculations.</p>
+        <p className="text-sm text-muted-foreground">Professional per-person cost calculator with live currency conversion and automatic passenger multiplication.</p>
         
         <div className="space-y-4">
-          <h4 className="font-semibold text-base">Ticket Payable Calculator</h4>
-          <p className="text-sm text-muted-foreground">Calculate net payable amounts including vendor shares.</p>
+          <h4 className="font-semibold text-base">Umrah Package Calculator Features</h4>
           <StepList steps={[
-            "Enter Basic Fare",
-            "Enter Tax Amount",
-            "Select Vendor Share Type: Fixed or Percentage",
-            "Enter Vendor Share value",
-            "View calculated Net Payable and Total Fare"
+            "Select a Quick Preset (e.g. 15-day Economy, 21-day Premium) or enter custom costs",
+            "Set the SAR to PKR exchange rate (e.g. 1 SAR = 74.50 PKR) to convert hotel and ground service costs instantly",
+            "Enter flight cost per person, Makkah hotel, Madinah hotel, transport, and visa fees",
+            "Enter passenger count: all costs automatically multiply across the entire family/group",
+            "View net package cost, profit margin, and grand total per person and for the whole group"
           ]} />
         </div>
 
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Umrah Calculator</h4>
-          <p className="text-sm text-muted-foreground">Calculate complete Umrah package costs.</p>
-          <StepList steps={[
-            "Enter Flight Cost per person",
-            "Enter Hotel Cost per night",
-            "Enter number of nights",
-            "Enter Transport and Visa costs",
-            "Enter number of passengers",
-            "View total package cost and per-person cost"
-          ]} />
-        </div>
-
-        <TipBox>Use fullscreen mode for easier calculations on mobile devices.</TipBox>
+        <TipBox>Save your frequently used package setups as Quick Presets to quote Umrah packages to prospective clients in under 30 seconds.</TipBox>
       </div>
     )
   },
@@ -520,7 +611,17 @@ const sections: Section[] = [
     icon: Shield,
     content: (
       <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">TAMS implements robust security to protect your business data.</p>
+        <p className="text-sm text-muted-foreground">TAMS implements robust enterprise-grade security to protect your agency records and user accounts.</p>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">A. Instant Trial Signup</h4>
+          <p className="text-sm text-muted-foreground">Creating a new account takes seconds. Upon submitting your name, agency name, email, and password, you are immediately logged in and taken directly to your active dashboard with a 14-day free trial without frustrating email confirmation blocks.</p>
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="font-semibold text-base">B. Password Visibility Toggle</h4>
+          <p className="text-sm text-muted-foreground">An interactive eye icon toggle is available across all password input fields (Sign In, Create Account, Reset Password, and Change Password) allowing you to verify what you typed and prevent accidental lockouts.</p>
+        </div>
         
         <div className="space-y-4">
           <h4 className="font-semibold text-base">Login System</h4>

@@ -13,6 +13,7 @@ import { SyncIndicator } from "@/components/SyncIndicator";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PageTransition } from "@/components/PageTransition";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { NotificationBell } from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   Calendar,
@@ -32,6 +33,8 @@ import {
   Scale,
   LogOut,
   FileText,
+  Ticket,
+  Bell,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -102,6 +105,8 @@ function AppSidebar() {
     { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
     { name: "Client Bookings", href: "/app/clients", icon: Calendar },
     { name: "Quotations", href: "/app/quotations", icon: FileText },
+    { name: "Vouchers", href: "/app/vouchers", icon: Ticket },
+    { name: "Reminders", href: "/app/reminders", icon: Bell },
     { name: "B2B Agents", href: "/app/b2b-agents", icon: Users },
     { name: "Vendors", href: "/app/vendors", icon: Plane },
     { name: "Client Queries", href: "/app/queries", icon: MessageSquare },
@@ -245,19 +250,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="safe-area-wrapper flex min-h-screen w-full bg-background">
+      <div className="h-[100dvh] md:min-h-screen flex w-full bg-background overflow-hidden">
         <AppSidebar />
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col overflow-hidden w-full">
+        <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
           {/* Header */}
-          <header className="h-12 md:h-16 border-b border-border/60 bg-background/80 backdrop-blur-xl px-4 md:px-6 lg:px-8 flex items-center justify-between gap-2 sticky top-0 z-40">
+          <header className="border-b border-border/60 bg-background/95 backdrop-blur-xl px-4 md:px-6 lg:px-8 flex items-center justify-between gap-2 z-40 shrink-0 pt-[env(safe-area-inset-top,0px)] h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-16 md:pt-0">
             
             {/* === MOBILE HEADER LAYOUT === */}
             <div className="md:hidden flex-1" />
             
             <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
               <OfflineIndicator />
+              <NotificationBell />
             </div>
 
             {/* === DESKTOP HEADER LAYOUT === */}
@@ -272,6 +278,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <div className="hidden md:flex items-center gap-2.5 flex-shrink-0">
+              <NotificationBell />
               <OfflineIndicator />
               <SyncIndicator />
               <SidebarTrigger className="h-9 w-9 hover:bg-accent/10 active:bg-accent/10 rounded-xl inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation flex-shrink-0 border border-border/40">
@@ -280,9 +287,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           </header>
           
-          {/* Content Area */}
-          <div className="flex-1 overflow-auto">
-            <div className="p-2 sm:p-2 md:p-4 lg:p-6 pb-20 md:pb-4 lg:pb-6 w-full">
+          {/* Content Area - Only this container scrolls */}
+          <div className="flex-1 overflow-y-auto overscroll-y-contain">
+            <div className="p-2 sm:p-2 md:p-4 lg:p-6 pb-24 md:pb-6 w-full">
               {children}
             </div>
           </div>

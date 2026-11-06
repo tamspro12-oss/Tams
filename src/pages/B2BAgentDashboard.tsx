@@ -11,6 +11,10 @@ import { useVendors } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
 import { AddB2BBookingDialog } from "@/components/AddB2BBookingDialog";
 import { AddB2BLedgerDialog } from "@/components/AddB2BLedgerDialog";
+import { Switch } from "@/components/ui/switch";
+import { useVouchers } from "@/hooks/useVouchers";
+import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
+import { downloadVoucherPdf, printVoucherPdf, generateVoucherWhatsAppText } from "@/lib/voucherPdfGenerator";
 import { 
   ArrowLeft,
   Plus,
@@ -34,7 +38,10 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Filter,
-  Send
+  Send,
+  ShieldCheck,
+  Share2,
+  Printer
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
@@ -119,14 +126,17 @@ export default function B2BAgentDashboard() {
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [preselectedBookingId, setPreselectedBookingId] = useState<string | null>(null);
+  const [showAgentVoucherModal, setShowAgentVoucherModal] = useState(false);
   
-  const { agents, isLoading: agentsLoading } = useB2BAgents();
+  const { agents, isLoading: agentsLoading, updateAgent } = useB2BAgents();
   const { bookings, isLoading: bookingsLoading, deleteBooking: deleteBookingMutation } = useB2BBookings(agentId);
   const { ledgerEntries, isLoading: ledgerLoading, deleteLedgerEntry } = useB2BLedger(agentId);
   const { vendors } = useVendors();
   const { data: agency } = useAgency();
+  const { vouchers, addVoucher } = useVouchers();
 
   const agent = agents.find(a => a.id === agentId);
+  const agentVouchers = useMemo(() => vouchers.filter(v => v.agent_id === agentId), [vouchers, agentId]);
 
   // Helper to calculate booking service amount (what agent owes)
   const getBookingServiceAmount = (booking: B2BBooking): number => {
@@ -784,6 +794,10 @@ export default function B2BAgentDashboard() {
             <Receipt className="w-4 h-4 hidden sm:block" />
             Ledger
           </TabsTrigger>
+          <TabsTrigger value="vouchers" className="gap-1.5">
+            <FileText className="w-4 h-4 hidden sm:block" />
+            Vouchers ({agentVouchers.length})
+          </TabsTrigger>
           <TabsTrigger value="reports" className="gap-1.5">
             <FileText className="w-4 h-4 hidden sm:block" />
             Reports
@@ -1426,7 +1440,163 @@ export default function B2BAgentDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* Vouchers Tab */}
+        <TabsContent value="vouchers" className="space-y-4">
+          {/* Voucher Permissions Card */}
+          <Card className="border">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold">Agent Voucher Privileges</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Enable or disable this agent's permission to issue vouchers
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-muted/40 px-3 py-2 rounded-lg border">
+                  <span className="text-xs font-medium">
+                    {agent?.can_create_vouchers ? "Allowed to Issue Vouchers" : "Voucher Issuance Disabled"}
+                  </span>
+                  <Switch
+                    checked={!!agent?.can_create_vouchers}
+                    onCheckedChange={(checked) => {
+                      if (agent) {
+                        updateAgent.mutate({
+                          id: agent.id,
+                          agent: { can_create_vouchers: checked } as any,
+                        });
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {/* Vouchers List Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Agent Vouchers ({agentVouchers.length})
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Branded vouchers generated for {agent?.agent_name || "this agent"}'s bookings
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowAgentVoucherModal(true)}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Issue Voucher
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {agentVouchers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm space-y-2">
+                  <FileText className="w-8 h-8 mx-auto text-muted-foreground/50" />
+                  <p>No vouchers issued for this agent yet.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAgentVoucherModal(true)}
+                    className="text-xs"
+                  >
+                    Issue First Voucher
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {agentVouchers.map((v) => (
+                    <div
+                      key={v.id}
+                      className="p-3.5 rounded-lg border bg-card/60 flex flex-col justify-between space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-primary">{v.voucher_number}</span>
+                            <Badge variant="outline" className="text-[10px]">{v.voucher_type}</Badge>
+                            <Badge
+                              className={`text-[10px] ${
+                                v.status === "Issued"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {v.status}
+                            </Badge>
+                          </div>
+                          <p className="font-semibold text-sm mt-1">{v.passenger_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {v.voucher_type === "Umrah" && (v.makkah_hotel || v.package_name || "Umrah Package")}
+                            {v.voucher_type === "Hotel" && (v.hotel_name || "Hotel Booking")}
+                            {v.voucher_type === "Ticket" && `${v.airline || ""} ${v.sector || ""}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t text-[11px] text-muted-foreground">
+                        <span>{v.created_at ? format(new Date(v.created_at), "dd MMM yyyy") : ""}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const text = generateVoucherWhatsAppText(v, agency?.name || "TAMS Pro");
+                              const phone = (agent?.phone || v.contact_number || "").replace(/[^0-9]/g, "");
+                              const url = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+                              window.open(url, "_blank");
+                            }}
+                            className="h-7 px-2 text-[11px] gap-1 text-green-600"
+                          >
+                            <Share2 className="w-3 h-3" />
+                            WhatsApp
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() =>
+                              downloadVoucherPdf(v, {
+                                agencyName: agency?.name || "Travel Agency",
+                                agencyEmail: agency?.email || "",
+                                agencyPhone: agency?.phone_number || "",
+                              })
+                            }
+                            className="h-7 px-2.5 text-[11px] gap-1"
+                          >
+                            <Download className="w-3 h-3" />
+                            PDF
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Voucher Generation Dialog for Agent */}
+      {showAgentVoucherModal && (
+        <CreateVoucherDialog
+          open={showAgentVoucherModal}
+          onOpenChange={setShowAgentVoucherModal}
+          initialBookingData={{ agent_id: agentId }}
+          onSave={async (voucherData) => {
+            await addVoucher.mutateAsync({ ...voucherData, agent_id: agentId });
+          }}
+        />
+      )}
 
       {/* Custom Date Range Dialog */}
       <Dialog open={showCustomDialog} onOpenChange={setShowCustomDialog}>

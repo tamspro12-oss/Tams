@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, RotateCcw, Calendar as CalendarIcon, Save, Upload, Maximize2, Minimize2, Plus, Trash2, Package, PlusCircle, Ticket, FileDown, FileText } from "lucide-react";
+import { Calculator, RotateCcw, Calendar as CalendarIcon, Save, Upload, Maximize2, Minimize2, Plus, Trash2, Package, PlusCircle, FileDown, FileText } from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
 import { format } from "date-fns";
@@ -28,12 +28,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { TicketPayableCalculator } from "@/components/TicketPayableCalculator";
 import { MobileUmrahCostCards } from "@/components/MobileUmrahCostCards";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-// Calculator mode type
-type CalculatorMode = "umrah" | "ticket";
 
 // Rate mode: "sharing" = per person rate, "room" = room rate divided by occupancy
 type RateMode = "sharing" | "room";
@@ -141,9 +137,6 @@ export default function UmrahCalculator() {
   const isMobile = useIsMobile();
   const { data: agency } = useAgency();
 
-  // Calculator Mode Toggle
-  const [calculatorMode, setCalculatorMode] = useState<CalculatorMode>("umrah");
-  
   // Exchange Rate
   const [sarToPkrRate, setSarToPkrRate] = useState("77.50");
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -725,96 +718,63 @@ export default function UmrahCalculator() {
   return (
     <div className="p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4">
-        {/* Header with Calculator Mode Toggle */}
-        <div className="flex flex-col gap-4 pb-3 border-b border-border">
-          {/* Title Row */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                {calculatorMode === "umrah" ? (
-                  <Calculator className="w-6 h-6 text-primary" />
-                ) : (
-                  <Ticket className="w-6 h-6 text-primary" />
-                )}
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">
-                  {calculatorMode === "umrah" ? "Umrah Package Calculator" : "Ticket Payable Calculator"}
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  {calculatorMode === "umrah" 
-                    ? "All costs per person • Auto-multiplied by passengers" 
-                    : "Calculate vendor share and ticket payable amounts"}
-                </p>
-              </div>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Calculator className="w-6 h-6 text-primary" />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {calculatorMode === "umrah" && hasDraft && (
-                <Button onClick={handleLoadDraft} variant="secondary" size="sm" className="h-8 gap-1.5">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Load Draft</span>
-                </Button>
-              )}
+            <div>
+              <h1 className="text-xl font-bold text-foreground">
+                Umrah Package Calculator
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                All costs per person • Auto-multiplied by passengers
+              </p>
             </div>
           </div>
-          
-          {/* Calculator Mode Toggle Buttons */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setCalculatorMode("umrah")}
-              variant={calculatorMode === "umrah" ? "default" : "outline"}
-              size="sm"
-              className="gap-2 h-9"
-            >
-              <Calculator className="w-4 h-4" />
-              Umrah Package
-            </Button>
-            <Button
-              onClick={() => setCalculatorMode("ticket")}
-              variant={calculatorMode === "ticket" ? "default" : "outline"}
-              size="sm"
-              className="gap-2 h-9"
-            >
-              <Ticket className="w-4 h-4" />
-              Ticket Payable
-            </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {hasDraft && (
+              <Button onClick={handleLoadDraft} variant="secondary" size="sm" className="h-8 gap-1.5">
+                <Upload className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Load Draft</span>
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Conditional Content Based on Mode */}
-        {calculatorMode === "ticket" ? (
-          <TicketPayableCalculator />
-        ) : (
-          <>
-            {/* Preset Selector - UMRAH CALCULATOR ONLY */}
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-accent/30 border border-accent/50">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-accent-foreground" />
-                <span className="text-sm font-medium">Quick Preset:</span>
-              </div>
-          <Select value={selectedPreset} onValueChange={applyPreset}>
-            <SelectTrigger className="h-8 w-[180px] text-xs">
-              <SelectValue placeholder="Select package..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None (Manual Entry)</SelectItem>
-              {allPresets.map(preset => (
-                <SelectItem key={preset.id} value={preset.id}>
-                  {preset.name}
-                  {preset.id.startsWith('custom_') && ' ⭐'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button 
-            onClick={() => setShowAddPresetDialog(true)} 
-            variant="outline" 
-            size="sm" 
-            className="h-8 gap-1.5 text-xs"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Add Preset</span>
-          </Button>
+        {/* Preset Selector */}
+        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-lg bg-accent/30 border border-accent/50">
+          <div className="flex items-center gap-2 shrink-0">
+            <Package className="w-4 h-4 text-accent-foreground" />
+            <span className="text-sm font-medium">Quick Preset:</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-[200px]">
+            <Select value={selectedPreset} onValueChange={applyPreset}>
+              <SelectTrigger className="h-8 flex-1 sm:w-[180px] text-xs">
+                <SelectValue placeholder="Select package..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (Manual Entry)</SelectItem>
+                {allPresets.map(preset => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                    {preset.id.startsWith('custom_') && ' ⭐'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={() => setShowAddPresetDialog(true)} 
+              variant="outline" 
+              size="sm" 
+              className="h-8 px-2 sm:px-2.5 gap-1.5 text-xs shrink-0"
+              title="Add Preset"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Add Preset</span>
+            </Button>
+          </div>
           {isPresetLocked && (
             <Button onClick={unlockPreset} variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">
               🔓 Unlock to Edit
@@ -870,13 +830,13 @@ export default function UmrahCalculator() {
 
         {/* Exchange Rate & Dates - Inline Bar */}
         <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
             <span className="text-sm font-medium text-primary">1 SAR =</span>
             <Input
               type="number"
               value={sarToPkrRate}
               onChange={(e) => setSarToPkrRate(e.target.value)}
-              className="w-20 h-8 text-sm font-semibold"
+              className="w-16 sm:w-20 h-8 text-sm font-semibold"
               placeholder="77.50"
             />
             <span className="text-sm font-medium">PKR</span>
@@ -1754,8 +1714,6 @@ export default function UmrahCalculator() {
             Reset
           </Button>
         </div>
-          </>
-        )}
       </div>
     </div>
   );

@@ -49,6 +49,8 @@ const VendorDashboard = lazy(() => import("./pages/VendorDashboard"));
 const Refunds = lazy(() => import("./pages/Refunds"));
 const OpeningBalances = lazy(() => import("./pages/OpeningBalances"));
 const Quotations = lazy(() => import("./pages/Quotations"));
+const Vouchers = lazy(() => import("./pages/Vouchers"));
+const Reminders = lazy(() => import("./pages/Reminders"));
 
 // Lazy non-critical overlays (kept out of the initial bundle)
 const UpdateNotification = lazy(() =>
@@ -152,6 +154,8 @@ const App = () => {
                   <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><Admin /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/clients" element={<ProtectedRoute><DashboardLayout><Clients /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/quotations" element={<ProtectedRoute><DashboardLayout><Quotations /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/vouchers" element={<ProtectedRoute><DashboardLayout><Vouchers /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/reminders" element={<ProtectedRoute><DashboardLayout><Reminders /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/b2b-agents" element={<ProtectedRoute><DashboardLayout><B2BAgents /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><B2BAgentDashboard /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/vendors" element={<ProtectedRoute><DashboardLayout><Vendors /></DashboardLayout></ProtectedRoute>} />

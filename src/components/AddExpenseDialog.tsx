@@ -74,7 +74,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
       <DialogContent className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-screen !rounded-none border-0" 
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
           : "w-[95vw] max-w-4xl max-h-[85vh]"
       )}>
         <DialogHeader className="pb-3 border-b shrink-0">

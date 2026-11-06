@@ -15,6 +15,7 @@ export interface B2BAgent {
   commission_type: string;
   commission_value: number | null;
   status: string;
+  can_create_vouchers?: boolean | null;
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
