@@ -4,12 +4,6 @@ Complete travel agency management system with offline support, local-first data 
 
 ---
 
-## 🎯 Project Info
-
-**URL**: https://lovable.dev/projects/d2bb4ab1-7e42-4613-9e84-e486d2afa3a5
-
----
-
 ## ✨ Features Overview
 
 ### 1. **Login System**
@@ -372,11 +366,8 @@ public/
 
 ## 🤝 How to Edit This Project
 
-### Use Lovable
-Visit the [Lovable Project](https://lovable.dev/projects/d2bb4ab1-7e42-4613-9e84-e486d2afa3a5) and start prompting. Changes are committed automatically.
-
 ### Use Your IDE
-Clone the repo and push changes. Pushed changes are reflected in Lovable.
+Clone the repo, make changes, and push them to GitHub.
 
 ### Edit in GitHub
 Navigate to files and click the "Edit" button (pencil icon).
@@ -386,28 +377,12 @@ Click "Code" → "Codespaces" → "New codespace" to launch a cloud IDE.
 
 ---
 
-## 🚢 Deployment
-
-### Via Lovable
-1. Open [Lovable Project](https://lovable.dev/projects/d2bb4ab1-7e42-4613-9e84-e486d2afa3a5)
-2. Click Share → Publish
-
-### Custom Domain
-Navigate to Project > Settings > Domains and click Connect Domain.
-[Learn more](https://docs.lovable.dev/features/custom-domain)
-
----
-
 ## 📞 Support
 
-For issues or questions, contact your administrator or refer to the [Lovable Documentation](https://docs.lovable.dev).
+For issues or questions, contact your administrator.
 
 ---
 
 ## 📄 License
 
 Proprietary - All rights reserved
-
----
-
-**Built with ❤️ using Lovable**
