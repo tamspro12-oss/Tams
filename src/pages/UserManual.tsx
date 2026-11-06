@@ -124,20 +124,21 @@ const sections: Section[] = [
     icon: LayoutDashboard,
     content: (
       <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">The Dashboard is your command center showing real-time business insights at a glance.</p>
+        <p className="text-sm text-muted-foreground">The Dashboard is your action-driven command center showing real-time business performance and daily operational triggers at a single glance.</p>
         
         <div className="space-y-4">
-          <h4 className="font-semibold text-base">Dashboard Widgets</h4>
+          <h4 className="font-semibold text-base">Key Dashboard Modules</h4>
           <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Revenue & Profit Stats:</strong> Total bookings, revenue, profit, and pending payments</li>
-            <li><strong>Month Selector:</strong> Filter all stats by month</li>
-            <li><strong>Upcoming Flights:</strong> Flights in next 7 days with reminder option</li>
-            <li><strong>Name Update Reminders:</strong> Bookings requiring name corrections</li>
-            <li><strong>Active Queries:</strong> Pending client inquiries</li>
+            <li><strong>Quick Actions Bar:</strong> Instant triggers for primary agency workflows: "+ Create Booking", "+ Add Payment", "+ Add Quotation", "+ New Client Query", and "+ Add Expense / Bill".</li>
+            <li><strong>Financial KPIs (Above the Fold):</strong> Aggregated B2C + B2B metrics including Total Bookings, Clients Pending Payment, Vendors Pending Payment, and Net Profit for the selected month.</li>
+            <li><strong>B2B Performance Strip:</strong> Compact wholesale overview tracking active B2B agents, sub-agent booking volume, sales revenue, and profit.</li>
+            <li><strong>Financials & Payables (3-Column Grid):</strong> Comprehensive monthly financial summary, today's payment collections alert (with inline "+ Receive Payment" action), and top vendor payables (with inline "+ Pay Vendor" action).</li>
+            <li><strong>Actionable Alerts Banner:</strong> A smart, conditional slim alert that activates only when urgent departures, name updates, or client queries need immediate action.</li>
+            <li><strong>Navbar Notification Bell:</strong> Unified notification drawer featuring dedicated tabs for Departures (Tickets & Umrah), Passenger Name Updates, Active Queries, and Daily Tasks.</li>
           </ul>
         </div>
 
-        <TipBox>Pull down on mobile or click the refresh icon to refresh dashboard data.</TipBox>
+        <TipBox>Pull down on touch screens or click the refresh button anytime to sync live real-time bookings and financial accounts.</TipBox>
       </div>
     )
   },
