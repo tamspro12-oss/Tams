@@ -35,6 +35,8 @@ const Index = lazy(() => import("./pages/Index"));
 const Admin = lazy(() => import("./pages/Admin"));
 const BookingsHub = lazy(() => import("./pages/BookingsHub"));
 const LeadsQuotesHub = lazy(() => import("./pages/LeadsQuotesHub"));
+const QueryFormPage = lazy(() => import("./pages/QueryFormPage"));
+const QuotationFormPage = lazy(() => import("./pages/QuotationFormPage"));
 const AccountsHub = lazy(() => import("./pages/AccountsHub"));
 const NotificationsHub = lazy(() => import("./pages/NotificationsHub"));
 const SettingsHub = lazy(() => import("./pages/SettingsHub"));
@@ -144,6 +146,10 @@ const App = () => {
                   <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><Admin /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><BookingsHub /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><LeadsQuotesHub /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><QueryFormPage /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/queries/:id/edit" element={<ProtectedRoute><DashboardLayout><QueryFormPage /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/quotations/new" element={<ProtectedRoute><DashboardLayout><QuotationFormPage /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/quotations/:id/edit" element={<ProtectedRoute><DashboardLayout><QuotationFormPage /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/accounts" element={<ProtectedRoute><DashboardLayout><AccountsHub /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><UmrahCalculator /></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><NotificationsHub /></DashboardLayout></ProtectedRoute>} />

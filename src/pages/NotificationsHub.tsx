@@ -22,6 +22,7 @@ import {
   Trash2,
   Moon,
   Sliders,
+  RefreshCw,
 } from "lucide-react";
 import { useReminders } from "@/hooks/useReminders";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -33,31 +34,45 @@ import { NewReminderDialog } from "@/components/NewReminderDialog";
 
 type NotificationTab = "all" | "travel" | "accounts" | "reminders" | "preferences";
 
+const safeFormatDateTime = (dateVal: any, formatPattern = "dd MMM, hh:mm a") => {
+  if (!dateVal) return "";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return format(d, formatPattern);
+  } catch {
+    return String(dateVal);
+  }
+};
+
 export default function NotificationsHub() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get("tab") as NotificationTab) || "all";
 
   const {
-    reminders,
-    dynamicTravelAlerts,
-    dailyPrompts,
-    pendingRemindersCount,
+    reminders = [],
+    dynamicTravelAlerts = [],
+    dailyPrompts = { openingAlert: null, closingAlert: null },
+    pendingRemindersCount = 0,
     toggleReminderComplete,
     deleteReminder,
   } = useReminders();
 
   const {
-    notifications,
-    unreadNotifications,
-    unreadCount,
+    notifications = [],
+    unreadNotifications = [],
+    unreadCount = 0,
     markAsRead,
     markAllAsRead,
     snoozeNotification,
-    deleteNotification: deleteDbNotification,
   } = useNotifications();
 
-  const totalActiveCount = pendingRemindersCount + unreadCount;
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
+  const safeDynamicAlerts = Array.isArray(dynamicTravelAlerts) ? dynamicTravelAlerts : [];
+  const safeUnreadNotifs = Array.isArray(unreadNotifications) ? unreadNotifications : [];
+  const activeReminders = safeReminders.filter((r) => r && !r.is_completed);
+  const totalActiveCount = (Number(pendingRemindersCount) || 0) + (Number(unreadCount) || 0);
 
   const [isAddReminderOpen, setIsAddReminderOpen] = useState(false);
 
@@ -81,8 +96,6 @@ export default function NotificationsHub() {
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
   };
-
-  const activeReminders = reminders.filter((r) => !r.is_completed);
 
   return (
     <div className="space-y-4">
@@ -114,7 +127,7 @@ export default function NotificationsHub() {
           <Button
             size="sm"
             onClick={() => setIsAddReminderOpen(true)}
-            className="h-9 px-3 text-xs font-semibold gap-1.5 self-start sm:self-auto"
+            className="h-9 px-3 text-xs font-semibold gap-1.5 self-start sm:self-auto shadow-xs"
           >
             <Plus className="w-4 h-4" />
             New Reminder
@@ -129,7 +142,7 @@ export default function NotificationsHub() {
             </TabsTrigger>
             <TabsTrigger value="travel" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
               <Plane className="w-4 h-4 text-blue-500" />
-              Flights & Umrah ({dynamicTravelAlerts.length})
+              Flights & Umrah ({safeDynamicAlerts.length})
             </TabsTrigger>
             <TabsTrigger value="accounts" className="gap-2 text-xs sm:text-sm font-semibold shrink-0">
               <Wallet className="w-4 h-4 text-emerald-500" />
@@ -151,7 +164,7 @@ export default function NotificationsHub() {
       {currentTab === "all" && (
         <div className="space-y-4">
           {/* Live Operational Alerts from Database */}
-          {unreadNotifications.length > 0 && (
+          {safeUnreadNotifs.length > 0 && (
             <Card className="border shadow-xs border-primary/20 bg-primary/5">
               <CardHeader className="pb-2 pt-3 border-b bg-primary/10">
                 <div className="flex items-center justify-between">
@@ -160,7 +173,7 @@ export default function NotificationsHub() {
                     <CardTitle className="text-sm font-bold">Live Agency Activity & Alerts</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[11px] bg-background">{unreadNotifications.length} New</Badge>
+                    <Badge variant="outline" className="text-[11px] bg-background">{safeUnreadNotifs.length} New</Badge>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -173,7 +186,7 @@ export default function NotificationsHub() {
                 </div>
               </CardHeader>
               <CardContent className="p-0 divide-y divide-border/60 bg-card">
-                {unreadNotifications.map((notif) => (
+                {safeUnreadNotifs.map((notif) => (
                   <div key={notif.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 font-bold">
@@ -182,7 +195,7 @@ export default function NotificationsHub() {
                       <div>
                         <p className="font-bold text-sm text-foreground">{notif.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{notif.message}</p>
-                        <p className="text-[10px] text-muted-foreground/60 mt-1">{format(new Date(notif.created_at), "dd MMM, hh:mm a")}</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">{safeFormatDateTime(notif.created_at)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
@@ -218,8 +231,9 @@ export default function NotificationsHub() {
               </CardContent>
             </Card>
           )}
+
           {/* Departures Section */}
-          {dynamicTravelAlerts.length > 0 && (
+          {safeDynamicAlerts.length > 0 && (
             <Card className="border shadow-xs">
               <CardHeader className="pb-2 pt-3 border-b bg-muted/20">
                 <div className="flex items-center justify-between">
@@ -227,11 +241,11 @@ export default function NotificationsHub() {
                     <Plane className="w-4 h-4 text-blue-500" />
                     <CardTitle className="text-sm font-bold">Upcoming Scheduled Departures</CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-[11px]">{dynamicTravelAlerts.length} Due</Badge>
+                  <Badge variant="outline" className="text-[11px]">{safeDynamicAlerts.length} Due</Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0 divide-y divide-border/60">
-                {dynamicTravelAlerts.map((alert) => (
+                {safeDynamicAlerts.map((alert) => (
                   <div key={alert.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-start gap-3">
                       <div className={cn(
@@ -280,9 +294,9 @@ export default function NotificationsHub() {
           )}
 
           {/* Daily Operational Prompts */}
-          {(dailyPrompts.openingAlert || dailyPrompts.closingAlert) && (
+          {(dailyPrompts?.openingAlert || dailyPrompts?.closingAlert) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {dailyPrompts.openingAlert && (
+              {dailyPrompts?.openingAlert && (
                 <Card className="border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/60 p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="font-bold text-sm text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
@@ -302,7 +316,7 @@ export default function NotificationsHub() {
                 </Card>
               )}
 
-              {dailyPrompts.closingAlert && (
+              {dailyPrompts?.closingAlert && (
                 <Card className="border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/60 p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="font-bold text-sm text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
@@ -355,7 +369,7 @@ export default function NotificationsHub() {
                       <div>
                         <p className="font-semibold text-sm text-foreground">{r.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Due: {r.remind_date} {r.remind_time ? `• ${r.remind_time.slice(0, 5)}` : ""}
+                          Due: {r.remind_date} {typeof r.remind_time === "string" && r.remind_time.length >= 5 ? `• ${r.remind_time.slice(0, 5)}` : ""}
                         </p>
                       </div>
                     </div>
@@ -388,12 +402,12 @@ export default function NotificationsHub() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 divide-y divide-border/60">
-            {dynamicTravelAlerts.length === 0 ? (
+            {safeDynamicAlerts.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
                 No flights or Umrah packages scheduled for departure today or tomorrow.
               </div>
             ) : (
-              dynamicTravelAlerts.map((alert) => (
+              safeDynamicAlerts.map((alert) => (
                 <div key={alert.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
                   <div className="flex items-start gap-3">
                     <div className={cn(
@@ -488,17 +502,17 @@ export default function NotificationsHub() {
               <CardTitle className="text-base font-bold">Custom Reminders ({activeReminders.length})</CardTitle>
               <CardDescription>Your personal and agency task checklist.</CardDescription>
             </div>
-            <Button size="sm" onClick={() => setIsAddReminderOpen(true)} className="h-8 text-xs gap-1">
+            <Button size="sm" onClick={() => setIsAddReminderOpen(true)} className="h-8 text-xs gap-1 shadow-xs">
               <Plus className="w-3.5 h-3.5" /> Add Task
             </Button>
           </CardHeader>
           <CardContent className="p-0 divide-y divide-border/60">
-            {reminders.length === 0 ? (
+            {safeReminders.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
                 No reminders recorded. Click "Add Task" to create one.
               </div>
             ) : (
-              reminders.map((r) => (
+              safeReminders.map((r) => (
                 <div key={r.id} className="p-3.5 flex items-start justify-between gap-3 hover:bg-muted/30 transition-colors">
                   <div className="flex items-start gap-3">
                     <button
@@ -512,7 +526,9 @@ export default function NotificationsHub() {
                       <p className={cn("font-semibold text-sm", r.is_completed && "line-through text-muted-foreground")}>
                         {r.title}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Due: {r.remind_date}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Due: {r.remind_date} {typeof r.remind_time === "string" && r.remind_time.length >= 5 ? `• ${r.remind_time.slice(0, 5)}` : ""}
+                      </p>
                       {r.notes && <p className="text-xs text-muted-foreground mt-1 bg-muted/40 p-2 rounded">{r.notes}</p>}
                     </div>
                   </div>
@@ -542,4 +558,3 @@ export default function NotificationsHub() {
     </div>
   );
 }
-

@@ -25,16 +25,18 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const {
-    reminders,
-    dynamicTravelAlerts,
-    dailyPrompts,
-    pendingRemindersCount,
+    reminders = [],
+    dynamicTravelAlerts = [],
+    dailyPrompts = { openingAlert: null, closingAlert: null },
+    pendingRemindersCount = 0,
     toggleReminderComplete,
   } = useReminders();
-  const { unreadCount, unreadNotifications } = useNotifications();
+  const { unreadCount = 0, unreadNotifications = [] } = useNotifications();
 
-  const totalDueCount = pendingRemindersCount + unreadCount;
-  const activeReminders = reminders.filter((r) => !r.is_completed);
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
+  const safeDynamicAlerts = Array.isArray(dynamicTravelAlerts) ? dynamicTravelAlerts : [];
+  const totalDueCount = (Number(pendingRemindersCount) || 0) + (Number(unreadCount) || 0);
+  const activeReminders = safeReminders.filter((r) => r && !r.is_completed);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -255,7 +257,7 @@ export function NotificationBell() {
                       <p className="font-semibold text-foreground">{r.title}</p>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                         <span>{r.remind_date}</span>
-                        {r.remind_time && <span>• {r.remind_time.slice(0, 5)}</span>}
+                        {typeof r.remind_time === "string" && r.remind_time.length >= 5 && <span>• {r.remind_time.slice(0, 5)}</span>}
                       </div>
                       {r.notes && (
                         <p className="text-muted-foreground/80 text-[11px] truncate mt-0.5">

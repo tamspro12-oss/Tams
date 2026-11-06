@@ -87,7 +87,7 @@ const MobileCurrencySelect = ({
   className?: string;
 }) => (
   <Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger className={cn("h-11 text-xs w-full min-h-[44px] bg-background font-medium", className)}>
+    <SelectTrigger className={cn("h-11 text-xs w-full min-h-[44px] bg-white ring-1 ring-slate-300 font-medium rounded-lg", className)}>
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -110,7 +110,7 @@ const MobileSharingTypeSelect = ({
   disabled?: boolean;
 }) => (
   <Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-background font-medium">
+    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-white ring-1 ring-slate-300 font-medium rounded-lg">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -133,7 +133,7 @@ const MobileRateModeSelect = ({
   disabled?: boolean;
 }) => (
   <Select value={value} onValueChange={v => onChange(v as RateMode)} disabled={disabled}>
-    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-background font-medium">
+    <SelectTrigger className="h-11 text-xs w-full min-h-[44px] bg-white ring-1 ring-slate-300 font-medium rounded-lg">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -233,35 +233,37 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
   return (
     <div className="space-y-2.5">
-      {/* 1. Makkah Hotel Card (Expanded by default) */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-2xs">
+      {/* 1. Makkah Hotel Card (Rounded emerald-tinted, Expanded by default) */}
+      <div className="rounded-xl bg-emerald-50/70 ring-1 ring-emerald-200/80 dark:bg-emerald-950/20 dark:ring-emerald-900/40 overflow-hidden shadow-2xs">
         <button
           type="button"
           onClick={() => setMakkahExpanded(prev => !prev)}
-          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-emerald-100/40 active:bg-emerald-100/60 transition-colors"
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base shrink-0">🕋</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm shrink-0">
+              🕋
+            </div>
             <div className="min-w-0">
-              <span className="text-xs font-bold text-foreground truncate block">Makkah Hotel</span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block">Makkah Hotel</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400">
                 {useMultiHotel ? `${makkahHotels.length} hotel(s) • ${makkahMultiNights} nights` : `${makkahNights || 0} nights • ${makkahSharingType}`}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(makkahCost)}</span>
-            {makkahExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">{fmtTotal(makkahCost)}</span>
+            {makkahExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
           </div>
         </button>
 
         {makkahExpanded && (
-          <div className="p-3 pt-1 border-t border-border/60 bg-muted/10 space-y-2.5">
+          <div className="p-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-2.5">
             {!useMultiHotel ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Type</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
                     <MobileSharingTypeSelect
                       value={makkahSharingType}
                       onChange={setMakkahSharingType}
@@ -269,7 +271,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate Mode</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
                     <MobileRateModeSelect
                       value={makkahRateMode}
                       onChange={handleMakkahRateModeChange}
@@ -280,27 +282,27 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nights</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
                     <Input
                       type="number"
                       inputMode="numeric"
                       value={makkahNights}
                       onFocus={e => e.target.select()}
                       onChange={e => setMakkahNights(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                       placeholder="0"
                       disabled={isPresetLocked}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate ({hotelCurrency})</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
                     <Input
                       type="number"
                       inputMode="decimal"
                       value={makkahRate}
                       onFocus={e => e.target.select()}
                       onChange={e => setMakkahRate(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                       placeholder="0.00"
                       disabled={isPresetLocked}
                     />
@@ -311,7 +313,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                   onClick={addMakkahHotel}
                   variant="outline"
                   size="sm"
-                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed"
+                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
                   disabled={isPresetLocked}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -321,7 +323,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             ) : (
               <div className="space-y-2.5">
                 {makkahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="p-2.5 rounded-lg border border-border bg-background space-y-2 relative">
+                  <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
                     <div className="flex items-center justify-between gap-2">
                       <Input
                         type="text"
@@ -363,7 +365,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                         onFocus={e => e.target.select()}
                         onChange={e => updateMakkahHotel(hotel.id, "nights", e.target.value)}
                         placeholder="Nights"
-                        className="h-11 text-center text-base font-semibold"
+                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
                         disabled={isPresetLocked}
                       />
                       <Input
@@ -373,7 +375,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                         onFocus={e => e.target.select()}
                         onChange={e => updateMakkahHotel(hotel.id, "rate", e.target.value)}
                         placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 text-center text-base font-semibold"
+                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
                         disabled={isPresetLocked}
                       />
                     </div>
@@ -395,35 +397,37 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
         )}
       </div>
 
-      {/* 2. Madinah Hotel Card (Expanded by default) */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-2xs">
+      {/* 2. Madinah Hotel Card (Rounded emerald-tinted, Expanded by default) */}
+      <div className="rounded-xl bg-emerald-50/70 ring-1 ring-emerald-200/80 dark:bg-emerald-950/20 dark:ring-emerald-900/40 overflow-hidden shadow-2xs">
         <button
           type="button"
           onClick={() => setMadinahExpanded(prev => !prev)}
-          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 active:bg-muted/50 transition-colors"
+          className="w-full min-h-[46px] px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-emerald-100/40 active:bg-emerald-100/60 transition-colors"
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base shrink-0">🕌</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm shrink-0">
+              🕌
+            </div>
             <div className="min-w-0">
-              <span className="text-xs font-bold text-foreground truncate block">Madinah Hotel</span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block">Madinah Hotel</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400">
                 {useMultiHotel ? `${madinahHotels.length} hotel(s) • ${madinahMultiNights} nights` : `${madinahNights || 0} nights • ${madinahSharingType}`}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs font-mono font-bold text-primary">{fmtTotal(madinahCost)}</span>
-            {madinahExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">{fmtTotal(madinahCost)}</span>
+            {madinahExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
           </div>
         </button>
 
         {madinahExpanded && (
-          <div className="p-3 pt-1 border-t border-border/60 bg-muted/10 space-y-2.5">
+          <div className="p-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-2.5">
             {!useMultiHotel ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Type</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Type</label>
                     <MobileSharingTypeSelect
                       value={madinahSharingType}
                       onChange={setMadinahSharingType}
@@ -431,7 +435,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate Mode</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate Mode</label>
                     <MobileRateModeSelect
                       value={madinahRateMode}
                       onChange={handleMadinahRateModeChange}
@@ -442,27 +446,27 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nights</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Nights</label>
                     <Input
                       type="number"
                       inputMode="numeric"
                       value={madinahNights}
                       onFocus={e => e.target.select()}
                       onChange={e => setMadinahNights(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                       placeholder="0"
                       disabled={isPresetLocked}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Rate ({hotelCurrency})</label>
+                    <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
                     <Input
                       type="number"
                       inputMode="decimal"
                       value={madinahRate}
                       onFocus={e => e.target.select()}
                       onChange={e => setMadinahRate(e.target.value)}
-                      className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+                      className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
                       placeholder="0.00"
                       disabled={isPresetLocked}
                     />
@@ -473,7 +477,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                   onClick={addMadinahHotel}
                   variant="outline"
                   size="sm"
-                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed"
+                  className="w-full h-9 min-h-[36px] text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100"
                   disabled={isPresetLocked}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -483,7 +487,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             ) : (
               <div className="space-y-2.5">
                 {madinahHotels.map((hotel, index) => (
-                  <div key={hotel.id} className="p-2.5 rounded-lg border border-border bg-background space-y-2 relative">
+                  <div key={hotel.id} className="p-2.5 rounded-lg border border-emerald-200 bg-white space-y-2 relative">
                     <div className="flex items-center justify-between gap-2">
                       <Input
                         type="text"
@@ -525,7 +529,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                         onFocus={e => e.target.select()}
                         onChange={e => updateMadinahHotel(hotel.id, "nights", e.target.value)}
                         placeholder="Nights"
-                        className="h-11 text-center text-base font-semibold"
+                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
                         disabled={isPresetLocked}
                       />
                       <Input
@@ -535,7 +539,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                         onFocus={e => e.target.select()}
                         onChange={e => updateMadinahHotel(hotel.id, "rate", e.target.value)}
                         placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 text-center text-base font-semibold"
+                        className="h-11 text-center text-base font-semibold bg-white ring-1 ring-slate-300"
                         disabled={isPresetLocked}
                       />
                     </div>
@@ -557,122 +561,118 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
         )}
       </div>
 
-      {/* 3. Airline Ticket + Visa Fee (2 Columns Side by Side in One Compact Card) */}
-      <div className="rounded-xl border border-border bg-card p-3 shadow-2xs">
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* Airline Ticket */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-foreground truncate">✈️ Airline Ticket</span>
-              <span className="text-[10px] font-mono font-bold text-primary">{fmtTotal(ticketPerPerson)}</span>
-            </div>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={ticketCost}
-              onFocus={e => e.target.select()}
-              onChange={e => setTicketCost(e.target.value)}
-              className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
-              placeholder="0.00"
-            />
-            <MobileCurrencySelect value={ticketCurrency} onChange={setTicketCurrency} />
+      {/* 3. Airline Ticket + Visa Fee (2 Columns side by side, sky tinted) */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {/* Airline Ticket */}
+        <div className="rounded-xl p-3 bg-sky-50/70 ring-1 ring-sky-200/80 dark:bg-sky-950/20 dark:ring-sky-900/40 space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate">✈️ Ticket</span>
+            <span className="text-[10px] font-mono font-bold text-slate-900 dark:text-slate-100">{fmtTotal(ticketPerPerson)}</span>
           </div>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={ticketCost}
+            onFocus={e => e.target.select()}
+            onChange={e => setTicketCost(e.target.value)}
+            className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
+            placeholder="0.00"
+          />
+          <MobileCurrencySelect value={ticketCurrency} onChange={setTicketCurrency} />
+        </div>
 
-          {/* Visa Fee */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-foreground truncate">📋 Visa Fee</span>
-              <span className="text-[10px] font-mono font-bold text-primary">{fmtTotal(visaPerPerson)}</span>
-            </div>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={visaFee}
-              onFocus={e => e.target.select()}
-              onChange={e => setVisaFee(e.target.value)}
-              className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
-              placeholder="0.00"
-              disabled={isPresetLocked}
-            />
-            <MobileCurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} />
+        {/* Visa Fee */}
+        <div className="rounded-xl p-3 bg-sky-50/70 ring-1 ring-sky-200/80 dark:bg-sky-950/20 dark:ring-sky-900/40 space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate">📋 Visa</span>
+            <span className="text-[10px] font-mono font-bold text-slate-900 dark:text-slate-100">{fmtTotal(visaPerPerson)}</span>
           </div>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={visaFee}
+            onFocus={e => e.target.select()}
+            onChange={e => setVisaFee(e.target.value)}
+            className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
+            placeholder="0.00"
+            disabled={isPresetLocked}
+          />
+          <MobileCurrencySelect value={visaCurrency} onChange={setVisaCurrency} disabled={isPresetLocked} />
         </div>
       </div>
 
-      {/* 4. Transport + Ziyarat + Food / Add-ons (3 Compact Tiles in ONE Row) */}
-      <div className="rounded-xl border border-border bg-card p-2.5 shadow-2xs">
-        <div className="grid grid-cols-3 gap-2">
-          {/* Transport */}
-          <div className="space-y-1 bg-muted/20 p-2 rounded-lg border border-border/50">
-            <span className="text-[10px] font-bold text-foreground block truncate">🚌 Transport</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={transport}
-              onFocus={e => e.target.select()}
-              onChange={e => setTransport(e.target.value)}
-              className="h-10 min-h-[40px] text-center font-bold text-sm bg-background p-1"
-              placeholder="0.00"
-              disabled={isPresetLocked}
-            />
-            <MobileCurrencySelect
-              value={transportCurrency}
-              onChange={setTransportCurrency}
-              disabled={isPresetLocked}
-              className="h-9 min-h-[36px] text-[11px]"
-            />
-            <span className="text-[10px] font-mono text-muted-foreground block text-center truncate">
-              {fmtTotal(transportPerPerson)}
-            </span>
-          </div>
+      {/* 4. Transport + Ziyarat + Food / Add-ons (3 small tiles in ONE row, amber tinted) */}
+      <div className="grid grid-cols-3 gap-2">
+        {/* Transport */}
+        <div className="rounded-xl p-2.5 bg-amber-50/70 ring-1 ring-amber-200/80 dark:bg-amber-950/20 dark:ring-amber-900/40 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 block truncate">🚌 Transport</span>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={transport}
+            onFocus={e => e.target.select()}
+            onChange={e => setTransport(e.target.value)}
+            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            placeholder="0.00"
+            disabled={isPresetLocked}
+          />
+          <MobileCurrencySelect
+            value={transportCurrency}
+            onChange={setTransportCurrency}
+            disabled={isPresetLocked}
+            className="h-8 min-h-[32px] text-[10px]"
+          />
+          <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
+            {fmtTotal(transportPerPerson)}
+          </span>
+        </div>
 
-          {/* Ziyarat */}
-          <div className="space-y-1 bg-muted/20 p-2 rounded-lg border border-border/50">
-            <span className="text-[10px] font-bold text-foreground block truncate">🕌 Ziyarat</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={ziyarat}
-              onFocus={e => e.target.select()}
-              onChange={e => setZiyarat(e.target.value)}
-              className="h-10 min-h-[40px] text-center font-bold text-sm bg-background p-1"
-              placeholder="0.00"
-              disabled={isPresetLocked}
-            />
-            <MobileCurrencySelect
-              value={ziyaratCurrency}
-              onChange={setZiyaratCurrency}
-              disabled={isPresetLocked}
-              className="h-9 min-h-[36px] text-[11px]"
-            />
-            <span className="text-[10px] font-mono text-muted-foreground block text-center truncate">
-              {fmtTotal(ziyaratPerPerson)}
-            </span>
-          </div>
+        {/* Ziyarat */}
+        <div className="rounded-xl p-2.5 bg-amber-50/70 ring-1 ring-amber-200/80 dark:bg-amber-950/20 dark:ring-amber-900/40 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 block truncate">🕌 Ziyarat</span>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={ziyarat}
+            onFocus={e => e.target.select()}
+            onChange={e => setZiyarat(e.target.value)}
+            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            placeholder="0.00"
+            disabled={isPresetLocked}
+          />
+          <MobileCurrencySelect
+            value={ziyaratCurrency}
+            onChange={setZiyaratCurrency}
+            disabled={isPresetLocked}
+            className="h-8 min-h-[32px] text-[10px]"
+          />
+          <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
+            {fmtTotal(ziyaratPerPerson)}
+          </span>
+        </div>
 
-          {/* Food */}
-          <div className="space-y-1 bg-muted/20 p-2 rounded-lg border border-border/50">
-            <span className="text-[10px] font-bold text-foreground block truncate">🍽️ Food</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              value={food}
-              onFocus={e => e.target.select()}
-              onChange={e => setFood(e.target.value)}
-              className="h-10 min-h-[40px] text-center font-bold text-sm bg-background p-1"
-              placeholder="0.00"
-              disabled={isPresetLocked}
-            />
-            <MobileCurrencySelect
-              value={foodCurrency}
-              onChange={setFoodCurrency}
-              disabled={isPresetLocked}
-              className="h-9 min-h-[36px] text-[11px]"
-            />
-            <span className="text-[10px] font-mono text-muted-foreground block text-center truncate">
-              {fmtTotal(foodPerPerson)}
-            </span>
-          </div>
+        {/* Food */}
+        <div className="rounded-xl p-2.5 bg-amber-50/70 ring-1 ring-amber-200/80 dark:bg-amber-950/20 dark:ring-amber-900/40 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 block truncate">🍽️ Food</span>
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={food}
+            onFocus={e => e.target.select()}
+            onChange={e => setFood(e.target.value)}
+            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            placeholder="0.00"
+            disabled={isPresetLocked}
+          />
+          <MobileCurrencySelect
+            value={foodCurrency}
+            onChange={setFoodCurrency}
+            disabled={isPresetLocked}
+            className="h-8 min-h-[32px] text-[10px]"
+          />
+          <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
+            {fmtTotal(foodPerPerson)}
+          </span>
         </div>
       </div>
     </div>

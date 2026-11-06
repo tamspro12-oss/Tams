@@ -537,11 +537,37 @@ export default function UmrahCalculator() {
   useEffect(() => {
     const res = calculateUmrah();
     setResult(res);
+    try {
+      if (res && res.totalPackageCost > 0) {
+        localStorage.setItem(
+          "tams_latest_umrah_calc",
+          JSON.stringify({
+            result: res,
+            calculatedAt: new Date().toISOString(),
+          })
+        );
+      }
+    } catch (e) {
+      console.debug("Failed to cache umrah calculation", e);
+    }
   }, [calculateUmrah]);
 
   const handleCalculate = () => {
     const res = calculateUmrah();
     setResult(res);
+    try {
+      if (res) {
+        localStorage.setItem(
+          "tams_latest_umrah_calc",
+          JSON.stringify({
+            result: res,
+            calculatedAt: new Date().toISOString(),
+          })
+        );
+      }
+    } catch (e) {
+      console.debug("Failed to cache umrah calculation", e);
+    }
     toast.success("Package calculated successfully");
   };
 
@@ -918,14 +944,16 @@ export default function UmrahCalculator() {
   const SharingTypeSelect = ({
     value,
     onChange,
+    className = "",
     disabled = false,
   }: {
     value: string;
     onChange: (v: string) => void;
+    className?: string;
     disabled?: boolean;
   }) => (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="h-8 text-xs w-[84px] px-1.5 py-0 mx-auto bg-background">
+      <SelectTrigger className={cn("h-8 text-xs w-full px-2 py-0 bg-background", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -941,14 +969,16 @@ export default function UmrahCalculator() {
   const RateModeSelect = ({
     value,
     onChange,
+    className = "",
     disabled = false,
   }: {
     value: RateMode;
     onChange: (v: RateMode) => void;
+    className?: string;
     disabled?: boolean;
   }) => (
     <Select value={value} onValueChange={v => onChange(v as RateMode)} disabled={disabled}>
-      <SelectTrigger className="h-8 text-xs w-[80px] px-1.5 py-0 mx-auto bg-background">
+      <SelectTrigger className={cn("h-8 text-xs w-full px-2 py-0 bg-background", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

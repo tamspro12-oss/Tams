@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.2.1'; // Update this with each deployment
+const CURRENT_VERSION = '3.3.0'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,17 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.3.0': [
+          'Redesigned Queries & Quotes Hub with primary Quotations tab and segmented pill switcher',
+          'Full-page keyboard-first New Quotation & Query creation forms with shortcuts',
+          'Manual free-text quotation numbering with uniqueness check and last-used helper',
+          'Date Preset filtering (Today, Yesterday, Week, Month, Year, Custom Range)',
+          'Instant Umrah Calculator package import and quotation-to-booking conversion',
+        ],
+        '3.2.1': [
+          'Unified single-screen Umrah Package Calculator layout',
+          'Keyboard-first data entry and shortcuts (Ctrl+S, Ctrl+Enter)',
+        ],
         '3.2.0': [
           'Professional update system with iOS support',
           'Auto-sync and pull-to-refresh gestures',

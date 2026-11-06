@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,6 +188,7 @@ export function NewReminderDialog({
             <Plus className="w-4 h-4 text-primary shrink-0" />
             New Reminder
           </DialogTitle>
+          <DialogDescription className="sr-only">Create a new reminder task</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3 pt-1">

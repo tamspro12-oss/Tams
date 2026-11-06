@@ -10,29 +10,45 @@ import { useReminders } from "@/hooks/useReminders";
 export function NotificationPreferences() {
   const { settings, updateSettings } = useReminders();
 
-  const [flightAlerts, setFlightAlerts] = useState(settings?.flight_alerts_enabled ?? true);
-  const [umrahAlerts, setUmrahAlerts] = useState(settings?.umrah_alerts_enabled ?? true);
-  const [expenseAlerts, setExpenseAlerts] = useState(settings?.daily_expense_reminder_enabled ?? true);
-  const [openingTime, setOpeningTime] = useState(settings?.opening_time || "09:00:00");
-  const [closingTime, setClosingTime] = useState(settings?.closing_time || "20:00:00");
+  const [flightAlerts, setFlightAlerts] = useState<boolean>(() => Boolean(settings?.flight_alerts_enabled ?? true));
+  const [umrahAlerts, setUmrahAlerts] = useState<boolean>(() => Boolean(settings?.umrah_alerts_enabled ?? true));
+  const [expenseAlerts, setExpenseAlerts] = useState<boolean>(() => Boolean(settings?.daily_expense_reminder_enabled ?? true));
+  const [openingTime, setOpeningTime] = useState<string>(() => String(settings?.opening_time || "09:00:00"));
+  const [closingTime, setClosingTime] = useState<string>(() => String(settings?.closing_time || "20:00:00"));
 
   useEffect(() => {
     if (settings) {
-      setFlightAlerts(settings.flight_alerts_enabled);
-      setUmrahAlerts(settings.umrah_alerts_enabled);
-      setExpenseAlerts(settings.daily_expense_reminder_enabled);
-      setOpeningTime(settings.opening_time || "09:00:00");
-      setClosingTime(settings.closing_time || "20:00:00");
+      if (settings.flight_alerts_enabled !== undefined && settings.flight_alerts_enabled !== null) {
+        setFlightAlerts(Boolean(settings.flight_alerts_enabled));
+      }
+      if (settings.umrah_alerts_enabled !== undefined && settings.umrah_alerts_enabled !== null) {
+        setUmrahAlerts(Boolean(settings.umrah_alerts_enabled));
+      }
+      if (settings.daily_expense_reminder_enabled !== undefined && settings.daily_expense_reminder_enabled !== null) {
+        setExpenseAlerts(Boolean(settings.daily_expense_reminder_enabled));
+      }
+      if (settings.opening_time) {
+        setOpeningTime(String(settings.opening_time));
+      }
+      if (settings.closing_time) {
+        setClosingTime(String(settings.closing_time));
+      }
     }
   }, [settings]);
 
+  const safeOpening = typeof openingTime === "string" && openingTime.length >= 5 ? openingTime.slice(0, 5) : "09:00";
+  const safeClosing = typeof closingTime === "string" && closingTime.length >= 5 ? closingTime.slice(0, 5) : "20:00";
+
   const handleSave = async () => {
+    const finalOpening = typeof openingTime === "string" && openingTime.length === 5 ? `${openingTime}:00` : (openingTime || "09:00:00");
+    const finalClosing = typeof closingTime === "string" && closingTime.length === 5 ? `${closingTime}:00` : (closingTime || "20:00:00");
+
     await updateSettings.mutateAsync({
-      flight_alerts_enabled: flightAlerts,
-      umrah_alerts_enabled: umrahAlerts,
-      daily_expense_reminder_enabled: expenseAlerts,
-      opening_time: openingTime.length === 5 ? `${openingTime}:00` : openingTime,
-      closing_time: closingTime.length === 5 ? `${closingTime}:00` : closingTime,
+      flight_alerts_enabled: Boolean(flightAlerts),
+      umrah_alerts_enabled: Boolean(umrahAlerts),
+      daily_expense_reminder_enabled: Boolean(expenseAlerts),
+      opening_time: finalOpening,
+      closing_time: finalClosing,
     });
   };
 
@@ -84,8 +100,8 @@ export function NotificationPreferences() {
             <Label className="text-xs font-semibold text-foreground">Morning Operations Briefing Hour</Label>
             <Input
               type="time"
-              value={openingTime.slice(0, 5)}
-              onChange={(e) => setOpeningTime(`${e.target.value}:00`)}
+              value={safeOpening}
+              onChange={(e) => setOpeningTime(e.target.value ? `${e.target.value}:00` : "09:00:00")}
               className="h-9 text-xs sm:text-sm"
             />
           </div>
@@ -94,8 +110,8 @@ export function NotificationPreferences() {
             <Label className="text-xs font-semibold text-foreground">Evening Closing Hour</Label>
             <Input
               type="time"
-              value={closingTime.slice(0, 5)}
-              onChange={(e) => setClosingTime(`${e.target.value}:00`)}
+              value={safeClosing}
+              onChange={(e) => setClosingTime(e.target.value ? `${e.target.value}:00` : "20:00:00")}
               className="h-9 text-xs sm:text-sm"
             />
           </div>
@@ -104,9 +120,10 @@ export function NotificationPreferences() {
         {/* Save button right-aligned at the bottom */}
         <div className="flex justify-end pt-2">
           <Button
+            size="sm"
             onClick={handleSave}
             disabled={updateSettings.isPending}
-            className="font-semibold text-xs h-9 px-4"
+            className="font-semibold text-xs h-9 px-5 shadow-xs"
           >
             {updateSettings.isPending ? "Saving..." : "Save Preferences"}
           </Button>
@@ -115,4 +132,5 @@ export function NotificationPreferences() {
     </Card>
   );
 }
+
 export default NotificationPreferences;

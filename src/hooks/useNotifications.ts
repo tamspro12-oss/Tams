@@ -40,13 +40,10 @@ export function useNotifications() {
           .limit(100);
 
         if (error) {
-          // If table doesn't exist yet, return empty list gracefully without throwing
-          if (error.code === "42P01" || error.message?.includes("does not exist")) {
-            return [];
-          }
-          throw error;
+          console.warn("Notifications query warning:", error);
+          return [];
         }
-        return (data || []) as unknown as AgencyNotification[];
+        return (Array.isArray(data) ? data : []) as unknown as AgencyNotification[];
       } catch (e) {
         console.warn("Notifications query warning:", e);
         return [];
@@ -139,9 +136,17 @@ export function useNotifications() {
   });
 
   // Active unread notifications (ignoring active snoozes)
-  const unreadNotifications = notifications.filter((n) => {
-    if (n.is_read) return false;
-    if (n.snoozed_until && new Date(n.snoozed_until) > new Date()) return false;
+  const safeList = Array.isArray(notifications) ? notifications : [];
+  const unreadNotifications = safeList.filter((n) => {
+    if (!n || n.is_read) return false;
+    if (n.snoozed_until) {
+      try {
+        const snoozeDate = new Date(n.snoozed_until);
+        if (!isNaN(snoozeDate.getTime()) && snoozeDate > new Date()) return false;
+      } catch {
+        // Safe fallback
+      }
+    }
     return true;
   });
 

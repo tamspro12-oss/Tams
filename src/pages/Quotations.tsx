@@ -1,33 +1,64 @@
-import { useState, useMemo, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, FileText, Download, Mail, Pencil, Trash2, RefreshCw, Search, Banknote, Loader2, Eye, Sparkles, CheckCircle2, ArrowRightCircle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Plus,
+  FileText,
+  Download,
+  Mail,
+  Pencil,
+  Trash2,
+  Search,
+  Banknote,
+  Loader2,
+  Eye,
+  CheckCircle2,
+  ArrowRightCircle,
+  Clock,
+  XCircle,
+  X,
+  FileCheck2,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO, isPast } from "date-fns";
 import { toast } from "sonner";
-import { useQuotations, type Quotation, type QuotationInput, type QuotationItem } from "@/hooks/useQuotations";
+import { useQuotations, type Quotation } from "@/hooks/useQuotations";
 import { useClients } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { downloadQuotationPdf, quotationPdfBase64 } from "@/lib/quotationPdf";
 import { sendEmail } from "@/lib/emailService";
+import {
+  DatePresetFilter,
+  type DatePresetFilterValue,
+} from "@/components/leads-quotes/DatePresetFilter";
+import { isDateWithinPreset } from "@/lib/dateFilterUtils";
+import { cn } from "@/lib/utils";
 
 type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
 
-const serviceLabels: Record<ServiceType, string> = {
+const serviceLabels: Record<string, string> = {
   client_booking: "Client Booking",
   b2b: "B2B Service",
   umrah: "Umrah Package",
@@ -35,202 +66,137 @@ const serviceLabels: Record<ServiceType, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  accepted: "bg-green-500/15 text-green-700 dark:text-green-300",
-  rejected: "bg-red-500/15 text-red-700 dark:text-red-300",
+  draft: "bg-muted text-muted-foreground border-muted-foreground/30",
+  sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-300",
+  accepted: "bg-green-500/15 text-green-700 dark:text-green-300 border-green-300",
+  rejected: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-300",
+  expired: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300",
 };
-
-/**
- * Generate the next quotation number with format: Q-YYYYMM-####
- * Scans existing quotations for the same month and increments the highest seq.
- */
-const generateQuotationNumber = (existing: Quotation[]): string => {
-  const now = new Date();
-  const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = `Q-${ym}-`;
-  let maxSeq = 0;
-  for (const q of existing) {
-    if (!q.quotation_number?.startsWith(prefix)) continue;
-    const tail = q.quotation_number.slice(prefix.length);
-    const n = parseInt(tail, 10);
-    if (!isNaN(n) && n > maxSeq) maxSeq = n;
-  }
-  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
-};
-
-const emptyForm = (number: string): QuotationInput => ({
-  quotation_number: number,
-  quotation_date: format(new Date(), "yyyy-MM-dd"),
-  valid_until: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"),
-  service_type: "client_booking",
-  client_name: "",
-  client_email: "",
-  client_phone: "",
-  client_id: null,
-  agent_id: null,
-  title: "",
-  description: "",
-  items: [{ description: "", qty: 1, unit_price: 0, amount: 0 }],
-  subtotal: 0,
-  discount: 0,
-  tax: 0,
-  total: 0,
-  currency: "PKR",
-  status: "draft",
-  notes: "",
-  terms: "Quotation valid until the date mentioned above. Prices subject to availability at the time of confirmation.",
-  source: null,
-  source_ref: null,
-});
 
 export default function Quotations() {
-  const { quotations, isLoading, isFetching, refetch, addQuotation, updateQuotation, deleteQuotation } = useQuotations();
-  const { clients } = useClients();
-  const { agents: b2bAgents = [] } = useB2BAgents();
-  const { data: agency } = useAgency();
-  const location = useLocation();
   const navigate = useNavigate();
+  const { quotations = [], isLoading, updateQuotation, deleteQuotation } = useQuotations();
+  const { clients = [] } = useClients();
+  const { data: agency } = useAgency();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Quotation | null>(null);
-  const [form, setForm] = useState<QuotationInput>(() => emptyForm(`Q-${Date.now().toString().slice(-6)}`));
+  // Filters State
   const [search, setSearch] = useState("");
   const [filterService, setFilterService] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [sending, setSending] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
+
+  // Action states
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
   const [previewQ, setPreviewQ] = useState<Quotation | null>(null);
-  const [previewAction, setPreviewAction] = useState<"download" | "email" | null>(null);
 
-  // Prefill from navigation state (e.g. from Umrah Calculator)
+  // Keyboard shortcut 'N' for New Quotation
   useEffect(() => {
-    const prefill = (location.state as any)?.prefill as Partial<QuotationInput> | undefined;
-    if (prefill) {
-      const base = emptyForm(generateQuotationNumber(quotations));
-      setForm({ ...base, ...prefill, quotation_number: base.quotation_number });
-      setEditing(null);
-      setDialogOpen(true);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quotations.length]);
-
-  const filtered = useMemo(() => {
-    return quotations.filter((q) => {
-      if (filterService !== "all" && q.service_type !== filterService) return false;
-      if (filterStatus !== "all" && q.status !== filterStatus) return false;
-      if (search) {
-        const s = search.toLowerCase();
-        return (
-          q.quotation_number.toLowerCase().includes(s) ||
-          q.client_name.toLowerCase().includes(s) ||
-          (q.title || "").toLowerCase().includes(s)
-        );
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.key === "n" || e.key === "N") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA" &&
+        document.activeElement?.tagName !== "SELECT"
+      ) {
+        e.preventDefault();
+        navigate("/app/leads-quotes/quotations/new");
       }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [navigate]);
+
+  // Check if quotation is expired
+  const isQuotationExpired = useCallback((q: Quotation): boolean => {
+    if (q.status === "accepted" || q.status === "rejected") return false;
+    if (q.status === "expired" as any) return true;
+    if (!q.valid_until) return false;
+    try {
+      return isPast(parseISO(q.valid_until));
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Filtered quotations (by date preset, search, service type, and status)
+  const dateFilteredQuotations = useMemo(() => {
+    return quotations.filter((q) => {
+      const qDate = q.quotation_date || q.created_at;
+      return isDateWithinPreset(
+        qDate,
+        dateFilter.preset,
+        dateFilter.customFrom,
+        dateFilter.customTo
+      );
+    });
+  }, [quotations, dateFilter]);
+
+  // Stats strip reflects date filter
+  const stats = useMemo(() => {
+    const list = dateFilteredQuotations;
+    const totalCount = list.length;
+    const totalValue = list.reduce((acc, q) => acc + Number(q.total || 0), 0);
+    const acceptedList = list.filter((q) => q.status === "accepted");
+    const acceptedCount = acceptedList.length;
+    const acceptedValue = acceptedList.reduce((acc, q) => acc + Number(q.total || 0), 0);
+
+    return { totalCount, totalValue, acceptedCount, acceptedValue };
+  }, [dateFilteredQuotations]);
+
+  // Status counts for quick chips (within date filtered set)
+  const statusCounts = useMemo(() => {
+    const counts = {
+      all: dateFilteredQuotations.length,
+      draft: 0,
+      sent: 0,
+      accepted: 0,
+      rejected: 0,
+      expired: 0,
+    };
+
+    dateFilteredQuotations.forEach((q) => {
+      if (isQuotationExpired(q)) {
+        counts.expired += 1;
+      }
+      if (q.status === "draft") counts.draft += 1;
+      else if (q.status === "sent") counts.sent += 1;
+      else if (q.status === "accepted") counts.accepted += 1;
+      else if (q.status === "rejected") counts.rejected += 1;
+    });
+
+    return counts;
+  }, [dateFilteredQuotations, isQuotationExpired]);
+
+  // Full filtered list
+  const filtered = useMemo(() => {
+    return dateFilteredQuotations.filter((q) => {
+      if (filterService !== "all" && q.service_type !== filterService) return false;
+
+      if (filterStatus === "expired") {
+        if (!isQuotationExpired(q)) return false;
+      } else if (filterStatus !== "all" && q.status !== filterStatus) {
+        return false;
+      }
+
+      if (search.trim()) {
+        const s = search.toLowerCase();
+        const matchNumber = q.quotation_number?.toLowerCase().includes(s);
+        const matchClient = q.client_name?.toLowerCase().includes(s);
+        const matchTitle = (q.title || "").toLowerCase().includes(s);
+        const matchPhone = (q.client_phone || "").includes(s);
+        if (!matchNumber && !matchClient && !matchTitle && !matchPhone) return false;
+      }
+
       return true;
     });
-  }, [quotations, search, filterService, filterStatus]);
+  }, [dateFilteredQuotations, filterService, filterStatus, search, isQuotationExpired]);
 
-  const stats = useMemo(() => {
-    const total = quotations.reduce((s, q) => s + Number(q.total || 0), 0);
-    const accepted = quotations.filter((q) => q.status === "accepted");
-    const acceptedTotal = accepted.reduce((s, q) => s + Number(q.total || 0), 0);
-    return { count: quotations.length, total, accepted: accepted.length, acceptedTotal };
-  }, [quotations]);
-
-  const handleConvertToBooking = (q: Quotation) => {
-    navigate("/app/bookings?tab=clients", {
-      state: {
-        openAddClient: true,
-        prefill: {
-          name: q.client_name,
-          contact_number: (q as any).client_phone || "",
-          email: (q as any).client_email || "",
-          travel_type: q.service_type === "umrah" ? "Umrah" : q.service_type === "visa" ? "Custom" : "Ticket",
-          selling_price: q.total,
-          notes: `Converted from Quotation #${q.quotation_number}${q.title ? ` — ${q.title}` : ""}\nQuotation Total: ${q.currency} ${Number(q.total).toLocaleString()}`,
-          converted_from_quote_id: q.id,
-        },
-      },
-    });
-  };
-
-  const recalc = (next: QuotationInput): QuotationInput => {
-    const items = next.items.map((it) => ({
-      ...it,
-      amount: Number(it.qty || 0) * Number(it.unit_price || 0),
-    }));
-    const subtotal = items.reduce((s, i) => s + i.amount, 0);
-    const total = Math.max(0, subtotal - Number(next.discount || 0) + Number(next.tax || 0));
-    return { ...next, items, subtotal, total };
-  };
-
-  const setItem = (idx: number, patch: Partial<QuotationItem>) => {
-    setForm((f) => recalc({ ...f, items: f.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) }));
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm(emptyForm(generateQuotationNumber(quotations)));
-    setDialogOpen(true);
-  };
-
-  const regenerateNumber = () => {
-    setForm((f) => ({ ...f, quotation_number: generateQuotationNumber(quotations) }));
-    toast.success("Quotation number refreshed");
-  };
-
-  const openEdit = (q: Quotation) => {
-    setEditing(q);
-    setForm({
-      quotation_number: q.quotation_number,
-      quotation_date: q.quotation_date,
-      valid_until: q.valid_until,
-      service_type: q.service_type,
-      client_name: q.client_name,
-      client_email: q.client_email,
-      client_phone: q.client_phone,
-      client_id: q.client_id,
-      agent_id: q.agent_id,
-      title: q.title,
-      description: q.description,
-      items: q.items?.length ? q.items : [{ description: "", qty: 1, unit_price: 0, amount: 0 }],
-      subtotal: q.subtotal,
-      discount: q.discount,
-      tax: q.tax,
-      total: q.total,
-      currency: q.currency,
-      status: q.status,
-      notes: q.notes,
-      terms: q.terms,
-      source: q.source,
-      source_ref: q.source_ref,
-    });
-    setDialogOpen(true);
-  };
-
-  const submit = () => {
-    if (!form.client_name.trim()) { toast.error("Client name is required"); return; }
-    if (!form.quotation_number.trim()) { toast.error("Quotation number is required"); return; }
-    if (!form.items.length || form.items.every((i) => !i.description.trim())) {
-      toast.error("Add at least one item with a description"); return;
-    }
-    // Enforce uniqueness of quotation number
-    const clash = quotations.find(
-      (q) => q.quotation_number.trim().toLowerCase() === form.quotation_number.trim().toLowerCase() && q.id !== editing?.id,
-    );
-    if (clash) {
-      toast.error("Quotation number already exists", { description: "Use a different number or click Auto." });
-      return;
-    }
-    const normalized = recalc(form);
-    if (editing) {
-      updateQuotation.mutate({ id: editing.id, ...normalized }, { onSuccess: () => { setDialogOpen(false); refetch(); } });
-    } else {
-      addQuotation.mutate(normalized, { onSuccess: () => { setDialogOpen(false); refetch(); } });
-    }
-  };
-
+  // Action handlers
   const handleDownload = (q: Quotation) => {
     downloadQuotationPdf(q, {
       agencyName: agency?.name,
@@ -242,14 +208,19 @@ export default function Quotations() {
 
   const handleEmail = async (q: Quotation) => {
     if (!q.client_email) {
-      toast.error("Client email missing", { description: "Edit the quotation and add the client's email." });
+      toast.error("Client email missing", {
+        description: "Edit this quotation to add the client's email address.",
+      });
       return;
     }
     if (!agency?.email) {
-      toast.error("Email sender not configured", { description: "Add sender email in Settings > Agency Branding." });
+      toast.error("Sender email not configured", {
+        description: "Configure email sender in Settings > Agency Branding.",
+      });
       return;
     }
-    setSending(q.id);
+
+    setSendingEmailId(q.id);
     try {
       const base64 = quotationPdfBase64(q, {
         agencyName: agency?.name,
@@ -260,11 +231,12 @@ export default function Quotations() {
         <div style="font-family:Arial,sans-serif;color:#0a2540;">
           <h2>Quotation ${q.quotation_number}</h2>
           <p>Dear ${q.client_name},</p>
-          <p>Please find attached your quotation for <strong>${serviceLabels[q.service_type] || q.service_type}</strong>${q.title ? ` — ${q.title}` : ""}.</p>
-          <p><strong>Total: ${q.currency} ${Number(q.total).toLocaleString()}</strong></p>
+          <p>Please find attached your requested quotation for <strong>${serviceLabels[q.service_type] || q.service_type}</strong>${q.title ? ` — ${q.title}` : ""}.</p>
+          <p><strong>Total Amount: ${q.currency} ${Number(q.total).toLocaleString()}</strong></p>
           ${q.valid_until ? `<p>Valid until: ${format(new Date(q.valid_until), "dd MMM yyyy")}</p>` : ""}
           <p>Best regards,<br/>${agency?.name || ""}</p>
         </div>`;
+
       const result = await sendEmail(
         { email: agency.email, password: "", contactEmail: agency.contact_email || undefined },
         {
@@ -276,550 +248,659 @@ export default function Quotations() {
           clientId: q.client_id || undefined,
         }
       );
+
       if (result.success) {
-        toast.success("Quotation emailed");
+        toast.success("Quotation emailed successfully");
         if (q.status === "draft") {
           updateQuotation.mutate({ id: q.id, status: "sent" });
         }
       } else {
-        toast.error("Email failed", { description: result.message });
+        toast.error("Email sending failed", { description: result.message });
       }
     } catch (e: any) {
       toast.error("Email failed", { description: e?.message || String(e) });
     } finally {
-      setSending(null);
+      setSendingEmailId(null);
     }
   };
 
-  const openPreview = (q: Quotation, action: "download" | "email" | null = null) => {
-    setPreviewQ(q);
-    setPreviewAction(action);
+  const handleConvertToBooking = async (q: Quotation) => {
+    try {
+      if (q.status !== "accepted") {
+        await updateQuotation.mutateAsync({ id: q.id, status: "accepted" });
+      }
+    } catch (e) {
+      console.warn("Could not pre-mark quotation as accepted", e);
+    }
+
+    navigate("/app/bookings?tab=clients", {
+      state: {
+        openAddClient: true,
+        prefill: {
+          name: q.client_name,
+          contact_number: q.client_phone || "",
+          email: q.client_email || "",
+          travel_type: q.service_type === "umrah" ? "Umrah" : "Ticket",
+          selling_price: q.total,
+          notes: `Converted from Quotation #${q.quotation_number}${q.title ? ` — ${q.title}` : ""}\nQuotation Total: ${q.currency} ${Number(q.total).toLocaleString()}`,
+          converted_from_quote_id: q.id,
+        },
+      },
+    });
   };
 
-  const confirmFromPreview = async () => {
-    if (!previewQ) return;
-    const q = previewQ;
-    const action = previewAction;
-    setPreviewQ(null);
-    setPreviewAction(null);
-    if (action === "download") handleDownload(q);
-    else if (action === "email") await handleEmail(q);
-  };
+  // Helper to get booking reference badge
+  const renderBookingReference = (q: Quotation) => {
+    const bookingId = q.booking_id || q.converted_booking_id;
+    if (!bookingId) return null;
 
-  const changeStatus = (q: Quotation, status: Status) => {
-    if (q.status === status) return;
-    updateQuotation.mutate({ id: q.id, status }, { onSuccess: () => refetch() });
+    const matchedClient = clients.find((c: any) => c.id === bookingId);
+    const refText = matchedClient?.serial_number
+      ? `#BK-${matchedClient.serial_number}`
+      : `Booked (#${bookingId.slice(0, 6).toUpperCase()})`;
+
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] bg-green-50 text-green-700 border-green-300 dark:bg-green-950/60 dark:text-green-300 dark:border-green-800 gap-1 h-5 px-1.5 shrink-0"
+        title={`Linked Booking: ${refText}`}
+      >
+        <CheckCircle2 className="w-3 h-3 text-green-600 dark:text-green-400" />
+        <span className="font-semibold truncate max-w-[90px]">{refText}</span>
+      </Badge>
+    );
   };
 
   return (
-    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-7xl pb-24 md:pb-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-            <FileText className="w-7 h-7 text-primary" /> Quotations
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create professional quotations for client bookings, B2B services and Umrah packages.
-          </p>
+    <div className="flex flex-col h-[calc(100dvh-7.5rem)] md:h-[calc(100dvh-8rem)] w-full overflow-hidden">
+      {/* Compact Top Row: Title Left, + New Quotation Right */}
+      <div className="flex items-center justify-between pb-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">Quotations</h2>
+          <span className="text-xs text-muted-foreground font-medium">({filtered.length})</span>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="flex-1 md:flex-none">
-            <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-          <Button onClick={openCreate} size="sm" className="flex-1 md:flex-none">
-            <Plus className="w-4 h-4 mr-2" /> New Quotation
-          </Button>
+        <Button
+          size="sm"
+          onClick={() => navigate("/app/leads-quotes/quotations/new")}
+          className="h-8 px-3 text-xs font-semibold gap-1.5 shadow-sm"
+          title="Press N to create a new quotation"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>New Quotation</span>
+          <kbd className="hidden sm:inline-block text-[10px] px-1 rounded bg-primary-foreground/20 text-primary-foreground font-mono">
+            N
+          </kbd>
+        </Button>
+      </div>
+
+      {/* Stats Strip: Slim single-row strip (~64px) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2 shrink-0">
+        <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
+          <span className="text-[11px] text-muted-foreground font-medium">Total Quotations</span>
+          <span className="text-lg md:text-xl font-black text-foreground">{stats.totalCount}</span>
+        </div>
+
+        <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
+          <span className="text-[11px] text-muted-foreground font-medium">Total Value</span>
+          <span className="text-base md:text-lg font-black text-foreground truncate font-mono">
+            PKR {stats.totalValue.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
+          <span className="text-[11px] text-muted-foreground font-medium">Accepted</span>
+          <span className="text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400">
+            {stats.acceptedCount}
+          </span>
+        </div>
+
+        <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
+          <span className="text-[11px] text-muted-foreground font-medium">Accepted Value</span>
+          <span className="text-base md:text-lg font-black text-emerald-600 dark:text-emerald-400 truncate font-mono">
+            PKR {stats.acceptedValue.toLocaleString()}
+          </span>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
-        <Card><CardContent className="p-3 md:p-4">
-          <p className="text-xs text-muted-foreground">Total Quotations</p>
-          <p className="text-xl md:text-2xl font-bold">{stats.count}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-3 md:p-4">
-          <p className="text-xs text-muted-foreground">Total Value</p>
-          <p className="text-base md:text-xl font-bold flex items-center gap-1"><Banknote className="w-4 h-4" />PKR {stats.total.toLocaleString()}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-3 md:p-4">
-          <p className="text-xs text-muted-foreground">Accepted</p>
-          <p className="text-xl md:text-2xl font-bold text-green-600">{stats.accepted}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-3 md:p-4">
-          <p className="text-xs text-muted-foreground">Accepted Value</p>
-          <p className="text-base md:text-xl font-bold text-green-600">PKR {stats.acceptedTotal.toLocaleString()}</p>
-        </CardContent></Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-3 md:p-4 flex flex-col md:flex-row gap-2 md:gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-3.5 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search by number, client or title..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 md:flex gap-2 md:gap-3">
-            <Select value={filterService} onValueChange={setFilterService}>
-              <SelectTrigger className="md:w-48"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Services</SelectItem>
-                <SelectItem value="client_booking">Client Booking</SelectItem>
-                <SelectItem value="b2b">B2B Service</SelectItem>
-                <SelectItem value="umrah">Umrah Package</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="md:w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* List */}
-      <Card>
-        <CardHeader className="p-4 md:p-6"><CardTitle className="text-base md:text-lg">Quotations</CardTitle></CardHeader>
-        <CardContent className="p-3 md:p-6 pt-0">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground">Loading...</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <FileText className="w-12 h-12 mx-auto opacity-30 mb-2" />
-              No quotations yet. Click "New Quotation" to create one.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filtered.map((q) => (
-                <div key={q.id} className="border rounded-xl p-3 md:p-4 hover:bg-muted/30 transition-colors active:bg-muted/40">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm md:text-base break-all">{q.quotation_number}</span>
-                        <Badge className={statusColors[q.status]}>{q.status}</Badge>
-                        <Badge variant="outline" className="text-xs">{serviceLabels[q.service_type] || q.service_type}</Badge>
-                      </div>
-                      <div className="mt-1 text-sm">
-                        <span className="font-medium">{q.client_name}</span>
-                        {q.title ? <span className="text-muted-foreground"> — {q.title}</span> : null}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {format(new Date(q.quotation_date), "dd MMM yyyy")}
-                        {q.valid_until ? ` • Valid until ${format(new Date(q.valid_until), "dd MMM yyyy")}` : ""}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between md:justify-end gap-2 md:gap-4">
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Total</p>
-                        <p className="font-bold text-sm md:text-base">{q.currency} {Number(q.total).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action row — mobile-optimised */}
-                  <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2">
-                    <Select value={q.status} onValueChange={(v: Status) => changeStatus(q, v)}>
-                      <SelectTrigger className="h-9 w-[110px] text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="sent">Sent</SelectItem>
-                        <SelectItem value="accepted">Accepted</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex-1" />
-                    {(q as any).converted_booking_id ? (
-                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-300 gap-1 h-9 px-2.5">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Booked
-                      </Badge>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 px-2.5 text-xs gap-1.5 text-primary hover:bg-primary/10 border-primary/30 font-semibold"
-                        onClick={() => handleConvertToBooking(q)}
-                      >
-                        <ArrowRightCircle className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Convert to </span>Booking
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => openPreview(q, null)}>
-                      <Eye className="w-4 h-4 md:mr-1" /> <span className="hidden md:inline">Preview</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => openPreview(q, "download")}>
-                      <Download className="w-4 h-4 md:mr-1" /> <span className="hidden md:inline">PDF</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => openPreview(q, "email")} disabled={sending === q.id}>
-                      {sending === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4 md:mr-1" />} <span className="hidden md:inline">Email</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => openEdit(q)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-9 px-2"><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="z-[100]">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete quotation?</AlertDialogTitle>
-                          <AlertDialogDescription>Quotation {q.quotation_number} will be permanently removed.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteQuotation.mutate(q.id)}>Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Filter Row: ONE LINE (Search | DATE FILTER | All Services | All Status) */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9 h-9 text-xs rounded-lg"
+            placeholder="Search by quotation #, client, title, phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Create / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl w-[calc(100vw-1rem)] max-h-[95vh] md:max-h-[90vh] overflow-y-auto z-[100] p-4 md:p-6">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Quotation" : "New Quotation"}</DialogTitle>
-            <DialogDescription>Fill in details and save. PDF and email options are available after saving.</DialogDescription>
-          </DialogHeader>
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+          {/* Date Filter Dropdown with presets */}
+          <DatePresetFilter
+            value={dateFilter}
+            onChange={setDateFilter}
+            className="h-9 shrink-0"
+          />
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label>Quotation # *</Label>
-                <div className="flex gap-1">
-                  <Input value={form.quotation_number} onChange={(e) => setForm({ ...form, quotation_number: e.target.value })} />
-                  {!editing && (
-                    <Button type="button" size="icon" variant="outline" title="Auto-generate number" onClick={regenerateNumber}>
-                      <Sparkles className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Date *</Label>
-                <Input type="date" value={form.quotation_date} onChange={(e) => setForm({ ...form, quotation_date: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Valid Until</Label>
-                <Input type="date" value={form.valid_until || ""} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} />
-              </div>
-            </div>
+          {/* All Services */}
+          <Select value={filterService} onValueChange={setFilterService}>
+            <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-50 text-xs">
+              <SelectItem value="all">All Services</SelectItem>
+              <SelectItem value="client_booking">Client Booking</SelectItem>
+              <SelectItem value="b2b">B2B Service</SelectItem>
+              <SelectItem value="umrah">Umrah Package</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Service Type *</Label>
-                <Select value={form.service_type} onValueChange={(v: ServiceType) => setForm({ ...form, service_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="client_booking">Client Booking</SelectItem>
-                    <SelectItem value="b2b">B2B Service</SelectItem>
-                    <SelectItem value="umrah">Umrah Package</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="accepted">Accepted</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          {/* All Status Dropdown */}
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-50 text-xs">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-            {form.service_type === "client_booking" && clients.length > 0 && (
-              <div className="space-y-1">
-                <Label>Link Existing Client (optional)</Label>
-                <Select
-                  value={form.client_id || "none"}
-                  onValueChange={(v) => {
-                    if (v === "none") { setForm({ ...form, client_id: null }); return; }
-                    const c = clients.find((x: any) => x.id === v);
-                    setForm({
-                      ...form,
-                      client_id: v,
-                      client_name: c?.name || form.client_name,
-                      client_email: (c as any)?.email || form.client_email,
-                      client_phone: (c as any)?.contact_number || form.client_phone,
-                    });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Pick a client" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {clients.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+      {/* Quick Status Chips Row */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 shrink-0 no-scrollbar">
+        {[
+          { key: "all", label: "All", count: statusCounts.all, activeColor: "bg-primary text-primary-foreground" },
+          { key: "draft", label: "Draft", count: statusCounts.draft, activeColor: "bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900" },
+          { key: "sent", label: "Sent", count: statusCounts.sent, activeColor: "bg-blue-600 text-white" },
+          { key: "accepted", label: "Accepted", count: statusCounts.accepted, activeColor: "bg-emerald-600 text-white" },
+          { key: "rejected", label: "Rejected", count: statusCounts.rejected, activeColor: "bg-destructive text-destructive-foreground" },
+          { key: "expired", label: "Expired", count: statusCounts.expired, activeColor: "bg-amber-600 text-white" },
+        ].map((chip) => {
+          const isSelected = filterStatus === chip.key;
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setFilterStatus(chip.key)}
+              className={cn(
+                "h-7 px-2.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 border",
+                isSelected
+                  ? `${chip.activeColor} border-transparent shadow-sm font-semibold`
+                  : "bg-background/80 hover:bg-muted text-muted-foreground border-border/80"
+              )}
+            >
+              <span>{chip.label}</span>
+              <span
+                className={cn(
+                  "text-[10px] px-1.5 py-0.2 rounded-full",
+                  isSelected
+                    ? "bg-black/20 text-current"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {chip.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-            {form.service_type === "b2b" && b2bAgents.length > 0 && (
-              <div className="space-y-1">
-                <Label>Link B2B Agent (optional)</Label>
-                <Select
-                  value={form.agent_id || "none"}
-                  onValueChange={(v) => {
-                    if (v === "none") { setForm({ ...form, agent_id: null }); return; }
-                    const a = b2bAgents.find((x: any) => x.id === v);
-                    setForm({
-                      ...form,
-                      agent_id: v,
-                      client_name: a?.agent_name || form.client_name,
-                      client_email: a?.email || form.client_email,
-                      client_phone: a?.phone || form.client_phone,
-                    });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Pick an agent" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    {b2bAgents.map((a: any) => (
-                      <SelectItem key={a.id} value={a.id}>{a.agent_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label>Client / Recipient Name *</Label>
-                <Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Email</Label>
-                <Input type="email" value={form.client_email || ""} onChange={(e) => setForm({ ...form, client_email: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input value={form.client_phone || ""} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Title</Label>
-                <Input value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Umrah Package 14-Night" />
-              </div>
-              <div className="space-y-1">
-                <Label>Currency</Label>
-                <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PKR">PKR</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="SAR">SAR</SelectItem>
-                    <SelectItem value="AED">AED</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Textarea rows={2} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
-
-            {/* Items */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Items *</Label>
-                <Button type="button" size="sm" variant="outline"
-                  onClick={() => setForm(recalc({ ...form, items: [...form.items, { description: "", qty: 1, unit_price: 0, amount: 0 }] }))}>
-                  <Plus className="w-3 h-3 mr-1" /> Add Item
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {form.items.map((it, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                    <Input className="col-span-12 md:col-span-6" placeholder="Description" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} />
-                    <Input className="col-span-3 md:col-span-1" type="number" inputMode="decimal" min="0" placeholder="Qty" value={it.qty} onChange={(e) => setItem(i, { qty: Number(e.target.value) })} />
-                    <Input className="col-span-4 md:col-span-2" type="number" inputMode="decimal" min="0" step="0.01" placeholder="Unit" value={it.unit_price} onChange={(e) => setItem(i, { unit_price: Number(e.target.value) })} />
-                    <div className="col-span-4 md:col-span-2 text-sm text-right pt-2.5 font-medium">{Number(it.amount || 0).toLocaleString()}</div>
-                    <Button type="button" size="icon" variant="ghost" className="col-span-1"
-                      onClick={() => setForm(recalc({ ...form, items: form.items.filter((_, x) => x !== i) }))}
-                      disabled={form.items.length <= 1}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label>Discount</Label>
-                <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.discount} onChange={(e) => setForm(recalc({ ...form, discount: Number(e.target.value) }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Tax</Label>
-                <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.tax} onChange={(e) => setForm(recalc({ ...form, tax: Number(e.target.value) }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Total</Label>
-                <div className="h-11 rounded-xl border bg-muted/40 px-4 flex items-center font-bold">
-                  {form.currency} {Number(form.total).toLocaleString()}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Notes</Label>
-                <Textarea rows={2} value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Terms</Label>
-                <Textarea rows={2} value={form.terms || ""} onChange={(e) => setForm({ ...form, terms: e.target.value })} />
-              </div>
-            </div>
+      {/* TABLE / LIST CONTAINER: Fills remaining height, internal scroll only for rows */}
+      <div className="flex-1 min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden flex flex-col shadow-sm">
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin mb-2" />
+            <p className="text-xs">Loading quotations...</p>
           </div>
-
-          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={submit} disabled={addQuotation.isPending || updateQuotation.isPending} className="w-full sm:w-auto">
-              {addQuotation.isPending || updateQuotation.isPending ? "Saving..." : editing ? "Update" : "Create"}
+        ) : filtered.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <FileText className="w-10 h-10 text-muted-foreground/30 mb-2" />
+            <p className="text-sm font-semibold text-foreground">No quotations found</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+              {search || filterStatus !== "all" || filterService !== "all" || dateFilter.preset !== "this_month"
+                ? "Try clearing your filters or date range to view quotations."
+                : "Create your first professional quotation to send to your clients."}
+            </p>
+            <Button
+              size="sm"
+              onClick={() => navigate("/app/leads-quotes/quotations/new")}
+              className="mt-3 h-8 text-xs font-semibold gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Quotation</span>
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        ) : (
+          <>
+            {/* DESKTOP TABLE VIEW (>= 1024px) */}
+            <div className="hidden lg:block flex-1 overflow-y-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="sticky top-0 bg-muted/90 backdrop-blur z-10 border-b text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="py-2.5 px-3">Quotation #</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Client</th>
+                    <th className="py-2.5 px-3">Service Type</th>
+                    <th className="py-2.5 px-3 text-right">Total</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((q) => {
+                    const isExpired = isQuotationExpired(q);
+                    const bookingId = q.booking_id || q.converted_booking_id;
+                    return (
+                      <tr key={q.id} className="hover:bg-muted/40 transition-colors group">
+                        {/* Quotation # + Link booking */}
+                        <td className="py-2.5 px-3 font-semibold font-mono text-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <span>{q.quotation_number}</span>
+                            {renderBookingReference(q)}
+                          </div>
+                          {q.title && <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[180px]">{q.title}</p>}
+                        </td>
+
+                        {/* Date */}
+                        <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                          <div>{format(parseISO(q.quotation_date), "dd MMM yyyy")}</div>
+                          {q.valid_until && (
+                            <div className="text-[10px] text-muted-foreground/80">
+                              Valid: {format(parseISO(q.valid_until), "dd MMM")}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Client */}
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-foreground truncate max-w-[170px]">{q.client_name}</div>
+                          {q.client_phone && <div className="text-[11px] text-muted-foreground font-mono">{q.client_phone}</div>}
+                        </td>
+
+                        {/* Service Type */}
+                        <td className="py-2.5 px-3">
+                          <Badge variant="outline" className="text-[10px] font-medium py-0 px-1.5 h-4.5">
+                            {serviceLabels[q.service_type] || q.service_type}
+                          </Badge>
+                        </td>
+
+                        {/* Total */}
+                        <td className="py-2.5 px-3 text-right font-bold font-mono text-foreground whitespace-nowrap">
+                          {q.currency} {Number(q.total).toLocaleString()}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {isExpired ? (
+                            <Badge variant="outline" className={cn("text-[10px] font-semibold py-0 px-2 h-5", statusColors.expired)}>
+                              Expired
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className={cn("text-[10px] font-semibold py-0 px-2 h-5 capitalize", statusColors[q.status])}>
+                              {q.status}
+                            </Badge>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            {!bookingId && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleConvertToBooking(q)}
+                                className="h-7 text-[11px] px-2 gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold"
+                                title="Convert this quotation to a client booking"
+                              >
+                                <ArrowRightCircle className="w-3 h-3" />
+                                <span>Convert</span>
+                              </Button>
+                            )}
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setPreviewQ(q)}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="View Quotation Preview"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => navigate(`/app/leads-quotes/quotations/${q.id}/edit`)}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="Edit Quotation"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleDownload(q)}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="Download PDF"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleEmail(q)}
+                              disabled={sendingEmailId === q.id}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="Send PDF Email"
+                            >
+                              {sendingEmailId === q.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Mail className="w-3.5 h-3.5" />
+                              )}
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive/70 hover:text-destructive"
+                                  title="Delete Quotation"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="z-[100]">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete quotation #{q.quotation_number}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete quotation #{q.quotation_number}. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteQuotation.mutate(q.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* MOBILE CARD VIEW (< 1024px) */}
+            <div className="lg:hidden flex-1 overflow-y-auto p-2.5 space-y-2">
+              {filtered.map((q) => {
+                const isExpired = isQuotationExpired(q);
+                const bookingId = q.booking_id || q.converted_booking_id;
+                return (
+                  <div
+                    key={q.id}
+                    className="p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-all flex flex-col gap-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm font-mono text-foreground">{q.quotation_number}</span>
+                          {renderBookingReference(q)}
+                          {isExpired ? (
+                            <Badge variant="outline" className={cn("text-[9px] font-semibold py-0 px-1.5 h-4.5", statusColors.expired)}>
+                              Expired
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className={cn("text-[9px] font-semibold py-0 px-1.5 h-4.5 capitalize", statusColors[q.status])}>
+                              {q.status}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="font-semibold text-xs text-foreground mt-0.5 truncate">{q.client_name}</p>
+                        {q.title && <p className="text-[11px] text-muted-foreground truncate">{q.title}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-muted-foreground block">Total</span>
+                        <span className="font-black text-sm text-foreground font-mono">
+                          {q.currency} {Number(q.total).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t">
+                      <span>{format(parseISO(q.quotation_date), "dd MMM yyyy")}</span>
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">
+                        {serviceLabels[q.service_type] || q.service_type}
+                      </Badge>
+                    </div>
+
+                    {/* Action buttons on card */}
+                    <div className="flex items-center justify-between pt-1.5 border-t gap-1">
+                      {!bookingId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleConvertToBooking(q)}
+                          className="h-8 text-[11px] px-2 gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold"
+                        >
+                          <ArrowRightCircle className="w-3.5 h-3.5" />
+                          <span>Convert to Booking</span>
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setPreviewQ(q)}
+                          className="h-8 w-8 text-muted-foreground"
+                          title="Preview"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => navigate(`/app/leads-quotes/quotations/${q.id}/edit`)}
+                          className="h-8 w-8 text-muted-foreground"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDownload(q)}
+                          className="h-8 w-8 text-muted-foreground"
+                          title="PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleEmail(q)}
+                          disabled={sendingEmailId === q.id}
+                          className="h-8 w-8 text-muted-foreground"
+                          title="Email"
+                        >
+                          {sendingEmailId === q.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Mail className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Preview Dialog */}
-      <Dialog open={!!previewQ} onOpenChange={(o) => { if (!o) { setPreviewQ(null); setPreviewAction(null); } }}>
-        <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] max-h-[95vh] md:max-h-[90vh] overflow-y-auto z-[100] p-4 md:p-6">
+      <Dialog open={Boolean(previewQ)} onOpenChange={(o) => !o && setPreviewQ(null)}>
+        <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto z-[100] p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Eye className="w-5 h-5" /> Quotation Preview</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Eye className="w-5 h-5 text-primary" />
+              <span>Quotation Preview — {previewQ?.quotation_number}</span>
+            </DialogTitle>
             <DialogDescription>
-              Review totals and items before {previewAction === "email" ? "emailing" : previewAction === "download" ? "downloading the PDF" : "closing"}.
+              Review line items and customer information.
             </DialogDescription>
           </DialogHeader>
 
           {previewQ && (
-            <div className="space-y-4 text-sm">
-              <div className="flex items-start justify-between gap-2 pb-3 border-b">
+            <div className="space-y-3.5 text-xs">
+              <div className="flex items-start justify-between pb-2 border-b">
                 <div>
-                  <p className="font-bold text-base">{previewQ.quotation_number}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(previewQ.quotation_date), "dd MMM yyyy")}
-                    {previewQ.valid_until ? ` • Valid until ${format(new Date(previewQ.valid_until), "dd MMM yyyy")}` : ""}
+                  <p className="font-bold text-sm sm:text-base font-mono">{previewQ.quotation_number}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Date: {format(parseISO(previewQ.quotation_date), "dd MMM yyyy")}
+                    {previewQ.valid_until ? ` • Valid until: ${format(parseISO(previewQ.valid_until), "dd MMM yyyy")}` : ""}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Badge className={statusColors[previewQ.status]}>{previewQ.status}</Badge>
-                  <Badge variant="outline" className="text-xs">{serviceLabels[previewQ.service_type] || previewQ.service_type}</Badge>
+                  <Badge variant="outline" className={cn("text-[10px] capitalize", statusColors[previewQ.status])}>
+                    {previewQ.status}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {serviceLabels[previewQ.service_type] || previewQ.service_type}
+                  </Badge>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2.5 rounded-lg border">
                 <div>
-                  <p className="text-xs text-muted-foreground">Quotation For</p>
-                  <p className="font-medium">{previewQ.client_name}</p>
-                  {previewQ.client_email && <p className="text-xs">{previewQ.client_email}</p>}
-                  {previewQ.client_phone && <p className="text-xs">{previewQ.client_phone}</p>}
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Recipient / Client</p>
+                  <p className="font-bold text-foreground text-xs">{previewQ.client_name}</p>
+                  {previewQ.client_phone && <p className="text-muted-foreground">{previewQ.client_phone}</p>}
+                  {previewQ.client_email && <p className="text-muted-foreground">{previewQ.client_email}</p>}
                 </div>
                 {previewQ.title && (
                   <div>
-                    <p className="text-xs text-muted-foreground">Title</p>
-                    <p className="font-medium">{previewQ.title}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Subject / Package</p>
+                    <p className="font-semibold text-foreground text-xs">{previewQ.title}</p>
+                    {previewQ.description && <p className="text-muted-foreground line-clamp-2">{previewQ.description}</p>}
                   </div>
                 )}
               </div>
 
-              {previewQ.description && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Description</p>
-                  <p className="whitespace-pre-wrap">{previewQ.description}</p>
-                </div>
-              )}
-
-              {/* Items */}
+              {/* Items List */}
               <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-xs font-semibold">
+                <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/60 text-[11px] font-semibold text-muted-foreground">
                   <div className="col-span-6">Description</div>
                   <div className="col-span-2 text-center">Qty</div>
-                  <div className="col-span-2 text-right">Unit</div>
+                  <div className="col-span-2 text-right">Unit Price</div>
                   <div className="col-span-2 text-right">Amount</div>
                 </div>
                 {(previewQ.items || []).map((it, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 px-3 py-2 border-t text-sm">
-                    <div className="col-span-6 break-words">{it.description || "-"}</div>
-                    <div className="col-span-2 text-center">{it.qty}</div>
-                    <div className="col-span-2 text-right">{Number(it.unit_price || 0).toLocaleString()}</div>
-                    <div className="col-span-2 text-right font-medium">{Number(it.amount || 0).toLocaleString()}</div>
+                  <div key={i} className="grid grid-cols-12 gap-2 px-3 py-2 border-t text-xs">
+                    <div className="col-span-6 break-words font-medium">{it.description || "-"}</div>
+                    <div className="col-span-2 text-center font-mono">{it.qty}</div>
+                    <div className="col-span-2 text-right font-mono">{Number(it.unit_price || 0).toLocaleString()}</div>
+                    <div className="col-span-2 text-right font-bold font-mono">
+                      {Number(it.amount || 0).toLocaleString()}
+                    </div>
                   </div>
                 ))}
               </div>
 
               {/* Totals */}
-              <div className="ml-auto w-full sm:w-72 space-y-1">
-                <div className="flex justify-between text-sm"><span>Subtotal</span><span>{previewQ.currency} {Number(previewQ.subtotal).toLocaleString()}</span></div>
+              <div className="ml-auto w-full sm:w-64 space-y-1 bg-muted/20 p-2.5 rounded-lg border">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-mono">{previewQ.currency} {Number(previewQ.subtotal).toLocaleString()}</span>
+                </div>
                 {Number(previewQ.discount) > 0 && (
-                  <div className="flex justify-between text-sm"><span>Discount</span><span>- {previewQ.currency} {Number(previewQ.discount).toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                    <span>Discount</span>
+                    <span className="font-mono">- {previewQ.currency} {Number(previewQ.discount).toLocaleString()}</span>
+                  </div>
                 )}
                 {Number(previewQ.tax) > 0 && (
-                  <div className="flex justify-between text-sm"><span>Tax</span><span>{previewQ.currency} {Number(previewQ.tax).toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Tax</span>
+                    <span className="font-mono">+ {previewQ.currency} {Number(previewQ.tax).toLocaleString()}</span>
+                  </div>
                 )}
-                <div className="flex justify-between text-base font-bold pt-1 border-t">
-                  <span>Total</span><span>{previewQ.currency} {Number(previewQ.total).toLocaleString()}</span>
+                <div className="flex justify-between text-sm font-black pt-1.5 border-t text-primary">
+                  <span>TOTAL:</span>
+                  <span className="font-mono">{previewQ.currency} {Number(previewQ.total).toLocaleString()}</span>
                 </div>
               </div>
 
-              {previewQ.notes && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-muted-foreground">Notes</p>
-                  <p className="whitespace-pre-wrap text-sm">{previewQ.notes}</p>
-                </div>
-              )}
               {previewQ.terms && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Terms</p>
-                  <p className="whitespace-pre-wrap text-sm">{previewQ.terms}</p>
+                <div className="pt-1 text-[11px] text-muted-foreground">
+                  <span className="font-semibold">Terms:</span> {previewQ.terms}
                 </div>
               )}
             </div>
           )}
 
-          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => { setPreviewQ(null); setPreviewAction(null); }} className="w-full sm:w-auto">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setPreviewQ(null)}>
               Close
             </Button>
-            {previewQ && previewAction === null && (
+            {previewQ && (
               <>
-                <Button variant="outline" onClick={() => { const q = previewQ; setPreviewQ(null); handleDownload(q); }} className="w-full sm:w-auto">
-                  <Download className="w-4 h-4 mr-2" /> Download PDF
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const q = previewQ;
+                    setPreviewQ(null);
+                    handleDownload(q);
+                  }}
+                  className="gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download PDF</span>
                 </Button>
-                <Button onClick={() => { const q = previewQ; setPreviewQ(null); handleEmail(q); }} className="w-full sm:w-auto" disabled={!previewQ.client_email}>
-                  <Mail className="w-4 h-4 mr-2" /> Email
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const q = previewQ;
+                    setPreviewQ(null);
+                    handleEmail(q);
+                  }}
+                  disabled={!previewQ.client_email}
+                  className="gap-1.5"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Email to Client</span>
                 </Button>
               </>
-            )}
-            {previewQ && previewAction === "download" && (
-              <Button onClick={confirmFromPreview} className="w-full sm:w-auto">
-                <Download className="w-4 h-4 mr-2" /> Confirm & Download
-              </Button>
-            )}
-            {previewQ && previewAction === "email" && (
-              <Button onClick={confirmFromPreview} className="w-full sm:w-auto" disabled={!previewQ.client_email}>
-                <Mail className="w-4 h-4 mr-2" /> Confirm & Send
-              </Button>
             )}
           </DialogFooter>
         </DialogContent>

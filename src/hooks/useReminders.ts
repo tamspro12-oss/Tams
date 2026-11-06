@@ -65,8 +65,10 @@ export function useReminders() {
     const tomorrowStr = format(new Date(Date.now() + 86400000), "yyyy-MM-dd");
 
     const alerts: DynamicTravelAlert[] = [];
+    const clientList = Array.isArray(clients) ? clients : [];
 
-    clients.forEach((c: any) => {
+    clientList.forEach((c: any) => {
+      if (!c) return;
       const travelDateRaw = c.flight_date || c.travelDate || c.travel_date;
       if (!travelDateRaw) return;
 
@@ -80,8 +82,8 @@ export function useReminders() {
       const isUmrah = travelType.includes("umrah");
 
       // Check settings toggles
-      if (isUmrah && settings && !settings.umrah_alerts_enabled) return;
-      if (!isUmrah && settings && !settings.flight_alerts_enabled) return;
+      if (isUmrah && settings && settings.umrah_alerts_enabled === false) return;
+      if (!isUmrah && settings && settings.flight_alerts_enabled === false) return;
 
       alerts.push({
         id: `booking-${c.id}`,
@@ -133,9 +135,10 @@ export function useReminders() {
 
   // Total active alerts count
   const pendingRemindersCount = useMemo(() => {
-    const manualDue = reminders.filter((r) => !r.is_completed).length;
-    const travelCount = dynamicTravelAlerts.length;
-    const dailyPromptCount = (dailyPrompts.openingAlert ? 1 : 0) + (dailyPrompts.closingAlert ? 1 : 0);
+    const reminderList = Array.isArray(reminders) ? reminders : [];
+    const manualDue = reminderList.filter((r) => r && !r.is_completed).length;
+    const travelCount = (dynamicTravelAlerts || []).length;
+    const dailyPromptCount = (dailyPrompts?.openingAlert ? 1 : 0) + (dailyPrompts?.closingAlert ? 1 : 0);
     return manualDue + travelCount + dailyPromptCount;
   }, [reminders, dynamicTravelAlerts, dailyPrompts]);
 
@@ -233,11 +236,11 @@ export function useReminders() {
   });
 
   return {
-    reminders,
+    reminders: Array.isArray(reminders) ? reminders : [],
     settings,
-    dynamicTravelAlerts,
+    dynamicTravelAlerts: Array.isArray(dynamicTravelAlerts) ? dynamicTravelAlerts : [],
     dailyPrompts,
-    pendingRemindersCount,
+    pendingRemindersCount: Number(pendingRemindersCount) || 0,
     loadingReminders,
     refetch,
     addReminder,

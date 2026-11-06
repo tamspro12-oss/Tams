@@ -1,10 +1,17 @@
 // Version control and update management
-const CURRENT_VERSION = '3.2.1';
+const CURRENT_VERSION = '3.3.0';
 const VERSION_KEY = 'travelpro_app_version';
 const CHANGELOG_KEY = 'travelpro_changelog';
 const LAST_CHECK_KEY = 'travelpro_last_version_check';
 
 export const VERSION_CHANGELOG = {
+  '3.3.0': [
+    'Redesigned Queries & Quotes Hub with primary Quotations tab and segmented pill switcher',
+    'Full-page keyboard-first New Quotation & Query creation forms with shortcuts (Tab, Ctrl+Enter, Esc)',
+    'Manual free-text quotation numbering with per-agency uniqueness validation and last-used helper',
+    'Integrated Date Preset filter (Today, Yesterday, Week, Month, Year, Custom Range) across lists and stats',
+    'Instant Umrah Calculator package import and seamless quotation-to-booking conversion'
+  ],
   '3.2.1': [
     'Unified single-screen Umrah Package Calculator layout',
     'Keyboard-first data entry and shortcuts (Ctrl+S, Ctrl+Enter, Ctrl+Shift+R)',

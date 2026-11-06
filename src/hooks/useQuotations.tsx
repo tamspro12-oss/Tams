@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
@@ -35,6 +36,8 @@ export interface Quotation {
   terms: string | null;
   source: string | null;
   source_ref: any;
+  booking_id?: string | null;
+  converted_booking_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -63,6 +66,31 @@ export function useQuotations() {
     },
     enabled: !!agencyId,
   });
+
+  // Real-time synchronization for quotations
+  useEffect(() => {
+    if (!agencyId) return;
+
+    const channel = supabase
+      .channel("quotations-realtime-channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "quotations",
+          filter: `agency_id=eq.${agencyId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["quotations", agencyId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, agencyId]);
 
   const addQuotation = useMutation({
     mutationFn: async (q: QuotationInput) => {
