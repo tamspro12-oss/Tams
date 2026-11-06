@@ -697,7 +697,7 @@ export default function UmrahCalculator() {
       return;
     }
     const perPerson = Math.round(result.perPerson);
-    navigate("/app/quotations", {
+    navigate("/app/leads-quotes/quotations/new", {
       state: {
         prefill: {
           service_type: "umrah",

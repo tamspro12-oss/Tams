@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.3.1'; // Update this with each deployment
+const CURRENT_VERSION = '3.4.1'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,19 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.4.1': [
+          'Compact single-bar control header for Umrah Package Calculator',
+          'Streamlined Passengers and Service Charges row with Profit field removed',
+          'Root-cause fix for multi-hotel combination bug (all Makkah & Madinah hotels stay visible and counted in totals)',
+          'Direct 1-click Quotation creation from calculator into quotation form',
+        ],
+        '3.4.0': [
+          'Action-Driven Dashboard: 5-button Quick Actions bar for instant bookings, payments, quotes, queries, and expenses',
+          'Financials Above-the-Fold: Unified B2C + B2B aggregations with Net Profit KPI card and clean 3-column financial & payables grid',
+          'Conditional Actionable Alerts: Smart slim banner for urgent items, hiding automatically when clear of alerts',
+          'Consolidated Navbar Notification Bell: Real-time tabs for Departures (Tickets & Umrah), Name Updates, Active Queries, and Tasks',
+          'Interactive Empty States: Direct inline "+ Receive Payment" and "+ Pay Vendor" buttons inside alerts and payables widgets',
+        ],
         '3.3.1': [
           'Sidebar-proof Umrah Calculator redesign using container queries',
           'Fintech-style unified layout with soft tints and tabular figures',
