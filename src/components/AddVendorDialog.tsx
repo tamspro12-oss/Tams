@@ -37,21 +37,34 @@ const getInitialFormData = (vendor?: any) => ({
 
 export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor?: any; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
+  const [isFullScreen, setIsFullScreen] = useState(true);
   const { addVendor, updateVendor } = useVendors();
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
   const { balances, upsertBalance } = useOpeningBalances();
   const { data: agency } = useAgency();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Keyboard navigation & Ctrl+Enter to save
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        const form = document.querySelector<HTMLFormElement>("#vendor-form");
+        if (form) form.requestSubmit();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
   const existingOpeningBalance = editVendor
     ? balances.find((b) => b.party_type === "vendor" && b.party_id === editVendor.id)
     : null;
   const [openingBalanceAmount, setOpeningBalanceAmount] = useState<string>("");
   const [openingBalanceType, setOpeningBalanceType] = useState<"payable" | "receivable">("payable");
-
-  const isOpen = open !== undefined ? open : internalOpen;
-  const setIsOpen = onOpenChange || setInternalOpen;
 
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
 
@@ -224,6 +237,7 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
         )}
         
         <form 
+          id="vendor-form"
           onSubmit={handleSubmit} 
           className={cn(
             "flex-1 overflow-y-auto form-scroll-container",
@@ -471,9 +485,12 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="px-6 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25"
+              className="px-6 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25 gap-1.5"
             >
               {isSubmitting ? (editVendor ? "Updating..." : "Adding...") : (editVendor ? "Update Vendor" : "Add Vendor")}
+              <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-white/20 rounded">
+                Ctrl+Enter
+              </kbd>
             </Button>
           </div>
         </form>

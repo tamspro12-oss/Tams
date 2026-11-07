@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { Plus, Trash2, Calendar, FileText, User, Plane, Building2, Sparkles } from "lucide-react";
+import { Plus, Trash2, Calendar, FileText, User, Plane, Building2, Sparkles, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { useClients } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
 import type { Voucher, VoucherType, VoucherStatus, VoucherPassenger } from "@/types/voucher";
@@ -82,6 +83,21 @@ export function CreateVoucherDialog({
   const [remarks, setRemarks] = useState("");
   const [terms, setTerms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(true);
+
+  // Keyboard navigation & Ctrl+Enter to save
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        const form = document.querySelector<HTMLFormElement>("#voucher-form");
+        if (form) form.requestSubmit();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   // Load existing voucher or initial booking data
   useEffect(() => {
@@ -356,18 +372,39 @@ export function CreateVoucherDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
-            {voucherToEdit ? `Edit Voucher (${voucherToEdit.voucher_number})` : "Create New Voucher"}
-          </DialogTitle>
-          <DialogDescription>
-            Generate branded Umrah, Hotel, or Airline ticket vouchers with auto-fill and instant PDF export.
-          </DialogDescription>
+      <DialogContent className={cn(
+        "overflow-hidden flex flex-col transition-all duration-300",
+        isFullScreen 
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6" 
+          : "max-w-3xl max-h-[90dvh] p-4 sm:p-6"
+      )}>
+        <DialogHeader className="shrink-0 border-b pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              <div>
+                <DialogTitle className="text-xl font-bold">
+                  {voucherToEdit ? `Edit Voucher (${voucherToEdit.voucher_number})` : "Create New Voucher"}
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Generate branded Umrah, Hotel, or Airline ticket vouchers with auto-fill and instant PDF export.
+                </DialogDescription>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="h-8 w-8 shrink-0"
+              title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
+            >
+              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </Button>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 pt-2">
+        <form id="voucher-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 pt-2">
           {/* Voucher Type Tabs */}
           {!voucherToEdit && (
             <div className="space-y-1.5">
@@ -968,6 +1005,9 @@ export function CreateVoucherDialog({
                 <>
                   <FileText className="w-4 h-4" />
                   {voucherToEdit ? "Update Voucher" : "Issue Voucher"}
+                  <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-white/20 rounded">
+                    Ctrl+Enter
+                  </kbd>
                 </>
               )}
             </Button>
