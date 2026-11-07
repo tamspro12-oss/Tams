@@ -492,16 +492,6 @@ export default function Dashboard() {
                 />
               </PopoverContent>
             </Popover>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleRefresh}
-              className="h-9 w-9 shrink-0 text-slate-500 hover:text-slate-900 bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800"
-              title="Refresh Dashboard"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
           </div>
         </div>
 
@@ -553,81 +543,120 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 3. QUICK ACTION BUTTONS (2 Rows x 3 Columns - World-Class Aesthetic) */}
+        {/* 3. QUICK ACTION BUTTONS (3 + 3 Grid: Premium Shape, Gradient Icon Badges, Distinct Accents) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Row 1 - Action 1: + Create Booking (Primary Action Button) */}
+          {/* Action 1: Create Booking - Blue Accent */}
           <button
             type="button"
-            onClick={() => setIsAddBookingOpen(true)}
-            className="h-14 rounded-xl px-5 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm shadow-slate-900/10 flex items-center justify-start gap-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 text-sm font-semibold cursor-pointer group"
+            onClick={() => navigate("/app/bookings?tab=clients&action=new", { state: { openAddClient: true } })}
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-white/10 dark:bg-slate-900/10 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-              <Plane className="w-4 h-4 text-white dark:text-slate-900" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-blue-500/25 transition-transform duration-200 group-hover:scale-105">
+              <Plane className="w-5 h-5" />
             </div>
-            <span>+ Create Booking</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors block truncate">
+                Create Booking
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                New client reservation & tickets
+              </span>
+            </div>
           </button>
 
-          {/* Row 1 - Action 2: Umrah Calculator */}
+          {/* Action 2: Umrah Calculator - Green/Emerald Accent */}
           <button
             type="button"
             onClick={() => navigate("/app/umrah-calculator")}
-            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400 transition-colors group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/40">
-              <Calculator className="w-4 h-4" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/25 transition-transform duration-200 group-hover:scale-105">
+              <Calculator className="w-5 h-5" />
             </div>
-            <span>Umrah Calculator</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
+                Umrah Calculator
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                Package costing & quotes
+              </span>
+            </div>
           </button>
 
-          {/* Row 1 - Action 3: + Add Payment */}
+          {/* Action 3: Add Payment - Purple Accent */}
           <button
             type="button"
-            onClick={() => {
-              setQuickPaymentTab('client');
-              setIsQuickPaymentOpen(true);
-            }}
-            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+            onClick={() => navigate("/app/accounts?tab=bank-cash&action=new-entry", { state: { openAddEntry: true } })}
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/40">
-              <Wallet className="w-4 h-4" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-500/25 transition-transform duration-200 group-hover:scale-105">
+              <Wallet className="w-5 h-5" />
             </div>
-            <span>+ Add Payment</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors block truncate">
+                Add Payment
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                Record cash & bank entries
+              </span>
+            </div>
           </button>
 
-          {/* Row 2 - Action 4: + Add Quotation */}
+          {/* Action 4: Add Quotation - Orange Accent */}
           <button
             type="button"
             onClick={() => navigate("/app/leads-quotes/quotations/new")}
-            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-orange-400 dark:hover:border-orange-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400 transition-colors group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40">
-              <FileText className="w-4 h-4" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-orange-500/25 transition-transform duration-200 group-hover:scale-105">
+              <FileText className="w-5 h-5" />
             </div>
-            <span>+ Add Quotation</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors block truncate">
+                Add Quotation
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                Client & B2B price proposals
+              </span>
+            </div>
           </button>
 
-          {/* Row 2 - Action 5: + New Client Query */}
+          {/* Action 5: New Client Query - Teal/Cyan Accent */}
           <button
             type="button"
             onClick={() => navigate("/app/leads-quotes/queries/new")}
-            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-teal-400 dark:hover:border-teal-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-400 transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-950/40">
-              <UserPlus className="w-4 h-4" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-teal-500/25 transition-transform duration-200 group-hover:scale-105">
+              <UserPlus className="w-5 h-5" />
             </div>
-            <span>+ New Client Query</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors block truncate">
+                New Client Query
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                Inbound lead & enquiry
+              </span>
+            </div>
           </button>
 
-          {/* Row 2 - Action 6: + Add Expense / Bill */}
+          {/* Action 6: Add Expense / Bill - Red Accent */}
           <button
             type="button"
-            onClick={() => setIsAddExpenseOpen(true)}
-            className="h-14 rounded-xl px-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 active:translate-y-0 flex items-center justify-start gap-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer group"
+            onClick={() => navigate("/app/accounts?tab=expenses&action=new", { state: { openAddExpense: true } })}
+            className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-rose-400 dark:hover:border-rose-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
-            <div className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 transition-colors group-hover:bg-amber-50 dark:group-hover:bg-amber-950/40">
-              <Receipt className="w-4 h-4" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-rose-500/25 transition-transform duration-200 group-hover:scale-105">
+              <Receipt className="w-5 h-5" />
             </div>
-            <span>+ Add Expense / Bill</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors block truncate">
+                Add Expense / Bill
+              </span>
+              <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
+                Daily operational expense
+              </span>
+            </div>
           </button>
         </div>
 

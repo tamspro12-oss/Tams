@@ -10,7 +10,11 @@ import { useAgency } from "@/hooks/useAgency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, addDays, addWeeks, addMonths } from "date-fns";
 
-export function ManualLocalBackup() {
+interface ManualLocalBackupProps {
+  quotaCard?: React.ReactNode;
+}
+
+export function ManualLocalBackup({ quotaCard }: ManualLocalBackupProps = {}) {
   const { toast } = useToast();
   const { data: agency } = useAgency();
   const [selectedFolder, setSelectedFolder] = useState<FileSystemDirectoryHandle | null>(null);
@@ -264,115 +268,135 @@ export function ManualLocalBackup() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Manual Backup (Local)</CardTitle>
-          <CardDescription>
-            Save a backup of your TAMS data to your computer.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isSupported && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Folder selection is not supported on this browser.
-              </AlertDescription>
-            </Alert>
-          )}
+    <div className="space-y-4">
+      {/* Row 1: Storage Usage Card & Manual Backup Card side by side - exactly same size */}
+      <div className={quotaCard ? "grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch" : ""}>
+        {quotaCard}
+        <Card className="h-full flex flex-col justify-between">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Download className="h-4.5 w-4.5 text-primary" />
+              Manual Backup (Local)
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Save a complete offline backup of your agency data to your local machine.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-1 space-y-3 flex-1 flex flex-col justify-between">
+            {!isSupported && (
+              <Alert variant="destructive" className="py-2 text-xs">
+                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertDescription className="text-xs">
+                  Folder selection is not supported on this browser.
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {selectedFolder && (
-            <div className="text-sm text-muted-foreground">
-              Selected folder: <span className="font-medium">{folderName}</span>
+            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-2.5 border">
+              <div className="font-medium text-foreground mb-0.5">Destination Directory:</div>
+              {selectedFolder ? (
+                <span className="font-semibold text-primary truncate block">{folderName}</span>
+              ) : (
+                <span className="text-muted-foreground italic">No destination folder selected yet</span>
+              )}
             </div>
-          )}
 
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={handleChooseFolder}
-              variant="outline"
-              disabled={!isSupported || isBackingUp}
-              className="gap-2"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Choose Folder
-            </Button>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+              <Button
+                onClick={handleChooseFolder}
+                variant="outline"
+                size="sm"
+                disabled={!isSupported || isBackingUp}
+                className="h-9 text-xs rounded-lg gap-1.5"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                Choose Folder
+              </Button>
 
-            <Button
-              onClick={handleBackupNow}
-              disabled={!selectedFolder || isBackingUp || !isSupported}
-              className="gap-2"
-            >
-              <Download className="w-4 h-4" />
-              {isBackingUp ? "Backing Up..." : "Backup Now"}
-            </Button>
+              <Button
+                onClick={handleBackupNow}
+                size="sm"
+                disabled={!selectedFolder || isBackingUp || !isSupported}
+                className="h-9 text-xs rounded-lg gap-1.5 font-semibold"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isBackingUp ? "Backing Up..." : "Backup Now"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 2: Auto Backup Card - full width below, options in a horizontal row */}
+      <Card className="w-full">
+        <CardHeader className="p-4 pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Clock className="h-4.5 w-4.5 text-primary" />
+                Auto Backup (Optional)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Automatically save periodic backups to your designated local folder whenever online.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="auto-backup"
+                checked={autoBackupEnabled}
+                onCheckedChange={handleAutoBackupToggle}
+                disabled={!isSupported}
+              />
+              <label
+                htmlFor="auto-backup"
+                className="text-xs font-semibold cursor-pointer select-none"
+              >
+                Enable Auto Backup
+              </label>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Auto Backup (Optional)</CardTitle>
-          <CardDescription>
-            Automatically save a backup file to your selected folder.
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="auto-backup"
-              checked={autoBackupEnabled}
-              onCheckedChange={handleAutoBackupToggle}
-              disabled={!isSupported}
-            />
-            <label
-              htmlFor="auto-backup"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Enable Auto Backup
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Backup Frequency</label>
-            <Select
-              value={autoBackupFrequency}
-              onValueChange={handleFrequencyChange}
-              disabled={!autoBackupEnabled || !isSupported}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-3 pt-2 border-t">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Next Backup:
+        <CardContent className="p-4 pt-1">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-lg border bg-muted/30">
+            {/* Backup frequency selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                Backup Frequency:
               </span>
-              <span className="font-medium">
+              <Select
+                value={autoBackupFrequency}
+                onValueChange={handleFrequencyChange}
+                disabled={!autoBackupEnabled || !isSupported}
+              >
+                <SelectTrigger className="w-[130px] h-8 text-xs rounded-lg bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily" className="text-xs">Daily</SelectItem>
+                  <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
+                  <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Next Backup */}
+            <div className="flex items-center gap-2 text-xs">
+              <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="text-muted-foreground">Next Backup:</span>
+              <span className="font-semibold text-foreground">
                 {nextBackupDate && autoBackupEnabled
-                  ? format(new Date(nextBackupDate), 'PPP')
+                  ? format(new Date(nextBackupDate), 'PP')
                   : 'Not scheduled'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Last Backup:
-              </span>
-              <span className="font-medium">
+            {/* Last Backup */}
+            <div className="flex items-center gap-2 text-xs">
+              <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span className="text-muted-foreground">Last Backup:</span>
+              <span className="font-semibold text-foreground">
                 {lastBackupDate
-                  ? format(new Date(lastBackupDate), 'PPP')
+                  ? format(new Date(lastBackupDate), 'PP')
                   : 'Never'}
               </span>
             </div>

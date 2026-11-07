@@ -65,14 +65,15 @@ export default function Clients() {
   const [prefillClient, setPrefillClient] = useState<any>(null);
 
   useEffect(() => {
-    if (location.state?.openAddClient) {
-      if (location.state.prefill) {
+    const params = new URLSearchParams(location.search);
+    if (location.state?.openAddClient || params.get("action") === "new") {
+      if (location.state?.prefill) {
         setPrefillClient(location.state.prefill);
       }
       setShowAddDialog(true);
-      window.history.replaceState({}, document.title);
+      window.history.replaceState({}, document.title, location.pathname + (params.get("tab") ? `?tab=${params.get("tab")}` : ""));
     }
-  }, [location.state]);
+  }, [location.state, location.search, location.pathname]);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentClient, setPaymentClient] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);

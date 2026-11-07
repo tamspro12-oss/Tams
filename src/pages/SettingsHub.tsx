@@ -1,14 +1,16 @@
+import { lazy, Suspense } from "react";
 import { useSearchParams, Navigate } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, Palette, Mail, HardDrive, BookOpen } from "lucide-react";
+import { SettingsTabSkeleton } from "@/components/SettingsSkeleton";
 
-// The 5 Consolidated Modular Settings Components
-import { AccountSettings } from "@/components/AccountSettings";
-import { BrandingSettings } from "@/components/BrandingSettings";
-import { EmailIntegration } from "@/components/EmailIntegration";
-import { StorageSettings } from "@/components/StorageSettings";
-import UserManual from "@/pages/UserManual";
+// Lazy-loaded Modular Settings Components for High-Performance Startup
+const AccountSettings = lazy(() => import("@/components/AccountSettings"));
+const BrandingSettings = lazy(() => import("@/components/BrandingSettings"));
+const EmailIntegration = lazy(() => import("@/components/EmailIntegration"));
+const StorageSettings = lazy(() => import("@/components/StorageSettings"));
+const UserManual = lazy(() => import("@/pages/UserManual"));
 
 export type SettingsMainTab = "account" | "branding" | "email-integration" | "storage" | "manual";
 
@@ -117,15 +119,17 @@ export default function SettingsHub() {
 
       {/* Active Tab View - Compact Zero-Scroll Content Container */}
       <div className="pt-1">
-        {currentTab === "account" && <AccountSettings />}
-        {currentTab === "branding" && <BrandingSettings />}
-        {currentTab === "email-integration" && <EmailIntegration />}
-        {currentTab === "storage" && <StorageSettings />}
-        {currentTab === "manual" && (
-          <div className="rounded-xl border bg-card/60 p-3 sm:p-5 max-h-[calc(100vh-200px)] overflow-y-auto">
-            <UserManual />
-          </div>
-        )}
+        <Suspense fallback={<SettingsTabSkeleton />}>
+          {currentTab === "account" && <AccountSettings />}
+          {currentTab === "branding" && <BrandingSettings />}
+          {currentTab === "email-integration" && <EmailIntegration />}
+          {currentTab === "storage" && <StorageSettings />}
+          {currentTab === "manual" && (
+            <div className="rounded-xl border bg-card/60 p-3 sm:p-5 max-h-[calc(100vh-200px)] overflow-y-auto">
+              <UserManual />
+            </div>
+          )}
+        </Suspense>
       </div>
     </div>
   );

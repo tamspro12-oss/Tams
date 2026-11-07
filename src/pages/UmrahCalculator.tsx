@@ -75,6 +75,7 @@ export interface HotelEntry {
   rateMode: RateMode;
   rate: string;
   nights: string;
+  currency?: string;
 }
 
 interface PresetPackage {
@@ -97,6 +98,7 @@ const createDefaultHotels = (): HotelEntry[] => [
     rateMode: "sharing",
     rate: "",
     nights: "12",
+    currency: "SAR",
   },
   {
     id: "madinah-1",
@@ -106,6 +108,7 @@ const createDefaultHotels = (): HotelEntry[] => [
     rateMode: "sharing",
     rate: "",
     nights: "8",
+    currency: "SAR",
   },
 ];
 
@@ -192,6 +195,7 @@ export default function UmrahCalculator() {
       rateMode: "sharing",
       rate: "",
       nights: "",
+      currency: "SAR",
     };
     setHotels(prev => [...prev, newHotel]);
   };
@@ -207,6 +211,7 @@ export default function UmrahCalculator() {
       rateMode: "sharing",
       rate: "",
       nights: "",
+      currency: "SAR",
     };
     setHotels(prev => [...prev, newHotel]);
   };
@@ -421,11 +426,12 @@ export default function UmrahCalculator() {
   const getHotelRowTotal = useCallback((hotel: HotelEntry): number => {
     const rate = parseValue(hotel.rate);
     const nights = parseValue(hotel.nights);
+    const curr = hotel.currency || hotelCurrency || "SAR";
     if (hotel.rateMode === "room") {
       const divisor = OCCUPANCY_DIVISORS[hotel.sharingType] || 1;
-      return convertToPKR((rate / divisor) * nights, hotelCurrency);
+      return convertToPKR((rate / divisor) * nights, curr);
     }
-    return convertToPKR(rate * nights, hotelCurrency);
+    return convertToPKR(rate * nights, curr);
   }, [convertToPKR, hotelCurrency]);
 
   const calculateUmrah = useCallback((): CalculationResult => {
@@ -1019,14 +1025,6 @@ export default function UmrahCalculator() {
                 </PopoverContent>
               </Popover>
             </div>
-
-            <div className="h-4 w-px bg-border/80 shrink-0" />
-
-            {/* 3) Hotel Currency */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-muted-foreground font-medium text-xs whitespace-nowrap">Hotel Currency:</span>
-              <CurrencySelect value={hotelCurrency} onChange={setHotelCurrency} className="w-[72px] h-7" />
-            </div>
           </div>
 
           {/* Right: Quick Preset dropdown & compact actions */}
@@ -1197,8 +1195,13 @@ export default function UmrahCalculator() {
                     disabled={isPresetLocked}
                   />
                 </div>
-                <div className="text-center text-xs font-semibold text-muted-foreground">
-                  {hotelCurrency}
+                <div className="flex justify-center">
+                  <CurrencySelect
+                    value={hotel.currency || "SAR"}
+                    onChange={v => updateHotel(hotel.id, "currency", v)}
+                    disabled={isPresetLocked}
+                    className="w-16 h-7 text-xs"
+                  />
                 </div>
                 <div className="flex items-center justify-end gap-1.5 pr-2">
                   <span className="font-mono text-xs font-bold text-foreground tabular-nums">
@@ -1291,8 +1294,13 @@ export default function UmrahCalculator() {
                     disabled={isPresetLocked}
                   />
                 </div>
-                <div className="text-center text-xs font-semibold text-muted-foreground">
-                  {hotelCurrency}
+                <div className="flex justify-center">
+                  <CurrencySelect
+                    value={hotel.currency || "SAR"}
+                    onChange={v => updateHotel(hotel.id, "currency", v)}
+                    disabled={isPresetLocked}
+                    className="w-16 h-7 text-xs"
+                  />
                 </div>
                 <div className="flex items-center justify-end gap-1.5 pr-2">
                   <span className="font-mono text-xs font-bold text-foreground tabular-nums">
@@ -1821,35 +1829,18 @@ export default function UmrahCalculator() {
 
         {/* 2-Column Compact Grid: Exchange Rate, Currency, Dates */}
         <div className="rounded-xl border border-border bg-card p-3 shadow-xs space-y-2.5">
-          {/* Row 1: Rate + Currency */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase">1 SAR (in PKR)</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={sarToPkrRate}
-                onFocus={e => e.target.select()}
-                onChange={e => setSarToPkrRate(e.target.value)}
-                className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
-                placeholder="77.50"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase">Hotel Currency</label>
-              <Select value={hotelCurrency} onValueChange={setHotelCurrency}>
-                <SelectTrigger className="h-11 min-h-[44px] text-xs font-semibold bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SAR">SAR (Saudi Riyal)</SelectItem>
-                  <SelectItem value="PKR">PKR (Pak Rupee)</SelectItem>
-                  <SelectItem value="USD">USD (US Dollar)</SelectItem>
-                  <SelectItem value="EUR">EUR (Euro)</SelectItem>
-                  <SelectItem value="AED">AED (Dirham)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Row 1: Exchange Rate */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase">1 SAR (in PKR)</label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={sarToPkrRate}
+              onFocus={e => e.target.select()}
+              onChange={e => setSarToPkrRate(e.target.value)}
+              className="h-11 min-h-[44px] text-center font-bold text-base bg-background"
+              placeholder="77.50"
+            />
           </div>
 
           {/* Row 2: Arrival + Departure */}

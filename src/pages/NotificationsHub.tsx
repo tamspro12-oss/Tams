@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useReminders } from "@/hooks/useReminders";
 import { useNotifications } from "@/hooks/useNotifications";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,11 +69,27 @@ export default function NotificationsHub() {
     snoozeNotification,
   } = useNotifications();
 
-  const safeReminders = Array.isArray(reminders) ? reminders : [];
-  const safeDynamicAlerts = Array.isArray(dynamicTravelAlerts) ? dynamicTravelAlerts : [];
-  const safeUnreadNotifs = Array.isArray(unreadNotifications) ? unreadNotifications : [];
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
+
+  const safeReminders = useMemo(() => {
+    const list = Array.isArray(reminders) ? reminders : [];
+    return list.filter((r) => isDateWithinPreset(r.remind_date || r.created_at, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo));
+  }, [reminders, dateFilter]);
+
+  const safeDynamicAlerts = useMemo(() => {
+    const list = Array.isArray(dynamicTravelAlerts) ? dynamicTravelAlerts : [];
+    return list.filter((a: any) => isDateWithinPreset(a.flight_date || a.created_at, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo));
+  }, [dynamicTravelAlerts, dateFilter]);
+
+  const safeUnreadNotifs = useMemo(() => {
+    const list = Array.isArray(unreadNotifications) ? unreadNotifications : [];
+    return list.filter((n: any) => isDateWithinPreset(n.created_at, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo));
+  }, [unreadNotifications, dateFilter]);
+
   const activeReminders = safeReminders.filter((r) => r && !r.is_completed);
-  const totalActiveCount = (Number(pendingRemindersCount) || 0) + (Number(unreadCount) || 0);
+  const totalActiveCount = (Number(pendingRemindersCount) || 0) + (Number(safeUnreadNotifs.length) || 0);
 
   const [isAddReminderOpen, setIsAddReminderOpen] = useState(false);
 
@@ -124,14 +141,21 @@ export default function NotificationsHub() {
             </div>
           </div>
 
-          <Button
-            size="sm"
-            onClick={() => setIsAddReminderOpen(true)}
-            className="h-9 px-3 text-xs font-semibold gap-1.5 self-start sm:self-auto shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            New Reminder
-          </Button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <DateFilter
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="h-9 shrink-0"
+            />
+            <Button
+              size="sm"
+              onClick={() => setIsAddReminderOpen(true)}
+              className="h-9 px-3 text-xs font-semibold gap-1.5 shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              New Reminder
+            </Button>
+          </div>
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">

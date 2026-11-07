@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, Users, Lock, Shield, Mail, FileText, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { AdminAccountInfo } from "@/components/AdminAccountInfo";
-import { SubUserManagement } from "@/components/SubUserManagement";
-import { ChangePasswordSection } from "@/components/ChangePasswordSection";
 import { usePolicyAcknowledgment } from "@/hooks/usePolicyAcknowledgment";
+import { SettingsTabSkeleton } from "@/components/SettingsSkeleton";
+
+// Lazy-load sub-components so they only fetch and render when active
+const AdminAccountInfo = lazy(() => import("@/components/AdminAccountInfo").then(m => ({ default: m.AdminAccountInfo })));
+const SubUserManagement = lazy(() => import("@/components/SubUserManagement").then(m => ({ default: m.SubUserManagement })));
+const ChangePasswordSection = lazy(() => import("@/components/ChangePasswordSection").then(m => ({ default: m.ChangePasswordSection })));
 
 export type AccountSubView = "admin" | "subusers" | "security" | "legal";
 
@@ -18,9 +21,9 @@ export function AccountSettings() {
   return (
     <div className="space-y-3">
       {/* Sub-navigation Segment Tabs */}
-      <div className="flex items-center justify-start border-b pb-2">
+      <div className="sticky top-[52px] z-20 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/40">
         <Tabs value={subView} onValueChange={(v) => setSubView(v as AccountSubView)} className="w-full">
-          <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-fit overflow-x-auto">
+          <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-full sm:w-fit overflow-x-auto shadow-xs">
             <TabsTrigger
               value="admin"
               className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
@@ -53,25 +56,27 @@ export function AccountSettings() {
         </Tabs>
       </div>
 
-      {/* Sub-view Content */}
+      {/* Sub-view Content with Suspense */}
       <div className="pt-1">
-        {subView === "admin" && (
-          <div className="max-w-4xl mx-auto">
-            <AdminAccountInfo />
-          </div>
-        )}
+        <Suspense fallback={<SettingsTabSkeleton />}>
+          {subView === "admin" && (
+            <div className="max-w-4xl mx-auto">
+              <AdminAccountInfo />
+            </div>
+          )}
 
-        {subView === "subusers" && (
-          <div className="max-w-4xl mx-auto">
-            <SubUserManagement />
-          </div>
-        )}
+          {subView === "subusers" && (
+            <div className="max-w-4xl mx-auto">
+              <SubUserManagement />
+            </div>
+          )}
 
-        {subView === "security" && (
-          <div className="max-w-3xl mx-auto">
-            <ChangePasswordSection />
-          </div>
-        )}
+          {subView === "security" && (
+            <div className="max-w-3xl mx-auto">
+              <ChangePasswordSection />
+            </div>
+          )}
+        </Suspense>
 
         {subView === "legal" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">

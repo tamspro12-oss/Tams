@@ -11,7 +11,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Scale, Pencil, Search, FileSpreadsheet, FileText, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Scale, Pencil, Search, FileSpreadsheet, FileText, RefreshCw, X } from "lucide-react";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import { useOpeningBalances, PartyType, BalanceType, OpeningBalance, OpeningBalanceInput } from "@/hooks/useOpeningBalances";
 import { useClients, useVendors } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
@@ -38,6 +39,9 @@ export default function OpeningBalances() {
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState<string>("all");
   const [kindFilter, setKindFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
 
   const { balances, isLoading, isFetching, refetch, upsertBalance, updateBalance, deleteBalance } = useOpeningBalances();
   const { clients } = useClients();
@@ -59,13 +63,15 @@ export default function OpeningBalances() {
     return balances.filter((b) => {
       if (partyFilter !== "all" && b.party_type !== partyFilter) return false;
       if (kindFilter !== "all" && b.balance_type !== kindFilter) return false;
+      const dateToCheck = b.as_of_date || (b as any).created_at;
+      if (!isDateWithinPreset(dateToCheck, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo)) return false;
       if (search) {
         const q = search.toLowerCase();
         if (!labelOf(b).toLowerCase().includes(q) && !(b.notes || "").toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [balances, search, partyFilter, kindFilter, clients, vendors, agents]);
+  }, [balances, search, partyFilter, kindFilter, dateFilter, clients, vendors, agents]);
 
   const totalReceivable = filtered.filter((b) => b.balance_type === "receivable").reduce((s, b) => s + Number(b.amount), 0);
   const totalPayable = filtered.filter((b) => b.balance_type === "payable").reduce((s, b) => s + Number(b.amount), 0);
@@ -148,17 +154,11 @@ export default function OpeningBalances() {
             Set starting receivables (clients owe you) and payables (you owe vendors/agents).
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => { refetch(); toast.success("Refreshed"); }} disabled={isFetching} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportRowsToExcel(buildExportRows(), "opening-balances", "Balances")} className="gap-2">
-            <FileSpreadsheet className="h-4 w-4" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportRowsToPDF("Opening Balances", buildExportRows(), "opening-balances", agency?.name)} className="gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
+          <Button variant="outline" size="sm" onClick={() => exportRowsToPDF("Opening Balances", buildExportRows(), "opening-balances", agency?.name)} className="h-9 gap-2">
             <FileText className="h-4 w-4" /> PDF
           </Button>
-          <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Add Balance</Button>
+          <Button onClick={openNew} className="h-9 gap-2"><Plus className="h-4 w-4" /> Add Balance</Button>
         </div>
       </div>
 
@@ -234,28 +234,52 @@ export default function OpeningBalances() {
       <Card>
         <CardHeader className="space-y-3">
           <CardTitle className="text-base">All Opening Balances</CardTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="relative">
-              <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Search party or notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9 pr-8 h-9 text-xs rounded-lg"
+                placeholder="Search party or notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <Select value={partyFilter} onValueChange={setPartyFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Party Types</SelectItem>
-                <SelectItem value="client">Client</SelectItem>
-                <SelectItem value="vendor">Vendor</SelectItem>
-                <SelectItem value="b2b_agent">B2B Agent</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={kindFilter} onValueChange={setKindFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Kinds</SelectItem>
-                <SelectItem value="receivable">Receivable</SelectItem>
-                <SelectItem value="payable">Payable</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+              <DateFilter
+                value={dateFilter}
+                onChange={setDateFilter}
+                className="h-9 shrink-0"
+              />
+              <Select value={partyFilter} onValueChange={setPartyFilter}>
+                <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-50 text-xs">
+                  <SelectItem value="all">All Party Types</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="vendor">Vendor</SelectItem>
+                  <SelectItem value="b2b_agent">B2B Agent</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={kindFilter} onValueChange={setKindFilter}>
+                <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-50 text-xs">
+                  <SelectItem value="all">All Kinds</SelectItem>
+                  <SelectItem value="receivable">Receivable</SelectItem>
+                  <SelectItem value="payable">Payable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

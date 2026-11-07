@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +32,7 @@ import {
   User,
   ExternalLink,
   Ban,
+  X,
 } from "lucide-react";
 import { useVouchers } from "@/hooks/useVouchers";
 import { useAgency } from "@/hooks/useAgency";
@@ -48,8 +51,11 @@ export default function Vouchers() {
     useVouchers();
   const { data: agency } = useAgency();
 
-  const [activeTab, setActiveTab] = useState<string>("All");
-  const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [filterService, setFilterService] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
@@ -63,13 +69,19 @@ export default function Vouchers() {
 
   const filteredVouchers = useMemo(() => {
     return vouchers.filter((v) => {
-      // Type tab filter
-      if (activeTab !== "All" && v.voucher_type !== activeTab) {
+      // Date filter
+      const dateToCheck = v.created_at || (v as any).date || (v as any).issue_date;
+      if (!isDateWithinPreset(dateToCheck, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo)) {
+        return false;
+      }
+
+      // Service type filter
+      if (filterService !== "all" && v.voucher_type !== filterService) {
         return false;
       }
 
       // Status filter
-      if (statusFilter !== "All" && v.status !== statusFilter) {
+      if (filterStatus !== "all" && v.status !== filterStatus) {
         return false;
       }
 
@@ -92,7 +104,7 @@ export default function Vouchers() {
 
       return true;
     });
-  }, [vouchers, activeTab, statusFilter, searchQuery]);
+  }, [vouchers, filterService, filterStatus, dateFilter, searchQuery]);
 
   const handleShareWhatsApp = (v: Voucher) => {
     const text = generateVoucherWhatsAppText(v, agency?.name || "TAMS Pro");
@@ -148,9 +160,6 @@ export default function Vouchers() {
             <FileText className="w-7 h-7 text-primary" />
             Vouchers & Itineraries
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Generate branded Umrah, Hotel, and Airline tickets with 1-tap PDF & WhatsApp sharing.
-          </p>
         </div>
 
         <Button
@@ -165,52 +174,56 @@ export default function Vouchers() {
         </Button>
       </div>
 
-      {/* Filter Row */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-card p-3 rounded-xl border shadow-sm">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      {/* Filter Row: Search, DateFilter, All Services, All Status (Quotations reference layout) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search vouchers (passenger, passport, PNR, voucher #, hotel)..."
-            className="pl-9 h-10 text-xs sm:text-sm bg-muted/40"
+            className="pl-9 pr-8 h-9 text-xs rounded-lg"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Type Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
-          <TabsList className="grid grid-cols-4 h-10">
-            <TabsTrigger value="All" className="text-xs">
-              All ({vouchers.length})
-            </TabsTrigger>
-            <TabsTrigger value="Umrah" className="text-xs">
-              Umrah ({vouchers.filter((v) => v.voucher_type === "Umrah").length})
-            </TabsTrigger>
-            <TabsTrigger value="Hotel" className="text-xs">
-              Hotel ({vouchers.filter((v) => v.voucher_type === "Hotel").length})
-            </TabsTrigger>
-            <TabsTrigger value="Ticket" className="text-xs">
-              Ticket ({vouchers.filter((v) => v.voucher_type === "Ticket").length})
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+          <DateFilter
+            value={dateFilter}
+            onChange={setDateFilter}
+            className="h-9 shrink-0"
+          />
 
-        {/* Status filter chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-          {(["All", "Issued", "Draft", "Cancelled"] as const).map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                statusFilter === st
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {st}
-            </button>
-          ))}
+          <Select value={filterService} onValueChange={setFilterService}>
+            <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-50 text-xs">
+              <SelectItem value="all">All Services</SelectItem>
+              <SelectItem value="Umrah">Umrah</SelectItem>
+              <SelectItem value="Hotel">Hotel</SelectItem>
+              <SelectItem value="Ticket">Ticket</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-50 text-xs">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="Issued">Issued</SelectItem>
+              <SelectItem value="Draft">Draft</SelectItem>
+              <SelectItem value="Cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -233,15 +246,16 @@ export default function Vouchers() {
           </div>
           <h3 className="text-base font-semibold text-foreground">No Vouchers Found</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            {searchQuery || activeTab !== "All" || statusFilter !== "All"
+            {searchQuery || filterService !== "all" || filterStatus !== "all" || dateFilter.preset !== "this_month"
               ? "No vouchers matched your current filters. Try resetting search."
               : "Create your first professional voucher for an Umrah package, hotel stay, or airline ticket."}
           </p>
           <Button
             onClick={() => {
               setSearchQuery("");
-              setActiveTab("All");
-              setStatusFilter("All");
+              setDateFilter({ preset: "this_month" });
+              setFilterService("all");
+              setFilterStatus("all");
               setIsCreateOpen(true);
             }}
             variant="outline"

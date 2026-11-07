@@ -159,100 +159,57 @@ ${name}`;
         </div>
       </CardHeader>
 
-      <CardContent className="p-4 sm:p-5 space-y-4">
-        {/* Auto-populated Agency Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-muted/40 rounded-lg border">
-          <div className="space-y-1">
-            <Label htmlFor="reminder-agency-name" className="text-xs font-semibold">
-              Agency Name
-            </Label>
-            <Input
-              id="reminder-agency-name"
-              value={agencyName}
-              onChange={(e) => setAgencyName(e.target.value)}
-              placeholder="Agency Name"
-              className="h-8.5 text-xs"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="reminder-agency-phone" className="text-xs font-semibold">
-              Phone Number
-            </Label>
-            <Input
-              id="reminder-agency-phone"
-              value={agencyPhone}
-              onChange={(e) => setAgencyPhone(e.target.value)}
-              placeholder="+92 300 1234567"
-              className="h-8.5 text-xs"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="reminder-agency-email" className="text-xs font-semibold">
-              Email Address
-            </Label>
-            <Input
-              id="reminder-agency-email"
-              type="email"
-              value={agencyEmail}
-              onChange={(e) => setAgencyEmail(e.target.value)}
-              placeholder="agency@example.com"
-              className="h-8.5 text-xs"
-            />
-          </div>
-        </div>
-
+      <CardContent className="p-4 sm:p-5 space-y-3">
         {/* Available Placeholders Compact Banner */}
-        <div className="p-2.5 bg-muted/30 border rounded-lg">
+        <div className="p-2.5 bg-muted/40 border rounded-lg">
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="font-semibold text-foreground text-xs mr-1">Placeholders:</span>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[CLIENT_NAME]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[FLIGHT_DATE]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[TOTAL_AMOUNT]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[AMOUNT_PAID]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[BALANCE_DUE]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[DUE_DATE]</code>
-            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px]">[AGENCY_NAME]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[CLIENT_NAME]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[FLIGHT_DATE]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[TOTAL_AMOUNT]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[AMOUNT_PAID]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[BALANCE_DUE]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[DUE_DATE]</code>
+            <code className="bg-background px-1.5 py-0.5 rounded border text-[10px] font-mono">[AGENCY_NAME]</code>
           </div>
         </div>
 
-        {/* Side-by-side or stacked templates */}
+        {/* Side-by-side templates - large enough with NO inner scrollbar */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Flight Reminder Template */}
           <div className="space-y-1.5">
-            <Label htmlFor="flight-reminder" className="text-xs font-semibold">
-              Flight Reminder Message
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="flight-reminder" className="text-xs font-semibold">
+                Flight Reminder Message
+              </Label>
+              <span className="text-[11px] text-muted-foreground">Sent before flight date</span>
+            </div>
             <Textarea
               id="flight-reminder"
               value={flightReminderTemplate}
               onChange={(e) => setFlightReminderTemplate(e.target.value)}
               placeholder="Enter flight reminder template"
-              rows={7}
-              className="font-mono text-xs resize-none"
+              rows={11}
+              className="font-mono text-xs leading-relaxed resize-none overflow-hidden"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Sent before upcoming passenger departure dates
-            </p>
           </div>
 
           {/* Payment Reminder Template */}
           <div className="space-y-1.5">
-            <Label htmlFor="payment-reminder" className="text-xs font-semibold">
-              Payment Reminder Message
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="payment-reminder" className="text-xs font-semibold">
+                Payment Reminder Message
+              </Label>
+              <span className="text-[11px] text-muted-foreground">Sent for pending balances</span>
+            </div>
             <Textarea
               id="payment-reminder"
               value={paymentReminderTemplate}
               onChange={(e) => setPaymentReminderTemplate(e.target.value)}
               placeholder="Enter payment reminder template"
-              rows={7}
-              className="font-mono text-xs resize-none"
+              rows={11}
+              className="font-mono text-xs leading-relaxed resize-none overflow-hidden"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Sent for accounts with pending balances due
-            </p>
           </div>
         </div>
       </CardContent>

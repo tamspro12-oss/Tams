@@ -113,15 +113,6 @@ export default function LeadsQuotesHub() {
             </span>
           </button>
         </div>
-
-        {/* Shortcut Hint on Desktop */}
-        <div className="hidden md:flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
-          <span>Ctrl+1: Quotes</span>
-          <span>•</span>
-          <span>Ctrl+2: Queries</span>
-          <span>•</span>
-          <span>N: New</span>
-        </div>
       </div>
 
       {/* Active Tab View */}

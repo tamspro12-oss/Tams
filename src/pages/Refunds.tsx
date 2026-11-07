@@ -11,7 +11,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, RotateCcw, Banknote, Search, FileSpreadsheet, FileText, Pencil, RefreshCw } from "lucide-react";
+import { Plus, Trash2, RotateCcw, Banknote, Search, FileSpreadsheet, FileText, Pencil, RefreshCw, X } from "lucide-react";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import { useRefunds, Refund, RefundInput } from "@/hooks/useRefunds";
 import { useClients } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
@@ -40,8 +41,9 @@ export default function Refunds() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState<string>("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
 
   const { refunds, isLoading, isFetching, refetch, addRefund, updateRefund, deleteRefund } = useRefunds();
   const { clients } = useClients();
@@ -67,8 +69,7 @@ export default function Refunds() {
   const filtered = useMemo(() => {
     return refunds.filter((r) => {
       if (modeFilter !== "all" && (r.payment_mode || "cash") !== modeFilter) return false;
-      if (fromDate && r.refund_date < fromDate) return false;
-      if (toDate && r.refund_date > toDate) return false;
+      if (!isDateWithinPreset(r.refund_date, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo)) return false;
       if (search) {
         const q = search.toLowerCase();
         const name = clientName(r.client_id).toLowerCase();
@@ -81,7 +82,7 @@ export default function Refunds() {
       }
       return true;
     });
-  }, [refunds, search, modeFilter, fromDate, toDate, clients]);
+  }, [refunds, search, modeFilter, dateFilter, clients]);
 
   const totalRefunds = filtered.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
 
@@ -143,17 +144,11 @@ export default function Refunds() {
             Record cancelled bookings and refunded payments to clients.
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => { refetch(); toast.success("Refreshed"); }} disabled={isFetching} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportRowsToExcel(buildExportRows(), "refunds", "Refunds")} className="gap-2">
-            <FileSpreadsheet className="h-4 w-4" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportRowsToPDF("Refunds Report", buildExportRows(), "refunds", agency?.name)} className="gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
+          <Button variant="outline" size="sm" onClick={() => exportRowsToPDF("Refunds Report", buildExportRows(), "refunds", agency?.name)} className="h-9 gap-2">
             <FileText className="h-4 w-4" /> PDF
           </Button>
-          <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> New Refund</Button>
+          <Button onClick={openNew} className="h-9 gap-2"><Plus className="h-4 w-4" /> New Refund</Button>
         </div>
       </div>
 
@@ -172,22 +167,42 @@ export default function Refunds() {
       <Card>
         <CardHeader className="space-y-3">
           <CardTitle className="text-base">Refund History</CardTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <div className="relative sm:col-span-1">
-              <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Search client, reason..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9 pr-8 h-9 text-xs rounded-lg"
+                placeholder="Search by client, booking, reason, amount..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <Select value={modeFilter} onValueChange={setModeFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Modes</SelectItem>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="bank">Bank</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} placeholder="From" />
-            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} placeholder="To" />
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+              <DateFilter
+                value={dateFilter}
+                onChange={setDateFilter}
+                className="h-9 shrink-0"
+              />
+              <Select value={modeFilter} onValueChange={setModeFilter}>
+                <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-50 text-xs">
+                  <SelectItem value="all">All Modes</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

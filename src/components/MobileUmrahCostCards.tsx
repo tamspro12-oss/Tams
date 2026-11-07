@@ -270,17 +270,35 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={hotel.rate}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
-                        placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                        disabled={isPresetLocked}
-                      />
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate & Currency</label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={hotel.rate}
+                          onFocus={e => e.target.select()}
+                          onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
+                          placeholder="0.00"
+                          className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums flex-1"
+                          disabled={isPresetLocked}
+                        />
+                        <Select
+                          value={hotel.currency || "SAR"}
+                          onValueChange={v => updateHotel(hotel.id, "currency", v)}
+                          disabled={isPresetLocked}
+                        >
+                          <SelectTrigger className="h-11 min-h-[44px] w-20 text-xs font-semibold bg-white ring-1 ring-slate-300">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SAR">SAR</SelectItem>
+                            <SelectItem value="PKR">PKR</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="AED">AED</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -392,17 +410,35 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate ({hotelCurrency})</label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={hotel.rate}
-                        onFocus={e => e.target.select()}
-                        onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
-                        placeholder={`Rate (${hotelCurrency})`}
-                        className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums"
-                        disabled={isPresetLocked}
-                      />
+                      <label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase">Rate & Currency</label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={hotel.rate}
+                          onFocus={e => e.target.select()}
+                          onChange={e => updateHotel(hotel.id, "rate", e.target.value)}
+                          placeholder="0.00"
+                          className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums flex-1"
+                          disabled={isPresetLocked}
+                        />
+                        <Select
+                          value={hotel.currency || "SAR"}
+                          onValueChange={v => updateHotel(hotel.id, "currency", v)}
+                          disabled={isPresetLocked}
+                        >
+                          <SelectTrigger className="h-11 min-h-[44px] w-20 text-xs font-semibold bg-white ring-1 ring-slate-300">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SAR">SAR</SelectItem>
+                            <SelectItem value="PKR">PKR</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="AED">AED</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>

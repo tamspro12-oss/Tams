@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Search, Pencil, Download, FileDown, ChevronDown, RefreshCw, Banknote, Building2 } from "lucide-react";
 import { AddExpenseDialog } from "@/components/AddExpenseDialog";
@@ -24,6 +25,7 @@ import { RecurringExpenseSection } from "@/components/RecurringExpenseSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Expenses() {
+  const location = useLocation();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,6 +35,14 @@ export default function Expenses() {
   const { filter } = useDateFilter();
   const { toast: toastHook } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (location.state?.openAddExpense || params.get("action") === "new") {
+      setShowAddDialog(true);
+      window.history.replaceState({}, document.title, location.pathname + (params.get("tab") ? `?tab=${params.get("tab")}` : ""));
+    }
+  }, [location.state, location.search, location.pathname]);
 
   const handleRefresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['expenses'] });

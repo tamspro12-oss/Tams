@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Receipt, MessageSquare } from "lucide-react";
-import { InvoiceTemplateDesigner } from "@/components/InvoiceTemplateDesigner";
-import { BookingTemplateDesigner } from "@/components/BookingTemplateDesigner";
-import { ReminderMessageTemplates } from "@/components/ReminderMessageTemplates";
+import { SettingsTabSkeleton } from "@/components/SettingsSkeleton";
+
+// Lazy-load template designers on demand
+const InvoiceTemplateDesigner = lazy(() => import("@/components/InvoiceTemplateDesigner").then(m => ({ default: m.InvoiceTemplateDesigner })));
+const BookingTemplateDesigner = lazy(() => import("@/components/BookingTemplateDesigner").then(m => ({ default: m.BookingTemplateDesigner })));
+const ReminderMessageTemplates = lazy(() => import("@/components/ReminderMessageTemplates").then(m => ({ default: m.ReminderMessageTemplates })));
 
 export type BrandingView = "invoice" | "booking" | "reminder";
 
@@ -13,13 +16,13 @@ export function BrandingSettings() {
   return (
     <div className="space-y-3">
       {/* Prominent, clean 3-button selector */}
-      <div className="flex items-center justify-start border-b pb-2">
+      <div className="sticky top-[52px] z-20 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/40">
         <Tabs
           value={activeTemplateView}
           onValueChange={(val) => setActiveTemplateView(val as BrandingView)}
           className="w-full"
         >
-          <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-fit">
+          <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-full sm:w-fit overflow-x-auto shadow-xs">
             <TabsTrigger
               value="invoice"
               className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all"
@@ -45,11 +48,13 @@ export function BrandingSettings() {
         </Tabs>
       </div>
 
-      {/* Active Template View */}
+      {/* Active Template View with Suspense */}
       <div className="pt-1">
-        {activeTemplateView === "invoice" && <InvoiceTemplateDesigner />}
-        {activeTemplateView === "booking" && <BookingTemplateDesigner />}
-        {activeTemplateView === "reminder" && <ReminderMessageTemplates />}
+        <Suspense fallback={<SettingsTabSkeleton />}>
+          {activeTemplateView === "invoice" && <InvoiceTemplateDesigner />}
+          {activeTemplateView === "booking" && <BookingTemplateDesigner />}
+          {activeTemplateView === "reminder" && <ReminderMessageTemplates />}
+        </Suspense>
       </div>
     </div>
   );

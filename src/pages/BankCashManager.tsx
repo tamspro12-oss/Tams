@@ -16,14 +16,17 @@ import { useAllClientPaymentHistoryLocal, useAllVendorPaymentHistoryLocal } from
 import { useCashBankEntries } from "@/hooks/useCashBankEntries";
 import { useAgencyBanks, COMMON_BANKS } from "@/hooks/useAgencyBanks";
 import { format, parseISO, isWithinInterval } from "date-fns";
-import { DateFilterSelector } from "@/components/DateFilterSelector";
-import { useDateFilter } from "@/contexts/DateFilterContext";
+import { useLocation } from "react-router-dom";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 
 export default function BankCashManager() {
   const { expenses } = useExpenses();
   const { clients } = useClients();
   const { vendors } = useVendors();
-  const { filter } = useDateFilter();
+  const location = useLocation();
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
   
   // Get all client and vendor IDs
   const clientIds = useMemo(() => (clients || []).map((c: any) => c.id), [clients]);
@@ -38,16 +41,10 @@ export default function BankCashManager() {
   const { entries: manualEntries, addEntry, deleteEntry } = useCashBankEntries();
   const { banks: agencyBanks, allBankNames, addBank, deleteBank } = useAgencyBanks();
 
-  // Filter function for date range
+  // Filter function for date range using shared DateFilter (defaults to This Month)
   const isInDateRange = (dateStr: string | undefined) => {
     if (!dateStr) return false;
-    if (!filter.startDate || !filter.endDate) return true; // All time
-    try {
-      const date = parseISO(dateStr);
-      return isWithinInterval(date, { start: filter.startDate, end: filter.endDate });
-    } catch {
-      return false;
-    }
+    return isDateWithinPreset(dateStr, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo);
   };
   
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
@@ -57,6 +54,17 @@ export default function BankCashManager() {
   const [entryType, setEntryType] = useState<'cash_in' | 'cash_out' | 'bank_in' | 'bank_out'>('cash_in');
   const [entryCategory, setEntryCategory] = useState<string>('');
   const [entryDescription, setEntryDescription] = useState<string>('');
+
+  // Handle direct navigation to open Add Entry form (e.g. from Dashboard quick action)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (location.state?.openAddEntry || params.get("action") === "new-entry" || params.get("action") === "add-entry") {
+      setEntryCategory('');
+      setEntryDescription('');
+      setShowAddEntry(true);
+      window.history.replaceState({}, document.title, location.pathname + (params.get("tab") ? `?tab=${params.get("tab")}` : ""));
+    }
+  }, [location.state, location.search, location.pathname]);
 
   // Calculate cash totals from all sources (filtered by date)
   const cashSummary = useMemo(() => {
@@ -108,7 +116,7 @@ export default function BankCashManager() {
     });
 
     return { totalIn, totalOut, balance: totalIn - totalOut };
-  }, [clientPayments, vendorPayments, b2bLedger, expenses, manualEntries, filter]);
+  }, [clientPayments, vendorPayments, b2bLedger, expenses, manualEntries, dateFilter]);
 
   // Calculate bank totals by bank name (filtered by date)
   const bankSummary = useMemo(() => {
@@ -186,7 +194,7 @@ export default function BankCashManager() {
     });
 
     return banks;
-  }, [clientPayments, vendorPayments, b2bLedger, expenses, manualEntries, agencyBanks, filter]);
+  }, [clientPayments, vendorPayments, b2bLedger, expenses, manualEntries, agencyBanks, dateFilter]);
 
   // Get all transactions for a specific bank or cash (filtered by date)
   const getTransactions = (bankName: string | null) => {
@@ -369,32 +377,21 @@ export default function BankCashManager() {
           </h1>
           <p className="text-muted-foreground mt-1">Track all cash and bank transactions across your agency</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <DateFilterSelector />
-          <Button variant="outline" onClick={() => setShowAddBank(true)}>
-            <Building2 className="w-4 h-4 mr-2" />
-            Add Bank
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setEntryType('cash_in');
-              setEntryCategory('Opening Balance');
-              setEntryDescription('Initial Cash Float / Brought-Forward Cash');
-              setShowAddEntry(true);
-            }}
-          >
-            <Banknote className="w-4 h-4 mr-2 text-emerald-600" />
-            Set Cash Float
-          </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateFilter
+            value={dateFilter}
+            onChange={setDateFilter}
+            className="h-9"
+          />
           <Button
             onClick={() => {
               setEntryCategory('');
               setEntryDescription('');
               setShowAddEntry(true);
             }}
+            className="h-9 gap-1.5"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-1" />
             Add Entry
           </Button>
         </div>

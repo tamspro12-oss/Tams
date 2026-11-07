@@ -8,8 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useB2BAgents, B2BAgent } from "@/hooks/useB2BAgents";
 import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
 import { useB2BLedger } from "@/hooks/useB2BLedger";
-import { DateFilterSelector } from "@/components/DateFilterSelector";
-import { useDateFilter } from "@/contexts/DateFilterContext";
+import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import { parseISO, isWithinInterval, format } from "date-fns";
 import { AddB2BAgentDialog } from "@/components/AddB2BAgentDialog";
 import { AddB2BBookingDialog } from "@/components/AddB2BBookingDialog";
@@ -56,7 +55,9 @@ export default function B2BAgents() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchTab, setSearchTab] = useState<"all" | "agents" | "bookings">("all");
   const [visibleBookingCount, setVisibleBookingCount] = useState<number>(10);
-  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editAgent, setEditAgent] = useState<B2BAgent | null>(null);
   const [deleteAgent, setDeleteAgent] = useState<B2BAgent | null>(null);
@@ -69,12 +70,6 @@ export default function B2BAgents() {
   const { agents, isLoading, deleteAgent: deleteAgentMutation } = useB2BAgents();
   const { bookings: allBookings } = useB2BBookings();
   const { ledgerEntries: allLedger } = useB2BLedger();
-  const { filter, setPreset } = useDateFilter();
-
-  // Set "All Time" as default filter for B2B Agents page
-  useEffect(() => {
-    setPreset("all_time");
-  }, []);
 
   // 300ms Search Debounce
   useEffect(() => {
@@ -92,12 +87,6 @@ export default function B2BAgents() {
     return map;
   }, [agents]);
 
-  // Get unique countries for filtering
-  const countries = useMemo(() => {
-    const countrySet = new Set(agents.map(a => a.country).filter(Boolean));
-    return Array.from(countrySet).sort();
-  }, [agents]);
-
   // Filter agents
   const filteredAgents = useMemo(() => {
     return agents.filter(agent => {
@@ -108,23 +97,11 @@ export default function B2BAgents() {
         agent.phone?.toLowerCase().includes(debouncedSearch) ||
         agent.email?.toLowerCase().includes(debouncedSearch);
       
-      const matchesCountry = countryFilter === "all" || agent.country === countryFilter;
+      const matchesDate = isDateWithinPreset(agent.created_at, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo);
       
-      let matchesDate = true;
-      if (filter.startDate) {
-        const createdAt = agent.created_at ? parseISO(agent.created_at) : null;
-        if (!createdAt) {
-          matchesDate = false;
-        } else if (filter.endDate) {
-          matchesDate = isWithinInterval(createdAt, { start: filter.startDate, end: filter.endDate });
-        } else {
-          matchesDate = createdAt >= filter.startDate;
-        }
-      }
-      
-      return matchesSearch && matchesCountry && matchesDate;
+      return matchesSearch && matchesDate;
     });
-  }, [agents, debouncedSearch, countryFilter, filter]);
+  }, [agents, debouncedSearch, dateFilter]);
 
   // Search bookings belonging ONLY to B2B agents
   const matchingBookings = useMemo(() => {
@@ -135,21 +112,10 @@ export default function B2BAgents() {
       if (!b.agent_id) return false;
       const agent = agentMap.get(b.agent_id);
 
-      // Country filter applies to agent's country
-      if (countryFilter !== "all" && agent?.country !== countryFilter) {
-        return false;
-      }
-
       // Date filter applies to travel/flight date or booking date
-      if (filter.startDate) {
-        const dateToCheck = b.flight_date ? parseISO(b.flight_date) : b.created_at ? parseISO(b.created_at) : null;
-        if (!dateToCheck) return false;
-        if (filter.endDate) {
-          if (!isWithinInterval(dateToCheck, { start: filter.startDate, end: filter.endDate })) return false;
-        } else if (dateToCheck < filter.startDate) {
-          return false;
-        }
-      }
+      const dateToCheck = b.flight_date || b.created_at;
+      const matchesDate = isDateWithinPreset(dateToCheck, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo);
+      if (!matchesDate) return false;
 
       // Text search matching fields
       const searchFields = [
@@ -166,7 +132,7 @@ export default function B2BAgents() {
 
       return searchFields.some((f) => f!.toLowerCase().includes(debouncedSearch));
     });
-  }, [allBookings, debouncedSearch, agentMap, countryFilter, filter]);
+  }, [allBookings, debouncedSearch, agentMap, dateFilter]);
 
   // Calculate agent statistics
   const getAgentStats = (agentId: string) => {
@@ -381,18 +347,11 @@ export default function B2BAgents() {
                 </button>
               )}
             </div>
-            <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <Globe className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="All Countries" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Countries</SelectItem>
-                {countries.map(country => (
-                  <SelectItem key={country} value={country!}>{country}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <DateFilter
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="h-9 w-full sm:w-auto"
+            />
           </div>
 
           {/* Group filter chips appear when typing in search */}
@@ -437,8 +396,6 @@ export default function B2BAgents() {
               </button>
             </div>
           )}
-
-          <DateFilterSelector />
         </CardContent>
       </Card>
 
@@ -586,11 +543,11 @@ export default function B2BAgents() {
               <Users className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium mb-2">No B2B Agents Found</h3>
               <p className="text-muted-foreground mb-4">
-                {countryFilter !== "all" 
+                {dateFilter.preset !== "all" 
                   ? "Try adjusting your filters" 
                   : "Add your first B2B agent to get started"}
               </p>
-              {countryFilter === "all" && (
+              {dateFilter.preset === "all" && (
                 <Button onClick={() => setShowAddDialog(true)} className="gap-2">
                   <Plus className="w-4 h-4" />
                   Add First Agent
