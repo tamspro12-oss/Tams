@@ -1,36 +1,40 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useClients } from "@/hooks/useStorage";
-import { useB2BAgents, B2BAgent } from "@/hooks/useB2BAgents";
-import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
+import { useB2BAgents } from "@/hooks/useB2BAgents";
+import { useB2BBookings } from "@/hooks/useB2BBookings";
 import { useVendors } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
 import { useClientPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useOpeningBalances } from "@/hooks/useOpeningBalances";
-import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import {
   X,
   Plus,
   Trash2,
-  ScanLine,
   User,
   Users,
-  Building2,
   Plane,
   CreditCard,
-  DollarSign,
-  Calendar as CalendarIcon,
   Check,
-  AlertCircle,
-  Clock,
-  Sparkles,
   ChevronDown,
+  Sparkles,
   Store,
+  Building2,
+  FileText,
 } from "lucide-react";
+import { AddB2BAgentDialog } from "@/components/AddB2BAgentDialog";
+import { AddVendorDialog } from "@/components/AddVendorDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -65,6 +69,97 @@ interface MasterAddBookingModalProps {
   onSaved?: (savedItem: any, mode: "direct" | "b2b") => void;
 }
 
+// Reusable Keyboard-Aware Select for frictionless Enter / Arrow navigation
+interface BookingSelectProps {
+  value: string;
+  onValueChange: (val: string) => void;
+  options: { label: string; value: string }[];
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  triggerClassName?: string;
+  dataField?: string;
+  ariaLabel?: string;
+  triggerRef?: React.RefObject<HTMLButtonElement>;
+  onAdvance?: () => void;
+}
+
+function BookingSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  disabled,
+  triggerClassName,
+  dataField,
+  ariaLabel,
+  triggerRef: externalRef,
+  onAdvance,
+}: BookingSelectProps) {
+  const internalRef = useRef<HTMLButtonElement>(null);
+  const activeRef = externalRef || internalRef;
+  const advanceAfterSelectRef = useRef(false);
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(val) => {
+        onValueChange(val);
+      }}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        ref={activeRef}
+        aria-label={ariaLabel}
+        data-booking-input="true"
+        data-field={dataField}
+        className={cn(
+          "h-8 text-xs bg-background transition-colors focus-visible:ring-2",
+          triggerClassName
+        )}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            advanceAfterSelectRef.current = true;
+          }
+        }}
+        onCloseAutoFocus={(e) => {
+          if (advanceAfterSelectRef.current) {
+            advanceAfterSelectRef.current = false;
+            e.preventDefault();
+            if (onAdvance) {
+              onAdvance();
+            } else if (activeRef.current) {
+              // Trigger auto-advance to next form field
+              const form = activeRef.current.closest("[data-booking-form]");
+              if (form) {
+                const elements = Array.from(
+                  form.querySelectorAll<HTMLElement>(
+                    '[data-booking-input="true"]:not([disabled]):not([aria-disabled="true"])'
+                  )
+                ).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+                const idx = elements.indexOf(activeRef.current);
+                if (idx !== -1 && idx < elements.length - 1) {
+                  elements[idx + 1].focus();
+                }
+              }
+            }
+          }
+        }}
+      >
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value} className="text-xs cursor-pointer">
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function MasterAddBookingModal({
   open,
   onOpenChange,
@@ -87,13 +182,25 @@ export function MasterAddBookingModal({
   const { agents, addAgent } = useB2BAgents();
   const { addBooking: addB2BBooking, updateBooking: updateB2BBooking } = useB2BBookings();
   const { vendors, addVendor } = useVendors();
-  const { data: agency } = useAgency();
+  const { data: _agency } = useAgency();
   const { addPaymentHistory } = useClientPaymentHistoryLocal();
-  const { balances, upsertBalance } = useOpeningBalances();
+  const { upsertBalance } = useOpeningBalances();
 
   // References for focus management
-  const contactNameInputRef = useRef<HTMLInputElement>(null);
-  const firstPassengerNameRef = useRef<HTMLInputElement>(null);
+  const formContainerRef = useRef<HTMLDivElement>(null);
+  const serviceTriggerRef = useRef<HTMLButtonElement>(null);
+  const agentTriggerRef = useRef<HTMLButtonElement>(null);
+  const vendorTriggerRef = useRef<HTMLButtonElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Add Agent & Add Vendor modal states
+  const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
+  const [addAgentInitialName, setAddAgentInitialName] = useState("");
+  const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
+  const [addVendorInitialName, setAddVendorInitialName] = useState("");
+  const [vendorSearchOpen, setVendorSearchOpen] = useState(false);
+  const [vendorSearchQuery, setVendorSearchQuery] = useState("");
 
   // =================== AGENT STATE (B2B) ===================
   const [selectedAgentId, setSelectedAgentId] = useState<string>(
@@ -152,13 +259,10 @@ export function MasterAddBookingModal({
   const [paymentMode, setPaymentMode] = useState<string>("cash");
   const [bankName, setBankName] = useState<string>("");
   const [selectedVendorId, setSelectedVendorId] = useState<string>("none");
-  const [vendorSearchOpen, setVendorSearchOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-
-  // Quick Vendor Add state
   const [showQuickVendorAdd, setShowQuickVendorAdd] = useState(false);
   const [quickVendorName, setQuickVendorName] = useState("");
   const [quickVendorService, setQuickVendorService] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Opening Balance Toggle for direct client
   const [showOpeningBalance, setShowOpeningBalance] = useState(false);
@@ -255,14 +359,47 @@ export function MasterAddBookingModal({
     });
   }, [paxCount]);
 
-  // Autofocus first passenger name on open
+  // Move focus to next form field
+  const focusNext = (currentEl: HTMLElement | null) => {
+    if (!formContainerRef.current) return;
+    const elements = Array.from(
+      formContainerRef.current.querySelectorAll<HTMLElement>(
+        '[data-booking-input="true"]:not([disabled]):not([aria-disabled="true"])'
+      )
+    ).filter((el) => {
+      return el.offsetParent !== null || el.getClientRects().length > 0;
+    });
+
+    if (!currentEl) {
+      elements[0]?.focus();
+      return;
+    }
+
+    const currentIndex = elements.indexOf(currentEl);
+    if (currentIndex !== -1 && currentIndex < elements.length - 1) {
+      const nextEl = elements[currentIndex + 1];
+      nextEl.focus();
+      if (nextEl instanceof HTMLInputElement && nextEl.type !== "file") {
+        nextEl.select?.();
+      }
+    } else if (currentIndex === elements.length - 1) {
+      saveButtonRef.current?.focus();
+    }
+  };
+
+  // Autofocus first field on open
   useEffect(() => {
     if (open) {
-      setTimeout(() => {
-        firstPassengerNameRef.current?.focus();
-      }, 100);
+      const timer = setTimeout(() => {
+        if (bookingMode === "b2b" && !selectedAgentId) {
+          agentTriggerRef.current?.focus();
+        } else {
+          serviceTriggerRef.current?.focus();
+        }
+      }, 120);
+      return () => clearTimeout(timer);
     }
-  }, [open]);
+  }, [open, bookingMode, selectedAgentId]);
 
   // Prepopulate if editBookingData is provided
   useEffect(() => {
@@ -329,12 +466,7 @@ export function MasterAddBookingModal({
     }
   }, [editBookingData, open, prefilledAgentId, initialMode]);
 
-  // Keyboard shortcut listener:
-  // Ctrl+1: Direct mode
-  // Ctrl+2: B2B mode
-  // Ctrl+Enter: Save
-  // Ctrl+Shift+Enter: Save & Add Next
-  // Esc: Cancel
+  // Global Keyboard shortcut listener
   useEffect(() => {
     if (!open) return;
 
@@ -354,10 +486,10 @@ export function MasterAddBookingModal({
         handleSave(true); // Save and Add Next
       } else if (isCtrlOrCmd && e.key === "Enter") {
         e.preventDefault();
-        handleSave(false); // Save
+        handleSave(false); // Save Booking
       } else if (e.key === "Escape") {
-        // If child popovers or selects are open, allow default behavior
-        if (agentSearchOpen || vendorSearchOpen || showQuickVendorAdd) {
+        // If child search popovers are open, let them close themselves
+        if (agentSearchOpen || showQuickVendorAdd) {
           return;
         }
         e.preventDefault();
@@ -370,7 +502,6 @@ export function MasterAddBookingModal({
   }, [
     open,
     agentSearchOpen,
-    vendorSearchOpen,
     showQuickVendorAdd,
     isDirty,
     bookingMode,
@@ -407,7 +538,6 @@ export function MasterAddBookingModal({
       const day = cleanDigits.substring(0, 2);
       const month = cleanDigits.substring(2, 4);
       const year = cleanDigits.substring(4, 8);
-      // Validate reasonable year/month/day
       if (parseInt(month, 10) >= 1 && parseInt(month, 10) <= 12) {
         setter(`${year}-${month}-${day}`);
         return;
@@ -439,26 +569,6 @@ export function MasterAddBookingModal({
     if (passengers.length <= 1) return;
     setPassengers((prev) => prev.filter((_, idx) => idx !== index));
     setPaxCount((prev) => Math.max(1, prev - 1));
-  };
-
-  // Handle Enter key on the last passenger row's nationality field to add row
-  const handleLastPassengerKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    isLastRow: boolean
-  ) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      if (isLastRow) {
-        e.preventDefault();
-        setPaxCount((prev) => prev + 1);
-        setTimeout(() => {
-          // Focus new passenger name
-          const inputs = document.querySelectorAll<HTMLInputElement>(
-            'input[data-pax-field="name"]'
-          );
-          inputs[inputs.length - 1]?.focus();
-        }, 60);
-      }
-    }
   };
 
   // Quick Vendor Add handler
@@ -519,43 +629,15 @@ export function MasterAddBookingModal({
       setAgentSearchQuery("");
       setShowAgentDetails(false);
       toast.success(`Agent "${created.agent_name}" created & linked!`);
+      // Focus Service field next
+      setTimeout(() => serviceTriggerRef.current?.focus(), 60);
     } catch (err: any) {
       toast.error(err?.message || "Failed to create agent");
     }
   };
 
-  // Scan & Autofill handler
-  const handleScanApply = (fields: Record<string, any>) => {
-    if (fields.full_name || fields.passenger_name) {
-      const name = fields.full_name || fields.passenger_name;
-      setContactName(name);
-      updatePassenger(0, "name", name);
-    }
-    if (fields.passport_number || fields.document_number) {
-      updatePassenger(
-        0,
-        "passport_number",
-        fields.passport_number || fields.document_number
-      );
-    }
-    if (fields.contact || fields.phone) {
-      setContactNumber(fields.contact || fields.phone);
-    }
-    if (fields.pnr) setPnr(fields.pnr.toUpperCase());
-    if (fields.airline) setAirline(fields.airline);
-    if (fields.departure_date || fields.date) {
-      setFlightDate(fields.departure_date || fields.date);
-    }
-    if (fields.arrival_city || fields.destination) {
-      setDestination(fields.arrival_city || fields.destination);
-    }
-    toast.success("Document scanned & fields autofilled!");
-  };
-
   // Reset form for "Save & Add Next"
   const resetFormForNext = () => {
-    // Keeps: agent, flightDate, serviceType, airline, paymentMode, selectedVendorId
-    // Clears: passengers list, amounts, contact name, contact number, pnr
     setContactName("");
     setContactNumber("");
     setContactEmail("");
@@ -578,8 +660,8 @@ export function MasterAddBookingModal({
       },
     ]);
     setTimeout(() => {
-      // Set cursor on first passenger name
-      firstPassengerNameRef.current?.focus();
+      // Auto-focus Service field
+      serviceTriggerRef.current?.focus();
     }, 100);
   };
 
@@ -588,19 +670,27 @@ export function MasterAddBookingModal({
     // Validation: Contact is first passenger name
     const cleanContact = (passengers[0]?.name || contactName).trim();
     if (!cleanContact) {
-      toast.error("First passenger name is required (used as primary contact)");
-      firstPassengerNameRef.current?.focus();
+      toast.error("Passenger Name is required (used as primary contact)");
+      const firstPaxInput = formContainerRef.current?.querySelector<HTMLInputElement>(
+        'input[data-pax-field="name"]'
+      );
+      firstPaxInput?.focus();
       return;
     }
 
     const sellPrice = parseFloat(sellingPrice) || 0;
     if (sellPrice <= 0) {
       toast.error("Total Amount (Selling Price) is required");
+      const sellInput = formContainerRef.current?.querySelector<HTMLInputElement>(
+        'input[data-field="sellingPrice"]'
+      );
+      sellInput?.focus();
       return;
     }
 
     if (bookingMode === "b2b" && !selectedAgentId) {
       toast.error("Please select or create a B2B Agent");
+      agentTriggerRef.current?.focus();
       return;
     }
 
@@ -753,796 +843,951 @@ export function MasterAddBookingModal({
     }
   };
 
+  // Keyboard navigation handler for container
+  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
+    // Shortcuts with Ctrl / Cmd are handled globally
+    if (e.ctrlKey || e.metaKey) return;
+
+    if (e.key === "Enter") {
+      const target = e.target as HTMLElement;
+
+      // Let Radix Select popover / content listbox handle Enter
+      if (target.closest('[role="listbox"]') || target.closest('[data-radix-select-viewport]')) {
+        return;
+      }
+
+      // If inside agent command menu, let Command handle selection
+      if (target.closest('[cmdk-root]')) {
+        return;
+      }
+
+      // If target is a button other than a data-booking-input
+      if (target.tagName === "BUTTON" && !target.hasAttribute("data-booking-input")) {
+        return;
+      }
+
+      // If target is textarea and shiftKey is pressed, allow newline
+      if (target.tagName === "TEXTAREA" && e.shiftKey) {
+        return;
+      }
+
+      // If on Notes field (with data-field="notes") and plain Enter was pressed:
+      // Focus Save Booking button!
+      if (target.getAttribute("data-field") === "notes") {
+        e.preventDefault();
+        e.stopPropagation();
+        saveButtonRef.current?.focus();
+        return;
+      }
+
+      // For any field marked data-booking-input
+      const bookingInput = target.closest<HTMLElement>('[data-booking-input="true"]');
+      if (bookingInput) {
+        e.preventDefault();
+        e.stopPropagation();
+        focusNext(bookingInput);
+      }
+    }
+  };
+
   if (!open) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-background flex flex-col h-screen w-screen overflow-hidden text-foreground animate-in fade-in duration-200">
-        {/* ======================= TOP BAR ======================= */}
-        <div className="h-11 border-b border-border/80 px-4 flex items-center justify-between shrink-0 bg-muted/30">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-sm tracking-tight flex items-center gap-2">
-              <Plane className="w-4 h-4 text-primary" />
-              {editBookingData ? "Edit Booking" : "New Booking"}
-            </span>
+      {/* Backdrop overlay */}
+      <div
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden text-foreground animate-in fade-in duration-200"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleCloseRequest();
+          }
+        }}
+      >
+        {/* Main Dialog Card: max-h-[92vh] so height fits content snugly without empty space */}
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="booking-dialog-title"
+          ref={formContainerRef}
+          data-booking-form="true"
+          onKeyDown={handleContainerKeyDown}
+          className="relative w-full max-w-6xl max-h-[92vh] sm:max-h-[90vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        >
+          {/* ======================= 1. HEADER (CENTERED TABS) ======================= */}
+          <div className="h-14 border-b border-border/80 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-muted/30">
+            {/* Left: Title */}
+            <div className="flex items-center gap-2.5 min-w-0 sm:min-w-[170px]">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Plane className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <h2
+                  id="booking-dialog-title"
+                  className="font-bold text-sm sm:text-base tracking-tight leading-tight truncate"
+                >
+                  {editBookingData ? "Edit Booking" : "New Booking"}
+                </h2>
+                <p className="text-[11px] text-muted-foreground hidden sm:block leading-none mt-0.5">
+                  {bookingMode === "direct" ? "Direct Client" : "B2B Agent Booking"}
+                </p>
+              </div>
+            </div>
 
-            {/* Two switch buttons: Direct Client | B2B Agent */}
-            <div className="inline-flex rounded-md border p-0.5 bg-background shadow-xs">
+            {/* Center: Segmented Control Switcher */}
+            <div className="inline-flex rounded-lg border border-border/70 p-1 bg-background/80 shadow-xs shrink-0 mx-2">
               <button
                 type="button"
                 onClick={() => setBookingMode("direct")}
                 className={cn(
-                  "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
+                  "px-3.5 sm:px-5 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center gap-2 cursor-pointer select-none",
                   bookingMode === "direct"
-                    ? "bg-blue-600 text-white shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-blue-600 text-white shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 )}
               >
-                <User className="w-3.5 h-3.5" />
-                Direct Client
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Direct Client</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setBookingMode("b2b")}
                 className={cn(
-                  "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
+                  "px-3.5 sm:px-5 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center gap-2 cursor-pointer select-none",
                   bookingMode === "b2b"
-                    ? "bg-purple-600 text-white shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-purple-600 text-white shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 )}
               >
-                <Users className="w-3.5 h-3.5" />
-                B2B Agent
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>B2B Agent</span>
               </button>
+            </div>
+
+            {/* Right: Close (X) */}
+            <div className="flex items-center justify-end min-w-0 sm:min-w-[170px]">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+                onClick={handleCloseRequest}
+                aria-label="Close dialog"
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
           </div>
 
-          {/* Right: Close Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={handleCloseRequest}
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* ======================= BODY: DENSE GRID ======================= */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {/* ========== B2B AGENT SELECTOR ROW (Only if B2B) ========== */}
-          {bookingMode === "b2b" && (
-            <div className="p-2.5 bg-purple-500/5 rounded-md border border-purple-500/20 space-y-2 animate-in fade-in duration-150">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex-1 min-w-[260px]">
-                  <Label className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1 block">
-                    B2B Agent <span className="text-red-500">*</span>
-                  </Label>
-                  <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={agentSearchOpen}
-                        className="w-full justify-between h-8 text-xs bg-background font-normal"
-                      >
-                        {activeAgent ? (
-                          <span className="font-semibold text-foreground truncate">
-                            {activeAgent.agent_name}
-                            {activeAgent.business_name && (
-                              <span className="text-muted-foreground ml-1.5 font-normal">
-                                ({activeAgent.business_name})
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Type to search or add agent...</span>
-                        )}
-                        <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[320px] p-0" align="start">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search or enter new agent..."
-                          value={agentSearchQuery}
-                          onValueChange={setAgentSearchQuery}
-                          className="h-8 text-xs"
-                        />
-                        <CommandList>
-                          <CommandEmpty className="p-2 text-xs text-muted-foreground">
-                            {agentSearchQuery.trim() ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full justify-start text-xs gap-1.5 text-purple-600 font-semibold"
-                                onClick={() => handleCreateInlineAgent(agentSearchQuery)}
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                + Create &quot;{agentSearchQuery}&quot;
-                              </Button>
-                            ) : (
-                              "No agents found"
-                            )}
-                          </CommandEmpty>
-                          <CommandGroup heading="Existing Agents">
-                            {agents.map((agent) => (
-                              <CommandItem
-                                key={agent.id}
-                                value={agent.agent_name}
-                                onSelect={() => {
-                                  setSelectedAgentId(agent.id);
-                                  setAgentSearchOpen(false);
-                                  setAgentSearchQuery("");
-                                }}
-                                className="text-xs flex items-center justify-between cursor-pointer"
-                              >
-                                <div className="truncate">
-                                  <span className="font-medium">{agent.agent_name}</span>
-                                  {agent.business_name && (
-                                    <span className="text-[11px] text-muted-foreground ml-1.5">
-                                      - {agent.business_name}
-                                    </span>
-                                  )}
-                                </div>
-                                {selectedAgentId === agent.id && (
-                                  <Check className="w-3.5 h-3.5 text-purple-600" />
-                                )}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {activeAgent && (
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-4">
-                    {activeAgent.phone && (
-                      <span>Phone: <b className="text-foreground">{activeAgent.phone}</b></span>
+          {/* ======================= 2. SCROLLABLE FORM BODY ======================= */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-3 sm:px-4 py-3 space-y-3">
+            {/* ========== 1. AGENT & SERVICE/FLIGHT SPECS (BLUE TINT) ========== */}
+            <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/60 border-l-4 border-l-blue-600 dark:border-l-blue-500 rounded-lg p-2.5 sm:p-3">
+              <div className="text-xs sm:text-sm font-bold text-blue-900 dark:text-blue-300 mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <div className="p-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400">
+                    {bookingMode === "b2b" ? (
+                      <Building2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Plane className="w-3.5 h-3.5" />
                     )}
-                    {activeAgent.city && (
-                      <span>City: <b className="text-foreground">{activeAgent.city}</b></span>
-                    )}
-                    <Badge variant="outline" className="text-[10px] h-5 border-purple-500/30 text-purple-700 dark:text-purple-300">
-                      Comm: {activeAgent.commission_type === "percentage" ? `${activeAgent.commission_value}%` : `PKR ${activeAgent.commission_value}`}
-                    </Badge>
                   </div>
-                )}
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAgentDetails(!showAgentDetails)}
-                  className="h-7 text-xs text-purple-600 hover:text-purple-700 ml-auto mt-4"
-                >
-                  {showAgentDetails ? "Hide New Agent Fields" : "+ New Agent Extra Details"}
-                </Button>
+                  <span>
+                    {bookingMode === "b2b"
+                      ? "Agent & Service / Flight Details"
+                      : "Service & Flight Details"}
+                  </span>
+                </span>
               </div>
 
-              {/* Optional inline agent details row */}
-              {showAgentDetails && (
-                <div className="pt-2 border-t border-purple-500/20 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 text-xs">
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Business Name</Label>
-                    <Input
-                      placeholder="Agency Name"
-                      value={newAgentBusiness}
-                      onChange={(e) => setNewAgentBusiness(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Phone</Label>
-                    <Input
-                      placeholder="0300..."
-                      value={newAgentPhone}
-                      onChange={(e) => setNewAgentPhone(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">City</Label>
-                    <Input
-                      placeholder="Lahore / Karachi"
-                      value={newAgentCity}
-                      onChange={(e) => setNewAgentCity(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Commission</Label>
-                    <div className="flex gap-1">
-                      <Select
-                        value={newAgentCommissionType}
-                        onValueChange={(val: any) => setNewAgentCommissionType(val)}
-                      >
-                        <SelectTrigger className="h-7 text-xs w-16">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">%</SelectItem>
-                          <SelectItem value="fixed">PKR</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        placeholder="Val"
-                        value={newAgentCommissionValue}
-                        onChange={(e) => setNewAgentCommissionValue(e.target.value)}
-                        className="h-7 text-xs flex-1"
-                      />
+              {/* B2B Agent Selector (Row inside Blue card when B2B mode) */}
+              {bookingMode === "b2b" && (
+                <div className="mb-2.5 pb-2.5 border-b border-blue-200/80 dark:border-blue-900/60">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="flex-1 min-w-[260px]">
+                      <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        B2B Agent <span className="text-red-500 font-bold">*</span>
+                      </Label>
+                      <div className="flex gap-1">
+                        <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              ref={agentTriggerRef}
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={agentSearchOpen}
+                              data-booking-input="true"
+                              data-field="agent"
+                              className="w-full justify-between h-8 text-xs bg-background font-normal border-blue-200 dark:border-blue-800 focus-visible:ring-blue-500 truncate"
+                            >
+                              {activeAgent ? (
+                                <span className="font-semibold text-foreground truncate">
+                                  {activeAgent.agent_name}
+                                  {activeAgent.business_name && (
+                                    <span className="text-muted-foreground ml-1.5 font-normal">
+                                      ({activeAgent.business_name})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">Search or choose agent...</span>
+                              )}
+                              <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0 ml-1" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[320px] p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Search agent name or agency..."
+                                value={agentSearchQuery}
+                                onValueChange={setAgentSearchQuery}
+                                className="h-8 text-xs"
+                              />
+                              <CommandList>
+                                <CommandEmpty className="p-2 text-xs text-muted-foreground">
+                                  {agentSearchQuery.trim() ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full justify-start text-xs gap-1.5 text-blue-600 font-semibold"
+                                      onClick={() => {
+                                        setIsAddAgentOpen(true);
+                                        setAddAgentInitialName(agentSearchQuery);
+                                        setAgentSearchOpen(false);
+                                      }}
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      + Add &quot;{agentSearchQuery}&quot;
+                                    </Button>
+                                  ) : (
+                                    "No agents found"
+                                  )}
+                                </CommandEmpty>
+                                <CommandGroup heading="Existing Agents">
+                                  {agents.map((agent) => (
+                                    <CommandItem
+                                      key={agent.id}
+                                      value={`${agent.agent_name} ${agent.business_name || ""}`}
+                                      onSelect={() => {
+                                        setSelectedAgentId(agent.id);
+                                        setAgentSearchOpen(false);
+                                        setAgentSearchQuery("");
+                                        setTimeout(() => serviceTriggerRef.current?.focus(), 60);
+                                      }}
+                                      className="text-xs flex items-center justify-between cursor-pointer"
+                                    >
+                                      <div className="truncate">
+                                        <span className="font-medium">{agent.agent_name}</span>
+                                        {agent.business_name && (
+                                          <span className="text-[11px] text-muted-foreground ml-1.5">
+                                            - {agent.business_name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {selectedAgentId === agent.id && (
+                                        <Check className="w-3.5 h-3.5 text-blue-600" />
+                                      )}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                                {agentSearchQuery.trim() && (
+                                  <CommandGroup heading="New Agent">
+                                    <CommandItem
+                                      value={`add-${agentSearchQuery}`}
+                                      onSelect={() => {
+                                        setIsAddAgentOpen(true);
+                                        setAddAgentInitialName(agentSearchQuery);
+                                        setAgentSearchOpen(false);
+                                      }}
+                                      className="text-xs text-blue-600 font-semibold cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                      + Add &quot;{agentSearchQuery}&quot;
+                                    </CommandItem>
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          tabIndex={-1}
+                          onClick={() => {
+                            setIsAddAgentOpen(true);
+                            setAddAgentInitialName("");
+                          }}
+                          title="Add New Agent"
+                          className="h-8 w-8 shrink-0 cursor-pointer border-blue-200 dark:border-blue-800 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Opening Bal</Label>
-                    <div className="flex gap-1">
-                      <Select
-                        value={newAgentOpeningBalanceType}
-                        onValueChange={(val: any) => setNewAgentOpeningBalanceType(val)}
-                      >
-                        <SelectTrigger className="h-7 text-xs w-14">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="receivable">Rec</SelectItem>
-                          <SelectItem value="payable">Pay</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={newAgentOpeningBalance}
-                        onChange={(e) => setNewAgentOpeningBalance(e.target.value)}
-                        className="h-7 text-xs flex-1"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => handleCreateInlineAgent(agentSearchQuery || "New Agent")}
-                      className="h-7 text-xs w-full bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                      Save Agent Inline
-                    </Button>
+
+                    {activeAgent && (
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-4">
+                        {activeAgent.phone && (
+                          <span>
+                            Phone: <b className="text-foreground">{activeAgent.phone}</b>
+                          </span>
+                        )}
+                        {activeAgent.city && (
+                          <span>
+                            City: <b className="text-foreground">{activeAgent.city}</b>
+                          </span>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-5 border-blue-500/30 text-blue-700 dark:text-blue-300"
+                        >
+                          Comm:{" "}
+                          {activeAgent.commission_type === "percentage"
+                            ? `${activeAgent.commission_value}%`
+                            : `PKR ${activeAgent.commission_value?.toLocaleString()}`}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ========== SERVICE & FLIGHT SPECS (Contact Number & Email Merged) ========== */}
-          <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Plane className="w-3.5 h-3.5 text-emerald-500" />
-              Service & Flight Details
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
-              {/* Service Type */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Service</Label>
-                <Select value={serviceType} onValueChange={setServiceType}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Ticket">Ticket</SelectItem>
-                    <SelectItem value="Umrah">Umrah</SelectItem>
-                    <SelectItem value="Hotel">Hotel</SelectItem>
-                    <SelectItem value="Visa">Visa</SelectItem>
-                    <SelectItem value="Tour">Tour</SelectItem>
-                    <SelectItem value="Custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Trip Type */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Trip Type</Label>
-                <Select
-                  value={tripType}
-                  onValueChange={(val: any) => setTripType(val)}
-                  disabled={serviceType !== "Ticket"}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="one_way">One Way</SelectItem>
-                    <SelectItem value="return">Return</SelectItem>
-                    <SelectItem value="multi_city">Multi-City</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Pax Count */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Pax Count</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={paxCount}
-                  onChange={(e) => setPaxCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="h-8 text-xs font-bold text-center"
-                />
-              </div>
-
-              {/* Airline */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Airline</Label>
-                <Input
-                  placeholder="PIA, SV, EK..."
-                  value={airline}
-                  onChange={(e) => setAirline(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              {/* Destination */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Destination</Label>
-                <Input
-                  placeholder="JED, DXB, LHR..."
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  className="h-8 text-xs uppercase"
-                />
-              </div>
-
-              {/* Flight Date */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">
-                  Flight Date
-                </Label>
-                <Input
-                  placeholder="YYYY-MM-DD"
-                  value={flightDate}
-                  onChange={(e) => setFlightDate(e.target.value)}
-                  onBlur={(e) =>
-                    handleDateInputBlurOrChange(e.target.value, setFlightDate)
-                  }
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              {/* Flight Time */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Time</Label>
-                <Input
-                  placeholder="14:30"
-                  value={flightTime}
-                  onChange={(e) => setFlightTime(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              {/* PNR */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">PNR</Label>
-                <Input
-                  placeholder="6-char PNR"
-                  value={pnr}
-                  onChange={(e) => setPnr(e.target.value.toUpperCase())}
-                  className="h-8 text-xs font-mono font-bold uppercase tracking-wider"
-                />
-              </div>
-
-              {/* Contact Number (Merged into Service row) */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Contact Number</Label>
-                <Input
-                  placeholder="0300-1234567"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              {/* Contact Email (Merged into Service row) */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Contact Email</Label>
-                <Input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ========== PASSENGERS SECTION ========== */}
-          <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-indigo-500" />
-              Passengers
-            </div>
-
-            <div className="border border-border/80 rounded-sm overflow-hidden bg-background">
-              <div className="max-h-[135px] overflow-y-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead className="bg-muted/70 text-muted-foreground sticky top-0 z-10 border-b">
-                    <tr>
-                      <th className="p-1.5 text-center w-8">#</th>
-                      <th className="p-1.5 text-left min-w-[140px]">
-                        Passenger Name <span className="text-red-500">*</span>
-                      </th>
-                      <th className="p-1.5 text-left min-w-[110px]">Passport No</th>
-                      <th className="p-1.5 text-left min-w-[110px]">CNIC</th>
-                      <th className="p-1.5 text-left min-w-[95px]">DOB</th>
-                      <th className="p-1.5 text-center w-20">Gender</th>
-                      <th className="p-1.5 text-left min-w-[90px]">Nationality</th>
-                      <th className="p-1.5 text-center w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {passengers.map((pax, idx) => {
-                      const isFirst = idx === 0;
-                      const isLast = idx === passengers.length - 1;
-                      return (
-                        <tr key={pax.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="p-1 text-center font-bold text-muted-foreground">
-                            {idx + 1}
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              ref={isFirst ? firstPassengerNameRef : undefined}
-                              data-pax-field="name"
-                              placeholder="FULL NAME AS IN PASSPORT"
-                              value={pax.name}
-                              onChange={(e) =>
-                                updatePassenger(idx, "name", e.target.value.toUpperCase())
-                              }
-                              className="h-7 text-xs font-semibold uppercase"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              placeholder="Passport #"
-                              value={pax.passport_number}
-                              onChange={(e) =>
-                                updatePassenger(
-                                  idx,
-                                  "passport_number",
-                                  e.target.value.toUpperCase()
-                                )
-                              }
-                              className="h-7 text-xs uppercase"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              placeholder="42101-..."
-                              value={pax.cnic}
-                              onChange={(e) =>
-                                updatePassenger(idx, "cnic", e.target.value)
-                              }
-                              className="h-7 text-xs"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              placeholder="DD/MM/YYYY"
-                              value={pax.date_of_birth}
-                              onChange={(e) =>
-                                updatePassenger(idx, "date_of_birth", e.target.value)
-                              }
-                              onBlur={(e) =>
-                                handleDateInputBlurOrChange(e.target.value, (val) =>
-                                  updatePassenger(idx, "date_of_birth", val)
-                                )
-                              }
-                              className="h-7 text-xs"
-                            />
-                          </td>
-                          <td className="p-1 text-center">
-                            <Select
-                              value={pax.gender || "M"}
-                              onValueChange={(val) => updatePassenger(idx, "gender", val)}
-                            >
-                              <SelectTrigger className="h-7 text-xs w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="M">Male</SelectItem>
-                                <SelectItem value="F">Female</SelectItem>
-                                <SelectItem value="O">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              placeholder="Nationality"
-                              value={pax.nationality}
-                              onChange={(e) =>
-                                updatePassenger(idx, "nationality", e.target.value)
-                              }
-                              onKeyDown={(e) => handleLastPassengerKeyDown(e, isLast)}
-                              className="h-7 text-xs"
-                            />
-                          </td>
-                          <td className="p-1 text-center">
-                            {passengers.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removePassenger(idx)}
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* ========== FINANCIALS, SETTLEMENT, VENDOR, NAME UPDATE & NOTES (NO HEADING) ========== */}
-          <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            {bookingMode === "direct" && (
-              <div className="flex justify-end mb-1">
-                <button
-                  type="button"
-                  onClick={() => setShowOpeningBalance(!showOpeningBalance)}
-                  className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
-                >
-                  {showOpeningBalance ? "Hide Opening Balance" : "+ Client Opening Balance"}
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-              {/* Purchase Price */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Purchase Cost</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={purchasingPrice}
-                  onChange={(e) => setPurchasingPrice(e.target.value)}
-                  className="h-8 text-xs font-semibold"
-                />
-              </div>
-
-              {/* Total (Selling Price) */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">
-                  Total (Selling) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={sellingPrice}
-                  onChange={(e) => setSellingPrice(e.target.value)}
-                  className="h-8 text-xs font-bold text-primary"
-                  required
-                />
-              </div>
-
-              {/* Amount Paid */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Paid</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  className="h-8 text-xs font-semibold text-emerald-600"
-                />
-              </div>
-
-              {/* Remaining (Auto) */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Remaining</Label>
-                <div
-                  className={cn(
-                    "h-8 px-2 flex items-center rounded-md border text-xs font-bold bg-muted/50",
-                    remainingAmount > 0 ? "text-amber-600" : "text-muted-foreground"
-                  )}
-                >
-                  PKR {remainingAmount.toLocaleString()}
-                </div>
-              </div>
-
-              {/* Payment Mode */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">Payment Mode</Label>
-                <Select value={paymentMode} onValueChange={setPaymentMode}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank">Bank Transfer</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="online">Online</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Bank Name if Bank Transfer selected */}
-              {paymentMode === "bank" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+                {/* 1. Service Type */}
                 <div>
-                  <Label className="text-xs font-semibold mb-1 block">Bank Name</Label>
-                  <Input
-                    placeholder="Meezan, HBL..."
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    className="h-8 text-xs"
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Service <span className="text-red-500 font-bold">*</span>
+                  </Label>
+                  <BookingSelect
+                    triggerRef={serviceTriggerRef}
+                    dataField="service"
+                    ariaLabel="Service"
+                    value={serviceType}
+                    onValueChange={setServiceType}
+                    triggerClassName="focus-visible:ring-blue-500"
+                    options={[
+                      { label: "Ticket", value: "Ticket" },
+                      { label: "Umrah", value: "Umrah" },
+                      { label: "Hotel", value: "Hotel" },
+                      { label: "Visa", value: "Visa" },
+                      { label: "Tour", value: "Tour" },
+                      { label: "Custom", value: "Custom" },
+                    ]}
                   />
                 </div>
-              ) : null}
 
-              {/* Vendor Selector */}
-              <div className={paymentMode === "bank" ? "col-span-1" : "col-span-1 sm:col-span-2"}>
-                <Label className="text-xs font-semibold mb-1 block">Vendor</Label>
-                <div className="flex gap-1">
-                  <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
-                    <SelectTrigger className="h-8 text-xs flex-1 truncate">
-                      <SelectValue placeholder="Select Vendor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None / Direct</SelectItem>
-                      {vendors.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Popover open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 cursor-pointer"
-                        title="Quick Add Vendor"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64 p-3 space-y-2" align="end">
-                      <div className="font-semibold text-xs flex items-center gap-1.5">
-                        <Store className="w-3.5 h-3.5 text-primary" />
-                        Quick Add Vendor
-                      </div>
-                      <Input
-                        placeholder="Vendor Name"
-                        value={quickVendorName}
-                        onChange={(e) => setQuickVendorName(e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                      <Input
-                        placeholder="Service (Airlines / Hotel)"
-                        value={quickVendorService}
-                        onChange={(e) => setQuickVendorService(e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleQuickAddVendor}
-                        className="w-full h-7 text-xs cursor-pointer"
-                      >
-                        Save & Select
-                      </Button>
-                    </PopoverContent>
-                  </Popover>
+                {/* 2. Trip Type */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Trip Type
+                  </Label>
+                  <BookingSelect
+                    dataField="tripType"
+                    ariaLabel="Trip Type"
+                    value={tripType}
+                    onValueChange={(val: any) => setTripType(val)}
+                    disabled={serviceType !== "Ticket"}
+                    triggerClassName="focus-visible:ring-blue-500"
+                    options={[
+                      { label: "One Way", value: "one_way" },
+                      { label: "Return", value: "return" },
+                      { label: "Multi-City", value: "multi_city" },
+                    ]}
+                  />
                 </div>
-              </div>
 
-              {/* Name Update Date (Moved to last section) */}
-              <div>
-                <Label className="text-xs font-semibold mb-1 block truncate">
-                  Name Update
-                </Label>
-                <Input
-                  placeholder="YYYY-MM-DD"
-                  value={nameUpdateDate}
-                  onChange={(e) => setNameUpdateDate(e.target.value)}
-                  onBlur={(e) =>
-                    handleDateInputBlurOrChange(e.target.value, setNameUpdateDate)
-                  }
-                  className="h-8 text-xs"
-                />
+                {/* 3. Pax Count */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Pax Count
+                  </Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    data-booking-input="true"
+                    data-field="paxCount"
+                    value={paxCount}
+                    onChange={(e) => setPaxCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-8 text-xs font-bold text-center bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 4. Airline */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Airline
+                  </Label>
+                  <Input
+                    placeholder="PIA, SV, EK..."
+                    data-booking-input="true"
+                    data-field="airline"
+                    value={airline}
+                    onChange={(e) => setAirline(e.target.value)}
+                    className="h-8 text-xs bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 5. Destination */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Destination
+                  </Label>
+                  <Input
+                    placeholder="JED, DXB, LHR..."
+                    data-booking-input="true"
+                    data-field="destination"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    className="h-8 text-xs uppercase bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 6. Flight Date */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Flight Date
+                  </Label>
+                  <Input
+                    placeholder="YYYY-MM-DD"
+                    data-booking-input="true"
+                    data-field="flightDate"
+                    value={flightDate}
+                    onChange={(e) => setFlightDate(e.target.value)}
+                    onBlur={(e) =>
+                      handleDateInputBlurOrChange(e.target.value, setFlightDate)
+                    }
+                    className="h-8 text-xs bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 7. Flight Time */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Time
+                  </Label>
+                  <Input
+                    placeholder="14:30"
+                    data-booking-input="true"
+                    data-field="flightTime"
+                    value={flightTime}
+                    onChange={(e) => setFlightTime(e.target.value)}
+                    className="h-8 text-xs bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 8. PNR */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    PNR
+                  </Label>
+                  <Input
+                    placeholder="6-char PNR"
+                    data-booking-input="true"
+                    data-field="pnr"
+                    value={pnr}
+                    onChange={(e) => setPnr(e.target.value.toUpperCase())}
+                    className="h-8 text-xs font-mono font-bold uppercase tracking-wider bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 9. Contact Number */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Contact Number
+                  </Label>
+                  <Input
+                    placeholder="0300-1234567"
+                    data-booking-input="true"
+                    data-field="contactNumber"
+                    value={contactNumber}
+                    onChange={(e) => setContactNumber(e.target.value)}
+                    className="h-8 text-xs bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
+
+                {/* 10. Contact Email */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Contact Email
+                  </Label>
+                  <Input
+                    type="email"
+                    placeholder="client@example.com"
+                    data-booking-input="true"
+                    data-field="contactEmail"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    className="h-8 text-xs bg-background focus-visible:ring-blue-500"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Optional Opening Balance for Direct Client */}
-            {bookingMode === "direct" && showOpeningBalance && (
-              <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-3 text-xs animate-in fade-in">
-                <span className="font-semibold text-muted-foreground">
-                  Client Opening Balance:
+            {/* ========== 2. PASSENGERS SECTION (PURPLE TINT) ========== */}
+            <div className="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/60 border-l-4 border-l-purple-600 dark:border-l-purple-500 rounded-lg p-2.5 sm:p-3">
+              <div className="text-xs sm:text-sm font-bold text-purple-900 dark:text-purple-300 mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <div className="p-1 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                  <span>Passengers</span>
+                  <span className="text-[11px] font-normal text-muted-foreground ml-1">
+                    ({passengers.length} {passengers.length === 1 ? "passenger" : "passengers"})
+                  </span>
                 </span>
-                <Select
-                  value={openingBalanceType}
-                  onValueChange={(val: any) => setOpeningBalanceType(val)}
-                >
-                  <SelectTrigger className="h-7 text-xs w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="receivable">Receivable</SelectItem>
-                    <SelectItem value="payable">Payable</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  placeholder="Amount (PKR)"
-                  value={openingBalanceAmount}
-                  onChange={(e) => setOpeningBalanceAmount(e.target.value)}
-                  className="h-7 text-xs w-36"
-                />
               </div>
-            )}
 
-            {/* Notes: Single Full-Width Field */}
-            <div className="w-full mt-2.5">
-              <Label className="text-xs font-semibold mb-1 block">Notes / Remarks</Label>
-              <Input
-                placeholder="Special requests, flight notes, passenger instructions..."
+              <div className="border border-purple-200 dark:border-purple-900/60 rounded-md overflow-hidden bg-background">
+                <div className="max-h-[145px] sm:max-h-[165px] overflow-y-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="bg-purple-100/60 dark:bg-purple-950/50 text-purple-900 dark:text-purple-200 sticky top-0 z-10 border-b border-purple-200 dark:border-purple-900/60">
+                      <tr>
+                        <th className="p-1.5 text-center w-8">#</th>
+                        <th className="p-1.5 text-left min-w-[140px]">
+                          Passenger Name <span className="text-red-500 font-bold">*</span>
+                        </th>
+                        <th className="p-1.5 text-left min-w-[110px]">Passport No</th>
+                        <th className="p-1.5 text-left min-w-[110px]">CNIC</th>
+                        <th className="p-1.5 text-left min-w-[95px]">DOB</th>
+                        <th className="p-1.5 text-center w-24">Gender</th>
+                        <th className="p-1.5 text-left min-w-[90px]">Nationality</th>
+                        <th className="p-1.5 text-center w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-purple-100 dark:divide-purple-900/40">
+                      {passengers.map((pax, idx) => {
+                        return (
+                          <tr key={pax.id} className="hover:bg-purple-500/5 transition-colors">
+                            <td className="p-1 text-center font-bold text-muted-foreground">
+                              {idx + 1}
+                            </td>
+                            <td className="p-1">
+                              <Input
+                                data-booking-input="true"
+                                data-pax-index={idx}
+                                data-pax-field="name"
+                                placeholder="FULL NAME AS IN PASSPORT"
+                                value={pax.name}
+                                onChange={(e) =>
+                                  updatePassenger(idx, "name", e.target.value.toUpperCase())
+                                }
+                                className="h-7 text-xs font-semibold uppercase bg-background focus-visible:ring-purple-500"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <Input
+                                data-booking-input="true"
+                                data-pax-index={idx}
+                                data-pax-field="passport_number"
+                                placeholder="Passport #"
+                                value={pax.passport_number}
+                                onChange={(e) =>
+                                  updatePassenger(
+                                    idx,
+                                    "passport_number",
+                                    e.target.value.toUpperCase()
+                                  )
+                                }
+                                className="h-7 text-xs uppercase bg-background focus-visible:ring-purple-500"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <Input
+                                data-booking-input="true"
+                                data-pax-index={idx}
+                                data-pax-field="cnic"
+                                placeholder="42101-..."
+                                value={pax.cnic}
+                                onChange={(e) =>
+                                  updatePassenger(idx, "cnic", e.target.value)
+                                }
+                                className="h-7 text-xs bg-background focus-visible:ring-purple-500"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <Input
+                                data-booking-input="true"
+                                data-pax-index={idx}
+                                data-pax-field="date_of_birth"
+                                placeholder="YYYY-MM-DD"
+                                value={pax.date_of_birth}
+                                onChange={(e) =>
+                                  updatePassenger(idx, "date_of_birth", e.target.value)
+                                }
+                                onBlur={(e) =>
+                                  handleDateInputBlurOrChange(e.target.value, (val) =>
+                                    updatePassenger(idx, "date_of_birth", val)
+                                  )
+                                }
+                                className="h-7 text-xs bg-background focus-visible:ring-purple-500"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              <BookingSelect
+                                dataField={`gender-${idx}`}
+                                ariaLabel={`Gender Passenger ${idx + 1}`}
+                                value={pax.gender || "M"}
+                                onValueChange={(val) => updatePassenger(idx, "gender", val)}
+                                triggerClassName="h-7 text-xs focus-visible:ring-purple-500"
+                                options={[
+                                  { label: "Male", value: "M" },
+                                  { label: "Female", value: "F" },
+                                  { label: "Other", value: "O" },
+                                ]}
+                              />
+                            </td>
+                            <td className="p-1">
+                              <Input
+                                data-booking-input="true"
+                                data-pax-index={idx}
+                                data-pax-field="nationality"
+                                placeholder="Nationality"
+                                value={pax.nationality}
+                                onChange={(e) =>
+                                  updatePassenger(idx, "nationality", e.target.value)
+                                }
+                                className="h-7 text-xs bg-background focus-visible:ring-purple-500"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              {passengers.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  tabIndex={-1}
+                                  onClick={() => removePassenger(idx)}
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                                  aria-label={`Remove Passenger ${idx + 1}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* ========== 3. PRICING & PAYMENT (GREEN TINT) ========== */}
+            <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/60 border-l-4 border-l-emerald-600 dark:border-l-emerald-500 rounded-lg p-2.5 sm:p-3">
+              <div className="text-xs sm:text-sm font-bold text-emerald-900 dark:text-emerald-300 mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <div className="p-1 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400">
+                    <CreditCard className="w-3.5 h-3.5" />
+                  </div>
+                  <span>Pricing & Payment</span>
+                </span>
+
+                {bookingMode === "direct" && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowOpeningBalance(!showOpeningBalance)}
+                    className="text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer font-medium"
+                  >
+                    {showOpeningBalance ? "Hide Opening Balance" : "+ Client Opening Balance"}
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                {/* 1. Purchase Cost */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Purchase Cost
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    data-booking-input="true"
+                    data-field="purchasingPrice"
+                    value={purchasingPrice}
+                    onChange={(e) => setPurchasingPrice(e.target.value)}
+                    className="h-8 text-xs font-semibold bg-background focus-visible:ring-emerald-500"
+                  />
+                </div>
+
+                {/* 2. Total (Selling Price) */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Total (Selling) <span className="text-red-500 font-bold">*</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    data-booking-input="true"
+                    data-field="sellingPrice"
+                    value={sellingPrice}
+                    onChange={(e) => setSellingPrice(e.target.value)}
+                    className="h-8 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-background focus-visible:ring-emerald-500"
+                    required
+                  />
+                </div>
+
+                {/* 3. Paid */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Paid
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    data-booking-input="true"
+                    data-field="amountPaid"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    className="h-8 text-xs font-semibold text-emerald-600 bg-background focus-visible:ring-emerald-500"
+                  />
+                </div>
+
+                {/* 4. Remaining (Read-only - skipped by Enter & Tab) */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Remaining
+                  </Label>
+                  <div
+                    aria-label="Remaining Amount"
+                    className={cn(
+                      "h-8 px-2 flex items-center rounded-md border text-xs font-bold select-none",
+                      remainingAmount === 0
+                        ? "bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                        : "bg-rose-100/80 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800"
+                    )}
+                  >
+                    PKR {remainingAmount.toLocaleString()}
+                  </div>
+                </div>
+
+                {/* 5. Payment Mode */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Payment Mode
+                  </Label>
+                  <BookingSelect
+                    dataField="paymentMode"
+                    ariaLabel="Payment Mode"
+                    value={paymentMode}
+                    onValueChange={setPaymentMode}
+                    triggerClassName="focus-visible:ring-emerald-500"
+                    options={[
+                      { label: "Cash", value: "cash" },
+                      { label: "Bank Transfer", value: "bank" },
+                      { label: "Cheque", value: "cheque" },
+                      { label: "Online", value: "online" },
+                    ]}
+                  />
+                </div>
+
+                {/* 6. Bank Name if Bank Transfer selected */}
+                {paymentMode === "bank" && (
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                      Bank Name
+                    </Label>
+                    <Input
+                      placeholder="Meezan, HBL..."
+                      data-booking-input="true"
+                      data-field="bankName"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className="h-8 text-xs bg-background focus-visible:ring-emerald-500"
+                    />
+                  </div>
+                )}
+
+                {/* 7. Vendor Selector */}
+                <div className={paymentMode === "bank" ? "col-span-1" : "col-span-1 sm:col-span-2"}>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                    Vendor
+                  </Label>
+                  <div className="flex gap-1">
+                    <div className="flex-1 min-w-0">
+                      <BookingSelect
+                        dataField="vendor"
+                        ariaLabel="Vendor"
+                        value={selectedVendorId}
+                        onValueChange={setSelectedVendorId}
+                        triggerClassName="focus-visible:ring-emerald-500"
+                        options={[
+                          { label: "None / Direct", value: "none" },
+                          ...vendors.map((v) => ({ label: v.name, value: v.id })),
+                        ]}
+                      />
+                    </div>
+                    <Popover open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          tabIndex={-1}
+                          className="h-8 w-8 shrink-0 cursor-pointer border-emerald-200 dark:border-emerald-800"
+                          title="Quick Add Vendor"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3 space-y-2" align="end">
+                        <div className="font-semibold text-xs flex items-center gap-1.5">
+                          <Store className="w-3.5 h-3.5 text-emerald-600" />
+                          Quick Add Vendor
+                        </div>
+                        <Input
+                          placeholder="Vendor Name"
+                          value={quickVendorName}
+                          onChange={(e) => setQuickVendorName(e.target.value)}
+                          className="h-7 text-xs"
+                        />
+                        <Input
+                          placeholder="Service (Airlines / Hotel)"
+                          value={quickVendorService}
+                          onChange={(e) => setQuickVendorService(e.target.value)}
+                          className="h-7 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          tabIndex={-1}
+                          onClick={handleQuickAddVendor}
+                          className="w-full h-7 text-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          Save & Select
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {/* 8. Name Update Date */}
+                <div>
+                  <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block truncate">
+                    Name Update
+                  </Label>
+                  <Input
+                    placeholder="YYYY-MM-DD"
+                    data-booking-input="true"
+                    data-field="nameUpdateDate"
+                    value={nameUpdateDate}
+                    onChange={(e) => setNameUpdateDate(e.target.value)}
+                    onBlur={(e) =>
+                      handleDateInputBlurOrChange(e.target.value, setNameUpdateDate)
+                    }
+                    className="h-8 text-xs bg-background focus-visible:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Optional Opening Balance for Direct Client */}
+              {bookingMode === "direct" && showOpeningBalance && (
+                <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800/60 flex items-center gap-3 text-xs animate-in fade-in">
+                  <span className="font-semibold text-muted-foreground">
+                    Client Opening Balance:
+                  </span>
+                  <Select
+                    value={openingBalanceType}
+                    onValueChange={(val: any) => setOpeningBalanceType(val)}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-28 bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="receivable">Receivable</SelectItem>
+                      <SelectItem value="payable">Payable</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder="Amount (PKR)"
+                    value={openingBalanceAmount}
+                    onChange={(e) => setOpeningBalanceAmount(e.target.value)}
+                    className="h-7 text-xs w-36 bg-background"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ========== 4. NOTES / REMARKS (AMBER / NEUTRAL TINT) ========== */}
+            <div className="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 border-l-4 border-l-amber-500 dark:border-l-amber-500 rounded-lg p-2.5 sm:p-3">
+              <div className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-300 mb-1.5 flex items-center gap-2">
+                <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <span>Notes / Remarks</span>
+              </div>
+              <Textarea
+                rows={2}
+                placeholder="Special requests, flight notes, passenger instructions... (Shift+Enter for new line, Enter to focus Save)"
+                data-booking-input="true"
+                data-field="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="h-8 text-xs w-full"
+                className="text-xs w-full bg-background resize-none focus-visible:ring-amber-500"
               />
             </div>
           </div>
-        </div>
 
-        {/* ======================= BOTTOM STICKY FOOTER ======================= */}
-        <div className="h-12 border-t border-border px-4 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur-sm">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCloseRequest}
-            disabled={isSubmitting}
-            className="text-xs h-8 cursor-pointer"
-          >
-            Cancel
-          </Button>
-
-          <div className="flex items-center gap-2.5">
+          {/* ======================= 3. STICKY FOOTER (CANCEL / SAVE NEXT / SAVE) ======================= */}
+          <div className="shrink-0 border-t border-border px-3 sm:px-4 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 bg-background/95 backdrop-blur-sm">
+            {/* Left: Cancel */}
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
-              onClick={() => handleSave(true)}
+              onClick={handleCloseRequest}
               disabled={isSubmitting}
-              className="text-xs h-8 font-semibold gap-1.5 cursor-pointer"
+              className="text-xs h-8 cursor-pointer hover:bg-muted"
             >
-              <Plus className="w-3.5 h-3.5" />
-              Save & Add Next
+              Cancel
             </Button>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => handleSave(false)}
-              disabled={isSubmitting}
-              className="text-xs h-8 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Check className="w-4 h-4" />
-              Save Booking
-            </Button>
+            {/* Center: Keyboard hint */}
+            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground select-none">
+              <span className="font-semibold text-foreground/80">Enter</span> = next field •
+              <span className="font-semibold text-foreground/80">Ctrl+Enter</span> = save •
+              <span className="font-semibold text-foreground/80">Esc</span> = cancel
+            </div>
+
+            {/* Right: Save & Add Next + Save Booking */}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleSave(true)}
+                disabled={isSubmitting}
+                className="text-xs h-8 font-semibold gap-1.5 cursor-pointer hover:bg-secondary/80"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Save & Add Next
+              </Button>
+
+              <Button
+                ref={saveButtonRef}
+                type="button"
+                size="sm"
+                onClick={() => handleSave(false)}
+                disabled={isSubmitting}
+                className="text-xs h-8 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shadow-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                <Check className="w-4 h-4" />
+                Save Booking
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Exit confirmation dialog */}
+      {/* Exit confirmation dialog for unsaved changes */}
       <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1558,7 +1803,7 @@ export function MasterAddBookingModal({
                 setShowExitConfirm(false);
                 onOpenChange(false);
               }}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground cursor-pointer"
             >
               Discard & Exit
             </AlertDialogAction>
@@ -1568,4 +1813,3 @@ export function MasterAddBookingModal({
     </>
   );
 }
-

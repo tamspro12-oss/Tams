@@ -134,16 +134,18 @@ export default function AccountsHub() {
             </TabsList>
           </Tabs>
 
-          {/* Add Entry Button: Always visible on EVERY tab */}
-          <div className="shrink-0 flex items-center justify-end sm:justify-start">
-            <Button
-              onClick={() => setShowAddEntryModal(true)}
-              className="h-10 px-4 gap-1.5 bg-primary text-primary-foreground font-bold text-xs sm:text-sm shadow-sm hover:opacity-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Entry</span>
-            </Button>
-          </div>
+          {/* Add Payment Button: Visible on tabs other than ledger (ledger has its own toolbar button) */}
+          {currentTab !== "ledger" && (
+            <div className="shrink-0 flex items-center justify-end sm:justify-start">
+              <Button
+                onClick={() => setShowAddEntryModal(true)}
+                className="h-10 px-4 gap-1.5 bg-primary text-primary-foreground font-bold text-xs sm:text-sm shadow-sm hover:opacity-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Payment</span>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

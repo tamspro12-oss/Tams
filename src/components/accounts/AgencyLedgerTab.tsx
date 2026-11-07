@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ import {
   TrendingUp,
   TrendingDown,
   Scale,
-  RefreshCw,
   RotateCcw,
   Plus,
   FileSpreadsheet,
@@ -58,7 +57,7 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all");
-  const [includeReversed, setIncludeReversed] = useState<boolean>(false);
+  const [includeReversed, setIncludeReversed] = useState<boolean>(true);
   const [txToReverse, setTxToReverse] = useState<TransactionItem | null>(null);
   const [reversalReason, setReversalReason] = useState<string>("");
 
@@ -93,7 +92,7 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   }, [dateFilterPreset]);
 
   // Fetch unified agency transactions
-  const { data: transactions = [], isLoading, refetch } = useAgencyLedger({
+  const { data: transactions = [], isLoading } = useAgencyLedger({
     startDate: dateRange.start,
     endDate: dateRange.end,
     accountId: selectedAccount,
@@ -265,53 +264,53 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       {/* 1. Small Summary Strip On Top */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
         <Card className="bg-gradient-to-br from-emerald-500/10 via-background to-background border-emerald-500/20 shadow-xs">
-          <CardContent className="p-3.5 flex items-center justify-between">
+          <CardContent className="p-2.5 sm:p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground">Total Cash & Bank</p>
-              <h3 className="text-base sm:text-lg font-bold text-foreground">
+              <h3 className="text-sm sm:text-base font-bold text-foreground">
                 PKR {summaryStrip.totalBalance.toLocaleString()}
               </h3>
             </div>
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600">
               <Wallet className="w-4 h-4" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-blue-500/10 via-background to-background border-blue-500/20 shadow-xs">
-          <CardContent className="p-3.5 flex items-center justify-between">
+          <CardContent className="p-2.5 sm:p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground">Total Receivables</p>
-              <h3 className="text-base sm:text-lg font-bold text-blue-600">
+              <h3 className="text-sm sm:text-base font-bold text-blue-600">
                 PKR {summaryStrip.receivable.toLocaleString()}
               </h3>
             </div>
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
+            <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-600">
               <TrendingUp className="w-4 h-4" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-amber-500/10 via-background to-background border-amber-500/20 shadow-xs">
-          <CardContent className="p-3.5 flex items-center justify-between">
+          <CardContent className="p-2.5 sm:p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground">Total Payables</p>
-              <h3 className="text-base sm:text-lg font-bold text-amber-600">
+              <h3 className="text-sm sm:text-base font-bold text-amber-600">
                 PKR {summaryStrip.payable.toLocaleString()}
               </h3>
             </div>
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+            <div className="p-1.5 rounded-md bg-amber-500/10 text-amber-600">
               <TrendingDown className="w-4 h-4" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-500/10 via-background to-background border-purple-500/20 shadow-xs">
-          <CardContent className="p-3.5 flex items-center justify-between">
+          <CardContent className="p-2.5 sm:p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground">Period Receipts / Out</p>
               <div className="flex items-center gap-1.5 text-xs font-bold">
@@ -320,136 +319,131 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                 <span className="text-red-500">-{summaryStrip.monthOut.toLocaleString()}</span>
               </div>
             </div>
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600">
+            <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-600">
               <Scale className="w-4 h-4" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* 2. Main Ledger Card with Filters */}
+      {/* 2. Main Ledger Card with Compact Toolbar & Table */}
       <Card className="shadow-xs border-border/80">
-        <CardHeader className="py-3 px-4 border-b space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
-                <Scale className="w-4 h-4 text-primary" />
-                Agency Master Ledger ({filteredTransactions.length} entries)
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                All money in, money out, customer charges, and journal entries in chronological sequence.
-              </p>
+        <div className="p-2.5 sm:p-3 border-b space-y-2">
+          {/* Compact Toolbar Row:
+              [ Search party, PNR, note... ] [ This Month ▾ ] [ All Parties ▾ ] [ All Types ▾ ] [ All Accounts ▾ ] ........ [ Excel ] [ PDF ] [ Add Payment ] */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-2 flex-1 min-w-0">
+              {/* Search */}
+              <div className="relative w-full sm:w-48 xl:w-56 shrink-0">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search party, PNR, note..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 text-xs pl-8"
+                />
+              </div>
+
+              {/* Filters in 2-column grid on mobile, row on tablet/desktop */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap xl:flex-nowrap items-center gap-2 flex-1 min-w-0">
+                {/* Date Preset */}
+                <Select value={dateFilterPreset} onValueChange={(val: any) => setDateFilterPreset(val)}>
+                  <SelectTrigger className="h-8 text-xs w-full sm:w-28 xl:w-32">
+                    <SelectValue placeholder="Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="all">All Dates</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Party Scope */}
+                <Select value={selectedPartyFilter} onValueChange={setSelectedPartyFilter}>
+                  <SelectTrigger className="h-8 text-xs w-full sm:w-28 xl:w-32">
+                    <SelectValue placeholder="Party" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Parties</SelectItem>
+                    <SelectItem value="client">Direct Clients</SelectItem>
+                    <SelectItem value="agent">B2B Agents</SelectItem>
+                    <SelectItem value="vendor">Vendors</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Type */}
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger className="h-8 text-xs w-full sm:w-28 xl:w-32">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="payment_in">Payment In</SelectItem>
+                    <SelectItem value="payment_out">Payment Out</SelectItem>
+                    <SelectItem value="charge">Charge</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="refund">Refund</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Account */}
+                <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <SelectTrigger className="h-8 text-xs w-full sm:w-32 xl:w-36">
+                    <SelectValue placeholder="Account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Accounts</SelectItem>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center gap-2">
+            {/* Buttons right-aligned */}
+            <div className="flex items-center justify-end gap-1.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleExportExcel}
-                className="h-8 text-xs gap-1.5"
+                className="h-8 text-xs gap-1.5 px-2.5"
                 disabled={filteredTransactions.length === 0}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Excel</span>
+                <span>Excel</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleExportPDF}
-                className="h-8 text-xs gap-1.5"
+                className="h-8 text-xs gap-1.5 px-2.5"
                 disabled={filteredTransactions.length === 0}
               >
                 <FileText className="w-3.5 h-3.5 text-red-600" />
-                <span className="hidden sm:inline">PDF</span>
+                <span>PDF</span>
               </Button>
               {onOpenAddEntry && (
                 <Button
                   size="sm"
                   onClick={onOpenAddEntry}
-                  className="h-8 text-xs gap-1 bg-primary text-primary-foreground font-semibold"
+                  className="h-8 text-xs gap-1 bg-primary text-primary-foreground font-semibold px-3"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Add Entry
+                  <span>Add Payment</span>
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Filter Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1 border-t">
-            {/* Search */}
-            <div className="relative col-span-2 sm:col-span-1 md:col-span-2">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-              <Input
-                placeholder="Search party, PNR, note..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 text-xs pl-8"
-              />
-            </div>
-
-            {/* Date Preset */}
-            <Select value={dateFilterPreset} onValueChange={(val: any) => setDateFilterPreset(val)}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="this_month">This Month</SelectItem>
-                <SelectItem value="last_month">Last Month</SelectItem>
-                <SelectItem value="all">All Dates</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Party Scope */}
-            <Select value={selectedPartyFilter} onValueChange={setSelectedPartyFilter}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Party" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Parties</SelectItem>
-                <SelectItem value="client">Direct Clients</SelectItem>
-                <SelectItem value="agent">B2B Agents</SelectItem>
-                <SelectItem value="vendor">Vendors</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Type */}
-            <Select value={selectedType} onValueChange={setSelectedType}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="payment_in">Payment In</SelectItem>
-                <SelectItem value="payment_out">Payment Out</SelectItem>
-                <SelectItem value="charge">Charge</SelectItem>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="refund">Refund</SelectItem>
-                <SelectItem value="transfer">Transfer</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Account */}
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Account" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Accounts</SelectItem>
-                {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Toggle Show Reversed */}
-          <div className="flex items-center justify-between text-xs pt-1">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-muted-foreground hover:text-foreground">
+          {/* Show voided / reversed transactions checkbox directly under toolbar, small, no extra spacing */}
+          <div className="flex items-center text-[11px] text-muted-foreground pt-0.5">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none hover:text-foreground transition-colors">
               <input
                 type="checkbox"
                 checked={includeReversed}
@@ -458,28 +452,24 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
               />
               <span>Show voided / reversed transactions</span>
             </label>
-            <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-6 text-[11px] gap-1 px-2 text-muted-foreground">
-              <RefreshCw className="w-3 h-3" />
-              Refresh
-            </Button>
           </div>
-        </CardHeader>
+        </div>
 
         {/* Ledger Table */}
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-muted/50 border-b text-muted-foreground font-semibold">
               <tr>
-                <th className="p-2.5 text-left whitespace-nowrap">Date</th>
-                <th className="p-2.5 text-left whitespace-nowrap">Ref / PNR</th>
-                <th className="p-2.5 text-left whitespace-nowrap">Type</th>
-                <th className="p-2.5 text-left whitespace-nowrap">Party Name</th>
-                <th className="p-2.5 text-left whitespace-nowrap">Account</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Debit (In)</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Credit (Out)</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Running Balance</th>
-                <th className="p-2.5 text-left">Notes</th>
-                <th className="p-2.5 text-center w-14">Action</th>
+                <th className="py-2 px-2.5 text-left whitespace-nowrap">Date</th>
+                <th className="py-2 px-2.5 text-left whitespace-nowrap">Ref / PNR</th>
+                <th className="py-2 px-2.5 text-left whitespace-nowrap">Type</th>
+                <th className="py-2 px-2.5 text-left whitespace-nowrap">Party Name</th>
+                <th className="py-2 px-2.5 text-left whitespace-nowrap">Account</th>
+                <th className="py-2 px-2.5 text-right whitespace-nowrap">Debit (In)</th>
+                <th className="py-2 px-2.5 text-right whitespace-nowrap">Credit (Out)</th>
+                <th className="py-2 px-2.5 text-right whitespace-nowrap">Running Balance</th>
+                <th className="py-2 px-2.5 text-left">Notes</th>
+                <th className="py-2 px-2.5 text-center w-14">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -492,16 +482,16 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                       tx.is_reversed && "opacity-50 bg-muted/20"
                     )}
                   >
-                    <td className="p-2.5 text-muted-foreground whitespace-nowrap font-mono">
+                    <td className="py-2 px-2.5 text-muted-foreground whitespace-nowrap font-mono">
                       {tx.date}
                     </td>
-                    <td className="p-2.5 font-mono font-medium text-primary whitespace-nowrap">
+                    <td className="py-2 px-2.5 font-mono font-medium text-primary whitespace-nowrap">
                       {tx.booking_ref || tx.reference_no || "-"}
                     </td>
-                    <td className="p-2.5 whitespace-nowrap">
+                    <td className="py-2 px-2.5 whitespace-nowrap">
                       {getTypeBadge(tx.type, tx.is_reversed || false)}
                     </td>
-                    <td className="p-2.5 font-semibold text-foreground">
+                    <td className="py-2 px-2.5 font-semibold text-foreground">
                       {tx.party_id && tx.party_type ? (
                         <button
                           type="button"
@@ -515,22 +505,22 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                         tx.party_name || "-"
                       )}
                     </td>
-                    <td className="p-2.5 text-muted-foreground whitespace-nowrap">
+                    <td className="py-2 px-2.5 text-muted-foreground whitespace-nowrap">
                       {tx.account_name || "Cash"}
                     </td>
-                    <td className="p-2.5 text-right font-medium text-emerald-600 whitespace-nowrap">
+                    <td className="py-2 px-2.5 text-right font-medium text-emerald-600 whitespace-nowrap">
                       {tx.debit > 0 ? `PKR ${tx.debit.toLocaleString()}` : "-"}
                     </td>
-                    <td className="p-2.5 text-right font-medium text-red-500 whitespace-nowrap">
+                    <td className="py-2 px-2.5 text-right font-medium text-red-500 whitespace-nowrap">
                       {tx.credit > 0 ? `PKR ${tx.credit.toLocaleString()}` : "-"}
                     </td>
-                    <td className="p-2.5 text-right font-bold font-mono whitespace-nowrap">
+                    <td className="py-2 px-2.5 text-right font-bold font-mono whitespace-nowrap">
                       {tx.running_balance !== undefined ? `PKR ${tx.running_balance.toLocaleString()}` : "-"}
                     </td>
-                    <td className="p-2.5 text-muted-foreground max-w-xs truncate" title={tx.notes || ""}>
+                    <td className="py-2 px-2.5 text-muted-foreground max-w-xs truncate" title={tx.notes || ""}>
                       {tx.notes || "-"}
                     </td>
-                    <td className="p-2.5 text-center">
+                    <td className="py-2 px-2.5 text-center">
                       {!tx.is_reversed ? (
                         <Button
                           variant="ghost"

@@ -465,7 +465,7 @@ export default function BankCashManager() {
             className="h-9 gap-1.5"
           >
             <Plus className="w-4 h-4 mr-1" />
-            Add Entry
+            Add Payment
           </Button>
         </div>
       </div>
