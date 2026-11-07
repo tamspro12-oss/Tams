@@ -1,317 +1,459 @@
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { SeoHead } from "@/components/SeoHead";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
-  Plane,
   Calendar,
+  Ticket,
   Users,
-  Receipt,
-  BarChart3,
-  Shield,
-  Calculator,
-  Mail,
+  Store,
+  Scale,
   Wallet,
-  ArrowLeft,
+  Calculator,
+  MessageSquare,
+  BarChart3,
+  Receipt,
+  Shield,
+  Cloud,
+  Database,
+  Lock,
+  Mail,
+  Smartphone,
+  CheckCircle2,
   ArrowRight,
   FileText,
-  Globe,
-  Smartphone,
-  Cloud,
-  Lock,
-  Zap,
-  CheckCircle2,
+  RotateCcw,
+  Sparkles,
+  Layers,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SeoHead } from "@/components/SeoHead";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { PublicFooter } from "@/components/public/PublicFooter";
+import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
+import { HOMEPAGE_CONTENT } from "@/config/marketingContent";
 
-const coreFeatures = [
+// Icon mapping helper for single stroke weight
+const ICONS: Record<string, React.ElementType> = {
+  Calendar,
+  Ticket,
+  Users,
+  Store,
+  Scale,
+  Wallet,
+  Calculator,
+  MessageSquare,
+  BarChart3,
+  Receipt,
+  Shield,
+  Cloud,
+  Database,
+  Lock,
+  Mail,
+  Smartphone,
+  FileText,
+  RotateCcw,
+  Layers,
+};
+
+// Deep operational feature categories matching actual application code
+const FEATURE_PILLARS = [
   {
-    icon: Calendar,
-    title: "Client Booking Management",
-    description: "Complete booking lifecycle management from inquiry to completion.",
-    details: [
-      "Individual and group bookings",
-      "PNR tracking and management",
-      "Payment status tracking",
-      "Name update reminders",
-      "Flight date notifications",
+    id: "bookings-operations",
+    badge: "Operations Core",
+    title: "Unified Bookings & Service Vouchers",
+    subtitle:
+      "A single source of truth for direct passengers, B2B partner groups, and official travel vouchers.",
+    features: [
+      {
+        icon: "Calendar",
+        title: "Unified Client Bookings",
+        description:
+          "Manage direct clients and B2B agent bookings in one high-performance list. Track flight dates, passenger names, passport numbers, PNR details, and outstanding balances without separate data silos.",
+        bullets: [
+          "Unified list combining retail clients and B2B agent records",
+          "Comprehensive booking modal with passenger and service breakdown",
+          "Automated payment status tracking (Paid, Partial, Unpaid)",
+          "Printable client confirmations and professional PDF invoices",
+        ],
+      },
+      {
+        icon: "Ticket",
+        title: "Official Service Vouchers",
+        description:
+          "Generate formal, verifiable vouchers with accurate hotel reservations, room categories, and airline schedules directly from your booking records.",
+        bullets: [
+          "Umrah package vouchers with Makkah & Madinah hotel details",
+          "Hotel vouchers with room occupancy, meal plans & check-in dates",
+          "Air ticket vouchers with PNR, baggage allowance & flight routing",
+          "Instant high-resolution PDF download for WhatsApp and email dispatch",
+        ],
+      },
     ],
   },
   {
-    icon: Users,
-    title: "B2B Agent Portal",
-    description: "Manage your B2B agent network with complete transparency.",
-    details: [
-      "Agent registration and profiles",
-      "Commission tracking",
-      "Ledger management",
-      "Payment reconciliation",
-      "Agent-wise reporting",
+    id: "b2b-vendors",
+    badge: "Partner Network",
+    title: "B2B Agent Network & Vendor Payables",
+    subtitle:
+      "Complete commercial transparency for your agent network and supplier relationships.",
+    features: [
+      {
+        icon: "Users",
+        title: "B2B Agent Portal & Ledger",
+        description:
+          "Empower your distribution network. Every B2B agent receives a dedicated running-balance ledger, statement export, and payment allocation mechanism.",
+        bullets: [
+          "Dedicated agent profiles with contact directories and credit limits",
+          "Real-time party ledger with running balance debit/credit entries",
+          "Lump-sum payment allocation across open bookings",
+          "Downloadable statement of accounts in PDF and Excel format",
+        ],
+      },
+      {
+        icon: "Store",
+        title: "Vendor Management & Liabilities",
+        description:
+          "Maintain absolute control over airline consolidators, hotel vendors, and visa suppliers with automated liability tracking and aging reports.",
+        bullets: [
+          "Comprehensive supplier directory with contact details",
+          "Vendor payable tracking with automatic debit/credit recording",
+          "Supplier aging analysis to prevent payment defaults",
+          "Direct payout logging linked to selected bank or cash accounts",
+        ],
+      },
     ],
   },
   {
-    icon: Plane,
-    title: "Vendor Management",
-    description: "Track all vendor relationships and payments in one place.",
-    details: [
-      "Vendor profiles and contacts",
-      "Payment tracking",
-      "Outstanding balance management",
-      "Aging reports",
-      "Transaction history",
+    id: "financial-accounting",
+    badge: "Financial Control",
+    title: "Agency Ledger & Liquidity Management",
+    subtitle:
+      "Double-entry bookkeeping designed specifically for travel agency cash flows.",
+    features: [
+      {
+        icon: "Scale",
+        title: "Agency Master Ledger",
+        description:
+          "Every operational event—booking payment, vendor charge, customer refund, or office expense—is permanently logged in the agency master ledger.",
+        bullets: [
+          "Real-time running balances with reversal audit trails",
+          "Party-wise filtering for direct clients, B2B agents, and vendors",
+          "Date preset selectors (Today, This Month, Custom Date Ranges)",
+          "Flexible opening balance configuration for clean fiscal setup",
+        ],
+      },
+      {
+        icon: "Wallet",
+        title: "Bank & Cash Account Manager",
+        description:
+          "Real-time visibility across all your liquid assets. Monitor commercial bank accounts, physical cash drawers, and internal account transfers.",
+        bullets: [
+          "Multi-bank account tracking with live balance updates",
+          "Cash register & drawer balance monitoring",
+          "Direct expense and payout deductions from selected accounts",
+          "Reconciliation history and opening balance records",
+        ],
+      },
+      {
+        icon: "Receipt",
+        title: "Operating Expense Tracking",
+        description:
+          "Categorize and monitor daily overheads: office rent, staff salaries, marketing, utility bills, and petty cash directly linked to your liquidity.",
+        bullets: [
+          "Configurable expense categories and payment modes",
+          "Automated deduction from chosen bank or cash accounts",
+          "Recurring expense logging and monthly overhead summaries",
+          "Direct integration into agency Profit & Loss reports",
+        ],
+      },
+      {
+        icon: "RotateCcw",
+        title: "Customer Refunds & Adjustments",
+        description:
+          "Manage flight cancellations and hotel refund requests seamlessly with automatic ledger reversals and bank position adjustments.",
+        bullets: [
+          "Structured refund processing with reason documentation",
+          "Automatic party ledger credit/debit adjustments",
+          "Bank/cash payout verification and receipt generation",
+          "Full audit trail to prevent duplicate refund payouts",
+        ],
+      },
     ],
   },
   {
-    icon: Receipt,
-    title: "Expense Tracking",
-    description: "Comprehensive expense management for your agency.",
-    details: [
-      "Categorized expenses",
-      "Recurring expense support",
-      "Payment mode tracking",
-      "Bank-wise filtering",
-      "Expense reports",
+    id: "sales-engine",
+    badge: "Sales & Inquiries",
+    title: "Inquiries, Quotes & Umrah Calculator",
+    subtitle:
+      "Convert travel queries into confirmed bookings with precision costing tools.",
+    features: [
+      {
+        icon: "Calculator",
+        title: "Umrah Package Calculator",
+        description:
+          "A specialized costing engine for Umrah operators. Calculate hotel nights across Makkah & Madinah, room sharing rates, transport, visas, and flight tickets with live SAR to PKR currency conversion.",
+        bullets: [
+          "Multi-hotel accommodation rates (Sharing, Quad, Triple, Double)",
+          "Visa fees, ground transport (bus/private car), and Ziyarat costing",
+          "Live SAR to PKR currency conversion rate configuration",
+          "Custom profit margin sliders and instant quotation PDF export",
+        ],
+      },
+      {
+        icon: "MessageSquare",
+        title: "Queries & Quotation Hub",
+        description:
+          "Never lose a lead. Track inquiries across phone, email, and walk-in travelers, build itemized travel quotes, and convert accepted quotes into bookings with 1 click.",
+        bullets: [
+          "Inquiry pipeline with status tags and follow-up reminders",
+          "Itemized travel quotations with flight and hotel breakdowns",
+          "One-click conversion from accepted quotation to live booking",
+          "Comprehensive date-wise query filtering and lead history",
+        ],
+      },
     ],
   },
   {
-    icon: BarChart3,
-    title: "Business Reports",
-    description: "Detailed analytics and reports for informed decisions.",
-    details: [
-      "Profit & loss statements",
-      "Revenue reports",
-      "Collection reports",
-      "Date-wise filtering",
-      "Excel/PDF exports",
-    ],
-  },
-  {
-    icon: Calculator,
-    title: "Smart Calculators",
-    description: "Built-in tools for quick and accurate quotes.",
-    details: [
-      "Umrah package calculator",
-      "Ticket payable calculator",
-      "Currency conversion",
-      "Margin calculations",
-      "Quick quotations",
-    ],
-  },
-  {
-    icon: Mail,
-    title: "Email Integration",
-    description: "Professional communication directly from the system.",
-    details: [
-      "Booking confirmations",
-      "Invoice emails",
-      "Payment reminders",
-      "Custom templates",
-      "Email history tracking",
-    ],
-  },
-  {
-    icon: Wallet,
-    title: "Bank & Cash Manager",
-    description: "Centralized financial transaction tracking.",
-    details: [
-      "Multiple bank accounts",
-      "Cash tracking",
-      "Transaction categories",
-      "Balance reconciliation",
-      "Opening balance setup",
+    id: "intelligence-security",
+    badge: "Infrastructure",
+    title: "Business Intelligence, Security & Cloud",
+    subtitle:
+      "Enterprise reliability, automated alerts, and row-level database isolation.",
+    features: [
+      {
+        icon: "BarChart3",
+        title: "Business Reports & Analytics",
+        description:
+          "Gain immediate insight into agency performance. Analyze revenue trends, profit margins, outstanding receivables, and supplier payables over any date range.",
+        bullets: [
+          "Net Profit & Loss statements with real-time margin calculation",
+          "Gross collection summaries and service-wise breakdown",
+          "Party-wise outstanding collection lists for proactive recovery",
+          "One-click export to formatted Excel spreadsheets & PDF",
+        ],
+      },
+      {
+        icon: "Shield",
+        title: "Database Isolation & Security",
+        description:
+          "Built on Supabase with strict Row-Level Security (RLS). Your agency records, client contact lists, and financial books are completely segregated and private.",
+        bullets: [
+          "Row-Level Security (RLS) ensuring 100% tenant data isolation",
+          "Automated cloud backups preserving records indefinitely",
+          "Role-based sub-user permissions to restrict sensitive financial views",
+          "No third-party trackers or external advertising scripts",
+        ],
+      },
+      {
+        icon: "Cloud",
+        title: "Offline-Ready PWA & Cloud Sync",
+        description:
+          "TAMS Pro is engineered as a modern Progressive Web App. Continue accessing your booking records during internet outages, with seamless auto-sync upon reconnection.",
+        bullets: [
+          "Progressive Web App (PWA) installable on Windows, Mac, iOS, Android",
+          "Local caching for offline record inspection",
+          "Automatic background sync when internet connection resumes",
+          "Fast loading speeds optimized for low-bandwidth connections",
+        ],
+      },
+      {
+        icon: "Mail",
+        title: "Email Integration & Direct Dispatches",
+        description:
+          "Send booking confirmations, PDF invoices, and payment reminders directly to clients and B2B agents with integrated email logging.",
+        bullets: [
+          "Direct SMTP configuration for agency branded emails",
+          "Automated PDF attachment for invoices and service vouchers",
+          "Email dispatch history log to track sent communications",
+          "Pre-configured reminder message templates for flights and payments",
+        ],
+      },
     ],
   },
 ];
 
-const technicalFeatures = [
-  {
-    icon: Smartphone,
-    title: "Mobile-First Design",
-    description: "Works perfectly on phones, tablets, and desktops with responsive layouts.",
-  },
-  {
-    icon: Cloud,
-    title: "Cloud Storage",
-    description: "All data securely stored in the cloud with automatic backups.",
-  },
-  {
-    icon: Globe,
-    title: "Works Offline",
-    description: "Continue working during internet outages with automatic sync when online.",
-  },
-  {
-    icon: Lock,
-    title: "Role-Based Access",
-    description: "Create sub-users with granular permissions for different team members.",
-  },
-  {
-    icon: FileText,
-    title: "PDF Generation",
-    description: "Generate professional invoices and booking confirmations instantly.",
-  },
-  {
-    icon: Zap,
-    title: "Real-time Sync",
-    description: "All changes sync instantly across all devices and sessions.",
-  },
-];
+function FeaturesPageContent() {
+  const { closingCta } = HOMEPAGE_CONTENT;
 
-export default function FeaturesPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30">
-      <SeoHead title="Features - TAMS Pro Travel Agency Software" description="Explore TAMS Pro features: booking management, B2B agents, vendors, invoices, expenses, financial reports and offline-ready cloud sync." path="/features" jsonLd={{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "TAMS Pro", "applicationCategory": "BusinessApplication", "operatingSystem": "Web, iOS, Android", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}} />
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between px-4 md:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-md">
-              <Plane className="w-6 h-6 text-primary-foreground" />
+    <div className="min-h-screen bg-[#fafaf9] dark:bg-[#070e17] text-foreground font-sans antialiased selection:bg-[#d4af37]/20 selection:text-foreground">
+      <SeoHead
+        title="Features — TAMS Pro Travel Agency Management System"
+        description="Explore the comprehensive feature architecture of TAMS Pro: Unified Client Bookings, B2B Agent Portal, Agency Master Ledger, Service Vouchers, Umrah Calculator, and Offline Sync."
+        path="/features"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "TAMS Pro Features",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web, iOS, Android (PWA)",
+          "description":
+            "Detailed operational capabilities of TAMS Pro for travel agencies and Umrah operators.",
+        }}
+      />
+
+      {/* Shared Public Header */}
+      <PublicHeader currentPath="/features" />
+
+      <main>
+        {/* HERO SECTION */}
+        <section className="relative pt-12 pb-16 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28 overflow-hidden border-b border-border/60">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-[#d4af37]/10 via-[#0b192c]/5 to-transparent rounded-full blur-3xl -z-10 pointer-events-none" />
+
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0b192c]/5 dark:bg-slate-900 border border-[#d4af37]/30 text-xs font-semibold tracking-wide text-foreground">
+              <Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />
+              <span className="text-[#0b192c] dark:text-[#d4af37]">
+                Complete Architectural Feature Guide
+              </span>
             </div>
-            <div>
-              <span className="block font-bold text-lg">TAMS PRO</span>
-              <p className="text-xs text-muted-foreground hidden sm:block">Travel Agency Management System</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Home
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button size="sm" className="gap-2">
-                Login
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
 
-      {/* Hero */}
-      <section className="container px-4 md:px-8 py-16 md:py-20">
-        <div className="max-w-3xl mx-auto text-center space-y-6">
-          <Badge variant="secondary" className="px-4 py-2 text-sm font-medium">
-            <Zap className="h-4 w-4 mr-2 text-primary" />
-            Complete Feature Set
-          </Badge>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-            Everything Your Agency Needs
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            TAMS PRO is built specifically for travel agencies with features designed 
-            for real-world workflows.
-          </p>
-        </div>
-      </section>
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground font-heading leading-tight max-w-4xl mx-auto">
+              Engineered for Absolute Precision in Travel Operations
+            </h1>
 
-      {/* Core Features */}
-      <section className="container px-4 md:px-8 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Core Features</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Comprehensive tools for every aspect of your travel agency operations
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {coreFeatures.map((feature, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <feature.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">{feature.title}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">{feature.description}</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {feature.details.map((detail, idx) => (
-                    <li key={idx} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Technical Features */}
-      <section className="bg-muted/30 border-y">
-        <div className="container px-4 md:px-8 py-16">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Built for Modern Agencies</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Technical features that make TAMS PRO reliable and efficient
+            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto font-normal">
+              Every tool, table, and calculator in TAMS Pro exists to solve real operational
+              bottlenecks in travel agency management. No superfluous modules, no generic compromises.
             </p>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {technicalFeatures.map((feature, index) => (
-              <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-background border">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="h-5 w-5 text-primary" />
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <Link to="/signup">
+                <Button
+                  size="lg"
+                  className="h-11 px-7 text-xs font-semibold tracking-tight gap-2 bg-[#0b192c] dark:bg-slate-800 text-white hover:bg-[#122846] border border-[#d4af37]/40 shadow-sm"
+                >
+                  <span>Start Free Account</span>
+                  <ArrowRight className="h-4 w-4 text-[#d4af37]" />
+                </Button>
+              </Link>
+              <Link to="/pricing">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-11 px-7 text-xs font-semibold tracking-tight text-foreground"
+                >
+                  View Subscription Plans
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* DETAILED FEATURE PILLARS */}
+        <section className="py-16 sm:py-24 lg:py-32">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
+            {FEATURE_PILLARS.map((pillar) => (
+              <div key={pillar.id} className="space-y-10">
+                {/* Pillar Header */}
+                <div className="max-w-3xl space-y-2 border-b border-border/70 pb-4">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
+                    {pillar.badge}
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground font-heading">
+                    {pillar.title}
+                  </h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {pillar.subtitle}
+                  </p>
                 </div>
-                <div>
-                  <h3 className="font-semibold mb-1">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+
+                {/* Pillar Feature Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                  {pillar.features.map((feat, featIdx) => {
+                    const IconComp = ICONS[feat.icon] || Calendar;
+
+                    return (
+                      <div
+                        key={featIdx}
+                        className="p-6 sm:p-8 rounded-2xl border border-border/80 bg-card hover:border-[#d4af37]/40 hover:shadow-lg transition-all duration-300 flex flex-col justify-between space-y-6"
+                      >
+                        <div className="space-y-4">
+                          <div className="w-12 h-12 rounded-xl bg-[#0b192c] dark:bg-slate-900 border border-[#d4af37]/30 flex items-center justify-center shrink-0">
+                            <IconComp className="w-6 h-6 text-[#d4af37]" strokeWidth={1.5} />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <h3 className="text-lg font-bold tracking-tight text-foreground font-heading">
+                              {feat.title}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                              {feat.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Capabilities Bullets */}
+                        <div className="pt-4 border-t border-border/50 space-y-2.5">
+                          {feat.bullets.map((b, bIdx) => (
+                            <div key={bIdx} className="flex items-start gap-2.5 text-xs text-foreground/80">
+                              <CheckCircle2
+                                className="w-3.5 h-3.5 text-[#d4af37] shrink-0 mt-0.5"
+                                strokeWidth={1.75}
+                              />
+                              <span className="leading-snug">{b}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA */}
-      <section className="container px-4 md:px-8 py-16">
-        <div className="max-w-2xl mx-auto text-center space-y-6">
-          <Shield className="h-12 w-12 mx-auto text-primary" />
-          <h2 className="text-3xl font-bold">Ready to Get Started?</h2>
-          <p className="text-muted-foreground">
-            Contact us to set up your agency account and start managing your business efficiently.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/signup">
-              <Button size="lg" className="gap-2 px-8">
-                Sign Up Free
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button variant="outline" size="lg" className="gap-2 px-8">
-                Login
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+        {/* CLOSING CTA */}
+        <section className="py-20 sm:py-28 bg-[#07111e] text-white relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#d4af37]/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Footer */}
-      <footer className="border-t bg-muted/30">
-        <div className="container px-4 md:px-8 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Plane className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-semibold">TAMS PRO</span>
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-6">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
+              {closingCta.eyebrow}
+            </span>
+
+            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight font-heading leading-tight max-w-2xl mx-auto">
+              {closingCta.title}
+            </h2>
+
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl mx-auto">
+              {closingCta.subtitle}
+            </p>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+              <Link to="/login" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto h-12 px-8 text-sm font-semibold tracking-tight gap-2 bg-[#d4af37] text-[#07111e] hover:bg-[#e2bd4b] font-heading shadow-lg shadow-[#d4af37]/20"
+                >
+                  <span>{closingCta.primaryButton.text}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+
+              <Link to="/signup" className="w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto h-12 px-8 text-sm font-semibold tracking-tight border-slate-700 text-white hover:bg-slate-800"
+                >
+                  {closingCta.secondaryButton.text}
+                </Button>
+              </Link>
             </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
-              <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            </div>
-            <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} TAMS Pro</p>
           </div>
-        </div>
-      </footer>
+        </section>
+      </main>
+
+      {/* Shared Public Footer */}
+      <PublicFooter />
     </div>
+  );
+}
+
+export default function FeaturesPage() {
+  return (
+    <PublicErrorBoundary pageName="Features">
+      <FeaturesPageContent />
+    </PublicErrorBoundary>
   );
 }

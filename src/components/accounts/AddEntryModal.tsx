@@ -90,11 +90,15 @@ export function AddEntryModal({
         type: "client" as const,
       }));
     } else if (partyType === "agent") {
-      return (agents || []).map((a) => ({
-        id: a.id,
-        name: `${a.name} ${a.company_name ? `(${a.company_name})` : ""}`,
-        type: "agent" as const,
-      }));
+      return (agents || []).map((a) => {
+        const agentName = a.agent_name || (a as any).name || "Agent";
+        const businessName = a.business_name || (a as any).company_name;
+        return {
+          id: a.id,
+          name: `${agentName} ${businessName ? `(${businessName})` : ""}`.trim(),
+          type: "agent" as const,
+        };
+      });
     } else {
       return (vendors || []).map((v) => ({
         id: v.id,

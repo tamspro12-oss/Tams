@@ -129,7 +129,7 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
     if (scopeType === "party") {
       let pName = "Party";
       if (partyType === "client") pName = clients.find((c) => c.id === selectedPartyId)?.name || "Client";
-      if (partyType === "agent") pName = agents.find((a) => a.id === selectedPartyId)?.name || "Agent";
+      if (partyType === "agent") pName = agents.find((a) => a.id === selectedPartyId)?.agent_name || (agents.find((a) => a.id === selectedPartyId) as any)?.name || "Agent";
       if (partyType === "vendor") pName = vendors.find((v) => v.id === selectedPartyId)?.name || "Vendor";
       return {
         title: `${partyType.toUpperCase()} Statement — ${pName}`,
@@ -344,7 +344,7 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
                       {partyType === "agent" &&
                         agents.map((a) => (
                           <SelectItem key={a.id} value={a.id}>
-                            {a.name}
+                            {a.agent_name || (a as any).name || a.business_name || "Agent"}
                           </SelectItem>
                         ))}
                       {partyType === "vendor" &&

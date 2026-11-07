@@ -52,7 +52,6 @@ export default function Vouchers() {
   const { data: agency } = useAgency();
 
   const [filterService, setFilterService] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
     preset: "this_month",
   });
@@ -80,11 +79,6 @@ export default function Vouchers() {
         return false;
       }
 
-      // Status filter
-      if (filterStatus !== "all" && v.status !== filterStatus) {
-        return false;
-      }
-
       // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -104,7 +98,7 @@ export default function Vouchers() {
 
       return true;
     });
-  }, [vouchers, filterService, filterStatus, dateFilter, searchQuery]);
+  }, [vouchers, filterService, dateFilter, searchQuery]);
 
   const handleShareWhatsApp = (v: Voucher) => {
     const text = generateVoucherWhatsAppText(v, agency?.name || "TAMS Pro");
@@ -148,83 +142,72 @@ export default function Vouchers() {
   return (
     <div className="space-y-6">
       <SeoHead
-        title="Vouchers & Itineraries - TAMS Pro"
+        title="Vouchers - TAMS Pro"
         description="Issue, manage, and share branded Umrah, Hotel, and Flight vouchers for clients and B2B agents."
         path="/app/vouchers"
       />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <FileText className="w-7 h-7 text-primary" />
-            Vouchers & Itineraries
+      {/* Single Toolbar: One row, all controls same height & radius as Client Bookings */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+        {/* 1. "Vouchers" title */}
+        <div className="flex items-center gap-2 shrink-0 pr-1">
+          <FileText className="w-5 h-5 text-primary" />
+          <h1 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+            Vouchers
           </h1>
         </div>
 
-        <Button
-          onClick={() => {
-            setEditingVoucher(null);
-            setIsCreateOpen(true);
-          }}
-          className="h-10 px-4 font-semibold gap-2 shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Create Voucher
-        </Button>
-      </div>
-
-      {/* Filter Row: Search, DateFilter, All Services, All Status (Quotations reference layout) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        {/* 2. Search box (flexible width) */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search vouchers (passenger, passport, PNR, voucher #, hotel)..."
-            className="pl-9 pr-8 h-9 text-xs rounded-lg"
+            className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
-          <DateFilter
-            value={dateFilter}
-            onChange={setDateFilter}
-            className="h-9 shrink-0"
-          />
+        {/* 3. Date filter ("This Month" dropdown) */}
+        <DateFilter
+          value={dateFilter}
+          onChange={setDateFilter}
+          className="h-9 shrink-0"
+        />
 
-          <Select value={filterService} onValueChange={setFilterService}>
-            <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="z-50 text-xs">
-              <SelectItem value="all">All Services</SelectItem>
-              <SelectItem value="Umrah">Umrah</SelectItem>
-              <SelectItem value="Hotel">Hotel</SelectItem>
-              <SelectItem value="Ticket">Ticket</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* 4. "All Services" dropdown */}
+        <Select value={filterService} onValueChange={setFilterService}>
+          <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0 bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-50 text-xs">
+            <SelectItem value="all">All Services</SelectItem>
+            <SelectItem value="Umrah">Umrah</SelectItem>
+            <SelectItem value="Hotel">Hotel</SelectItem>
+            <SelectItem value="Ticket">Ticket</SelectItem>
+          </SelectContent>
+        </Select>
 
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="z-50 text-xs">
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Issued">Issued</SelectItem>
-              <SelectItem value="Draft">Draft</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* 5. "Create Voucher" primary button, far right */}
+        <Button
+          size="sm"
+          onClick={() => {
+            setEditingVoucher(null);
+            setIsCreateOpen(true);
+          }}
+          className="h-9 text-xs rounded-lg px-3.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Create Voucher
+        </Button>
       </div>
 
       {/* Vouchers List / Grid */}
@@ -246,7 +229,7 @@ export default function Vouchers() {
           </div>
           <h3 className="text-base font-semibold text-foreground">No Vouchers Found</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            {searchQuery || filterService !== "all" || filterStatus !== "all" || dateFilter.preset !== "this_month"
+            {searchQuery || filterService !== "all" || dateFilter.preset !== "this_month"
               ? "No vouchers matched your current filters. Try resetting search."
               : "Create your first professional voucher for an Umrah package, hotel stay, or airline ticket."}
           </p>
@@ -255,7 +238,6 @@ export default function Vouchers() {
               setSearchQuery("");
               setDateFilter({ preset: "this_month" });
               setFilterService("all");
-              setFilterStatus("all");
               setIsCreateOpen(true);
             }}
             variant="outline"

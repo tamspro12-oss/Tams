@@ -255,11 +255,11 @@ export function MasterAddBookingModal({
     });
   }, [paxCount]);
 
-  // Autofocus contact name on open
+  // Autofocus first passenger name on open
   useEffect(() => {
     if (open) {
       setTimeout(() => {
-        contactNameInputRef.current?.focus();
+        firstPassengerNameRef.current?.focus();
       }, 100);
     }
   }, [open]);
@@ -563,6 +563,8 @@ export function MasterAddBookingModal({
     setPurchasingPrice("");
     setSellingPrice("");
     setAmountPaid("");
+    setNameUpdateDate("");
+    setNotes("");
     setPaxCount(1);
     setPassengers([
       {
@@ -583,11 +585,11 @@ export function MasterAddBookingModal({
 
   // Main Save Handler
   const handleSave = async (isSaveAndAddNext = false) => {
-    // Validation
-    const cleanContact = contactName.trim() || passengers[0]?.name.trim();
+    // Validation: Contact is first passenger name
+    const cleanContact = (passengers[0]?.name || contactName).trim();
     if (!cleanContact) {
-      toast.error("Contact name or Passenger name is required");
-      contactNameInputRef.current?.focus();
+      toast.error("First passenger name is required (used as primary contact)");
+      firstPassengerNameRef.current?.focus();
       return;
     }
 
@@ -757,122 +759,54 @@ export function MasterAddBookingModal({
     <>
       <div className="fixed inset-0 z-50 bg-background flex flex-col h-screen w-screen overflow-hidden text-foreground animate-in fade-in duration-200">
         {/* ======================= TOP BAR ======================= */}
-        <div className="h-12 border-b border-border/80 px-4 flex items-center justify-between shrink-0 bg-muted/30">
+        <div className="h-11 border-b border-border/80 px-4 flex items-center justify-between shrink-0 bg-muted/30">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-base tracking-tight flex items-center gap-2">
+            <span className="font-bold text-sm tracking-tight flex items-center gap-2">
               <Plane className="w-4 h-4 text-primary" />
               {editBookingData ? "Edit Booking" : "New Booking"}
             </span>
 
-            {/* Toggle: Direct vs B2B Agent */}
+            {/* Two switch buttons: Direct Client | B2B Agent */}
             <div className="inline-flex rounded-md border p-0.5 bg-background shadow-xs">
               <button
                 type="button"
                 onClick={() => setBookingMode("direct")}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
+                  "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
                   bookingMode === "direct"
-                    ? "bg-blue-600 text-white shadow-xs"
+                    ? "bg-blue-600 text-white shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 )}
-                title="Ctrl + 1"
               >
                 <User className="w-3.5 h-3.5" />
                 Direct Client
-                <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-black/20 rounded">
-                  Ctrl+1
-                </kbd>
               </button>
 
               <button
                 type="button"
                 onClick={() => setBookingMode("b2b")}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
+                  "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer",
                   bookingMode === "b2b"
-                    ? "bg-purple-600 text-white shadow-xs"
+                    ? "bg-purple-600 text-white shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 )}
-                title="Ctrl + 2"
               >
                 <Users className="w-3.5 h-3.5" />
                 B2B Agent
-                <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-black/20 rounded">
-                  Ctrl+2
-                </kbd>
               </button>
             </div>
           </div>
 
-          {/* Center: Live Financial Badges */}
-          <div className="hidden md:flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded-sm border">
-              <span className="text-muted-foreground">Total:</span>
-              <span className="font-semibold text-foreground">
-                PKR {(parseFloat(sellingPrice) || 0).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded-sm border">
-              <span className="text-muted-foreground">Paid:</span>
-              <span className="font-semibold text-emerald-600">
-                PKR {(parseFloat(amountPaid) || 0).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded-sm border">
-              <span className="text-muted-foreground">Due:</span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  remainingAmount > 0 ? "text-amber-600" : "text-muted-foreground"
-                )}
-              >
-                PKR {remainingAmount.toLocaleString()}
-              </span>
-            </div>
-            {calculatedProfit !== 0 && (
-              <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-sm border border-emerald-200 dark:border-emerald-800">
-                <span className="text-emerald-700 dark:text-emerald-300">Profit:</span>
-                <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                  PKR {calculatedProfit.toLocaleString()}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Keyboard Shortcut Info & Close */}
-          <div className="flex items-center gap-2">
-            <div className="hidden lg:flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded border">
-              <span>
-                <kbd className="px-1 py-0.5 bg-background border rounded text-[10px]">
-                  Ctrl+Enter
-                </kbd>{" "}
-                Save
-              </span>
-              <span>•</span>
-              <span>
-                <kbd className="px-1 py-0.5 bg-background border rounded text-[10px]">
-                  Ctrl+Shift+Enter
-                </kbd>{" "}
-                Save & Add Next
-              </span>
-              <span>•</span>
-              <span>
-                <kbd className="px-1 py-0.5 bg-background border rounded text-[10px]">
-                  Esc
-                </kbd>{" "}
-                Cancel
-              </span>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={handleCloseRequest}
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          {/* Right: Close Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={handleCloseRequest}
+          >
+            <X className="w-4 h-4" />
+          </Button>
         </div>
 
         {/* ======================= BODY: DENSE GRID ======================= */}
@@ -926,7 +860,7 @@ export function MasterAddBookingModal({
                                 onClick={() => handleCreateInlineAgent(agentSearchQuery)}
                               >
                                 <Plus className="w-3.5 h-3.5" />
-                                + Create &quot;{agentSearchQuery}&quot; (Enter)
+                                + Create &quot;{agentSearchQuery}&quot;
                               </Button>
                             ) : (
                               "No agents found"
@@ -1082,69 +1016,13 @@ export function MasterAddBookingModal({
             </div>
           )}
 
-          {/* ========== ROW 1: CONTACT DETAILS ========== */}
+          {/* ========== SERVICE & FLIGHT SPECS (Contact Number & Email Merged) ========== */}
           <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-blue-500" />
-                Row 1: Contact Information
-              </span>
-              <ScanAutofillButton
-                onApply={handleScanApply}
-                label="Scan Passport / ID"
-                size="sm"
-                variant="outline"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">
-                  Contact Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  ref={contactNameInputRef}
-                  placeholder="Primary contact / passenger name"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  className="h-8 text-xs font-medium"
-                  required
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">
-                  Contact Number
-                </Label>
-                <Input
-                  placeholder="0300-1234567"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-semibold mb-1 block">
-                  Contact Email
-                </Label>
-                <Input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ========== ROW 2: SERVICE & FLIGHT SPECS ========== */}
-          <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Plane className="w-3.5 h-3.5 text-emerald-500" />
-              Row 2: Service & Flight Specifications
+              Service & Flight Details
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-9 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
               {/* Service Type */}
               <div>
                 <Label className="text-xs font-semibold mb-1 block">Service</Label>
@@ -1223,7 +1101,7 @@ export function MasterAddBookingModal({
                   Flight Date
                 </Label>
                 <Input
-                  placeholder="YYYY-MM-DD or ddmmyyyy"
+                  placeholder="YYYY-MM-DD"
                   value={flightDate}
                   onChange={(e) => setFlightDate(e.target.value)}
                   onBlur={(e) =>
@@ -1255,38 +1133,40 @@ export function MasterAddBookingModal({
                 />
               </div>
 
-              {/* Name Update Date */}
+              {/* Contact Number (Merged into Service row) */}
               <div>
-                <Label className="text-xs font-semibold mb-1 block truncate">
-                  Name Update
-                </Label>
+                <Label className="text-xs font-semibold mb-1 block">Contact Number</Label>
                 <Input
-                  placeholder="YYYY-MM-DD"
-                  value={nameUpdateDate}
-                  onChange={(e) => setNameUpdateDate(e.target.value)}
-                  onBlur={(e) =>
-                    handleDateInputBlurOrChange(e.target.value, setNameUpdateDate)
-                  }
+                  placeholder="0300-1234567"
+                  value={contactNumber}
+                  onChange={(e) => setContactNumber(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              {/* Contact Email (Merged into Service row) */}
+              <div>
+                <Label className="text-xs font-semibold mb-1 block">Contact Email</Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
                   className="h-8 text-xs"
                 />
               </div>
             </div>
           </div>
 
-          {/* ========== ROW 3: PASSENGERS TABLE ========== */}
+          {/* ========== PASSENGERS SECTION ========== */}
           <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-indigo-500" />
-                Row 3: Passengers Manifest ({passengers.length} Passenger{passengers.length > 1 ? "s" : ""})
-              </span>
-              <span className="text-[11px] text-muted-foreground hidden sm:inline-block">
-                Press <kbd className="px-1 py-0.5 bg-background border rounded text-[10px]">Enter</kbd> on last field to add row
-              </span>
+            <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-indigo-500" />
+              Passengers
             </div>
 
             <div className="border border-border/80 rounded-sm overflow-hidden bg-background">
-              <div className="max-h-[160px] overflow-y-auto">
+              <div className="max-h-[135px] overflow-y-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead className="bg-muted/70 text-muted-foreground sticky top-0 z-10 border-b">
                     <tr>
@@ -1395,7 +1275,7 @@ export function MasterAddBookingModal({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removePassenger(idx)}
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
@@ -1410,25 +1290,21 @@ export function MasterAddBookingModal({
             </div>
           </div>
 
-          {/* ========== ROW 4: FINANCIALS, PAYMENT, VENDOR & NOTES ========== */}
+          {/* ========== FINANCIALS, SETTLEMENT, VENDOR, NAME UPDATE & NOTES (NO HEADING) ========== */}
           <div className="bg-muted/20 border border-border/60 rounded-md p-2.5">
-            <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <CreditCard className="w-3.5 h-3.5 text-amber-500" />
-                Row 4: Financials, Settlement, Vendor & Notes
-              </span>
-              {bookingMode === "direct" && (
+            {bookingMode === "direct" && (
+              <div className="flex justify-end mb-1">
                 <button
                   type="button"
                   onClick={() => setShowOpeningBalance(!showOpeningBalance)}
-                  className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                  className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
                 >
-                  {showOpeningBalance ? "Hide Opening Balance" : "+ Opening Balance"}
+                  {showOpeningBalance ? "Hide Opening Balance" : "+ Client Opening Balance"}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
               {/* Purchase Price */}
               <div>
                 <Label className="text-xs font-semibold mb-1 block">Purchase Cost</Label>
@@ -1497,7 +1373,7 @@ export function MasterAddBookingModal({
                 </Select>
               </div>
 
-              {/* Bank Name if Bank Transfer selected, otherwise Notes preview */}
+              {/* Bank Name if Bank Transfer selected */}
               {paymentMode === "bank" ? (
                 <div>
                   <Label className="text-xs font-semibold mb-1 block">Bank Name</Label>
@@ -1508,69 +1384,12 @@ export function MasterAddBookingModal({
                     className="h-8 text-xs"
                   />
                 </div>
-              ) : (
-                <div className="md:col-span-1">
-                  <Label className="text-xs font-semibold mb-1 block">Vendor</Label>
-                  <div className="flex gap-1">
-                    <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
-                      <SelectTrigger className="h-8 text-xs flex-1 truncate">
-                        <SelectValue placeholder="Select Vendor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None / Direct</SelectItem>
-                        {vendors.map((v) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Popover open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          title="Quick Add Vendor"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3 space-y-2" align="end">
-                        <div className="font-semibold text-xs flex items-center gap-1.5">
-                          <Store className="w-3.5 h-3.5 text-primary" />
-                          Quick Add Vendor
-                        </div>
-                        <Input
-                          placeholder="Vendor Name"
-                          value={quickVendorName}
-                          onChange={(e) => setQuickVendorName(e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                        <Input
-                          placeholder="Service (Airlines / Hotel)"
-                          value={quickVendorService}
-                          onChange={(e) => setQuickVendorService(e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleQuickAddVendor}
-                          className="w-full h-7 text-xs"
-                        >
-                          Save & Select
-                        </Button>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-              )}
+              ) : null}
 
-              {/* Vendor field if bank was shown in column 6 */}
-              {paymentMode === "bank" && (
-                <div>
-                  <Label className="text-xs font-semibold mb-1 block">Vendor</Label>
+              {/* Vendor Selector */}
+              <div className={paymentMode === "bank" ? "col-span-1" : "col-span-1 sm:col-span-2"}>
+                <Label className="text-xs font-semibold mb-1 block">Vendor</Label>
+                <div className="flex gap-1">
                   <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
                     <SelectTrigger className="h-8 text-xs flex-1 truncate">
                       <SelectValue placeholder="Select Vendor" />
@@ -1584,16 +1403,59 @@ export function MasterAddBookingModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  <Popover open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 cursor-pointer"
+                        title="Quick Add Vendor"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3 space-y-2" align="end">
+                      <div className="font-semibold text-xs flex items-center gap-1.5">
+                        <Store className="w-3.5 h-3.5 text-primary" />
+                        Quick Add Vendor
+                      </div>
+                      <Input
+                        placeholder="Vendor Name"
+                        value={quickVendorName}
+                        onChange={(e) => setQuickVendorName(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        placeholder="Service (Airlines / Hotel)"
+                        value={quickVendorService}
+                        onChange={(e) => setQuickVendorService(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleQuickAddVendor}
+                        className="w-full h-7 text-xs cursor-pointer"
+                      >
+                        Save & Select
+                      </Button>
+                    </PopoverContent>
+                  </Popover>
                 </div>
-              )}
+              </div>
 
-              {/* Notes */}
-              <div className={paymentMode === "bank" ? "md:col-span-1" : "md:col-span-2"}>
-                <Label className="text-xs font-semibold mb-1 block">Notes / Remarks</Label>
+              {/* Name Update Date (Moved to last section) */}
+              <div>
+                <Label className="text-xs font-semibold mb-1 block truncate">
+                  Name Update
+                </Label>
                 <Input
-                  placeholder="Special requests or instructions..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                  value={nameUpdateDate}
+                  onChange={(e) => setNameUpdateDate(e.target.value)}
+                  onBlur={(e) =>
+                    handleDateInputBlurOrChange(e.target.value, setNameUpdateDate)
+                  }
                   className="h-8 text-xs"
                 />
               </div>
@@ -1626,23 +1488,32 @@ export function MasterAddBookingModal({
                 />
               </div>
             )}
+
+            {/* Notes: Single Full-Width Field */}
+            <div className="w-full mt-2.5">
+              <Label className="text-xs font-semibold mb-1 block">Notes / Remarks</Label>
+              <Input
+                placeholder="Special requests, flight notes, passenger instructions..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="h-8 text-xs w-full"
+              />
+            </div>
           </div>
         </div>
 
         {/* ======================= BOTTOM STICKY FOOTER ======================= */}
-        <div className="h-14 border-t border-border px-4 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCloseRequest}
-              disabled={isSubmitting}
-              className="text-xs h-9 cursor-pointer"
-            >
-              Cancel (Esc)
-            </Button>
-          </div>
+        <div className="h-12 border-t border-border px-4 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur-sm">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCloseRequest}
+            disabled={isSubmitting}
+            className="text-xs h-8 cursor-pointer"
+          >
+            Cancel
+          </Button>
 
           <div className="flex items-center gap-2.5">
             <Button
@@ -1651,13 +1522,10 @@ export function MasterAddBookingModal({
               size="sm"
               onClick={() => handleSave(true)}
               disabled={isSubmitting}
-              className="text-xs h-9 font-semibold gap-1.5 cursor-pointer"
+              className="text-xs h-8 font-semibold gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Save & Add Next
-              <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-black/10 dark:bg-white/10 rounded">
-                Ctrl+Shift+Enter
-              </kbd>
             </Button>
 
             <Button
@@ -1665,13 +1533,10 @@ export function MasterAddBookingModal({
               size="sm"
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
-              className="text-xs h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shadow-sm cursor-pointer"
+              className="text-xs h-8 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shadow-sm cursor-pointer"
             >
               <Check className="w-4 h-4" />
               Save Booking
-              <kbd className="hidden sm:inline-block text-[10px] opacity-75 font-mono ml-1 px-1 bg-white/20 rounded">
-                Ctrl+Enter
-              </kbd>
             </Button>
           </div>
         </div>

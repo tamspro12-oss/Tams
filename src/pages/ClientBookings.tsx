@@ -52,7 +52,7 @@ import {
 export default function ClientBookings() {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterChip, setFilterChip] = useState<"all" | "direct" | "b2b">("all");
+  const [filterChip, setFilterChip] = useState<"all" | "direct" | "b2b" | "agents">("all");
   const { filter } = useDateFilter();
 
   // Modals
@@ -277,7 +277,7 @@ export default function ClientBookings() {
         paid: directPaid,
         pending: directPending,
       };
-    } else if (filterChip === "b2b") {
+    } else if (filterChip === "b2b" || filterChip === "agents") {
       return {
         revenue: b2bSales,
         purchase: b2bPurchase,
@@ -316,7 +316,7 @@ export default function ClientBookings() {
       });
     }
 
-    if (filterChip === "all" || filterChip === "b2b") {
+    if (filterChip === "all" || filterChip === "b2b" || filterChip === "agents") {
       filteredB2BAgentsData.forEach((item) => {
         items.push({
           type: "b2b",
@@ -354,7 +354,7 @@ export default function ClientBookings() {
         });
       }
 
-      if (filterChip === "all" || filterChip === "b2b") {
+      if (filterChip === "all" || filterChip === "b2b" || filterChip === "agents") {
         filteredB2BAgentsData.forEach((item) => {
           rows.push({
             Type: "B2B Agent",
@@ -450,115 +450,114 @@ export default function ClientBookings() {
     <div className="space-y-4 pb-12 animate-in fade-in duration-150">
       {/* ===================== 1. TOP CONTROLS & STATS ===================== */}
 
-      {/* Row 1: Actions, Filters, Export, Primary Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border rounded-lg p-3 shadow-xs">
-        {/* Left: Filter Chips & Manage Agents */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Small Filter Chips: All | Direct | B2B */}
-          <div className="inline-flex rounded-md border p-0.5 bg-muted/40 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setFilterChip("all")}
-              className={cn(
-                "px-3 py-1 text-xs font-semibold rounded-xs transition-colors cursor-pointer",
-                filterChip === "all"
-                  ? "bg-background text-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              All Bookings
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterChip("direct")}
-              className={cn(
-                "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1 cursor-pointer",
-                filterChip === "direct"
-                  ? "bg-blue-600 text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <User className="w-3 h-3" />
-              Direct
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterChip("b2b")}
-              className={cn(
-                "px-3 py-1 text-xs font-semibold rounded-xs transition-colors flex items-center gap-1 cursor-pointer",
-                filterChip === "b2b"
-                  ? "bg-purple-600 text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Users className="w-3 h-3" />
-              B2B
-            </button>
-          </div>
+      {/* Top Toolbar: One row, all items same height & radius */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+        {/* 1. Search Box (far left, takes flexible width) */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search name, passport, PNR, destination..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 text-xs pl-9 rounded-lg bg-background"
+          />
+        </div>
 
-          {/* Secondary "Manage Agents" Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowManageAgents(true)}
-            className="h-8 text-xs font-semibold text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/10 gap-1.5"
+        {/* 2. ONE Segmented Switch with 4 options: All | Direct | B2B | Manage Agents */}
+        <div className="inline-flex h-9 items-center rounded-lg border border-input bg-muted/40 p-0.5 shrink-0 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setFilterChip("all")}
+            className={cn(
+              "h-7 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap",
+              filterChip === "all"
+                ? "bg-background text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <Users className="w-3.5 h-3.5 text-purple-600" />
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterChip("direct")}
+            className={cn(
+              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              filterChip === "direct"
+                ? "bg-blue-600 text-white shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <User className="w-3 h-3" />
+            Direct
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterChip("b2b")}
+            className={cn(
+              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              filterChip === "b2b"
+                ? "bg-purple-600 text-white shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Users className="w-3 h-3" />
+            B2B
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterChip("agents");
+              setShowManageAgents(true);
+            }}
+            className={cn(
+              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              filterChip === "agents"
+                ? "bg-purple-600 text-white shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Users className="w-3 h-3 text-purple-500" />
             Manage Agents
-          </Button>
+          </button>
         </div>
 
-        {/* Right: Date Filter, Search, Export, Primary "+ Add Booking" */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          {/* Date Filter */}
-          <DateFilterSelector />
+        {/* 3. Time Filter Dropdown (matching height & radius) */}
+        <DateFilterSelector size="sm" className="h-9 text-xs rounded-lg shrink-0" />
 
-          {/* Search Box */}
-          <div className="relative w-full sm:w-56">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-            <Input
-              placeholder="Search name, passport, PNR..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 text-xs pl-8 bg-background"
-            />
-          </div>
+        {/* 4. Export */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 text-xs rounded-lg gap-1.5 shrink-0">
+              <Download className="w-3.5 h-3.5" />
+              <span>Export</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="text-xs">
+            <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              Export to Excel (.xlsx)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPdfReport} className="gap-2 cursor-pointer">
+              <FileText className="w-3.5 h-3.5 text-red-600" />
+              Export PDF Report (.pdf)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-          {/* Export Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0">
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Export</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                Export to Excel (.xlsx)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPdfReport} className="gap-2 cursor-pointer">
-                <FileText className="w-3.5 h-3.5 text-red-600" />
-                Export PDF Report (.pdf)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* ONE Primary Button: "Add Booking" */}
-          <Button
-            size="sm"
-            onClick={() => handleOpenAddBooking("direct")}
-            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Booking
-          </Button>
-        </div>
+        {/* 5. Add Booking (Primary button, far right) */}
+        <Button
+          size="sm"
+          onClick={() => handleOpenAddBooking("direct")}
+          className="h-9 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Add Booking
+        </Button>
       </div>
 
-      {/* Row 2: Top Stat Cards (Revenue, Purchase Cost, Profit, Paid, Pending) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {/* Revenue */}
+      {/* Row 2: Top Stat Cards - 4 in ONE row: Total Revenue, Purchase Cost, Total Pending, Total Paid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* 1. Total Revenue */}
         <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
           <span className="text-xs font-semibold text-muted-foreground block">
             Total Revenue
@@ -568,7 +567,7 @@ export default function ClientBookings() {
           </span>
         </div>
 
-        {/* Purchase Cost */}
+        {/* 2. Purchase Cost */}
         <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
           <span className="text-xs font-semibold text-muted-foreground block">
             Purchase Cost
@@ -578,28 +577,8 @@ export default function ClientBookings() {
           </span>
         </div>
 
-        {/* Profit */}
+        {/* 3. Total Pending (moved up) */}
         <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
-          <span className="text-xs font-semibold text-muted-foreground block">
-            Gross Profit
-          </span>
-          <span className="text-base sm:text-xl font-bold text-emerald-600">
-            PKR {stats.profit.toLocaleString()}
-          </span>
-        </div>
-
-        {/* Paid */}
-        <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
-          <span className="text-xs font-semibold text-muted-foreground block">
-            Total Paid
-          </span>
-          <span className="text-base sm:text-xl font-bold text-emerald-600">
-            PKR {stats.paid.toLocaleString()}
-          </span>
-        </div>
-
-        {/* Pending */}
-        <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow col-span-2 sm:col-span-1">
           <span className="text-xs font-semibold text-muted-foreground block">
             Total Pending
           </span>
@@ -610,6 +589,16 @@ export default function ClientBookings() {
             )}
           >
             PKR {stats.pending.toLocaleString()}
+          </span>
+        </div>
+
+        {/* 4. Total Paid */}
+        <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
+          <span className="text-xs font-semibold text-muted-foreground block">
+            Total Paid
+          </span>
+          <span className="text-base sm:text-xl font-bold text-emerald-600">
+            PKR {stats.paid.toLocaleString()}
           </span>
         </div>
       </div>

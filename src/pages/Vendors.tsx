@@ -238,85 +238,99 @@ export default function Vendors() {
         </div>
       </div>
 
-      <div className="space-y-4 md:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-primary" />
+      <div className="space-y-4">
+        {/* Single Top Toolbar: one row, all controls same height & radius as Client Bookings */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+          {/* Left: Title & Subtitle */}
+          <div className="flex items-center gap-2.5 shrink-0 pr-1">
+            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-bold">Vendor Management</h1>
-              <p className="text-sm text-muted-foreground">{vendors.length} vendors registered</p>
+              <h1 className="text-sm sm:text-base font-bold leading-tight">Vendor Management</h1>
+              <p className="text-[11px] text-muted-foreground">{vendors.length} vendors registered</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2 flex-wrap">
+
+          {/* Middle: Search Box & Date Filter */}
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search vendors by name, contact, service..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9 text-xs rounded-lg bg-background"
+              />
+            </div>
+            <DateFilterSelector size="sm" className="h-9 text-xs rounded-lg shrink-0" />
+          </div>
+
+          {/* Right: Add Vendor Primary Button */}
+          <div className="shrink-0">
             <PermissionGate module="vendors" action="write">
               <AddVendorDialog />
             </PermissionGate>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-1.5 sm:gap-3 grid-cols-2 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-1 sm:pb-2 p-2 sm:p-4">
-              <CardTitle className="text-xs sm:text-sm font-medium">Total Vendors</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 sm:p-4 pt-0">
-              <div className="text-base sm:text-xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground">{stats.fullyPaid} fully paid</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1 sm:pb-2 p-2 sm:p-4">
-              <CardTitle className="text-xs sm:text-sm font-medium">Total Payable</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 sm:p-4 pt-0">
-              <div className="text-base sm:text-xl font-bold">₨ {stats.totalAmount.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Expected total</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1 sm:pb-2 p-2 sm:p-4">
-              <CardTitle className="text-xs sm:text-sm font-medium">Amount Paid</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 sm:p-4 pt-0">
-              <div className="text-base sm:text-xl font-bold text-success">₨ {stats.totalPaid.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Total disbursed</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1 sm:pb-2 p-2 sm:p-4">
-              <CardTitle className="text-xs sm:text-sm font-medium">Outstanding</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 sm:p-4 pt-0">
-              <div className="text-base sm:text-xl font-bold text-warning">₨ {stats.totalPending.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Yet to pay</p>
-            </CardContent>
-          </Card>
+        {/* Stats Cards: Exact same size, padding, font sizes and height as Client Bookings tab */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
+            <span className="text-xs font-semibold text-muted-foreground block">
+              Total Vendors
+            </span>
+            <span className="text-base sm:text-xl font-bold text-foreground block">
+              {stats.total}
+            </span>
+            <span className="text-xs text-muted-foreground block mt-0.5">
+              {stats.fullyPaid} fully paid
+            </span>
+          </div>
+
+          <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
+            <span className="text-xs font-semibold text-muted-foreground block">
+              Total Payable
+            </span>
+            <span className="text-base sm:text-xl font-bold text-foreground block">
+              ₨ {stats.totalAmount.toLocaleString()}
+            </span>
+            <span className="text-xs text-muted-foreground block mt-0.5">
+              Expected total
+            </span>
+          </div>
+
+          <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
+            <span className="text-xs font-semibold text-muted-foreground block">
+              Amount Paid
+            </span>
+            <span className="text-base sm:text-xl font-bold text-emerald-600 block">
+              ₨ {stats.totalPaid.toLocaleString()}
+            </span>
+            <span className="text-xs text-muted-foreground block mt-0.5">
+              Total disbursed
+            </span>
+          </div>
+
+          <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
+            <span className="text-xs font-semibold text-muted-foreground block">
+              Outstanding
+            </span>
+            <span
+              className={cn(
+                "text-base sm:text-xl font-bold block",
+                stats.totalPending > 0 ? "text-amber-600" : "text-muted-foreground"
+              )}
+            >
+              ₨ {stats.totalPending.toLocaleString()}
+            </span>
+            <span className="text-xs text-muted-foreground block mt-0.5">
+              Yet to pay
+            </span>
+          </div>
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search vendors by name, contact, service..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <DateFilterSelector />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Vendors List - B2B Style */}
+        {/* Vendors List */}
         {isLoading ? (
           <div className="grid gap-4">
             <VendorCardSkeleton />
@@ -328,16 +342,11 @@ export default function Vendors() {
             <CardContent className="py-12 text-center">
               <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium mb-2">No Vendors Found</h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="text-muted-foreground">
                 {searchTerm || filter.startDate
                   ? "Try adjusting your filters"
                   : "Add your first vendor to get started"}
               </p>
-              {!searchTerm && !filter.startDate && (
-                <PermissionGate module="vendors" action="write">
-                  <AddVendorDialog />
-                </PermissionGate>
-              )}
             </CardContent>
           </Card>
         ) : (

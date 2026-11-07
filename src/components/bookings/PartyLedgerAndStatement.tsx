@@ -211,7 +211,7 @@ export function PartyLedgerAndStatement({
         r.account_name || r.method || "-",
         r.debit > 0 ? `PKR ${r.debit.toLocaleString()}` : "-",
         r.credit > 0 ? `PKR ${r.credit.toLocaleString()}` : "-",
-        `PKR ${(r.runningBalance || 0).toLocaleString()}`,
+        `PKR ${(r.running_balance || 0).toLocaleString()}`,
       ]);
 
       autoTable(doc, {

@@ -71,7 +71,7 @@ export function useOpeningBalances() {
             method: "opening",
             notes: b.notes || "Opening balance",
             legacy_source: "opening_balances",
-            legacy_id: data.id,
+            legacy_id: (data as any)?.id,
           }, { onConflict: "agency_id,legacy_source,legacy_id" });
       } catch (e) {
         console.warn("Unified transaction sync warning:", e);

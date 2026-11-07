@@ -13,8 +13,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
 
-export function DateFilterSelector() {
+export interface DateFilterSelectorProps {
+  className?: string;
+  size?: "default" | "sm" | "lg" | "icon";
+}
+
+export function DateFilterSelector({ className, size = "sm" }: DateFilterSelectorProps = {}) {
   const { filter, setPreset, setCustomRange, getFilterLabel } = useDateFilter();
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [customRange, setCustomRangeState] = useState<DateRange | undefined>();
@@ -38,10 +44,10 @@ export function DateFilterSelector() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" size={size} className={cn("gap-2 text-xs", className)}>
             <Calendar className="w-4 h-4" />
-            {getFilterLabel()}
-            <ChevronDown className="w-4 h-4" />
+            <span>{getFilterLabel()}</span>
+            <ChevronDown className="w-4 h-4 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">

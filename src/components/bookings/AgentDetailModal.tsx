@@ -605,7 +605,7 @@ export function AgentDetailModal({
             <PartyLedgerAndStatement
               partyId={agent.id}
               partyType="agent"
-              partyName={agent.name}
+              partyName={agent.agent_name}
               defaultSubTab={cardSubTab === "add_payment" ? "payment" : cardSubTab === "statement" ? "statement" : "ledger"}
               outstandingBalance={agentStats.outstanding}
             />

@@ -175,7 +175,7 @@ export function AddVendorDialog({ editVendor, open, onOpenChange }: { editVendor
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {!editVendor && (
         <DialogTrigger asChild>
-          <Button className="gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25">
+          <Button size="sm" className="h-9 text-xs rounded-lg px-3.5 gap-1.5 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm cursor-pointer shrink-0">
             <Plus className="w-4 h-4" />
             Add Vendor
           </Button>

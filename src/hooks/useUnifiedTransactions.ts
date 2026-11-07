@@ -207,7 +207,7 @@ export function useAccounts() {
     mutationFn: async ({ id, ...updates }: Partial<AccountItem> & { id: string }) => {
       const { data, error } = await supabase
         .from("accounts")
-        .update(updates)
+        .update(updates as any)
         .eq("id", id)
         .select()
         .single();
@@ -278,7 +278,7 @@ export function useAgencyLedger(filters?: {
       if (filters?.endDate) query = query.lte("date", filters.endDate);
       if (filters?.accountId && filters.accountId !== "all") query = query.eq("account_id", filters.accountId);
       if (filters?.partyId && filters.partyId !== "all") query = query.eq("party_id", filters.partyId);
-      if (filters?.type && filters.type !== "all") query = query.eq("type", filters.type);
+      if (filters?.type && filters.type !== "all") query = query.eq("type", filters.type as any);
       if (!filters?.includeReversed) query = query.is("reversed_of", null);
 
       const { data, error } = await query;

@@ -63,7 +63,7 @@ export function useRefunds() {
           method: refund.payment_mode || "cash",
           notes: refund.notes || refund.reason || "Refund",
           legacy_source: "refunds",
-          legacy_id: data.id,
+          legacy_id: (data as any)?.id,
         });
       } catch (e) {
         console.warn("Unified transaction sync warning:", e);
