@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 const PAGE_SIZE = 50;
 
@@ -18,6 +19,7 @@ export function usePaginatedClients(page: number = 0, filters?: {
   startDate?: string;
   endDate?: string;
 }): PaginatedClientsResult {
+  const queryClient = useQueryClient();
   const [totalCount, setTotalCount] = useState(0);
 
   const { data: clients = [], isLoading, error } = useQuery({
@@ -66,18 +68,13 @@ export function usePaginatedClients(page: number = 0, filters?: {
   });
 
   // Real-time subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('clients-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
-        // Invalidate query on changes
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  useRealtimeTable({
+    table: 'clients',
+    channelPrefix: 'paginated-clients',
+    onChange: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients-paginated"] });
+    },
+  });
 
   return {
     clients,

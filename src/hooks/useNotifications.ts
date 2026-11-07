@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 
@@ -53,29 +53,15 @@ export function useNotifications() {
   });
 
   // Realtime subscription for instant updates
-  useEffect(() => {
-    if (!agencyId) return;
-
-    const channel = supabase
-      .channel(`agency-notifications-${agencyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `agency_id=eq.${agencyId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["agency_notifications", agencyId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [agencyId, queryClient]);
+  useRealtimeTable({
+    table: 'notifications',
+    filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
+    enabled: !!agencyId,
+    channelPrefix: 'notifications-changes',
+    onChange: () => {
+      queryClient.invalidateQueries({ queryKey: ["agency_notifications", agencyId] });
+    },
+  });
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {

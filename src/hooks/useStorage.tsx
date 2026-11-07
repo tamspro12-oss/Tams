@@ -3,6 +3,7 @@ import { cloudStorage } from '@/lib/storage/cloudStorageProvider';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useCurrentAgencyId } from '@/hooks/useCurrentAgencyId';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { addToOfflineQueue, getQueueCount } from '@/lib/offlineQueue';
@@ -18,75 +19,48 @@ export function useClients() {
   });
 
   // Smart real-time sync for clients - update cache directly instead of refetching
-  useEffect(() => {
-    if (!userAgencyId) return;
-
-    const channel = supabase
-      .channel('clients-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'clients',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received client data from different agency!', payload.new);
-            return;
-          }
-          console.log('Client added:', payload.new);
-          queryClient.setQueryData(['clients'], (old: any[] = []) => [payload.new, ...old]);
+  useRealtimeTable({
+    table: 'clients',
+    filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+    enabled: !!userAgencyId,
+    channelPrefix: 'clients-changes',
+    onInsert: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received client data from different agency!', payload.new);
+        return;
+      }
+      console.log('Client added:', payload.new);
+      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        if (old.some((item) => item.id === payload.new.id)) {
+          return old.map((item) => (item.id === payload.new.id ? payload.new : item));
         }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'clients',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received client update from different agency!', payload.new);
-            return;
-          }
-          console.log('Client updated:', payload.new);
-          queryClient.setQueryData(['clients'], (old: any[] = []) =>
-            old.map(item => item.id === payload.new.id ? payload.new : item)
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'DELETE', 
-          schema: 'public', 
-          table: 'clients',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.old.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received client deletion from different agency!', payload.old);
-            return;
-          }
-          console.log('Client deleted:', payload.old);
-          queryClient.setQueryData(['clients'], (old: any[] = []) =>
-            old.filter(item => item.id !== payload.old.id)
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userAgencyId]);
+        return [payload.new, ...old];
+      });
+    },
+    onUpdate: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received client update from different agency!', payload.new);
+        return;
+      }
+      console.log('Client updated:', payload.new);
+      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        return old.map(item => item.id === payload.new.id ? payload.new : item);
+      });
+    },
+    onDelete: (payload: any) => {
+      if (payload.old.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received client deletion from different agency!', payload.old);
+        return;
+      }
+      console.log('Client deleted:', payload.old);
+      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [];
+        return old.filter(item => item.id !== payload.old.id);
+      });
+    },
+  });
 
   const isOnline = useOnlineStatus();
 
@@ -214,36 +188,21 @@ export function useBookings() {
   });
 
   // Real-time sync for bookings
-  useEffect(() => {
-    if (!userAgencyId) return;
-
-    const channel = supabase
-      .channel('bookings-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          const data = payload.new || payload.old || {};
-          if ('agency_id' in data && data.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received booking data from different agency!', data);
-            return;
-          }
-          console.log('Bookings change detected:', payload.eventType);
-          queryClient.invalidateQueries({ queryKey: ['bookings'] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userAgencyId]);
+  useRealtimeTable({
+    table: 'bookings',
+    filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+    enabled: !!userAgencyId,
+    channelPrefix: 'bookings-changes',
+    onChange: (payload: any) => {
+      const data = payload.new || payload.old || {};
+      if ('agency_id' in data && data.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received booking data from different agency!', data);
+        return;
+      }
+      console.log('Bookings change detected:', payload.eventType);
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
 
   const isOnlineBooking = useOnlineStatus();
 
@@ -306,72 +265,45 @@ export function useExpenses() {
   });
 
   // Smart real-time sync for expenses
-  useEffect(() => {
-    if (!userAgencyId) return;
-
-    const channel = supabase
-      .channel('expenses-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'expenses',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received expense data from different agency!', payload.new);
-            return;
-          }
-          queryClient.setQueryData(['expenses'], (old: any[] = []) => [payload.new, ...old]);
+  useRealtimeTable({
+    table: 'expenses',
+    filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+    enabled: !!userAgencyId,
+    channelPrefix: 'expenses-changes',
+    onInsert: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received expense data from different agency!', payload.new);
+        return;
+      }
+      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        if (old.some((item) => item.id === payload.new.id)) {
+          return old.map((item) => (item.id === payload.new.id ? payload.new : item));
         }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'expenses',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received expense update from different agency!', payload.new);
-            return;
-          }
-          queryClient.setQueryData(['expenses'], (old: any[] = []) =>
-            old.map(item => item.id === payload.new.id ? payload.new : item)
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'DELETE', 
-          schema: 'public', 
-          table: 'expenses',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.old.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received expense deletion from different agency!', payload.old);
-            return;
-          }
-          queryClient.setQueryData(['expenses'], (old: any[] = []) =>
-            old.filter(item => item.id !== payload.old.id)
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userAgencyId]);
+        return [payload.new, ...old];
+      });
+    },
+    onUpdate: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received expense update from different agency!', payload.new);
+        return;
+      }
+      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        return old.map(item => item.id === payload.new.id ? payload.new : item);
+      });
+    },
+    onDelete: (payload: any) => {
+      if (payload.old.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received expense deletion from different agency!', payload.old);
+        return;
+      }
+      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [];
+        return old.filter(item => item.id !== payload.old.id);
+      });
+    },
+  });
 
   const isOnlineExpense = useOnlineStatus();
 
@@ -434,72 +366,45 @@ export function useVendors() {
   });
 
   // Smart real-time sync for vendors
-  useEffect(() => {
-    if (!userAgencyId) return;
-
-    const channel = supabase
-      .channel('vendors-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'vendors',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received vendor data from different agency!', payload.new);
-            return;
-          }
-          queryClient.setQueryData(['vendors'], (old: any[] = []) => [payload.new, ...old]);
+  useRealtimeTable({
+    table: 'vendors',
+    filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+    enabled: !!userAgencyId,
+    channelPrefix: 'vendors-changes',
+    onInsert: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received vendor data from different agency!', payload.new);
+        return;
+      }
+      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        if (old.some((item) => item.id === payload.new.id)) {
+          return old.map((item) => (item.id === payload.new.id ? payload.new : item));
         }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'vendors',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.new.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received vendor update from different agency!', payload.new);
-            return;
-          }
-          queryClient.setQueryData(['vendors'], (old: any[] = []) =>
-            old.map(item => item.id === payload.new.id ? payload.new : item)
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        { 
-          event: 'DELETE', 
-          schema: 'public', 
-          table: 'vendors',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          if (payload.old.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received vendor deletion from different agency!', payload.old);
-            return;
-          }
-          queryClient.setQueryData(['vendors'], (old: any[] = []) =>
-            old.filter(item => item.id !== payload.old.id)
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userAgencyId]);
+        return [payload.new, ...old];
+      });
+    },
+    onUpdate: (payload: any) => {
+      if (payload.new.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received vendor update from different agency!', payload.new);
+        return;
+      }
+      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [payload.new];
+        return old.map(item => item.id === payload.new.id ? payload.new : item);
+      });
+    },
+    onDelete: (payload: any) => {
+      if (payload.old.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received vendor deletion from different agency!', payload.old);
+        return;
+      }
+      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+        if (!Array.isArray(old)) return [];
+        return old.filter(item => item.id !== payload.old.id);
+      });
+    },
+  });
 
   const isOnlineVendor = useOnlineStatus();
 
@@ -587,35 +492,20 @@ export function useQueries() {
   });
 
   // Setup realtime listener
-  useEffect(() => {
-    if (!userAgencyId) return;
-
-    const channel = supabase
-      .channel('queries-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'queries',
-          filter: `agency_id=eq.${userAgencyId}` // Server-side agency filter
-        },
-        (payload) => {
-          // Client-side validation for security
-          const data = payload.new || payload.old || {};
-          if ('agency_id' in data && data.agency_id !== userAgencyId) {
-            console.error('SECURITY: Received query data from different agency!', data);
-            return;
-          }
-          queryClient.invalidateQueries({ queryKey: ['queries'] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userAgencyId]);
+  useRealtimeTable({
+    table: 'queries',
+    filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+    enabled: !!userAgencyId,
+    channelPrefix: 'queries-changes',
+    onChange: (payload: any) => {
+      const data = payload.new || payload.old || {};
+      if ('agency_id' in data && data.agency_id !== userAgencyId) {
+        console.error('SECURITY: Received query data from different agency!', data);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['queries'] });
+    },
+  });
 
   const isOnlineQuery = useOnlineStatus();
 

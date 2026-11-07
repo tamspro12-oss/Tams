@@ -22,7 +22,7 @@ import { useB2BLedger } from "@/hooks/useB2BLedger";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -127,40 +127,21 @@ export default function Dashboard() {
     onRefresh: handleRefresh,
   });
 
-  // Real-time sync
-  useEffect(() => {
-    const channel = supabase
-      .channel('dashboard-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['clients'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['vendors'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queries' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['queries'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_bookings' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_agents' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_ledger' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['b2b_ledger'] });
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
+  // Real-time sync for all dashboard-relevant tables
+  useRealtimeMultiTable({
+    channelPrefix: "dashboard-changes",
+    enabled: true,
+    subscriptions: [
+      { table: "clients", callback: () => queryClient.invalidateQueries({ queryKey: ["clients"] }) },
+      { table: "bookings", callback: () => queryClient.invalidateQueries({ queryKey: ["bookings"] }) },
+      { table: "expenses", callback: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }) },
+      { table: "vendors", callback: () => queryClient.invalidateQueries({ queryKey: ["vendors"] }) },
+      { table: "queries", callback: () => queryClient.invalidateQueries({ queryKey: ["queries"] }) },
+      { table: "b2b_bookings", callback: () => queryClient.invalidateQueries({ queryKey: ["b2b_bookings"] }) },
+      { table: "b2b_agents", callback: () => queryClient.invalidateQueries({ queryKey: ["b2b_agents"] }) },
+      { table: "b2b_ledger", callback: () => queryClient.invalidateQueries({ queryKey: ["b2b_ledger"] }) },
+    ],
+  });
 
   // Aggregate stats: Strictly B2C + B2B combined
   const totalBookingsCount = clients.length + b2bBookings.length;

@@ -35,6 +35,20 @@ export class RouteErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
+  private handleHardReset = async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      if ("caches" in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+    } catch {
+      // Ignore
+    }
+    window.location.href = "/app/dashboard";
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -64,6 +78,9 @@ export class RouteErrorBoundary extends Component<Props, State> {
               <Button variant="outline" onClick={this.handleReload} className="gap-2 h-9 text-xs">
                 <RefreshCw className="w-3.5 h-3.5" />
                 Reload
+              </Button>
+              <Button variant="ghost" onClick={this.handleHardReset} className="h-9 text-xs">
+                Clear Cache
               </Button>
             </div>
           </div>

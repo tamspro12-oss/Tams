@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 export function useAllClientPaymentHistory(clientIds: string[]) {
   const queryClient = useQueryClient();
@@ -28,29 +28,15 @@ export function useAllClientPaymentHistory(clientIds: string[]) {
   });
 
   // Real-time sync for all client payment history
-  useEffect(() => {
-    if (!clientIds.length) return;
-
-    const channel = supabase
-      .channel('all-client-payment-history')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'client_payment_history'
-        },
-        (payload) => {
-          console.log('Client payment history change detected:', payload.eventType);
-          queryClient.invalidateQueries({ queryKey: ["all-client-payment-history"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [clientIds.length, queryClient]);
+  useRealtimeTable({
+    table: 'client_payment_history',
+    channelPrefix: 'all-client-payment-history',
+    enabled: clientIds.length > 0,
+    onChange: (payload: any) => {
+      console.log('Client payment history change detected:', payload.eventType);
+      queryClient.invalidateQueries({ queryKey: ["all-client-payment-history"] });
+    },
+  });
 
   return query;
 }
@@ -81,29 +67,15 @@ export function useAllVendorPaymentHistory(vendorIds: string[]) {
   });
 
   // Real-time sync for all vendor payment history
-  useEffect(() => {
-    if (!vendorIds.length) return;
-
-    const channel = supabase
-      .channel('all-vendor-payment-history')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'vendor_payment_history'
-        },
-        (payload) => {
-          console.log('Vendor payment history change detected:', payload.eventType);
-          queryClient.invalidateQueries({ queryKey: ["all-vendor-payment-history"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [vendorIds.length, queryClient]);
+  useRealtimeTable({
+    table: 'vendor_payment_history',
+    channelPrefix: 'all-vendor-payment-history',
+    enabled: vendorIds.length > 0,
+    onChange: (payload: any) => {
+      console.log('Vendor payment history change detected:', payload.eventType);
+      queryClient.invalidateQueries({ queryKey: ["all-vendor-payment-history"] });
+    },
+  });
 
   return query;
 }

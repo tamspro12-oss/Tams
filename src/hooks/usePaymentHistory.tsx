@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
 import { triggerAutoBackup } from '@/lib/autoBackupTrigger';
 
 // Client Payment History
@@ -27,30 +27,16 @@ export function useClientPaymentHistory(clientId?: string) {
   });
 
   // Real-time sync for client payment history
-  useEffect(() => {
-    if (!clientId) return;
-
-    const channel = supabase
-      .channel(`client-payment-history-${clientId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'client_payment_history',
-          filter: `client_id=eq.${clientId}`
-        },
-        (payload) => {
-          console.log('Client payment history change detected:', payload.eventType);
-          queryClient.invalidateQueries({ queryKey: ["clientPaymentHistory", clientId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [clientId, queryClient]);
+  useRealtimeTable({
+    table: 'client_payment_history',
+    filter: clientId ? `client_id=eq.${clientId}` : undefined,
+    enabled: !!clientId,
+    channelPrefix: 'client-payment-history',
+    onChange: (payload: any) => {
+      console.log('Client payment history change detected:', payload.eventType);
+      queryClient.invalidateQueries({ queryKey: ["clientPaymentHistory", clientId] });
+    },
+  });
 
   const addPaymentHistory = useMutation({
     mutationFn: async (payment: {
@@ -119,30 +105,16 @@ export function useVendorPaymentHistory(vendorId?: string) {
   });
 
   // Real-time sync for vendor payment history
-  useEffect(() => {
-    if (!vendorId) return;
-
-    const channel = supabase
-      .channel(`vendor-payment-history-${vendorId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'vendor_payment_history',
-          filter: `vendor_id=eq.${vendorId}`
-        },
-        (payload) => {
-          console.log('Vendor payment history change detected:', payload.eventType);
-          queryClient.invalidateQueries({ queryKey: ["vendorPaymentHistory", vendorId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [vendorId, queryClient]);
+  useRealtimeTable({
+    table: 'vendor_payment_history',
+    filter: vendorId ? `vendor_id=eq.${vendorId}` : undefined,
+    enabled: !!vendorId,
+    channelPrefix: 'vendor-payment-history',
+    onChange: (payload: any) => {
+      console.log('Vendor payment history change detected:', payload.eventType);
+      queryClient.invalidateQueries({ queryKey: ["vendorPaymentHistory", vendorId] });
+    },
+  });
 
   const addPaymentHistory = useMutation({
     mutationFn: async (payment: {

@@ -29,17 +29,26 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleReload = () => {
+    this.setState({ hasError: false, error: null });
     window.location.reload();
   };
 
-  private handleHardReset = () => {
+  private handleHardReset = async () => {
     try {
       localStorage.clear();
       sessionStorage.clear();
+      if ("caches" in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+      }
     } catch {
-      // Ignore storage clear errors
+      // Ignore storage/cache clear errors
     }
-    window.location.href = "/";
+    window.location.href = "/login";
   };
 
   private handleGoToDashboard = () => {

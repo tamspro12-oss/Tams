@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 
@@ -68,29 +68,15 @@ export function useQuotations() {
   });
 
   // Real-time synchronization for quotations
-  useEffect(() => {
-    if (!agencyId) return;
-
-    const channel = supabase
-      .channel("quotations-realtime-channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "quotations",
-          filter: `agency_id=eq.${agencyId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["quotations", agencyId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, agencyId]);
+  useRealtimeTable({
+    table: 'quotations',
+    filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
+    enabled: !!agencyId,
+    channelPrefix: 'quotations-changes',
+    onChange: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotations", agencyId] });
+    },
+  });
 
   const addQuotation = useMutation({
     mutationFn: async (q: QuotationInput) => {

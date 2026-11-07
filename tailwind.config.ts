@@ -22,6 +22,7 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         heading: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['Fraunces', 'Playfair Display', 'Georgia', 'serif'],
         mono: ['SF Mono', 'Roboto Mono', 'ui-monospace', 'monospace'],
       },
       letterSpacing: {
