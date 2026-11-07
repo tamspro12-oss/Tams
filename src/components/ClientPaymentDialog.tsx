@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useClients } from "@/hooks/useStorage";
 import { useClientPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
+import { supabase } from "@/integrations/supabase/client";
 import { Banknote, Plus, Minus } from "lucide-react";
 import { PaymentHistorySection } from "./PaymentHistorySection";
 import { PaymentModeSelect } from "./PaymentModeSelect";
@@ -72,6 +73,25 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
           payment_mode: paymentMode,
           bank_name: paymentMode === "bank" ? bankName : null,
         });
+
+        // Sync into master transactions table
+        try {
+          await supabase.from("transactions").insert({
+            agency_id: client.agency_id,
+            date: new Date().toISOString().split("T")[0],
+            type: "payment_in",
+            party_id: client.id,
+            party_type: "client",
+            booking_id: client.id,
+            debit: additionalPayment,
+            credit: 0,
+            method: paymentMode || "cash",
+            reference_no: client.pnr,
+            notes: `Payment for booking #${client.pnr || client.name}`,
+          });
+        } catch (e) {
+          console.warn("Unified transactions sync notice:", e);
+        }
       }
 
       onOpenChange(false);

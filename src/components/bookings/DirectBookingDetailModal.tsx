@@ -37,6 +37,9 @@ import { ClientPaymentDialog } from "@/components/ClientPaymentDialog";
 import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { downloadVoucherPdf, printVoucherPdf } from "@/lib/voucherPdfGenerator";
+import { PartyLedgerAndStatement } from "./PartyLedgerAndStatement";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Scale } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +66,7 @@ export function DirectBookingDetailModal({
   onEdit,
   onDeleteSuccess,
 }: DirectBookingDetailModalProps) {
+  const [cardSubTab, setCardSubTab] = useState<"bookings" | "ledger" | "statement" | "add_payment">("bookings");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCreateVoucher, setShowCreateVoucher] = useState(false);
@@ -234,7 +238,7 @@ export function DirectBookingDetailModal({
             <Button
               variant="default"
               size="sm"
-              onClick={() => setShowPaymentDialog(true)}
+              onClick={() => setCardSubTab("add_payment")}
               className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-xs"
             >
               <DollarSign className="w-3.5 h-3.5" />
@@ -316,7 +320,32 @@ export function DirectBookingDetailModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Sub-Tabs: Bookings | Ledger | Statement | Add Payment */}
+          <div className="flex items-center justify-between border-b pb-2">
+            <Tabs value={cardSubTab} onValueChange={(val: any) => setCardSubTab(val)} className="w-full sm:w-auto">
+              <TabsList className="grid grid-cols-4 w-full sm:w-auto h-9 p-0.5 bg-muted/60 border">
+                <TabsTrigger value="bookings" className="text-xs font-semibold gap-1.5">
+                  <Plane className="w-3.5 h-3.5 text-primary" />
+                  Bookings
+                </TabsTrigger>
+                <TabsTrigger value="ledger" className="text-xs font-semibold gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-purple-600" />
+                  Ledger
+                </TabsTrigger>
+                <TabsTrigger value="statement" className="text-xs font-semibold gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  Statement
+                </TabsTrigger>
+                <TabsTrigger value="add_payment" className="text-xs font-semibold gap-1.5 text-emerald-600">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  Add Payment
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {cardSubTab === "bookings" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Left 2 Cols: Travel & Passenger Details */}
             <div className="lg:col-span-2 space-y-5">
               {/* Flight & Travel Details Card */}
@@ -609,6 +638,19 @@ export function DirectBookingDetailModal({
               </Card>
             </div>
           </div>
+          )}
+
+          {cardSubTab !== "bookings" && (
+            <PartyLedgerAndStatement
+              partyId={client.id}
+              partyType="client"
+              partyName={client.name}
+              pnr={client.pnr}
+              bookingId={client.id}
+              defaultSubTab={cardSubTab === "add_payment" ? "payment" : cardSubTab === "statement" ? "statement" : "ledger"}
+              outstandingBalance={remaining}
+            />
+          )}
         </div>
       </div>
 

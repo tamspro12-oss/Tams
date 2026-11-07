@@ -34,6 +34,9 @@ import { useAgency } from "@/hooks/useAgency";
 import { useVendors } from "@/hooks/useStorage";
 import { AgentLumpSumPaymentDialog } from "./AgentLumpSumPaymentDialog";
 import { AddB2BAgentDialog } from "@/components/AddB2BAgentDialog";
+import { PartyLedgerAndStatement } from "./PartyLedgerAndStatement";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Scale } from "lucide-react";
 import { format, parseISO, isSameDay, isSameMonth, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -65,6 +68,7 @@ export function AgentDetailModal({
   onAddBookingForAgent,
   onEditBooking,
 }: AgentDetailModalProps) {
+  const [cardSubTab, setCardSubTab] = useState<"bookings" | "ledger" | "statement" | "add_payment">("bookings");
   const [datePeriod, setDatePeriod] = useState<"all" | "today" | "this_month" | "last_month">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -324,7 +328,7 @@ export function AgentDetailModal({
             <Button
               variant="default"
               size="sm"
-              onClick={() => setShowPaymentDialog(true)}
+              onClick={() => setCardSubTab("add_payment")}
               className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-xs"
             >
               <DollarSign className="w-3.5 h-3.5" />
@@ -442,8 +446,32 @@ export function AgentDetailModal({
             </div>
           </div>
 
-          {/* Bookings Table Section */}
-          <Card>
+          {/* Sub-Tabs: Bookings | Ledger | Statement | Add Payment */}
+          <div className="flex items-center justify-between border-b pb-2">
+            <Tabs value={cardSubTab} onValueChange={(val: any) => setCardSubTab(val)} className="w-full sm:w-auto">
+              <TabsList className="grid grid-cols-4 w-full sm:w-auto h-9 p-0.5 bg-muted/60 border">
+                <TabsTrigger value="bookings" className="text-xs font-semibold gap-1.5">
+                  <Receipt className="w-3.5 h-3.5 text-primary" />
+                  Bookings
+                </TabsTrigger>
+                <TabsTrigger value="ledger" className="text-xs font-semibold gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-purple-600" />
+                  Ledger
+                </TabsTrigger>
+                <TabsTrigger value="statement" className="text-xs font-semibold gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  Statement
+                </TabsTrigger>
+                <TabsTrigger value="add_payment" className="text-xs font-semibold gap-1.5 text-emerald-600">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  Add Payment
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {cardSubTab === "bookings" && (
+            <Card>
             <CardHeader className="py-3 px-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -571,6 +599,17 @@ export function AgentDetailModal({
               </table>
             </CardContent>
           </Card>
+          )}
+
+          {cardSubTab !== "bookings" && (
+            <PartyLedgerAndStatement
+              partyId={agent.id}
+              partyType="agent"
+              partyName={agent.name}
+              defaultSubTab={cardSubTab === "add_payment" ? "payment" : cardSubTab === "statement" ? "statement" : "ledger"}
+              outstandingBalance={agentStats.outstanding}
+            />
+          )}
         </div>
       </div>
 

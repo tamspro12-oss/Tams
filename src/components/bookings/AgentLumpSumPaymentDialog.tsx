@@ -9,6 +9,7 @@ import { Banknote, CheckCircle, ArrowDown, Clock, ShieldCheck, DollarSign } from
 import { B2BAgent } from "@/hooks/useB2BAgents";
 import { useB2BBookings, B2BBooking, calculatePaymentStatus } from "@/hooks/useB2BBookings";
 import { useB2BLedger } from "@/hooks/useB2BLedger";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -154,6 +155,23 @@ export function AgentLumpSumPaymentDialog({
             },
           });
         }
+      }
+
+      // Sync into master transactions table
+      try {
+        await supabase.from("transactions").insert({
+          agency_id: agent.agency_id,
+          date: entryDate,
+          type: "payment_in",
+          party_id: agent.id,
+          party_type: "agent",
+          debit: paymentVal,
+          credit: 0,
+          method: paymentMode || "cash",
+          notes: remarks || `Lump sum allocated to ${validAllocations.length} bookings`,
+        });
+      } catch (e) {
+        console.warn("Unified transactions sync notice:", e);
       }
 
       toast.success(

@@ -92,8 +92,26 @@ export class CloudStorageProvider implements StorageProvider {
 
   async addExpense(expense: any): Promise<void> {
     const agencyId = await this.getAgencyId();
-    const { error } = await supabase.from('expenses').insert({ ...expense, agency_id: agencyId });
+    const { data, error } = await supabase.from('expenses').insert({ ...expense, agency_id: agencyId }).select().single();
     if (error) throw new Error(`Failed to add expense: ${error.message}`);
+
+    // Sync into master transactions table
+    try {
+      await supabase.from('transactions').insert({
+        agency_id: agencyId,
+        date: expense.expense_date,
+        type: 'expense',
+        debit: 0,
+        credit: expense.amount,
+        method: expense.payment_mode || 'cash',
+        category: expense.expense_type,
+        notes: expense.notes,
+        legacy_source: 'expenses',
+        legacy_id: data?.id,
+      });
+    } catch (e) {
+      console.warn('Transactions sync note:', e);
+    }
   }
 
   async updateExpense(id: string, expense: any): Promise<void> {

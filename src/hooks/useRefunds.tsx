@@ -48,6 +48,27 @@ export function useRefunds() {
         .select()
         .single();
       if (error) throw error;
+
+      // Sync into master transactions table
+      try {
+        await supabase.from("transactions").insert({
+          agency_id: agencyId,
+          date: refund.refund_date,
+          type: "refund",
+          party_id: refund.client_id,
+          party_type: "client",
+          booking_id: refund.booking_id,
+          debit: 0,
+          credit: refund.refund_amount,
+          method: refund.payment_mode || "cash",
+          notes: refund.notes || refund.reason || "Refund",
+          legacy_source: "refunds",
+          legacy_id: data.id,
+        });
+      } catch (e) {
+        console.warn("Unified transaction sync warning:", e);
+      }
+
       return data;
     },
     onSuccess: () => {

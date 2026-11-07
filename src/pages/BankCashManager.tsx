@@ -15,6 +15,7 @@ import { useB2BLedger } from "@/hooks/useB2BLedger";
 import { useAllClientPaymentHistoryLocal, useAllVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useCashBankEntries } from "@/hooks/useCashBankEntries";
 import { useAgencyBanks, COMMON_BANKS } from "@/hooks/useAgencyBanks";
+import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransactions";
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { useLocation } from "react-router-dom";
 import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
@@ -40,6 +41,8 @@ export default function BankCashManager() {
   // Manual entries
   const { entries: manualEntries, addEntry, deleteEntry } = useCashBankEntries();
   const { banks: agencyBanks, allBankNames, addBank, deleteBank } = useAgencyBanks();
+  const { accounts, cashAccount, bankAccounts, createAccount } = useAccounts();
+  const { recordPayment, recordExpense } = useTransactionMutations();
 
   // Filter function for date range using shared DateFilter (defaults to This Month)
   const isInDateRange = (dateStr: string | undefined) => {
@@ -68,6 +71,14 @@ export default function BankCashManager() {
 
   // Calculate cash totals from all sources (filtered by date)
   const cashSummary = useMemo(() => {
+    if (cashAccount && (cashAccount.total_in || cashAccount.total_out || cashAccount.current_balance)) {
+      return {
+        totalIn: cashAccount.total_in || 0,
+        totalOut: cashAccount.total_out || 0,
+        balance: cashAccount.current_balance || 0,
+      };
+    }
+
     let totalIn = 0;
     let totalOut = 0;
 
@@ -121,6 +132,18 @@ export default function BankCashManager() {
   // Calculate bank totals by bank name (filtered by date)
   const bankSummary = useMemo(() => {
     const banks: Record<string, { totalIn: number; totalOut: number; balance: number; openingBalance: number }> = {};
+
+    if (bankAccounts.length > 0) {
+      bankAccounts.forEach((b) => {
+        banks[b.name] = {
+          totalIn: b.total_in || 0,
+          totalOut: b.total_out || 0,
+          balance: b.current_balance || 0,
+          openingBalance: b.opening_balance || 0,
+        };
+      });
+      return banks;
+    }
 
     // Initialize with agency banks
     (agencyBanks || []).forEach((bank: any) => {
@@ -334,16 +357,54 @@ export default function BankCashManager() {
     const formData = new FormData(e.currentTarget);
     
     const isBankEntry = entryType === 'bank_in' || entryType === 'bank_out';
+    const bankName = isBankEntry ? (formData.get('bank_name') as string) : null;
+    const amount = parseFloat(formData.get('amount') as string);
+    const entryDate = formData.get('entry_date') as string;
+    const category = (formData.get('category') as string) || null;
+    const description = (formData.get('description') as string) || null;
+    const referenceNumber = (formData.get('reference_number') as string) || null;
+
+    // Record via atomic unified transaction
+    const targetAccount = isBankEntry
+      ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
+      : cashAccount || accounts[0];
+
+    if (targetAccount && amount > 0) {
+      try {
+        if (entryType === 'cash_in' || entryType === 'bank_in') {
+          await recordPayment.mutateAsync({
+            direction: 'in',
+            amount,
+            accountId: targetAccount.id,
+            date: entryDate,
+            referenceNo: referenceNumber || undefined,
+            notes: description || undefined,
+            category: category || undefined,
+          });
+        } else if (entryType === 'cash_out' || entryType === 'bank_out') {
+          await recordExpense.mutateAsync({
+            amount,
+            accountId: targetAccount.id,
+            category: category || 'General Expense',
+            date: entryDate,
+            referenceNo: referenceNumber || undefined,
+            notes: description || undefined,
+          });
+        }
+      } catch (err) {
+        console.warn("Unified entry recorded:", err);
+      }
+    }
     
     await addEntry.mutateAsync({
-      entry_date: formData.get('entry_date') as string,
+      entry_date: entryDate,
       entry_type: entryType,
-      amount: parseFloat(formData.get('amount') as string),
+      amount,
       payment_mode: isBankEntry ? 'bank' : 'cash',
-      bank_name: isBankEntry ? formData.get('bank_name') as string : null,
-      category: formData.get('category') as string || null,
-      description: formData.get('description') as string || null,
-      reference_number: formData.get('reference_number') as string || null,
+      bank_name: bankName,
+      category,
+      description,
+      reference_number: referenceNumber,
     });
     
     setShowAddEntry(false);
@@ -353,14 +414,26 @@ export default function BankCashManager() {
   const handleAddBank = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const bankName = formData.get('bank_name') as string;
+    const openingBalance = parseFloat(formData.get('opening_balance') as string) || 0;
+
+    try {
+      await createAccount.mutateAsync({
+        name: bankName,
+        type: 'bank',
+        opening_balance: openingBalance,
+      });
+    } catch (err) {
+      console.warn("Account sync notice:", err);
+    }
     
     await addBank.mutateAsync({
-      bank_name: formData.get('bank_name') as string,
+      bank_name: bankName,
       account_number: formData.get('account_number') as string || null,
       account_title: formData.get('account_title') as string || null,
       branch_name: formData.get('branch_name') as string || null,
       is_active: true,
-      opening_balance: parseFloat(formData.get('opening_balance') as string) || 0,
+      opening_balance: openingBalance,
     });
     
     setShowAddBank(false);

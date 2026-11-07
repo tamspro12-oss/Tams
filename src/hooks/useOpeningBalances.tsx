@@ -52,6 +52,31 @@ export function useOpeningBalances() {
         .select()
         .single();
       if (error) throw error;
+
+      // Sync into transactions single source of truth
+      try {
+        const pType = b.party_type === "b2b_agent" ? "agent" : b.party_type;
+        const debit = b.balance_type === "receivable" ? b.amount : 0;
+        const credit = b.balance_type === "payable" ? b.amount : 0;
+        await supabase
+          .from("transactions")
+          .upsert({
+            agency_id: agencyId,
+            date: b.as_of_date,
+            type: "opening",
+            party_id: b.party_id,
+            party_type: pType as any,
+            debit,
+            credit,
+            method: "opening",
+            notes: b.notes || "Opening balance",
+            legacy_source: "opening_balances",
+            legacy_id: data.id,
+          }, { onConflict: "agency_id,legacy_source,legacy_id" });
+      } catch (e) {
+        console.warn("Unified transaction sync warning:", e);
+      }
+
       return data;
     },
     onSuccess: () => {

@@ -14,6 +14,131 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          active: boolean
+          agency_id: string
+          created_at: string
+          id: string
+          name: string
+          opening_balance: number
+          type: "cash" | "bank"
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          agency_id: string
+          created_at?: string
+          id?: string
+          name: string
+          opening_balance?: number
+          type: "cash" | "bank"
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          agency_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          opening_balance?: number
+          type?: "cash" | "bank"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      transactions: {
+        Row: {
+          account_id: string | null
+          agency_id: string
+          booking_id: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          credit: number
+          date: string
+          debit: number
+          id: string
+          legacy_id: string | null
+          legacy_source: string | null
+          method: string | null
+          notes: string | null
+          party_id: string | null
+          party_type: "client" | "agent" | "vendor" | null
+          reference_no: string | null
+          reversed_of: string | null
+          type: "charge" | "payment_in" | "payment_out" | "expense" | "refund" | "transfer" | "adjustment" | "opening"
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          agency_id: string
+          booking_id?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit?: number
+          date?: string
+          debit?: number
+          id?: string
+          legacy_id?: string | null
+          legacy_source?: string | null
+          method?: string | null
+          notes?: string | null
+          party_id?: string | null
+          party_type?: "client" | "agent" | "vendor" | null
+          reference_no?: string | null
+          reversed_of?: string | null
+          type: "charge" | "payment_in" | "payment_out" | "expense" | "refund" | "transfer" | "adjustment" | "opening"
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          agency_id?: string
+          booking_id?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit?: number
+          date?: string
+          debit?: number
+          id?: string
+          legacy_id?: string | null
+          legacy_source?: string | null
+          method?: string | null
+          notes?: string | null
+          party_id?: string | null
+          party_type?: "client" | "agent" | "vendor" | null
+          reference_no?: string | null
+          reversed_of?: string | null
+          type?: "charge" | "payment_in" | "payment_out" | "expense" | "refund" | "transfer" | "adjustment" | "opening"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       admin_audit_logs: {
         Row: {
           action_type: string
@@ -1356,6 +1481,156 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_balances: {
+        Args: { p_agency_id?: string }
+        Returns: {
+          account_id: string
+          account_name: string
+          account_type: string
+          active: boolean
+          current_balance: number
+          opening_balance: number
+          total_in: number
+          total_out: number
+        }[]
+      }
+      get_agency_ledger: {
+        Args: {
+          p_account_id?: string
+          p_end_date?: string
+          p_include_reversed?: boolean
+          p_party_id?: string
+          p_start_date?: string
+          p_type?: string
+        }
+        Returns: {
+          account_id: string | null
+          account_name: string | null
+          booking_id: string | null
+          booking_ref: string
+          category: string | null
+          credit: number
+          date: string
+          debit: number
+          id: string
+          is_reversed: boolean
+          method: string | null
+          notes: string | null
+          party_id: string | null
+          party_name: string
+          party_type: string | null
+          reference_no: string | null
+          reversed_of: string | null
+          running_balance: number
+          type: string
+        }[]
+      }
+      get_party_statement: {
+        Args: {
+          p_end_date?: string
+          p_include_reversed?: boolean
+          p_party_id: string
+          p_start_date?: string
+        }
+        Returns: {
+          account_name: string
+          booking_ref: string
+          credit: number
+          date: string
+          debit: number
+          id: string
+          is_reversed: boolean
+          method: string | null
+          notes: string | null
+          reference_no: string | null
+          reversed_of: string | null
+          running_balance: number
+          type: string
+        }[]
+      }
+      party_balances: {
+        Args: { p_agency_id?: string; p_party_type?: string }
+        Returns: {
+          current_balance: number
+          party_id: string
+          party_name: string
+          party_type: string
+          total_credit: number
+          total_debit: number
+        }[]
+      }
+      post_booking_charge: {
+        Args: {
+          p_amount: number
+          p_booking_id: string
+          p_date?: string
+          p_notes?: string
+          p_party_id: string
+          p_party_type: string
+          p_reference_no?: string
+        }
+        Returns: Json
+      }
+      record_expense: {
+        Args: {
+          p_account_id?: string
+          p_amount: number
+          p_category: string
+          p_date?: string
+          p_method?: string
+          p_notes?: string
+          p_party_id?: string
+          p_party_type?: string
+          p_reference_no?: string
+        }
+        Returns: Json
+      }
+      record_payment: {
+        Args: {
+          p_account_id?: string
+          p_amount: number
+          p_booking_id?: string
+          p_category?: string
+          p_date?: string
+          p_direction: string
+          p_method?: string
+          p_notes?: string
+          p_party_id?: string
+          p_party_type?: string
+          p_reference_no?: string
+        }
+        Returns: Json
+      }
+      record_refund: {
+        Args: {
+          p_account_id?: string
+          p_amount: number
+          p_booking_id?: string
+          p_date?: string
+          p_method?: string
+          p_notes?: string
+          p_party_id?: string
+          p_party_type?: string
+          p_reason?: string
+          p_reference_no?: string
+        }
+        Returns: Json
+      }
+      record_transfer: {
+        Args: {
+          p_amount: number
+          p_date?: string
+          p_from_account_id: string
+          p_notes?: string
+          p_reference_no?: string
+          p_to_account_id: string
+        }
+        Returns: Json
+      }
+      reverse_transaction: {
+        Args: { p_reason?: string; p_transaction_id: string }
+        Returns: Json
+      }
       agency_smtp_configured: { Args: never; Returns: boolean }
       can_upload_file: {
         Args: { p_agency_id: string; p_file_size: number }

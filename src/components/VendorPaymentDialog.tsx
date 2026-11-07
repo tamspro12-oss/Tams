@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useVendors } from "@/hooks/useStorage";
 import { useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useAgency } from "@/hooks/useAgency";
+import { supabase } from "@/integrations/supabase/client";
 import { Banknote, CheckCircle2 } from "lucide-react";
 import { PaymentHistorySection } from "./PaymentHistorySection";
 import { useToast } from "@/hooks/use-toast";
@@ -118,6 +119,23 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
           payment_status: paymentStatus,
         }
       });
+
+      // Sync into master transactions table
+      try {
+        await supabase.from("transactions").insert({
+          agency_id: agency.id,
+          date: new Date().toISOString().split("T")[0],
+          type: "payment_out",
+          party_id: vendor.id,
+          party_type: "vendor",
+          debit: 0,
+          credit: additionalPayment,
+          method: paymentMode || "cash",
+          notes: noteText,
+        });
+      } catch (e) {
+        console.warn("Unified transactions sync notice:", e);
+      }
 
       toast({
         title: "Success",
