@@ -27,7 +27,7 @@ export function useReminders() {
         console.warn("Reminders query fallback:", error);
         return [];
       }
-      return (data || []) as Reminder[];
+      return ((data || []) as unknown) as Reminder[];
     },
     enabled: !!agencyId,
     staleTime: 30 * 1000,
@@ -54,7 +54,7 @@ export function useReminders() {
           daily_expense_reminder_enabled: true,
         } as ReminderSettings;
       }
-      return data as ReminderSettings;
+      return (data as unknown) as ReminderSettings;
     },
     enabled: !!agencyId,
   });

@@ -206,11 +206,11 @@ export default function B2BAgents() {
                     {agent.phone}
                   </span>
                 )}
-                {agent.commission_rate && (
+                {agent.commission_value && (
                   <Badge variant="outline" className="text-xs">
                     {agent.commission_type === 'percentage' 
-                      ? `${agent.commission_rate}% Comm.`
-                      : `Rs ${agent.commission_rate} Comm.`}
+                      ? `${agent.commission_value}% Comm.`
+                      : `Rs ${agent.commission_value} Comm.`}
                   </Badge>
                 )}
               </div>

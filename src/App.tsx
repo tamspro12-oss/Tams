@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
 import { SyncProvider } from "@/contexts/SyncContext";
@@ -126,38 +127,38 @@ const App = () => {
 
                 <Routes>
                   {/* ========== PUBLIC ROUTES (No Login Required) ========== */}
-                  <Route path="/" element={<PublicHomepage />} />
-                  <Route path="/features" element={<FeaturesPage />} />
-                  <Route path="/pricing" element={<PricingPage />} />
-                  <Route path="/contact" element={<ContactPage />} />
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/signup" element={<SignupPage />} />
-                  <Route path="/privacy" element={<PrivacyPolicy />} />
-                  <Route path="/terms" element={<TermsOfService />} />
-                  <Route path="/install" element={<Install />} />
-                  <Route path="/subscription-expired" element={<SubscriptionExpired />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/" element={<RouteErrorBoundary routeName="Homepage"><PublicHomepage /></RouteErrorBoundary>} />
+                  <Route path="/features" element={<RouteErrorBoundary routeName="Features"><FeaturesPage /></RouteErrorBoundary>} />
+                  <Route path="/pricing" element={<RouteErrorBoundary routeName="Pricing"><PricingPage /></RouteErrorBoundary>} />
+                  <Route path="/contact" element={<RouteErrorBoundary routeName="Contact"><ContactPage /></RouteErrorBoundary>} />
+                  <Route path="/login" element={<RouteErrorBoundary routeName="Login"><LoginPage /></RouteErrorBoundary>} />
+                  <Route path="/signup" element={<RouteErrorBoundary routeName="Sign Up"><SignupPage /></RouteErrorBoundary>} />
+                  <Route path="/privacy" element={<RouteErrorBoundary routeName="Privacy Policy"><PrivacyPolicy /></RouteErrorBoundary>} />
+                  <Route path="/terms" element={<RouteErrorBoundary routeName="Terms of Service"><TermsOfService /></RouteErrorBoundary>} />
+                  <Route path="/install" element={<RouteErrorBoundary routeName="Install"><Install /></RouteErrorBoundary>} />
+                  <Route path="/subscription-expired" element={<RouteErrorBoundary routeName="Subscription Expired"><SubscriptionExpired /></RouteErrorBoundary>} />
+                  <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
                   
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
                   <Route path="/public" element={<Navigate to="/" replace />} />
 
                   {/* ========== CANONICAL 7 HUBS (Login Required) ========== */}
-                  <Route path="/app/dashboard" element={<ProtectedRoute><DashboardLayout><Index /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><Admin /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><BookingsHub /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><LeadsQuotesHub /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><QueryFormPage /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/queries/:id/edit" element={<ProtectedRoute><DashboardLayout><QueryFormPage /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/quotations/new" element={<ProtectedRoute><DashboardLayout><QuotationFormPage /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/quotations/:id/edit" element={<ProtectedRoute><DashboardLayout><QuotationFormPage /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/accounts" element={<ProtectedRoute><DashboardLayout><AccountsHub /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><UmrahCalculator /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><NotificationsHub /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><SettingsHub /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/dashboard" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Dashboard"><Index /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Bookings"><BookingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/queries/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/quotations/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/leads-quotes/quotations/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/accounts" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Accounts"><AccountsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Umrah Calculator"><UmrahCalculator /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Notifications"><NotificationsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Settings"><SettingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
 
                   {/* Detail Routes */}
-                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><B2BAgentDashboard /></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/vendors/:vendorId" element={<ProtectedRoute><DashboardLayout><VendorDashboard /></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/vendors/:vendorId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Vendor Dashboard"><VendorDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
 
                   {/* ========== 100% SEAMLESS LEGACY ROUTE REDIRECTS ========== */}
                   <Route path="/app/clients" element={<Navigate to="/app/bookings?tab=clients" replace />} />

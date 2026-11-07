@@ -146,6 +146,13 @@ const Sidebar = React.forwardRef<
 >(({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, ...props }, ref) => {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
+  // Swipe gesture to close sidebar on mobile (must be called unconditionally before any early returns)
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: side === "left" ? () => setOpenMobile(false) : undefined,
+    onSwipeRight: side === "right" ? () => setOpenMobile(false) : undefined,
+    threshold: 50,
+  });
+
   if (collapsible === "none") {
     return (
       <div
@@ -157,13 +164,6 @@ const Sidebar = React.forwardRef<
       </div>
     );
   }
-
-  // Swipe gesture to close sidebar on mobile
-  const swipeHandlers = useSwipeGesture({
-    onSwipeLeft: side === "left" ? () => setOpenMobile(false) : undefined,
-    onSwipeRight: side === "right" ? () => setOpenMobile(false) : undefined,
-    threshold: 50,
-  });
 
   if (isMobile) {
     return (

@@ -36,8 +36,14 @@ export class ErrorBoundary extends Component<Props, State> {
     try {
       localStorage.clear();
       sessionStorage.clear();
-    } catch {}
+    } catch {
+      // Ignore storage clear errors
+    }
     window.location.href = "/";
+  };
+
+  private handleGoToDashboard = () => {
+    window.location.href = "/app/dashboard";
   };
 
   public render() {
@@ -60,11 +66,14 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={this.handleReload} className="gap-2">
+              <Button onClick={this.handleGoToDashboard} className="gap-2">
+                Go to Dashboard
+              </Button>
+              <Button onClick={this.handleReload} variant="outline" className="gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Reload Application
               </Button>
-              <Button variant="outline" onClick={this.handleHardReset}>
+              <Button variant="ghost" onClick={this.handleHardReset}>
                 Clear Cache & Restart
               </Button>
             </div>

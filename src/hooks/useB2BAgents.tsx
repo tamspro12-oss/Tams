@@ -46,7 +46,7 @@ export function useB2BAgents() {
       if (!agencyId) throw new Error('No agency ID');
       const { data, error } = await supabase
         .from('b2b_agents')
-        .insert({ ...agent, agency_id: agencyId })
+        .insert({ ...agent, agency_id: agencyId } as any)
         .select()
         .single();
       
@@ -66,7 +66,7 @@ export function useB2BAgents() {
     mutationFn: async ({ id, agent }: { id: string; agent: Partial<B2BAgent> }) => {
       const { data, error } = await supabase
         .from('b2b_agents')
-        .update(agent)
+        .update(agent as any)
         .eq('id', id)
         .select()
         .single();

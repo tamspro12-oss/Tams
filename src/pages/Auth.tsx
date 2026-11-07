@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Plane } from "lucide-react";
+import { Plane, Monitor, Smartphone } from "lucide-react";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
+import { useViewMode } from "@/contexts/ViewModeContext";
 
 const loginSchema = z.object({
   email: z.string()
@@ -26,6 +27,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { viewMode, toggleViewMode } = useViewMode();
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
