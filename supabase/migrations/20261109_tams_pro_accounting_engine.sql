@@ -536,6 +536,6 @@ FROM public.clients
 ON CONFLICT (agency_id, name, type) DO NOTHING;
 
 INSERT INTO public.parties (agency_id, type, name, phone, city, opening_balance, legacy_source, legacy_id)
-SELECT agency_id, 'vendor', name, phone, city, 0, 'vendors', id
+SELECT agency_id, 'vendor', name, contact_number, NULL, 0, 'vendors', id
 FROM public.vendors
 ON CONFLICT (agency_id, name, type) DO NOTHING;
