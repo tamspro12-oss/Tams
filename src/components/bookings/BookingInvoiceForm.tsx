@@ -13,8 +13,6 @@ import { toast } from "sonner";
 import {
   FileText,
   FileCheck,
-  ChevronDown,
-  ChevronUp,
   Plus,
   Trash2,
   TrendingUp,
@@ -59,8 +57,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     { name: "", passport: "", type: "Adult" },
   ]);
 
-  // "More details" section
-  const [showMore, setShowMore] = useState(false);
+  // Additional service details (always visible)
   const [pnr, setPnr] = useState("");
   const [ticketNo, setTicketNo] = useState("");
   const [passportNo, setPassportNo] = useState("");
@@ -394,112 +391,97 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             </div>
           </div>
 
-          {/* More Details Toggle */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowMore(!showMore)}
-              className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 font-medium hover:underline cursor-pointer"
-            >
-              {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              {showMore
-                ? "Hide extra service fields"
-                : "More details (PNR, Ticket, Passport, SAR rate, Commission, WHT)"}
-            </button>
-          </div>
-
-          {showMore && (
-            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">PNR</Label>
-                  <Input
-                    value={pnr}
-                    onChange={(e) => setPnr(e.target.value.toUpperCase())}
-                    placeholder="PNR code"
-                    className="h-8 text-xs font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Ticket Number</Label>
-                  <Input
-                    value={ticketNo}
-                    onChange={(e) => setTicketNo(e.target.value)}
-                    placeholder="e.g. 214-1234567890"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Primary Passport</Label>
-                  <Input
-                    value={passportNo}
-                    onChange={(e) => setPassportNo(e.target.value)}
-                    placeholder="Passport No"
-                    className="h-8 text-xs font-mono uppercase"
-                  />
-                </div>
-              </div>
-
-              {/* SAR Currency Fields */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">SAR Exchange Rate</Label>
-                  <Input
-                    type="number"
-                    value={sarRate}
-                    onChange={(e) => setSarRate(e.target.value)}
-                    placeholder="e.g. 74.5"
-                    className="h-8 text-xs font-mono text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">SAR Amount</Label>
-                  <Input
-                    type="number"
-                    value={sarAmount}
-                    onChange={(e) => setSarAmount(e.target.value)}
-                    placeholder="0"
-                    className="h-8 text-xs font-mono text-right"
-                  />
-                </div>
-              </div>
-
-              {/* Commission and WHT */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Commission (PKR)</Label>
-                  <Input
-                    type="number"
-                    value={commission}
-                    onChange={(e) => setCommission(e.target.value)}
-                    placeholder="0"
-                    className="h-8 text-xs font-mono text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">WHT (PKR)</Label>
-                  <Input
-                    type="number"
-                    value={wht}
-                    onChange={(e) => setWht(e.target.value)}
-                    placeholder="0"
-                    className="h-8 text-xs font-mono text-right"
-                  />
-                </div>
-              </div>
-
+          {/* Additional Service Details */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <Label className="text-xs">Booking Notes</Label>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Itinerary remarks, hotel room info, special passenger requests..."
-                  rows={2}
-                  className="text-xs"
+                <Label className="text-xs">PNR</Label>
+                <Input
+                  value={pnr}
+                  onChange={(e) => setPnr(e.target.value.toUpperCase())}
+                  placeholder="PNR code"
+                  className="h-8 text-xs font-mono uppercase"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Ticket Number</Label>
+                <Input
+                  value={ticketNo}
+                  onChange={(e) => setTicketNo(e.target.value)}
+                  placeholder="e.g. 214-1234567890"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Primary Passport</Label>
+                <Input
+                  value={passportNo}
+                  onChange={(e) => setPassportNo(e.target.value)}
+                  placeholder="Passport No"
+                  className="h-8 text-xs font-mono uppercase"
                 />
               </div>
             </div>
-          )}
+
+            {/* SAR Currency Fields */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">SAR Exchange Rate</Label>
+                <Input
+                  type="number"
+                  value={sarRate}
+                  onChange={(e) => setSarRate(e.target.value)}
+                  placeholder="e.g. 74.5"
+                  className="h-8 text-xs font-mono text-right"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">SAR Amount</Label>
+                <Input
+                  type="number"
+                  value={sarAmount}
+                  onChange={(e) => setSarAmount(e.target.value)}
+                  placeholder="0"
+                  className="h-8 text-xs font-mono text-right"
+                />
+              </div>
+            </div>
+
+            {/* Commission and WHT */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Commission (PKR)</Label>
+                <Input
+                  type="number"
+                  value={commission}
+                  onChange={(e) => setCommission(e.target.value)}
+                  placeholder="0"
+                  className="h-8 text-xs font-mono text-right"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">WHT (PKR)</Label>
+                <Input
+                  type="number"
+                  value={wht}
+                  onChange={(e) => setWht(e.target.value)}
+                  placeholder="0"
+                  className="h-8 text-xs font-mono text-right"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Booking Notes</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Itinerary remarks, hotel room info, special passenger requests..."
+                rows={2}
+                className="text-xs"
+              />
+            </div>
+          </div>
 
           <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t">
             <Button
