@@ -30,35 +30,32 @@ const navItems = [
   },
   {
     icon: Calendar,
-    label: "Bookings",
-    href: "/app/bookings",
+    label: "Sales & Exp",
+    href: "/app/sales-expenses",
     matches: (p: string) =>
+      p.startsWith("/app/sales-expenses") ||
       p.startsWith("/app/bookings") ||
-      p.startsWith("/app/clients") ||
-      p.startsWith("/app/b2b-agents") ||
-      p.startsWith("/app/vendors") ||
-      p.startsWith("/app/vouchers"),
-  },
-  {
-    icon: MessageSquare,
-    label: "Queries",
-    href: "/app/leads-quotes",
-    matches: (p: string) =>
-      p.startsWith("/app/leads-quotes") ||
-      p.startsWith("/app/queries") ||
-      p.startsWith("/app/quotations"),
-  },
-  {
-    icon: Wallet,
-    label: "Accounts",
-    href: "/app/accounts",
-    matches: (p: string) =>
-      p.startsWith("/app/accounts") ||
-      p.startsWith("/app/bank-cash") ||
+      p.startsWith("/app/vouchers") ||
       p.startsWith("/app/expenses") ||
-      p.startsWith("/app/refunds") ||
+      p.startsWith("/app/refunds"),
+  },
+  {
+    icon: Users,
+    label: "Parties",
+    href: "/app/clients-vendors",
+    matches: (p: string) =>
+      p.startsWith("/app/clients-vendors") ||
+      p.startsWith("/app/clients") ||
+      p.startsWith("/app/vendors") ||
+      p.startsWith("/app/b2b-agents"),
+  },
+  {
+    icon: BarChart3,
+    label: "Reports",
+    href: "/app/reports",
+    matches: (p: string) =>
       p.startsWith("/app/reports") ||
-      p.startsWith("/app/opening-balances"),
+      p.startsWith("/app/accounts"),
   },
 ];
 

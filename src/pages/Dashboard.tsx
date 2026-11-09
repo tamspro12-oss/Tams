@@ -14,7 +14,10 @@ import {
   Calculator,
   CheckCircle2,
   Info,
+  TrendingUp,
+  Clock,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useClients, useExpenses, useVendors, useQueries } from "@/hooks/useStorage";
 import { useB2BBookings } from "@/hooks/useB2BBookings";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
@@ -23,8 +26,8 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
-import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import {
   Popover,
   PopoverContent,
@@ -219,6 +222,60 @@ export default function Dashboard() {
     }
     return `Rs ${Math.round(num).toLocaleString()}`;
   };
+
+  // Cash & Bank Position
+  const { data: accountsData = [] } = useQuery({
+    queryKey: ['dashboard_accounts'],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from('accounts').select('*');
+      return data || [];
+    },
+  });
+
+  const cashAndBankTotal = useMemo(() => {
+    return accountsData.reduce((sum: number, acc: any) => sum + (Number(acc.opening_balance) || 0), 0);
+  }, [accountsData]);
+
+  // Profit this month
+  const profitThisMonth = useMemo(() => {
+    const start = startOfMonth(selectedMonth);
+    const end = endOfMonth(selectedMonth);
+    const directProfit = clients
+      .filter((c: any) => {
+        const d = c.created_at ? new Date(c.created_at) : null;
+        return d && d >= start && d <= end;
+      })
+      .reduce((sum: number, c: any) => sum + ((Number(c.selling_price) || 0) - (Number(c.purchasing_price) || 0)), 0);
+
+    const b2bProfit = b2bBookings
+      .filter((b: any) => {
+        const d = b.created_at ? new Date(b.created_at) : null;
+        return d && d >= start && d <= end;
+      })
+      .reduce((sum: number, b: any) => sum + (Number(b.profit) || 0), 0);
+
+    return directProfit + b2bProfit;
+  }, [clients, b2bBookings, selectedMonth]);
+
+  // Today's Bookings
+  const todayBookingsCount = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const directToday = clients.filter((c: any) => (c.created_at || '').slice(0, 10) === todayStr).length;
+    const b2bToday = b2bBookings.filter((b: any) => (b.created_at || '').slice(0, 10) === todayStr).length;
+    return directToday + b2bToday;
+  }, [clients, b2bBookings]);
+
+  // Overdue Invoices
+  const overdueInvoicesCount = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return clients.filter((c: any) => {
+      const total = Number(c.selling_price) || 0;
+      const paid = Number(c.amount_paid) || 0;
+      const isUnpaid = paid < total;
+      const isPast = c.flight_date ? c.flight_date < todayStr : false;
+      return isUnpaid && isPast;
+    }).length;
+  }, [clients]);
 
   // Recent notifications list combining database notifications and live operational events
   const recentNotifications = useMemo<DashboardNotificationItem[]>(() => {
@@ -476,50 +533,143 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 2. TOP KPI METRIC CARDS (3-Column Row Placed Immediately Below Header) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: TOTAL BOOKINGS */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
-            <div>
-              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                TOTAL BOOKINGS
-              </p>
-              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
-                {totalBookingsCount.toLocaleString()}
-              </p>
+        {/* 2. CANONICAL 6 KPI METRIC CARDS (Part G7: Every card drills down) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+          {/* Card 1: CASH & BANK */}
+          <div
+            onClick={() => navigate("/app/sales-expenses?tab=payment-vouchers")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-teal-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Cash & Bank
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 flex items-center justify-center shrink-0">
+                <Wallet className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Calendar className="w-6 h-6" />
+            <div>
+              <p className="text-lg font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {formatCurrency(cashAndBankTotal)}
+              </p>
+              <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium group-hover:underline">
+                View Vouchers →
+              </span>
             </div>
           </div>
 
-          {/* Card 2: CLIENTS PENDING PAYMENT */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
+          {/* Card 2: CLIENT DUES */}
+          <div
+            onClick={() => navigate("/app/clients-vendors?balance=has_dues")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-amber-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Client Dues
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Banknote className="w-3.5 h-3.5" />
+              </div>
+            </div>
             <div>
-              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                CLIENTS PENDING PAYMENT
-              </p>
-              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
+              <p className="text-lg font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums">
                 {formatCurrency(totalClientsPending)}
               </p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Wallet className="w-6 h-6" />
+              <span className="text-[10px] text-amber-600 font-medium group-hover:underline">
+                View Clients →
+              </span>
             </div>
           </div>
 
-          {/* Card 3: VENDORS PENDING PAYMENT */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm p-6 flex items-center justify-between transition-all duration-200 hover:shadow-md">
+          {/* Card 3: VENDOR DUES */}
+          <div
+            onClick={() => navigate("/app/clients-vendors?type=vendor")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-rose-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Vendor Dues
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <Receipt className="w-3.5 h-3.5" />
+              </div>
+            </div>
             <div>
-              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                VENDORS PENDING PAYMENT
-              </p>
-              <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums mt-2">
+              <p className="text-lg font-bold tracking-tight text-rose-600 dark:text-rose-400 tabular-nums">
                 {formatCurrency(vendorPayables)}
               </p>
+              <span className="text-[10px] text-rose-600 font-medium group-hover:underline">
+                View Vendors →
+              </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
-              <Banknote className="w-6 h-6" />
+          </div>
+
+          {/* Card 4: PROFIT THIS MONTH */}
+          <div
+            onClick={() => navigate("/app/reports")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-emerald-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Profit (Month)
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
+                {formatCurrency(profitThisMonth)}
+              </p>
+              <span className="text-[10px] text-emerald-600 font-medium group-hover:underline">
+                Reports P&L →
+              </span>
+            </div>
+          </div>
+
+          {/* Card 5: TODAY'S BOOKINGS */}
+          <div
+            onClick={() => navigate("/app/sales-expenses?tab=booking-invoice")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-blue-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Today's Bookings
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Calendar className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {todayBookingsCount}
+              </p>
+              <span className="text-[10px] text-blue-600 font-medium group-hover:underline">
+                Booking Invoices →
+              </span>
+            </div>
+          </div>
+
+          {/* Card 6: OVERDUE INVOICES */}
+          <div
+            onClick={() => navigate("/app/reports")}
+            className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-red-500/50 cursor-pointer group"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[11px] font-bold tracking-wider text-slate-500 uppercase truncate">
+                Overdue Invoices
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400 flex items-center justify-center shrink-0">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight text-red-600 dark:text-red-400 tabular-nums">
+                {overdueInvoicesCount}
+              </p>
+              <span className="text-[10px] text-red-600 font-medium group-hover:underline">
+                Aging Statements →
+              </span>
             </div>
           </div>
         </div>

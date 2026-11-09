@@ -104,12 +104,13 @@ function AppSidebar() {
     }
   };
 
-  // Exactly 7 Top-Level Hubs (plus Admin Panel if authorized)
+  // Exactly Final Menu from Part D
   const navigation = [
     ...(isAdmin ? [{ name: "Admin Panel", href: "/app/admin", icon: Shield, badge: null }] : []),
     { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard, badge: null },
-    { name: "Bookings", href: "/app/bookings", icon: Calendar, badge: null },
-    { name: "Accounts", href: "/app/accounts", icon: Wallet, badge: null },
+    { name: "Sales & Expenses", href: "/app/sales-expenses", icon: Receipt, badge: null },
+    { name: "Clients & Vendors", href: "/app/clients-vendors", icon: Users, badge: null },
+    { name: "Reports", href: "/app/reports", icon: BarChart3, badge: null },
     { name: "Queries & Quotes", href: "/app/leads-quotes", icon: MessageSquare, badge: null },
     { name: "Umrah Calculator", href: "/app/umrah-calculator", icon: Calculator, badge: null },
     { name: "Notifications", href: "/app/notifications", icon: Bell, badge: pendingRemindersCount > 0 ? pendingRemindersCount : null },
@@ -119,9 +120,10 @@ function AppSidebar() {
   const isNavActive = (href: string) => {
     const p = location.pathname;
     if (href === "/app/dashboard") return p === "/app/dashboard";
-    if (href === "/app/bookings") return p.startsWith("/app/bookings") || p.startsWith("/app/clients") || p.startsWith("/app/b2b-agents") || p.startsWith("/app/vendors") || p.startsWith("/app/vouchers");
+    if (href === "/app/sales-expenses") return p.startsWith("/app/sales-expenses") || p.startsWith("/app/bookings") || p.startsWith("/app/vouchers") || p.startsWith("/app/expenses") || p.startsWith("/app/refunds");
+    if (href === "/app/clients-vendors") return p.startsWith("/app/clients-vendors") || p.startsWith("/app/clients") || p.startsWith("/app/b2b-agents") || p.startsWith("/app/vendors");
+    if (href === "/app/reports") return p.startsWith("/app/reports") || p.startsWith("/app/accounts");
     if (href === "/app/leads-quotes") return p.startsWith("/app/leads-quotes") || p.startsWith("/app/queries") || p.startsWith("/app/quotations");
-    if (href === "/app/accounts") return p.startsWith("/app/accounts") || p.startsWith("/app/bank-cash") || p.startsWith("/app/expenses") || p.startsWith("/app/refunds") || p.startsWith("/app/reports") || p.startsWith("/app/opening-balances");
     if (href === "/app/umrah-calculator") return p.startsWith("/app/umrah-calculator");
     if (href === "/app/notifications") return p.startsWith("/app/notifications") || p.startsWith("/app/reminders");
     if (href === "/app/settings") return p.startsWith("/app/settings") || p.startsWith("/app/email-history") || p.startsWith("/app/user-manual");

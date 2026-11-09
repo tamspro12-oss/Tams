@@ -66,3 +66,4 @@ export const Tile: React.FC<TileProps> = ({
 
   return content;
 };
+

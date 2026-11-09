@@ -34,6 +34,9 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 // Lazy-loaded App Pages (Protected)
 const Index = lazy(() => import("./pages/Index"));
 const Admin = lazy(() => import("./pages/Admin"));
+const SalesExpensesHub = lazy(() => import("./pages/SalesExpensesHub"));
+const ClientsVendors = lazy(() => import("./pages/ClientsVendors"));
+const ReportsHub = lazy(() => import("./pages/ReportsHub"));
 const BookingsHub = lazy(() => import("./pages/BookingsHub"));
 const LeadsQuotesHub = lazy(() => import("./pages/LeadsQuotesHub"));
 const QueryFormPage = lazy(() => import("./pages/QueryFormPage"));
@@ -142,8 +145,11 @@ const App = () => {
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
                   <Route path="/public" element={<Navigate to="/" replace />} />
 
-                  {/* ========== CANONICAL 7 HUBS (Login Required) ========== */}
+                  {/* ========== TAMS PRO CANONICAL MENU (Login Required) ========== */}
                   <Route path="/app/dashboard" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Dashboard"><Index /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/sales-expenses" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Sales & Expenses"><SalesExpensesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/clients-vendors" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Clients & Vendors"><ClientsVendors /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/reports" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Reports"><ReportsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Bookings"><BookingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />

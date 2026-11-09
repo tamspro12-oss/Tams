@@ -667,10 +667,16 @@ export function MasterAddBookingModal({
 
   // Main Save Handler
   const handleSave = async (isSaveAndAddNext = false) => {
-    // Validation: Contact is first passenger name
+    // Validation in on-screen order
+    if (bookingMode === "b2b" && !selectedAgentId) {
+      toast.error("Please select or create a B2B Agent");
+      agentTriggerRef.current?.focus();
+      return;
+    }
+
     const cleanContact = (passengers[0]?.name || contactName).trim();
     if (!cleanContact) {
-      toast.error("Passenger Name is required (used as primary contact)");
+      toast.error("First passenger name is required (used as primary contact)");
       const firstPaxInput = formContainerRef.current?.querySelector<HTMLInputElement>(
         'input[data-pax-field="name"]'
       );
@@ -685,12 +691,6 @@ export function MasterAddBookingModal({
         'input[data-field="sellingPrice"]'
       );
       sellInput?.focus();
-      return;
-    }
-
-    if (bookingMode === "b2b" && !selectedAgentId) {
-      toast.error("Please select or create a B2B Agent");
-      agentTriggerRef.current?.focus();
       return;
     }
 
@@ -1502,6 +1502,33 @@ export function MasterAddBookingModal({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                {/* 0. Agent Rate (Only shown in B2B mode) */}
+                {bookingMode === "b2b" && (
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
+                      Agent Rate
+                    </Label>
+                    <div
+                      tabIndex={-1}
+                      aria-label="Agent Rate"
+                      className="h-8 px-2 flex items-center justify-between rounded-md border text-xs font-semibold bg-background text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 select-none truncate"
+                    >
+                      <span className="truncate">
+                        {activeAgent
+                          ? activeAgent.commission_type === "percentage"
+                            ? `${activeAgent.commission_value}%`
+                            : `PKR ${activeAgent.commission_value?.toLocaleString()}`
+                          : "Standard"}
+                      </span>
+                      {calculatedCommission > 0 && (
+                        <span className="text-[10px] text-muted-foreground ml-1 shrink-0">
+                          ({calculatedCommission.toLocaleString()})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. Purchase Cost */}
                 <div>
                   <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
@@ -1612,59 +1639,149 @@ export function MasterAddBookingModal({
                     Vendor
                   </Label>
                   <div className="flex gap-1">
-                    <div className="flex-1 min-w-0">
-                      <BookingSelect
-                        dataField="vendor"
-                        ariaLabel="Vendor"
-                        value={selectedVendorId}
-                        onValueChange={setSelectedVendorId}
-                        triggerClassName="focus-visible:ring-emerald-500"
-                        options={[
-                          { label: "None / Direct", value: "none" },
-                          ...vendors.map((v) => ({ label: v.name, value: v.id })),
-                        ]}
-                      />
-                    </div>
-                    <Popover open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
+                    <Popover open={vendorSearchOpen} onOpenChange={setVendorSearchOpen}>
                       <PopoverTrigger asChild>
                         <Button
-                          type="button"
+                          ref={vendorTriggerRef}
                           variant="outline"
-                          size="icon"
-                          tabIndex={-1}
-                          className="h-8 w-8 shrink-0 cursor-pointer border-emerald-200 dark:border-emerald-800"
-                          title="Quick Add Vendor"
+                          role="combobox"
+                          aria-expanded={vendorSearchOpen}
+                          data-booking-input="true"
+                          data-field="vendor"
+                          className="w-full justify-between h-8 text-xs bg-background font-normal border-emerald-200 dark:border-emerald-800 focus-visible:ring-emerald-500 truncate"
                         >
-                          <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="truncate">
+                            {selectedVendorId === "none"
+                              ? "None / Direct"
+                              : vendors.find((v) => v.id === selectedVendorId)?.name || "Select Vendor"}
+                          </span>
+                          <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0 ml-1" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3 space-y-2" align="end">
-                        <div className="font-semibold text-xs flex items-center gap-1.5">
-                          <Store className="w-3.5 h-3.5 text-emerald-600" />
-                          Quick Add Vendor
-                        </div>
-                        <Input
-                          placeholder="Vendor Name"
-                          value={quickVendorName}
-                          onChange={(e) => setQuickVendorName(e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                        <Input
-                          placeholder="Service (Airlines / Hotel)"
-                          value={quickVendorService}
-                          onChange={(e) => setQuickVendorService(e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          tabIndex={-1}
-                          onClick={handleQuickAddVendor}
-                          className="w-full h-7 text-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          Save & Select
-                        </Button>
+                      <PopoverContent className="w-[280px] p-0" align="start">
+                        <Command>
+                          <CommandInput
+                            placeholder="Search vendor or service..."
+                            value={vendorSearchQuery}
+                            onValueChange={setVendorSearchQuery}
+                            className="h-8 text-xs"
+                          />
+                          <CommandList>
+                            <CommandEmpty className="p-2 text-xs text-muted-foreground">
+                              {vendorSearchQuery.trim() ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full justify-start text-xs gap-1.5 text-emerald-600 font-semibold"
+                                  onClick={() => {
+                                    setIsAddVendorOpen(true);
+                                    setAddVendorInitialName(vendorSearchQuery);
+                                    setVendorSearchOpen(false);
+                                  }}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  + Add &quot;{vendorSearchQuery}&quot;
+                                </Button>
+                              ) : (
+                                "No vendors found"
+                              )}
+                            </CommandEmpty>
+                            <CommandGroup heading="Vendors">
+                              <CommandItem
+                                value="none direct"
+                                onSelect={() => {
+                                  setSelectedVendorId("none");
+                                  setVendorSearchOpen(false);
+                                  setVendorSearchQuery("");
+                                  setTimeout(() => {
+                                    const nameUpdateEl = document.querySelector<HTMLInputElement>(
+                                      'input[data-field="nameUpdateDate"]'
+                                    );
+                                    if (nameUpdateEl) {
+                                      nameUpdateEl.focus();
+                                    } else {
+                                      notesRef.current?.focus();
+                                    }
+                                  }, 60);
+                                }}
+                                className="text-xs flex items-center justify-between cursor-pointer"
+                              >
+                                <span>None / Direct</span>
+                                {selectedVendorId === "none" && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                )}
+                              </CommandItem>
+                              {vendors.map((v) => (
+                                <CommandItem
+                                  key={v.id}
+                                  value={`${v.name} ${v.service_type || ""}`}
+                                  onSelect={() => {
+                                    setSelectedVendorId(v.id);
+                                    setVendorSearchOpen(false);
+                                    setVendorSearchQuery("");
+                                    setTimeout(() => {
+                                      const nameUpdateEl = document.querySelector<HTMLInputElement>(
+                                        'input[data-field="nameUpdateDate"]'
+                                      );
+                                      if (nameUpdateEl) {
+                                        nameUpdateEl.focus();
+                                      } else {
+                                        notesRef.current?.focus();
+                                      }
+                                    }, 60);
+                                  }}
+                                  className="text-xs flex items-center justify-between cursor-pointer"
+                                >
+                                  <div className="truncate">
+                                    <span className="font-medium">{v.name}</span>
+                                    {v.service_type && (
+                                      <span className="text-[11px] text-muted-foreground ml-1.5">
+                                        ({v.service_type})
+                                      </span>
+                                    )}
+                                  </div>
+                                  {selectedVendorId === v.id && (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                            {vendorSearchQuery.trim() && (
+                              <CommandGroup heading="New Vendor">
+                                <CommandItem
+                                  value={`add-${vendorSearchQuery}`}
+                                  onSelect={() => {
+                                    setIsAddVendorOpen(true);
+                                    setAddVendorInitialName(vendorSearchQuery);
+                                    setVendorSearchOpen(false);
+                                  }}
+                                  className="text-xs text-emerald-600 font-semibold cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                  + Add &quot;{vendorSearchQuery}&quot;
+                                </CommandItem>
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
                       </PopoverContent>
                     </Popover>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      tabIndex={-1}
+                      onClick={() => {
+                        setIsAddVendorOpen(true);
+                        setAddVendorInitialName("");
+                      }}
+                      title="Add New Vendor"
+                      className="h-8 w-8 shrink-0 cursor-pointer border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </div>
 
@@ -1725,6 +1842,7 @@ export function MasterAddBookingModal({
                 <span>Notes / Remarks</span>
               </div>
               <Textarea
+                ref={notesRef}
                 rows={2}
                 placeholder="Special requests, flight notes, passenger instructions... (Shift+Enter for new line, Enter to focus Save)"
                 data-booking-input="true"
@@ -1810,6 +1928,44 @@ export function MasterAddBookingModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Add B2B Agent Modal */}
+      <AddB2BAgentDialog
+        open={isAddAgentOpen}
+        onOpenChange={setIsAddAgentOpen}
+        initialName={addAgentInitialName}
+        onSaved={(newAgent) => {
+          setSelectedAgentId(newAgent.id);
+          setIsAddAgentOpen(false);
+          setAddAgentInitialName("");
+          toast.success(`Agent "${newAgent.agent_name}" selected`);
+          setTimeout(() => {
+            serviceTriggerRef.current?.focus();
+          }, 80);
+        }}
+      />
+
+      {/* Add Vendor Modal */}
+      <AddVendorDialog
+        open={isAddVendorOpen}
+        onOpenChange={setIsAddVendorOpen}
+        initialName={addVendorInitialName}
+        onSaved={(newVendor) => {
+          setSelectedVendorId(newVendor.id);
+          setIsAddVendorOpen(false);
+          setAddVendorInitialName("");
+          toast.success(`Vendor "${newVendor.name}" selected`);
+          setTimeout(() => {
+            const nameUpdateEl = document.querySelector<HTMLInputElement>(
+              'input[data-field="nameUpdateDate"]'
+            );
+            if (nameUpdateEl) {
+              nameUpdateEl.focus();
+            } else {
+              notesRef.current?.focus();
+            }
+          }, 80);
+        }}
+      />
     </>
   );
 }
