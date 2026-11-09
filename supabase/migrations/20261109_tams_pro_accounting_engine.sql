@@ -1,8 +1,50 @@
 -- ==============================================================================
 -- TAMS PRO — SAFE ADDITIVE MIGRATION: ACCOUNTING ENGINE & PARTIES
 -- Migration: 20261109_tams_pro_accounting_engine.sql
--- 100% Idempotent and Non-destructive: keeps all existing tables, rows, and views.
+-- 100% Self-Contained, Idempotent, and Non-destructive: keeps all existing data.
 -- ==============================================================================
+
+-- 0A. MULTI-TENANT ISOLATION HELPER (safe fallback if not already created)
+CREATE OR REPLACE FUNCTION public.current_user_agency_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT agency_id
+  FROM public.profiles
+  WHERE id = auth.uid();
+$$;
+
+-- 0B. ACCOUNTS TABLE (Cash & Bank Accounts)
+CREATE TABLE IF NOT EXISTS public.accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('cash', 'bank')),
+    name TEXT NOT NULL,
+    opening_balance NUMERIC NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT accounts_agency_name_unique UNIQUE (agency_id, name)
+);
+
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Agencies manage their own accounts" ON public.accounts;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE POLICY "Agencies manage their own accounts"
+    ON public.accounts FOR ALL
+    USING (agency_id = public.current_user_agency_id())
+    WITH CHECK (agency_id = public.current_user_agency_id());
+
+CREATE INDEX IF NOT EXISTS idx_accounts_agency_active ON public.accounts (agency_id, active);
+CREATE INDEX IF NOT EXISTS idx_accounts_agency_type ON public.accounts (agency_id, type);
 
 -- 1. UNIFIED PARTIES TABLE (Clients, Vendors, Both)
 CREATE TABLE IF NOT EXISTS public.parties (
