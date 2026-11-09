@@ -40,18 +40,18 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
     try {
       const additionalPayment = parseFloat(paymentAmount) || 0;
       const newTotalPaid = currentPaid + additionalPayment;
-      
+
       // Determine payment status
       let paymentStatus = "Pending";
       let paymentType: "partial" | "full" = "partial";
-      
+
       if (newTotalPaid >= totalReceivable) {
         paymentStatus = "Paid";
         paymentType = "full";
       } else if (newTotalPaid > 0) {
         paymentStatus = "Partial";
       }
-      
+
       // Update client payment
       await updateClient.mutateAsync({
         id: client.id,
@@ -218,8 +218,8 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
           {/* Right Column: Payment History */}
           <div className="lg:col-span-6 flex flex-col min-h-0 bg-muted/20 rounded-xl border p-3">
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <PaymentHistorySection 
-                history={history} 
+              <PaymentHistorySection
+                history={history}
                 isLoading={historyLoading}
                 title="Payment History"
               />

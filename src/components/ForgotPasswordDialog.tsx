@@ -53,7 +53,7 @@ export function ForgotPasswordDialog() {
           Forgot password?
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         {sent ? (
           <div className="space-y-5 text-center py-4">
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">

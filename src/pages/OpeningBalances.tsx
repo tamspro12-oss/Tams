@@ -328,7 +328,7 @@ export default function OpeningBalances() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md z-[100]">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto z-[100]">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Opening Balance" : "Opening Balance"}</DialogTitle>
             <DialogDescription>One opening balance per party. Re-saving the same party updates the existing record.</DialogDescription>

@@ -10,21 +10,21 @@ interface InvoicePreviewDialogProps {
   onDownload: () => void;
 }
 
-export function InvoicePreviewDialog({ 
-  open, 
-  onOpenChange, 
-  pdfUrl, 
+export function InvoicePreviewDialog({
+  open,
+  onOpenChange,
+  pdfUrl,
   filename,
-  onDownload 
+  onDownload
 }: InvoicePreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle>Invoice Preview</DialogTitle>
           <DialogDescription>Review the invoice before downloading</DialogDescription>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-hidden px-6">
           {pdfUrl ? (
             <iframe

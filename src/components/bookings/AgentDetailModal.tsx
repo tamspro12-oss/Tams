@@ -202,8 +202,7 @@ export function AgentDetailModal({
           ["Total Payments Received (Credits)", `PKR ${agentStats.totalCredits.toLocaleString()}`],
           [
             agentStats.outstanding > 0 ? "Outstanding Due (Debit)" : "Advance Credit",
-            `PKR ${Math.abs(agentStats.outstanding).toLocaleString()} ${
-              agentStats.outstanding > 0 ? "DR" : "CR"
+            `PKR ${Math.abs(agentStats.outstanding).toLocaleString()} ${agentStats.outstanding > 0 ? "DR" : "CR"
             }`,
           ],
         ],
@@ -405,8 +404,8 @@ export function AgentDetailModal({
                   agentStats.outstanding > 0
                     ? "text-destructive"
                     : agentStats.outstanding < 0
-                    ? "text-emerald-600"
-                    : "text-muted-foreground"
+                      ? "text-emerald-600"
+                      : "text-muted-foreground"
                 )}
               >
                 PKR {Math.abs(agentStats.outstanding).toLocaleString()}{" "}
@@ -472,133 +471,133 @@ export function AgentDetailModal({
 
           {cardSubTab === "bookings" && (
             <Card>
-            <CardHeader className="py-3 px-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-primary" />
-                  Agent Bookings Manifest ({filteredBookings.length})
-                </CardTitle>
-                <span className="text-xs text-muted-foreground hidden sm:inline">
-                  (Click any row to open full view)
-                </span>
-              </div>
-
-              {/* Filters: Day/Month & Search */}
-              <div className="flex items-center gap-2">
-                <div className="relative w-44 sm:w-56">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search passenger, PNR..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-8 text-xs pl-8"
-                  />
+              <CardHeader className="py-3 px-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-primary" />
+                    Agent Bookings Manifest ({filteredBookings.length})
+                  </CardTitle>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                    (Click any row to open full view)
+                  </span>
                 </div>
 
-                <Select
-                  value={datePeriod}
-                  onValueChange={(val: any) => setDatePeriod(val)}
-                >
-                  <SelectTrigger className="h-8 text-xs w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Dates</SelectItem>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="last_month">Last Month</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
+                {/* Filters: Day/Month & Search */}
+                <div className="flex items-center gap-2">
+                  <div className="relative w-44 sm:w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Search passenger, PNR..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="h-8 text-xs pl-8"
+                    />
+                  </div>
 
-            <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/50 border-b text-muted-foreground">
-                  <tr>
-                    <th className="p-2.5 text-left">Date</th>
-                    <th className="p-2.5 text-left">Passenger Name</th>
-                    <th className="p-2.5 text-left">PNR</th>
-                    <th className="p-2.5 text-left">Airline / Service</th>
-                    <th className="p-2.5 text-right">Total</th>
-                    <th className="p-2.5 text-right">Paid</th>
-                    <th className="p-2.5 text-right">Pending</th>
-                    <th className="p-2.5 text-center">Status</th>
-                    <th className="p-2.5 text-center w-16">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {filteredBookings.length > 0 ? (
-                    filteredBookings.map((b) => {
-                      const total = b.selling_price || 0;
-                      const paid = getBookingPaid(b);
-                      const due = Math.max(0, total - (b.commission_amount || 0) - paid);
-                      return (
-                        <tr
-                          key={b.id}
-                          onClick={() => setSelectedBookingForView(b)}
-                          className="hover:bg-muted/30 cursor-pointer transition-colors"
-                        >
-                          <td className="p-2.5 text-muted-foreground whitespace-nowrap">
-                            {b.flight_date || b.created_at?.split("T")[0] || "-"}
-                          </td>
-                          <td className="p-2.5 font-bold uppercase text-foreground">
-                            {b.passenger_name}
-                          </td>
-                          <td className="p-2.5 font-mono font-bold text-primary">
-                            {b.pnr || "-"}
-                          </td>
-                          <td className="p-2.5">
-                            {b.airline || b.destination || "Ticket"}
-                          </td>
-                          <td className="p-2.5 text-right font-medium">
-                            PKR {total.toLocaleString()}
-                          </td>
-                          <td className="p-2.5 text-right font-medium text-emerald-600">
-                            PKR {paid.toLocaleString()}
-                          </td>
-                          <td className="p-2.5 text-right font-bold text-amber-600">
-                            PKR {due.toLocaleString()}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[10px] h-4.5 px-1.5 capitalize",
-                                b.payment_status === "paid"
-                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                                  : b.payment_status === "partial"
-                                  ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                                  : "bg-red-500/10 text-red-600 border-red-500/30"
-                              )}
-                            >
-                              {b.payment_status || "pending"}
-                            </Badge>
-                          </td>
-                          <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setBookingToDelete(b)}
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
+                  <Select
+                    value={datePeriod}
+                    onValueChange={(val: any) => setDatePeriod(val)}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Dates</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="this_month">This Month</SelectItem>
+                      <SelectItem value="last_month">Last Month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50 border-b text-muted-foreground">
                     <tr>
-                      <td colSpan={9} className="p-6 text-center text-muted-foreground italic">
-                        No bookings found for the selected filter
-                      </td>
+                      <th className="p-2.5 text-left">Date</th>
+                      <th className="p-2.5 text-left">Passenger Name</th>
+                      <th className="p-2.5 text-left">PNR</th>
+                      <th className="p-2.5 text-left">Airline / Service</th>
+                      <th className="p-2.5 text-right">Total</th>
+                      <th className="p-2.5 text-right">Paid</th>
+                      <th className="p-2.5 text-right">Pending</th>
+                      <th className="p-2.5 text-center">Status</th>
+                      <th className="p-2.5 text-center w-16">Action</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {filteredBookings.length > 0 ? (
+                      filteredBookings.map((b) => {
+                        const total = b.selling_price || 0;
+                        const paid = getBookingPaid(b);
+                        const due = Math.max(0, total - (b.commission_amount || 0) - paid);
+                        return (
+                          <tr
+                            key={b.id}
+                            onClick={() => setSelectedBookingForView(b)}
+                            className="hover:bg-muted/30 cursor-pointer transition-colors"
+                          >
+                            <td className="p-2.5 text-muted-foreground whitespace-nowrap">
+                              {b.flight_date || b.created_at?.split("T")[0] || "-"}
+                            </td>
+                            <td className="p-2.5 font-bold uppercase text-foreground">
+                              {b.passenger_name}
+                            </td>
+                            <td className="p-2.5 font-mono font-bold text-primary">
+                              {b.pnr || "-"}
+                            </td>
+                            <td className="p-2.5">
+                              {b.airline || b.destination || "Ticket"}
+                            </td>
+                            <td className="p-2.5 text-right font-medium">
+                              PKR {total.toLocaleString()}
+                            </td>
+                            <td className="p-2.5 text-right font-medium text-emerald-600">
+                              PKR {paid.toLocaleString()}
+                            </td>
+                            <td className="p-2.5 text-right font-bold text-amber-600">
+                              PKR {due.toLocaleString()}
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] h-4.5 px-1.5 capitalize",
+                                  b.payment_status === "paid"
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                    : b.payment_status === "partial"
+                                      ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                      : "bg-red-500/10 text-red-600 border-red-500/30"
+                                )}
+                              >
+                                {b.payment_status || "pending"}
+                              </Badge>
+                            </td>
+                            <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setBookingToDelete(b)}
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="p-6 text-center text-muted-foreground italic">
+                          No bookings found for the selected filter
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
           )}
 
           {cardSubTab !== "bookings" && (
@@ -634,7 +633,7 @@ export function AgentDetailModal({
       {/* Single Booking Detail Modal when row is clicked */}
       {selectedBookingForView && (
         <div className="fixed inset-0 z-60 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-card border rounded-lg shadow-xl w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
             <div className="p-4 border-b flex items-center justify-between bg-muted/40">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base">{selectedBookingForView.passenger_name}</h3>

@@ -254,11 +254,10 @@ export default function Reminders() {
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        alert.type === "umrah"
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${alert.type === "umrah"
                           ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
                           : "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
-                      }`}
+                        }`}
                     >
                       {alert.type === "umrah" ? (
                         <Sparkles className="w-4 h-4" />
@@ -270,11 +269,10 @@ export default function Reminders() {
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-foreground">{alert.clientName}</span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            alert.isToday
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${alert.isToday
                               ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
                               : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                          }`}
+                            }`}
                         >
                           {alert.isToday ? "TODAY" : "TOMORROW"}
                         </span>
@@ -317,11 +315,10 @@ export default function Reminders() {
               <button
                 key={f}
                 onClick={() => setActiveFilter(f)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                  activeFilter === f
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${activeFilter === f
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/60 text-muted-foreground hover:bg-muted"
-                }`}
+                  }`}
               >
                 {f}
               </button>
@@ -371,9 +368,8 @@ export default function Reminders() {
                     </button>
                     <div>
                       <p
-                        className={`font-semibold text-sm ${
-                          r.is_completed ? "line-through text-muted-foreground" : "text-foreground"
-                        }`}
+                        className={`font-semibold text-sm ${r.is_completed ? "line-through text-muted-foreground" : "text-foreground"
+                          }`}
                       >
                         {r.title}
                       </p>
@@ -414,7 +410,7 @@ export default function Reminders() {
 
       {/* Reminder Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-primary" />

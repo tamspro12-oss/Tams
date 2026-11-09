@@ -2353,7 +2353,7 @@ export default function UmrahCalculator() {
 
       {/* Save as New Preset Dialog */}
       <Dialog open={showAddPresetDialog} onOpenChange={setShowAddPresetDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Save as New Preset</DialogTitle>
           </DialogHeader>
@@ -2384,7 +2384,7 @@ export default function UmrahCalculator() {
 
       {/* Reset Confirmation Dialog (Desktop & Mobile) */}
       <Dialog open={showResetConfirmDialog} onOpenChange={setShowResetConfirmDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />

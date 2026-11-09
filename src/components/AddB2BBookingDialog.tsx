@@ -55,26 +55,26 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
   const [newlyAddedVendor, setNewlyAddedVendor] = useState<any>(null);
   const [amountReceived, setAmountReceived] = useState<number>(0);
   const [sellingPrice, setSellingPrice] = useState<number>(editBooking?.selling_price || 0);
-  
+
   // Service type and trip type states
   const [serviceType, setServiceType] = useState<string>("Ticket");
   const [tripType, setTripType] = useState<'one_way' | 'return' | 'multi_city'>('one_way');
   const [transportIncluded, setTransportIncluded] = useState(false);
   const [customServiceName, setCustomServiceName] = useState<string>("");
-  
+
   // Flight time states
   const [outboundFlightTime, setOutboundFlightTime] = useState("");
   const [returnFlightTime, setReturnFlightTime] = useState("");
-  
+
   // Multi-city segments state
   const [multiCitySegments, setMultiCitySegments] = useState<Array<{
     departure_city: string; arrival_city: string; flight_date: string; flight_time: string; airline: string; flight_number: string;
   }>>([{ departure_city: '', arrival_city: '', flight_date: '', flight_time: '', airline: '', flight_number: '' }]);
-  
+
   // Payment mode states
   const [paymentMode, setPaymentMode] = useState<string>("cash");
   const [bankName, setBankName] = useState<string>("");
-  
+
   // Derived states for conditional rendering
   const isTicketService = serviceType === "Ticket";
   const isReturnTicket = serviceType === "Ticket" && tripType === 'return';
@@ -96,7 +96,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
     updated[idx] = { ...updated[idx], [field]: value };
     setMultiCitySegments(updated);
   };
-  
+
   // Common custom service options
   const customServiceOptions = [
     { value: "Hotel", label: "Hotel Booking", icon: "🏨" },
@@ -108,7 +108,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
     { value: "Airport Transfer", label: "Airport Transfer", icon: "✈️" },
     { value: "Other", label: "Other Service", icon: "📦" },
   ];
-  
+
   const { addBooking, updateBooking } = useB2BBookings(agent.id);
   const { vendors, addVendor } = useVendors();
   const { data: agency } = useAgency();
@@ -153,13 +153,13 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
   // Filter vendors based on search term and service type
   const filteredVendors = useMemo(() => {
     return allVendors.filter(vendor => {
-      const matchesSearch = vendorSearchTerm === "" || 
+      const matchesSearch = vendorSearchTerm === "" ||
         vendor.name.toLowerCase().includes(vendorSearchTerm.toLowerCase()) ||
         vendor.service_type?.toLowerCase().includes(vendorSearchTerm.toLowerCase()) ||
         vendor.contact_person?.toLowerCase().includes(vendorSearchTerm.toLowerCase());
-      
+
       const matchesServiceType = serviceTypeFilter === "all" || vendor.service_type === serviceTypeFilter;
-      
+
       return matchesSearch && matchesServiceType;
     });
   }, [allVendors, vendorSearchTerm, serviceTypeFilter]);
@@ -169,7 +169,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
       setSelectedVendorId(editBooking.vendor_id || "none");
       setSellingPrice(editBooking.selling_price || 0);
       setAmountReceived(0);
-      
+
       const packageData = parsePackageData(editBooking.notes);
       if (packageData?.type === 'umrah_package') {
         setServiceType("Umrah");
@@ -283,7 +283,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
     const purchasingPrice = parseFloat(formData.get("purchasing_price") as string) || 0;
     const commissionAmount = calculateCommission(sellingPriceVal);
     const profit = sellingPriceVal - purchasingPrice - commissionAmount;
-    
+
     // Validate amount received doesn't exceed total service amount
     const totalServiceAmount = sellingPriceVal - commissionAmount;
     if (amountReceived > totalServiceAmount && !editBooking) {
@@ -297,7 +297,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
     // Build structured notes based on service type
     let structuredNotes = "";
     const userNotes = (formData.get("notes") as string) || "";
-    
+
     if (isUmrah) {
       const umrahPackage = {
         type: 'umrah_package',
@@ -358,8 +358,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
       // One-way ticket with flight time
       structuredNotes = JSON.stringify({ type: 'ticket_one_way', outbound_flight_time: outboundFlightTime });
     }
-    
-    const finalNotes = structuredNotes 
+
+    const finalNotes = structuredNotes
       ? (userNotes ? `${structuredNotes}\n\nNotes: ${userNotes}` : structuredNotes)
       : userNotes || null;
 
@@ -420,8 +420,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
+        isFullScreen
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
           : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
       )}>
         <DialogHeader className="pb-3 border-b shrink-0">
@@ -455,7 +455,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
 
         <form ref={formRef} onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-6" : "space-y-4"}>
-            
+
             {/* Passenger Information */}
             <Card className="form-card form-card-blue">
               <CardHeader className="pb-4 pt-5">
@@ -561,8 +561,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Service Type *</Label>
-                  <Select 
-                    value={serviceType} 
+                  <Select
+                    value={serviceType}
                     onValueChange={(value) => {
                       setServiceType(value);
                       if (value !== "Ticket") {
@@ -583,7 +583,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Trip Type - Only for Ticket service */}
                 {isTicketService && (
                   <div className="space-y-2">
@@ -605,8 +605,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                 {isCustomService && (
                   <div className="space-y-2 sm:col-span-2">
                     <Label className="text-sm font-medium">Service Name *</Label>
-                    <Select 
-                      value={customServiceName} 
+                    <Select
+                      value={customServiceName}
                       onValueChange={setCustomServiceName}
                     >
                       <SelectTrigger className="enterprise-input">
@@ -819,8 +819,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="umrah_arrival_city" className="text-sm font-medium">Arrival City</Label>
-                        <Select 
-                          name="umrah_arrival_city" 
+                        <Select
+                          name="umrah_arrival_city"
                           defaultValue={(() => {
                             const pkg = parsePackageData(editBooking?.notes);
                             return pkg?.flights?.arrival_city || "Jeddah";
@@ -969,7 +969,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* Madinah Hotel */}
                       <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200/50 dark:border-green-800/30 space-y-3">
                         <h5 className="text-sm font-semibold text-green-800 dark:text-green-200">Madinah Hotel</h5>
@@ -1354,11 +1354,11 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                             </div>
                           </CardHeader>
                           <CardContent className="pb-5">
-                            <Textarea 
-                              id="vendor_notes" 
-                              name="vendor_notes" 
-                              rows={3} 
-                              placeholder="Additional vendor details..." 
+                            <Textarea
+                              id="vendor_notes"
+                              name="vendor_notes"
+                              rows={3}
+                              placeholder="Additional vendor details..."
                               className="enterprise-input resize-none"
                             />
                           </CardContent>
@@ -1366,8 +1366,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                       </div>
                     </form>
                     <div className="flex gap-3 justify-end pt-4 border-t shrink-0">
-                      <Button 
-                        type="button" 
+                      <Button
+                        type="button"
                         variant="outline"
                         onClick={() => setShowQuickVendorAdd(false)}
                         className="min-w-[100px]"
@@ -1409,7 +1409,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                           className="pl-9 enterprise-input"
                         />
                       </div>
-                      
+
                       {/* Service Type Filter */}
                       {serviceTypes.length > 0 && (
                         <Select value={serviceTypeFilter} onValueChange={setServiceTypeFilter}>
@@ -1426,7 +1426,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                         </Select>
                       )}
                     </div>
-                    
+
                     {/* Vendor List */}
                     <div className="flex-1 overflow-y-auto mt-3 -mx-6 px-6 space-y-1 max-h-[50vh]">
                       {/* No Vendor Option */}
@@ -1445,7 +1445,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                       >
                         <span className="text-muted-foreground">No Vendor</span>
                       </button>
-                      
+
                       {filteredVendors.length === 0 ? (
                         <p className="text-center text-muted-foreground py-8">No vendors found</p>
                       ) : (
@@ -1474,7 +1474,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                         ))
                       )}
                     </div>
-                    
+
                     {filteredVendors.length < allVendors.length && (
                       <p className="text-xs text-muted-foreground text-center pt-2 border-t">
                         Showing {filteredVendors.length} of {allVendors.length} vendors
@@ -1573,7 +1573,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                     </div>
                   )}
                 </div>
-                
+
                 {/* Accounting Summary for New Bookings */}
                 {!editBooking && sellingPrice > 0 && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200/50 dark:border-blue-800/30 space-y-2">
@@ -1581,45 +1581,45 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                       <span className="text-muted-foreground">Total Service Amount:</span>
                       <span className="font-medium text-right">PKR {(sellingPrice - calculateCommission(sellingPrice)).toLocaleString()}</span>
-                      
+
                       <span className="text-muted-foreground">Less: Agent Commission:</span>
                       <span className="font-medium text-right text-purple-600">- PKR {calculateCommission(sellingPrice).toLocaleString()}</span>
-                      
+
                       <span className="text-muted-foreground">Amount Received:</span>
                       <span className="font-medium text-right text-green-600">PKR {amountReceived.toLocaleString()}</span>
-                      
+
                       <div className="col-span-2 border-t border-blue-200/50 dark:border-blue-800/30 my-1"></div>
-                      
+
                       <span className="font-semibold">Outstanding Balance:</span>
                       <span className={cn(
                         "font-bold text-right",
-                        (sellingPrice - calculateCommission(sellingPrice) - amountReceived) > 0 
-                          ? "text-red-600" 
+                        (sellingPrice - calculateCommission(sellingPrice) - amountReceived) > 0
+                          ? "text-red-600"
                           : "text-green-600"
                       )}>
                         PKR {Math.abs(sellingPrice - calculateCommission(sellingPrice) - amountReceived).toLocaleString()}
                       </span>
-                      
+
                       <span className="text-muted-foreground">Auto Payment Status:</span>
                       <span className={cn(
                         "font-semibold text-right",
                         amountReceived <= 0 ? "text-red-500" :
-                        amountReceived >= (sellingPrice - calculateCommission(sellingPrice)) ? "text-green-600" :
-                        "text-amber-500"
+                          amountReceived >= (sellingPrice - calculateCommission(sellingPrice)) ? "text-green-600" :
+                            "text-amber-500"
                       )}>
                         {amountReceived <= 0 ? 'UNPAID' :
-                         amountReceived >= (sellingPrice - calculateCommission(sellingPrice)) ? 'PAID' :
-                         'PARTIAL'}
+                          amountReceived >= (sellingPrice - calculateCommission(sellingPrice)) ? 'PAID' :
+                            'PARTIAL'}
                       </span>
                     </div>
                   </div>
                 )}
-                
+
                 {/* Commission Info */}
                 <div className="p-3 bg-muted/50 rounded-lg border border-muted">
                   <p className="text-sm text-muted-foreground">
                     Agent Commission: <span className="font-medium text-foreground">
-                      {agent.commission_type === 'percentage' 
+                      {agent.commission_type === 'percentage'
                         ? `${agent.commission_value || 0}% of selling price`
                         : `PKR ${agent.commission_value?.toLocaleString() || 0} fixed`
                       }
@@ -1660,8 +1660,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="px-6">
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={loading}
               className="px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
             >

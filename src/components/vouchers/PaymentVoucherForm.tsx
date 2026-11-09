@@ -143,16 +143,18 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="shrink-0 pb-2 border-b">
+      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* 1. Sticky Header */}
+        <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             Payment Voucher
           </DialogTitle>
-        </DialogHeader>
+        </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
+        {/* 2. Flexible Form Body */}
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Column 1: Direction & Mode */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Transaction Direction
@@ -236,7 +238,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           </div>
 
           {/* Column 2: Party Selection */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Party / Account Ledger
@@ -312,7 +314,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           </div>
 
           {/* Column 3: Amount, Reference & Notes */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex-1 flex flex-col space-y-3">
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Amount & Particulars
@@ -376,39 +378,38 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t">
+        {/* 3. Pinned Bottom Footer */}
+        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs"
+            className="text-xs cursor-pointer"
           >
             Cancel
           </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isSubmitting}
-              onClick={() => handleSave(true)}
-              className="text-xs gap-1"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Save & Print
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isSubmitting}
-              onClick={() => handleSave(false)}
-              className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
-            >
-              {isSubmitting ? "Saving..." : "Save Voucher"}
-            </Button>
-          </div>
-        </DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isSubmitting}
+            onClick={() => handleSave(true)}
+            className="text-xs gap-1 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Save & Print
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isSubmitting}
+            onClick={() => handleSave(false)}
+            className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
+          >
+            {isSubmitting ? "Saving..." : "Save Voucher"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

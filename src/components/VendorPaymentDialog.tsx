@@ -35,7 +35,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!agency?.id) {
       toast({
         title: "Error",
@@ -47,7 +47,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
     // Validate input - allow both positive and negative values
     const additionalPayment = parseFloat(paymentAmount);
-    
+
     if (isNaN(additionalPayment) || additionalPayment === 0) {
       toast({
         title: "Invalid Amount",
@@ -82,23 +82,23 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
     try {
       const newTotalPaid = Math.max(0, currentPaid + additionalPayment);
-      
+
       // Calculate payment status based on amounts
       let paymentStatus = "Pending";
       let paymentType: "partial" | "full" = "partial";
-      
+
       if (newTotalPaid >= totalPayable && totalPayable > 0) {
         paymentStatus = "Paid";
         paymentType = "full";
       } else if (newTotalPaid > 0) {
         paymentStatus = "Partial";
       }
-      
+
       // Determine note based on positive or negative amount
-      const noteText = additionalPayment >= 0 
+      const noteText = additionalPayment >= 0
         ? `Payment of ₨${additionalPayment.toLocaleString()}`
         : `Adjustment: ₨${additionalPayment.toLocaleString()} (correction/reversal)`;
-      
+
       // First record payment history (stores both positive and negative)
       await addPaymentHistory.mutateAsync({
         vendor_id: vendor.id,
@@ -139,8 +139,8 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
       toast({
         title: "Success",
-        description: additionalPayment >= 0 
-          ? "Vendor payment recorded successfully" 
+        description: additionalPayment >= 0
+          ? "Vendor payment recorded successfully"
           : "Payment adjustment recorded successfully",
       });
 
@@ -285,8 +285,8 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   size="sm"
                   disabled={isSubmitting || !paymentAmount || parseFloat(paymentAmount) === 0}
                   className={`min-w-[140px] ${paymentAmount && parseFloat(paymentAmount) < 0 ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
@@ -307,8 +307,8 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
           {/* Right Column: Payment History */}
           <div className="lg:col-span-6 flex flex-col min-h-0 bg-muted/20 rounded-xl border p-3">
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <PaymentHistorySection 
-                history={history} 
+              <PaymentHistorySection
+                history={history}
                 isLoading={historyLoading}
                 title="Payment History"
               />

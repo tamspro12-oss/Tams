@@ -191,8 +191,9 @@ export function AddEntryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="p-4 bg-muted/40 border-b shrink-0">
+      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col p-0 overflow-hidden bg-background border rounded-xl shadow-2xl">
+        {/* 1. Sticky Header */}
+        <div className="px-6 py-3.5 border-b shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-base font-bold flex items-center justify-between">
             <span className="text-lg">Add Financial Entry</span>
             <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider">
@@ -208,40 +209,41 @@ export function AddEntryModal({
             <TabsList className="grid grid-cols-4 w-full h-9 p-0.5 bg-background border">
               <TabsTrigger
                 value="received"
-                className="text-xs font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+                className="text-xs font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white cursor-pointer"
               >
                 <ArrowDownLeft className="w-3.5 h-3.5 mr-1" />
                 Received
               </TabsTrigger>
               <TabsTrigger
                 value="paid"
-                className="text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                className="text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white cursor-pointer"
               >
                 <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
                 Paid
               </TabsTrigger>
               <TabsTrigger
                 value="expense"
-                className="text-xs font-semibold data-[state=active]:bg-red-600 data-[state=active]:text-white"
+                className="text-xs font-semibold data-[state=active]:bg-red-600 data-[state=active]:text-white cursor-pointer"
               >
                 <Receipt className="w-3.5 h-3.5 mr-1" />
                 Expense
               </TabsTrigger>
               <TabsTrigger
                 value="transfer"
-                className="text-xs font-semibold data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                className="text-xs font-semibold data-[state=active]:bg-purple-600 data-[state=active]:text-white cursor-pointer"
               >
                 <ArrowRightLeft className="w-3.5 h-3.5 mr-1" />
                 Transfer
               </TabsTrigger>
             </TabsList>
           </Tabs>
-        </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between p-4 sm:p-5">
-          <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-1">
+        {/* 2. Flexible Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Column 1: Amount, Date & Account Selection */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            <div className="flex flex-col gap-3 min-h-0">
               <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   Amount & Account
@@ -337,7 +339,7 @@ export function AddEntryModal({
             </div>
 
             {/* Column 2: Linked Party & Expense Category */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            <div className="flex flex-col gap-3 min-h-0">
               <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   Party Association
@@ -440,7 +442,7 @@ export function AddEntryModal({
             </div>
 
             {/* Column 3: Payment Method, Reference & Description */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            <div className="flex flex-col gap-3 min-h-0">
               <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex-1 flex flex-col space-y-3">
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   Payment Method & Documentation
@@ -487,13 +489,15 @@ export function AddEntryModal({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 pt-3 border-t mt-3 flex items-center justify-between">
+          {/* 3. Pinned Bottom Footer */}
+          <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
+              className="text-xs cursor-pointer"
             >
               Cancel
             </Button>
@@ -502,16 +506,16 @@ export function AddEntryModal({
               size="sm"
               disabled={isSubmitting}
               className={cn(
-                "min-w-28 font-semibold",
-                mode === "received" && "bg-emerald-600 hover:bg-emerald-700",
-                mode === "paid" && "bg-blue-600 hover:bg-blue-700",
-                mode === "expense" && "bg-red-600 hover:bg-red-700",
-                mode === "transfer" && "bg-purple-600 hover:bg-purple-700"
+                "min-w-28 font-semibold text-xs cursor-pointer",
+                mode === "received" && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                mode === "paid" && "bg-blue-600 hover:bg-blue-700 text-white",
+                mode === "expense" && "bg-red-600 hover:bg-red-700 text-white",
+                mode === "transfer" && "bg-purple-600 hover:bg-purple-700 text-white"
               )}
             >
               {isSubmitting ? "Recording..." : `Post ${mode.toUpperCase()}`}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

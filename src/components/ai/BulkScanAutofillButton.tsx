@@ -182,7 +182,7 @@ export function BulkScanAutofillButton({
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-        <DialogContent className="z-[100] max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+        <DialogContent className="z-[100] w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ScanLine className="w-5 h-5" /> Bulk AI Scan — Multiple Passengers

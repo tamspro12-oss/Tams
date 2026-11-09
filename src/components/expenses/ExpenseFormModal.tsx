@@ -79,23 +79,24 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="shrink-0 pb-2 border-b">
+      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* 1. Sticky Header */}
+        <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Receipt className="w-5 h-5 text-amber-600" />
             Record Daily Operating Expense
           </DialogTitle>
-        </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between">
-          <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
-            {/* Column 1: Category */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Expense Category
-                </div>
-
+        {/* 2. Flexible Form Body */}
+        <form onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            {/* Primary Details Grid */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Expense Information
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full">
                 <div>
                   <Label className="text-xs font-semibold">Select Category</Label>
                   <Select value={category} onValueChange={setCategory}>
@@ -124,15 +125,6 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                     />
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Column 2: Financials & Payment Mode */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Payment Details
-                </div>
 
                 <div>
                   <Label className="text-xs font-semibold">
@@ -170,46 +162,41 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                     className="h-9 text-xs mt-1"
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* Column 3: Reference & Particulars */}
-            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex-1 flex flex-col space-y-3">
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Documentation & Notes
-                </div>
 
                 <div>
-                  <Label className="text-xs font-semibold">Bill / Receipt / Reference No</Label>
+                  <Label className="text-xs font-semibold">Bill / Receipt / Ref No</Label>
                   <Input
                     value={referenceNo}
                     onChange={(e) => setReferenceNo(e.target.value)}
-                    placeholder="Optional voucher or bill #"
+                    placeholder="Optional voucher / receipt #"
                     className="h-9 text-xs font-mono mt-1"
-                  />
-                </div>
-
-                <div className="flex-1 flex flex-col space-y-1 mt-1">
-                  <Label className="text-xs">Particulars / Notes</Label>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Office electricity bill for month of October..."
-                    className="flex-1 min-h-[90px] text-xs resize-none"
                   />
                 </div>
               </div>
             </div>
+
+            {/* Documentation & Particulars Notes */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+              <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Particulars & Documentation Notes
+              </Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Office electricity bill for month of October, staff refreshments..."
+                className="w-full min-h-[140px] text-xs resize-none"
+              />
+            </div>
           </div>
 
-          <DialogFooter className="shrink-0 flex items-center justify-between gap-2 pt-3 border-t">
+          {/* 3. Pinned Bottom Footer */}
+          <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="text-xs"
+              className="text-xs cursor-pointer"
             >
               Cancel
             </Button>
@@ -217,11 +204,11 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
               type="submit"
               size="sm"
               disabled={isSubmitting}
-              className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
+              className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
             >
               {isSubmitting ? "Saving..." : "Save Expense"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

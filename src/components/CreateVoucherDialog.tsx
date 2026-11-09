@@ -374,9 +374,9 @@ export function CreateVoucherDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
         "overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6" 
-          : "max-w-3xl max-h-[90dvh] p-4 sm:p-6"
+        isFullScreen
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6"
+          : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6"
       )}>
         <DialogHeader className="shrink-0 border-b pb-3">
           <div className="flex items-center justify-between">

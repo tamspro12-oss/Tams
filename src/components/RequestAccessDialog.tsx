@@ -33,7 +33,7 @@ export function RequestAccessDialog({ open, onOpenChange }: RequestAccessDialogP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.agencyName.trim()) {
       toast.error("Agency name is required");
@@ -62,7 +62,7 @@ export function RequestAccessDialog({ open, onOpenChange }: RequestAccessDialogP
       // Build the mailto link with all form data
       const subject = encodeURIComponent(`TAMS PRO Account Request - ${formData.agencyName}`);
       const body = encodeURIComponent(
-`New Account Request
+        `New Account Request
 
 Agency Name: ${formData.agencyName}
 Contact Person: ${formData.contactPerson}
@@ -79,7 +79,7 @@ Sent from TAMS PRO Request Access Form`
 
       // Open email client with pre-filled data
       window.location.href = `mailto:tamspro12@gmail.com?subject=${subject}&body=${body}`;
-      
+
       // Show success state
       setTimeout(() => {
         setLoading(false);
@@ -110,7 +110,7 @@ Sent from TAMS PRO Request Access Form`
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         {submitted ? (
           // Success State
           <div className="py-8 text-center space-y-6">
@@ -220,8 +220,8 @@ Sent from TAMS PRO Request Access Form`
                   <Package className="w-4 h-4 text-muted-foreground" />
                   Select Plan *
                 </Label>
-                <Select 
-                  value={formData.plan} 
+                <Select
+                  value={formData.plan}
                   onValueChange={(value) => handleInputChange("plan", value)}
                 >
                   <SelectTrigger className="h-11">

@@ -46,7 +46,7 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
   const { addBooking } = useBookings();
   const { addVendor } = useVendors();
   const { addExpense } = useExpenses();
-  
+
   const [dataType, setDataType] = useState<DataType>('clients');
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -215,7 +215,7 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={(open) => { onOpenChange(open); if (!open) resetDialog(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import Data from Excel/CSV</DialogTitle>
           <DialogDescription>

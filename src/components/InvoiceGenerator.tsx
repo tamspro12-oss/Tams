@@ -90,7 +90,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
 
   const generateInvoice = async () => {
     if (isGenerating) return;
-    
+
     setIsGenerating(true);
     try {
       // Load template from localStorage
@@ -106,7 +106,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       }
 
       const template = JSON.parse(templateData);
-      
+
       // Get user and agency info
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
@@ -169,7 +169,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       doc.setFontSize(24);
       doc.setTextColor(template.themeColor || '#1e40af');
       doc.text('INVOICE', 200, 25, { align: 'right' });
-      
+
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text(`Invoice #: ${invoiceNumber}`, 200, 35, { align: 'right' });
@@ -320,12 +320,12 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       if (insertError) {
         console.error("Failed to save invoice record:", insertError);
       }
-      
+
       toast({
         title: "Success",
         description: `Invoice ${invoiceNumber} generated successfully`,
       });
-      
+
       if (!insertError) {
         loadInvoiceHistory(); // Refresh history
       }
@@ -355,7 +355,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Generate Invoice</DialogTitle>
             <DialogDescription>

@@ -12,14 +12,14 @@ export function GmailAppPasswordGuide() {
           How to Create App Password?
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <Mail className="w-6 h-6 text-primary" />
             How to Create Gmail App Password
           </DialogTitle>
         </DialogHeader>
-        
+
         <ScrollArea className="h-[calc(90vh-120px)] pr-4">
           <div className="space-y-6">
             {/* What is App Password */}
@@ -92,9 +92,9 @@ export function GmailAppPasswordGuide() {
                     <li>Click <span className="font-medium text-foreground">"Get Started"</span> and follow the setup instructions</li>
                     <li>Verify your phone number and complete the setup</li>
                   </ol>
-                  <a 
-                    href="https://myaccount.google.com/signinoptions/two-step-verification" 
-                    target="_blank" 
+                  <a
+                    href="https://myaccount.google.com/signinoptions/two-step-verification"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-primary hover:underline mt-2"
                   >
@@ -119,9 +119,9 @@ export function GmailAppPasswordGuide() {
                     <li>Sign in with your Gmail account if prompted</li>
                     <li>You'll see the App Password generator page</li>
                   </ol>
-                  <a 
-                    href="https://myaccount.google.com/apppasswords" 
-                    target="_blank" 
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-primary hover:underline mt-2"
                   >

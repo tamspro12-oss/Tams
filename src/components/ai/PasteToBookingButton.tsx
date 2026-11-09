@@ -60,7 +60,7 @@ export function PasteToBookingButton({ onApply, label = "Paste email / message",
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-        <DialogContent className="z-[100] max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="z-[100] w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" /> AI Booking Assistant

@@ -68,16 +68,18 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="shrink-0 pb-2 border-b">
+      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* 1. Sticky Header */}
+        <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             {actionType === "void" ? "Void Booking Invoice" : "Process Refund"}
           </DialogTitle>
-        </DialogHeader>
+        </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
+        {/* 2. Flexible Form Body */}
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Column 1: Action Type & Search */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Action & Target Invoice
@@ -127,7 +129,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           </div>
 
           {/* Column 2: Financial Details or Void Warning */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             {actionType === "void" ? (
               <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-900 text-xs space-y-2.5">
                 <div className="flex items-center gap-1.5 font-bold text-red-700 dark:text-red-300 text-sm">
@@ -194,7 +196,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           </div>
 
           {/* Column 3: Reason & Notes */}
-          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0">
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex-1 flex flex-col space-y-3">
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Reason & Audit Trail
@@ -228,13 +230,14 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 flex items-center justify-between gap-2 pt-3 border-t">
+        {/* 3. Pinned Bottom Footer */}
+        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs"
+            className="text-xs cursor-pointer"
           >
             Cancel
           </Button>
@@ -243,7 +246,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             size="sm"
             disabled={isSubmitting}
             onClick={handleSave}
-            className={`text-xs text-white ${
+            className={`text-xs text-white cursor-pointer ${
               actionType === "void"
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-purple-600 hover:bg-purple-700"
@@ -255,7 +258,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
               ? "Confirm Void"
               : "Record Refund"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

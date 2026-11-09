@@ -172,12 +172,7 @@ export function NewReminderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onKeyDown={handleContainerKeyDown}
-        className={cn(
-          // Mobile (< 768px): bottom sheet, rounded top corners, full width, scrolls above keyboard
-          "fixed inset-x-0 bottom-0 top-auto left-0 right-0 translate-x-0 translate-y-0 w-full max-w-none rounded-t-2xl rounded-b-none sm:rounded-t-2xl sm:rounded-b-none p-4 max-h-[85dvh] overflow-y-auto gap-3",
-          // Desktop (>= 768px): compact centered dialog, max-w-md, rounded-xl, fits without scrolling
-          "md:top-[50%] md:left-[50%] md:-translate-x-1/2 md:-translate-y-1/2 md:bottom-auto md:right-auto md:max-w-md md:rounded-xl md:p-5 md:max-h-none md:overflow-visible md:gap-3"
-        )}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6 overflow-hidden flex flex-col rounded-xl"
       >
         {/* Mobile drag handle */}
         <div className="w-10 h-1.5 rounded-full bg-muted-foreground/25 mx-auto -mt-1 mb-1 md:hidden" />

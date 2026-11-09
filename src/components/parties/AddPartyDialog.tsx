@@ -75,7 +75,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       if (onSaved && saved) {
         onSaved(saved);
       }
-    } catch {}
+    } catch { }
   };
 
   return (

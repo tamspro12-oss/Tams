@@ -17,9 +17,9 @@ interface PaymentModeSelectProps {
   required?: boolean;
 }
 
-export function PaymentModeSelect({ 
-  value, 
-  onChange, 
+export function PaymentModeSelect({
+  value,
+  onChange,
   bankName = "",
   onBankNameChange,
   className = "",
@@ -71,7 +71,7 @@ export function PaymentModeSelect({
         is_active: true,
         opening_balance: 0,
       });
-      
+
       // Select the newly added bank
       setSelectedBank(newBankName.trim());
       onBankNameChange?.(newBankName.trim());
@@ -121,15 +121,15 @@ export function PaymentModeSelect({
               <Building2 className="w-4 h-4 text-primary" />
               Select Bank
             </Label>
-            
+
             {userBanks.length === 0 ? (
               // No banks added yet - show prompt to add
               <div className="p-4 border border-dashed rounded-lg bg-muted/30 text-center">
                 <Building2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground mb-2">No bank accounts added yet</p>
-                <Button 
-                  type="button" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  size="sm"
                   variant="outline"
                   onClick={() => setShowQuickAdd(true)}
                 >
@@ -153,7 +153,7 @@ export function PaymentModeSelect({
                       </div>
                     </SelectItem>
                   ))}
-                  
+
                   {/* Divider and Quick Add option */}
                   <div className="border-t my-1" />
                   <SelectItem value="__add_new__" className="text-primary">
@@ -171,7 +171,7 @@ export function PaymentModeSelect({
 
       {/* Quick Add Bank Dialog */}
       <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
@@ -181,7 +181,7 @@ export function PaymentModeSelect({
               Add a new bank to your account. You can add more details later in Bank & Cash Manager.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="quickBankName">Bank Name *</Label>
@@ -210,11 +210,11 @@ export function PaymentModeSelect({
 }
 
 // Compact inline version for use in tables or smaller spaces
-export function PaymentModeInline({ 
-  value, 
+export function PaymentModeInline({
+  value,
   onChange,
   bankName = "",
-  onBankNameChange 
+  onBankNameChange
 }: PaymentModeSelectProps) {
   const { banks: agencyBanks } = useAgencyBanks();
   const userBanks = agencyBanks?.map((b: any) => b.bank_name) || [];
@@ -230,7 +230,7 @@ export function PaymentModeInline({
           <SelectItem value="bank">Bank</SelectItem>
         </SelectContent>
       </Select>
-      
+
       {value === "bank" && userBanks.length > 0 && (
         <Select value={bankName} onValueChange={onBankNameChange}>
           <SelectTrigger className="w-28 h-8 text-xs">

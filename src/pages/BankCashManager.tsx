@@ -28,16 +28,16 @@ export default function BankCashManager() {
   const [dateFilter, setDateFilter] = useState<DatePresetFilterValue>({
     preset: "this_month",
   });
-  
+
   // Get all client and vendor IDs
   const clientIds = useMemo(() => (clients || []).map((c: any) => c.id), [clients]);
   const vendorIds = useMemo(() => (vendors || []).map((v: any) => v.id), [vendors]);
-  
+
   // Fetch all payment histories
   const { data: clientPayments = [] } = useAllClientPaymentHistoryLocal(clientIds);
   const { data: vendorPayments = [] } = useAllVendorPaymentHistoryLocal(vendorIds);
   const { ledgerEntries: b2bLedger = [] } = useB2BLedger();
-  
+
   // Manual entries
   const { entries: manualEntries, addEntry, deleteEntry } = useCashBankEntries();
   const { banks: agencyBanks, allBankNames, addBank, deleteBank } = useAgencyBanks();
@@ -49,7 +49,7 @@ export default function BankCashManager() {
     if (!dateStr) return false;
     return isDateWithinPreset(dateStr, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo);
   };
-  
+
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
   const [showTransactions, setShowTransactions] = useState(false);
   const [showAddEntry, setShowAddEntry] = useState(false);
@@ -147,9 +147,9 @@ export default function BankCashManager() {
 
     // Initialize with agency banks
     (agencyBanks || []).forEach((bank: any) => {
-      banks[bank.bank_name] = { 
-        totalIn: 0, 
-        totalOut: 0, 
+      banks[bank.bank_name] = {
+        totalIn: 0,
+        totalOut: 0,
         balance: Number(bank.opening_balance) || 0,
         openingBalance: Number(bank.opening_balance) || 0
       };
@@ -227,10 +227,10 @@ export default function BankCashManager() {
     // Client payments
     (clientPayments || []).forEach((p: any) => {
       if (!isInDateRange(p.payment_date)) return;
-      const matches = isCash 
+      const matches = isCash
         ? (!p.payment_mode || p.payment_mode === "cash")
         : (p.payment_mode === "bank" && p.bank_name === bankName);
-      
+
       if (matches) {
         transactions.push({
           id: p.id,
@@ -247,10 +247,10 @@ export default function BankCashManager() {
     // Vendor payments
     (vendorPayments || []).forEach((p: any) => {
       if (!isInDateRange(p.payment_date)) return;
-      const matches = isCash 
+      const matches = isCash
         ? (!p.payment_mode || p.payment_mode === "cash")
         : (p.payment_mode === "bank" && p.bank_name === bankName);
-      
+
       if (matches) {
         transactions.push({
           id: p.id,
@@ -267,10 +267,10 @@ export default function BankCashManager() {
     // B2B Ledger
     (b2bLedger || []).forEach((l: any) => {
       if (!isInDateRange(l.entry_date)) return;
-      const matches = isCash 
+      const matches = isCash
         ? (!l.payment_mode || l.payment_mode === "cash")
         : (l.payment_mode === "bank" && l.bank_name === bankName);
-      
+
       if (matches) {
         transactions.push({
           id: l.id,
@@ -288,11 +288,11 @@ export default function BankCashManager() {
     (expenses || []).forEach((e: any) => {
       if (e.is_recurring && !e.recurring_parent_id) return;
       if (!isInDateRange(e.expense_date)) return;
-      
-      const matches = isCash 
+
+      const matches = isCash
         ? (!e.payment_mode || e.payment_mode === "cash")
         : (e.payment_mode === "bank" && e.bank_name === bankName);
-      
+
       if (matches) {
         transactions.push({
           id: e.id,
@@ -311,11 +311,11 @@ export default function BankCashManager() {
       if (!isInDateRange(e.entry_date)) return;
       const isCashEntry = e.entry_type === 'cash_in' || e.entry_type === 'cash_out';
       const isBankEntry = e.entry_type === 'bank_in' || e.entry_type === 'bank_out';
-      
-      const matches = isCash 
+
+      const matches = isCash
         ? isCashEntry
         : (isBankEntry && e.bank_name === bankName);
-      
+
       if (matches) {
         const isIncoming = e.entry_type === 'cash_in' || e.entry_type === 'bank_in';
         transactions.push({
@@ -332,7 +332,7 @@ export default function BankCashManager() {
     });
 
     // Sort by date descending
-    return transactions.sort((a, b) => 
+    return transactions.sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   };
@@ -355,7 +355,7 @@ export default function BankCashManager() {
   const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     const isBankEntry = entryType === 'bank_in' || entryType === 'bank_out';
     const bankName = isBankEntry ? (formData.get('bank_name') as string) : null;
     const amount = parseFloat(formData.get('amount') as string);
@@ -395,7 +395,7 @@ export default function BankCashManager() {
         console.warn("Unified entry recorded:", err);
       }
     }
-    
+
     await addEntry.mutateAsync({
       entry_date: entryDate,
       entry_type: entryType,
@@ -406,7 +406,7 @@ export default function BankCashManager() {
       description,
       reference_number: referenceNumber,
     });
-    
+
     setShowAddEntry(false);
   };
 
@@ -426,7 +426,7 @@ export default function BankCashManager() {
     } catch (err) {
       console.warn("Account sync notice:", err);
     }
-    
+
     await addBank.mutateAsync({
       bank_name: bankName,
       account_number: formData.get('account_number') as string || null,
@@ -435,7 +435,7 @@ export default function BankCashManager() {
       is_active: true,
       opening_balance: openingBalance,
     });
-    
+
     setShowAddBank(false);
   };
 
@@ -561,8 +561,8 @@ export default function BankCashManager() {
                     <p className="text-sm text-muted-foreground text-center py-4">No bank transactions yet</p>
                   ) : (
                     activeBanks.slice(0, 5).map(([bankName, data]) => (
-                      <div 
-                        key={bankName} 
+                      <div
+                        key={bankName}
                         className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                         onClick={() => { setSelectedBank(bankName); setShowTransactions(true); }}
                       >
@@ -588,7 +588,7 @@ export default function BankCashManager() {
               Add Cash Entry
             </Button>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="border-green-500/20">
               <CardHeader className="pb-2">
@@ -650,11 +650,11 @@ export default function BankCashManager() {
               </Button>
             </div>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeBanks.map(([bankName, data]) => (
-              <Card 
-                key={bankName} 
+              <Card
+                key={bankName}
                 className="cursor-pointer hover:shadow-lg transition-shadow border-blue-500/20"
                 onClick={() => { setSelectedBank(bankName); setShowTransactions(true); }}
               >
@@ -711,7 +711,7 @@ export default function BankCashManager() {
               Add Bank Account
             </Button>
           </div>
-          
+
           <Card>
             <CardContent className="pt-6">
               {agencyBanks.length === 0 ? (
@@ -741,8 +741,8 @@ export default function BankCashManager() {
                         <TableCell>{bank.branch_name || "-"}</TableCell>
                         <TableCell>₨ {(bank.opening_balance || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="ghost"
                             onClick={() => {
                               if (confirm('Delete this bank account?')) {
@@ -765,7 +765,7 @@ export default function BankCashManager() {
 
       {/* Transaction Details Dialog */}
       <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {selectedBank === null ? (
@@ -784,8 +784,8 @@ export default function BankCashManager() {
               All {selectedBank === null ? 'cash' : selectedBank} transactions
             </DialogDescription>
           </DialogHeader>
-          <TransactionTable 
-            transactions={getTransactions(selectedBank)} 
+          <TransactionTable
+            transactions={getTransactions(selectedBank)}
             onDelete={(id) => deleteEntry.mutate(id)}
           />
         </DialogContent>
@@ -793,7 +793,7 @@ export default function BankCashManager() {
 
       {/* Add Entry Dialog */}
       <Dialog open={showAddEntry} onOpenChange={setShowAddEntry}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-primary" />
@@ -803,7 +803,7 @@ export default function BankCashManager() {
               Record a manual {entryType.includes('in') ? 'receipt' : 'payment'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleAddEntry} className="space-y-4">
             <div className="space-y-2">
               <Label>Entry Type</Label>
@@ -941,7 +941,7 @@ export default function BankCashManager() {
 
       {/* Add Bank Dialog */}
       <Dialog open={showAddBank} onOpenChange={setShowAddBank}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-blue-600" />
@@ -951,7 +951,7 @@ export default function BankCashManager() {
               Add a new bank account to track transactions
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleAddBank} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="bank_name">Bank Name *</Label>
@@ -1062,8 +1062,8 @@ function TransactionTable({ transactions, onDelete }: { transactions: any[]; onD
               {onDelete && (
                 <TableCell>
                   {t.canDelete && (
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="ghost"
                       onClick={() => onDelete(t.id)}
                     >

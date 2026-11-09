@@ -40,15 +40,15 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
   const [remarks, setRemarks] = useState("");
   const [linkedBookingId, setLinkedBookingId] = useState<string>("none");
   const [isFullScreen, setIsFullScreen] = useState(false);
-  
+
   // Split payment states
   const [paymentMode, setPaymentMode] = useState<'single' | 'split'>('single');
   const [allocations, setAllocations] = useState<BookingAllocation[]>([]);
-  
+
   // Payment mode (cash/bank) states
   const [cashBankMode, setCashBankMode] = useState<string>("cash");
   const [bankName, setBankName] = useState<string>("");
-  
+
   const { ledgerEntries, addLedgerEntry, updateLedgerEntry, addSplitPayment } = useB2BLedger(agent.id);
   const { bookings } = useB2BBookings(agent.id);
 
@@ -58,11 +58,11 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
   const getBookingPaidAmount = (bookingId: string): number => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return 0;
-    
+
     const bookingRef = booking.pnr || booking.passenger_name;
     return ledgerEntries
-      .filter(e => 
-        e.entry_type === 'credit' && 
+      .filter(e =>
+        e.entry_type === 'credit' &&
         e.remarks?.includes(`[Booking: ${bookingRef}]`)
       )
       .reduce((sum, e) => sum + e.amount, 0);
@@ -87,11 +87,11 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
     if (linkedBookingId === "none") return null;
     const booking = bookings.find(b => b.id === linkedBookingId);
     if (!booking) return null;
-    
+
     const serviceAmount = getServiceAmount(booking);
     const paidAmount = getBookingPaidAmount(linkedBookingId);
     const outstanding = serviceAmount - paidAmount;
-    
+
     return {
       booking,
       serviceAmount,
@@ -137,7 +137,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       setEntryType(editEntry.entry_type);
       setAmount(editEntry.amount.toString());
       setEntryDate(editEntry.entry_date);
-      
+
       // Try to extract linked booking from remarks
       const linkedPnr = parseLinkedBookingFromRemarks(editEntry.remarks);
       if (linkedPnr) {
@@ -182,7 +182,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       .reduce((sum, a) => sum + a.amount, 0);
     const unallocated = totalPayment - allocatedAmount;
     const selectedCount = allocations.filter(a => a.selected).length;
-    
+
     return {
       totalPayment,
       allocatedAmount,
@@ -202,21 +202,21 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
     if (entryType !== 'credit' || linkedBookingId === "none") return false;
     const enteredAmount = parseFloat(amount) || 0;
     if (enteredAmount <= 0) return false;
-    
+
     const outstanding = selectedBookingInfo?.outstanding || 0;
     return enteredAmount > outstanding;
   }, [entryType, linkedBookingId, amount, selectedBookingInfo]);
 
   // Allocation handlers
   const toggleBookingSelection = (bookingId: string) => {
-    setAllocations(prev => prev.map(a => 
+    setAllocations(prev => prev.map(a =>
       a.bookingId === bookingId ? { ...a, selected: !a.selected, amount: !a.selected ? 0 : a.amount } : a
     ));
   };
 
   const updateAllocationAmount = (bookingId: string, newAmount: string) => {
     const numAmount = parseFloat(newAmount) || 0;
-    setAllocations(prev => prev.map(a => 
+    setAllocations(prev => prev.map(a =>
       a.bookingId === bookingId ? { ...a, amount: numAmount, selected: true } : a
     ));
   };
@@ -234,14 +234,14 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       // Sort by flight date if available, otherwise by outstanding amount
       return a.outstanding - b.outstanding; // Smallest first
     });
-    
+
     const newAllocations = sortedPending.map(a => {
       if (remaining <= 0) return { ...a, selected: false, amount: 0 };
       const allocAmount = Math.min(a.outstanding, remaining);
       remaining -= allocAmount;
       return { ...a, selected: true, amount: allocAmount };
     });
-    
+
     setAllocations(newAllocations);
   };
 
@@ -251,7 +251,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     setLoading(true);
 
     try {
@@ -264,7 +264,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
             bookingRef: a.bookingRef,
             amount: a.amount
           }));
-        
+
         await addSplitPayment.mutateAsync({
           agent_id: agent.id,
           entry_date: entryDate,
@@ -279,14 +279,14 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
           setLoading(false);
           return;
         }
-        
+
         // Build remarks with optional booking link
         let finalRemarks = remarks.trim();
         if (linkedBookingId !== "none") {
           const linkedBooking = bookings.find(b => b.id === linkedBookingId);
           if (linkedBooking) {
             const bookingRef = linkedBooking.pnr || linkedBooking.passenger_name;
-            finalRemarks = finalRemarks 
+            finalRemarks = finalRemarks
               ? `${finalRemarks} [Booking: ${bookingRef}]`
               : `[Booking: ${bookingRef}]`;
           }
@@ -309,7 +309,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
           await addLedgerEntry.mutateAsync(entryData);
         }
       }
-      
+
       setLoading(false);
       onOpenChange(false);
     } catch (error) {
@@ -319,7 +319,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
 
   const canSubmit = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0) return false;
-    
+
     if (paymentMode === 'split') {
       return splitSummary.selectedCount > 0 && splitSummary.isValid && !hasOverAllocation;
     } else {
@@ -331,8 +331,8 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
+        isFullScreen
+          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
           : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
       )}>
         <DialogHeader className="pb-3 border-b shrink-0">
@@ -366,7 +366,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
 
         <form onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-6" : "space-y-4"}>
-            
+
             {/* Transaction Details */}
             <Card className="form-card form-card-green">
               <CardHeader className="pb-4 pt-5">
@@ -432,7 +432,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                     className="enterprise-input"
                   />
                 </div>
-                
+
                 {/* Payment Mode (Cash/Bank) - Only for credits */}
                 {entryType === 'credit' && (
                   <div className="space-y-2">
@@ -562,8 +562,8 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                   {selectedBookingInfo && entryType === 'credit' && (
                     <Alert className={cn(
                       "border",
-                      selectedBookingInfo.outstanding > 0 
-                        ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30" 
+                      selectedBookingInfo.outstanding > 0
+                        ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30"
                         : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/30"
                     )}>
                       <AlertCircle className={cn(
@@ -652,7 +652,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                         </div>
                         <div className="divide-y max-h-[200px] overflow-y-auto">
                           {allocations.map((allocation) => (
-                            <div 
+                            <div
                               key={allocation.bookingId}
                               className={cn(
                                 "grid grid-cols-[auto_1fr_auto_auto_auto] gap-2 p-3 items-center transition-colors",
@@ -785,21 +785,21 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
             "flex justify-end gap-3 pt-4 mt-4 border-t",
             isFullScreen && "max-w-6xl mx-auto"
           )}>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => onOpenChange(false)}
               className="min-w-[100px]"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={loading || !canSubmit}
               className={cn(
                 "min-w-[140px] gap-2",
-                entryType === "credit" 
-                  ? "bg-green-600 hover:bg-green-700 text-white" 
+                entryType === "credit"
+                  ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-red-600 hover:bg-red-700 text-white"
               )}
             >
@@ -811,8 +811,8 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
               ) : (
                 <>
                   {paymentMode === 'split' ? <Split className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                  {isEditMode 
-                    ? 'Update Entry' 
+                  {isEditMode
+                    ? 'Update Entry'
                     : paymentMode === 'split'
                       ? `Split Payment (${splitSummary.selectedCount})`
                       : `Add ${entryType === 'credit' ? 'Credit' : 'Debit'} Entry`

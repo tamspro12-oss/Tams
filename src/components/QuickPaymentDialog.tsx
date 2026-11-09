@@ -109,7 +109,7 @@ export function QuickPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-2xl max-h-[85vh] p-0 overflow-hidden flex flex-col rounded-xl">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0 overflow-hidden flex flex-col rounded-xl">
         {/* Header */}
         <DialogHeader className="p-4 sm:p-5 border-b bg-muted/30 shrink-0">
           <div className="flex items-center gap-2.5">

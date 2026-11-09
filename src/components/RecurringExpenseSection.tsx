@@ -68,7 +68,7 @@ export function RecurringExpenseSection() {
     try {
       for (const template of recurringTemplates) {
         const instances = getGeneratedInstances(template.id);
-        
+
         // Check if expense already exists for this month
         const existsThisMonth = instances.some((inst: any) => {
           const instDate = parseISO(inst.expense_date);
@@ -77,13 +77,13 @@ export function RecurringExpenseSection() {
 
         if (!existsThisMonth) {
           // Get the last instance date or use template date
-          const lastInstance = instances.sort((a: any, b: any) => 
+          const lastInstance = instances.sort((a: any, b: any) =>
             new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime()
           )[0];
-          
+
           const lastDate = lastInstance?.expense_date || template.expense_date;
           const nextDue = getNextDueDate(lastDate, template.recurring_frequency);
-          
+
           // Only generate if next due is within or before current month
           if (isBefore(nextDue, monthEnd) || isWithinInterval(nextDue, { start: monthStart, end: monthEnd })) {
             await addExpense.mutateAsync({
@@ -201,7 +201,7 @@ export function RecurringExpenseSection() {
                   const currentMonth = new Date();
                   const monthStart = startOfMonth(currentMonth);
                   const monthEnd = endOfMonth(currentMonth);
-                  
+
                   const thisMonthInstance = instances.find((inst: any) => {
                     const instDate = parseISO(inst.expense_date);
                     return isWithinInterval(instDate, { start: monthStart, end: monthEnd });
@@ -303,7 +303,7 @@ function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringEx
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
-    
+
     const expenseData = {
       expense_date: formData.get("startDate") as string,
       expense_type: formData.get("expenseType") as string,
@@ -342,7 +342,7 @@ function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringEx
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RefreshCcw className="w-5 h-5" />

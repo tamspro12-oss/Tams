@@ -251,7 +251,7 @@ export default function Refunds() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg z-[100]">
+        <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] max-h-[92vh] overflow-y-auto z-[100]">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Refund" : "Record Refund"}</DialogTitle>
             <DialogDescription>Refunds reduce client receivables and total revenue.</DialogDescription>

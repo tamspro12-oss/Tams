@@ -23,6 +23,7 @@ export type ServiceType = "Ticket" | "Umrah" | "Visa" | "Insurance" | "Hotel" | 
 interface Passenger {
   name: string;
   passport?: string;
+  ticketNo?: string;
   type?: string;
 }
 
@@ -111,7 +112,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     clientPhone: selectedParty?.phone,
     clientAddress: selectedParty?.address || selectedParty?.city,
     pnr: pnr || undefined,
-    ticketNo: ticketNo || undefined,
+    ticketNo: ticketNo || passengers[0]?.ticketNo || undefined,
     passportNo: passportNo || passengers[0]?.passport || undefined,
     passengers: passengers.filter((p) => p.name.trim()),
     clientAmount: clientAmtNum,
@@ -199,37 +200,36 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="shrink-0 pb-2 border-b">
-          <div className="flex items-center justify-between pr-6">
-            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              New Booking Invoice
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => generateBookingConfirmationPdf(getPdfData("PREVIEW"))}
-                className="text-xs h-8 gap-1.5 font-medium"
-              >
-                <FileCheck className="w-3.5 h-3.5 text-teal-600" />
-                Confirmation PDF
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => generateBookingInvoicePdf(getPdfData("PREVIEW"))}
-                className="text-xs h-8 gap-1.5 font-medium"
-              >
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
-                Invoice PDF
-              </Button>
-            </div>
+      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* 1. Sticky Header */}
+        <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            New Booking Invoice
+          </DialogTitle>
+          <div className="flex items-center gap-2 mr-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => generateBookingConfirmationPdf(getPdfData("PREVIEW"))}
+              className="text-xs h-8 gap-1.5 font-medium cursor-pointer"
+            >
+              <FileCheck className="w-3.5 h-3.5 text-teal-600" />
+              Confirmation PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => generateBookingInvoicePdf(getPdfData("PREVIEW"))}
+              className="text-xs h-8 gap-1.5 font-medium cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              Invoice PDF
+            </Button>
           </div>
-        </DialogHeader>
+        </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
           {/* Column 1: Service, Client, Vendor & Passengers */}
@@ -513,38 +513,36 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t">
+        {/* 3. Pinned Bottom Footer */}
+        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 -mx-6 -mb-6 flex items-center justify-end gap-3 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs"
+            className="text-xs cursor-pointer"
           >
             Cancel
           </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isSubmitting}
-              onClick={() => handleSave(true, false)}
-              className="text-xs"
-            >
-              Save & Confirmation
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isSubmitting}
-              onClick={() => handleSave(false, true)}
-              className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
-            >
-              {isSubmitting ? "Saving..." : "Save & Download Invoice"}
-            </Button>
-          </div>
-        </DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isSubmitting}
+            onClick={() => handleSave(true, false)}
+            className="text-xs cursor-pointer"
+          >
+            Save & Confirmation
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isSubmitting}
+            className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
+          >
+            {isSubmitting ? "Saving..." : "Save & Download Invoice"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

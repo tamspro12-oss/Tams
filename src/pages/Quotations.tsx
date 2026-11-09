@@ -769,7 +769,7 @@ export default function Quotations() {
 
       {/* Preview Dialog */}
       <Dialog open={Boolean(previewQ)} onOpenChange={(o) => !o && setPreviewQ(null)}>
-        <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto z-[100] p-4 sm:p-6">
+        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto z-[100] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Eye className="w-5 h-5 text-primary" />

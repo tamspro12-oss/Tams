@@ -86,8 +86,8 @@ export function AgentLumpSumPaymentDialog({
         allocated >= outstanding
           ? "paid"
           : allocated > 0
-          ? "partial"
-          : "pending";
+            ? "partial"
+            : "pending";
 
       return {
         booking: b,
@@ -190,7 +190,7 @@ export function AgentLumpSumPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-4 border-b bg-muted/40 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -357,8 +357,8 @@ export function AgentLumpSumPaymentDialog({
                                 item.statusAfter === "paid"
                                   ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                                   : item.statusAfter === "partial"
-                                  ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                                  : "text-muted-foreground"
+                                    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                    : "text-muted-foreground"
                               )}
                             >
                               {item.statusAfter}

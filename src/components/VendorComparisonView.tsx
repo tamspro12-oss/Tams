@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  BarChart3, 
-  X, 
-  Building2, 
-  TrendingUp, 
-  Clock, 
+import {
+  BarChart3,
+  X,
+  Building2,
+  TrendingUp,
+  Clock,
   Briefcase,
   CheckCircle2,
   AlertCircle
@@ -121,7 +121,7 @@ export function VendorComparisonView() {
           Compare Vendors
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-primary" />
@@ -147,11 +147,10 @@ export function VendorComparisonView() {
                 {enhancedVendors.map(vendor => (
                   <div
                     key={vendor.id}
-                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
-                      selectedVendorIds.includes(vendor.id)
+                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${selectedVendorIds.includes(vendor.id)
                         ? 'bg-primary/10 border border-primary/30'
                         : 'hover:bg-muted/50 border border-transparent'
-                    }`}
+                      }`}
                     onClick={() => toggleVendor(vendor.id)}
                   >
                     <Checkbox
@@ -246,7 +245,7 @@ export function VendorComparisonView() {
                             />
                           </div>
                           <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                            {vendor.totalPayable > 0 
+                            {vendor.totalPayable > 0
                               ? `${((vendor.amountPaid / vendor.totalPayable) * 100).toFixed(0)}% paid`
                               : 'No payables'
                             }

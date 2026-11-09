@@ -70,7 +70,7 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
 
   const handleSelectAllReadOnly = () => {
     // Check if any permission is enabled
-    const hasAnyPermission = 
+    const hasAnyPermission =
       permissions.dashboard ||
       permissions.bookings.read ||
       permissions.vendors.read ||
@@ -111,7 +111,7 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Sub User</DialogTitle>
           <DialogDescription>
