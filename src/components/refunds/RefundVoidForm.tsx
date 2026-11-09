@@ -68,7 +68,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
         {/* 1. Sticky Header */}
         <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">

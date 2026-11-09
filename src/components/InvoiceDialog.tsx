@@ -94,7 +94,7 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
       {/* Only show search dialog if no preSelectedClient */}
       {!preSelectedClient && (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] max-h-[92vh] overflow-y-auto">
+          <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Generate Invoice</DialogTitle>
             </DialogHeader>

@@ -200,7 +200,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
         {/* 1. Sticky Header */}
         <div className="px-6 py-3.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -231,7 +231,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
+        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-5 px-6 py-4">
           {/* Column 1: Service, Client, Vendor & Passengers */}
           <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
             {/* Primary Service Selection */}
@@ -514,7 +514,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         </div>
 
         {/* 3. Pinned Bottom Footer */}
-        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 -mx-6 -mb-6 flex items-center justify-end gap-3 shrink-0">
+        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
           <Button
             type="button"
             variant="outline"

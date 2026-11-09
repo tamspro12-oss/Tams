@@ -470,8 +470,9 @@ All colors MUST be HSL.
 
   /* Mobile: Adjust dialog sizes */
   body.view-mobile [role="dialog"] {
-    max-width: 95vw !important;
-    margin: 0.5rem !important;
+    max-width: 98vw !important;
+    width: 98vw !important;
+    margin: 0.25rem !important;
   }
 
   /* Mobile: Make tables scrollable horizontally */
@@ -586,9 +587,10 @@ All colors MUST be HSL.
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
 
-  /* Desktop: Larger dialogs */
+  /* Desktop: Expansive full-width dialogs */
   body.view-desktop [role="dialog"] {
-    max-width: 600px;
+    max-width: 98vw !important;
+    width: 98vw !important;
   }
 
   /* Desktop: Show all table columns */

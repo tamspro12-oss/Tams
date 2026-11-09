@@ -90,7 +90,7 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-4 sm:p-6 overflow-hidden">
         <DialogHeader className="shrink-0 pb-2 border-b">
           <div className="flex items-center justify-between">
             <div>

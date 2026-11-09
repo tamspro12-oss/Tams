@@ -911,7 +911,7 @@ export function MasterAddBookingModal({
           ref={formContainerRef}
           data-booking-form="true"
           onKeyDown={handleContainerKeyDown}
-          className="relative w-[96vw] max-w-[1600px] h-[92vh] max-h-[92vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          className="relative w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ======================= 1. HEADER (CENTERED TABS) ======================= */}
           <div className="h-14 border-b border-border/80 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-muted/30">

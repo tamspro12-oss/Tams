@@ -63,7 +63,7 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none" : "w-[96vw] max-w-[1600px] h-[92vh] max-h-[92vh]"}>
+      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none" : "w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh]"}>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>

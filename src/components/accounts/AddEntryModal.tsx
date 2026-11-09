@@ -191,7 +191,7 @@ export function AddEntryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[1600px] h-[92vh] flex flex-col p-0 overflow-hidden bg-background border rounded-xl shadow-2xl">
+      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 overflow-hidden bg-background border rounded-xl shadow-2xl">
         {/* 1. Sticky Header */}
         <div className="px-6 py-3.5 border-b shrink-0 bg-white dark:bg-slate-900">
           <DialogTitle className="text-base font-bold flex items-center justify-between">
