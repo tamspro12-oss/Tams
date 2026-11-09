@@ -199,10 +199,11 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2 border-b">
+          <div className="flex items-center justify-between pr-6">
+            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
               New Booking Invoice
             </DialogTitle>
             <div className="flex items-center gap-2">
@@ -211,9 +212,9 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => generateBookingConfirmationPdf(getPdfData("PREVIEW"))}
-                className="text-[11px] h-7 gap-1"
+                className="text-xs h-8 gap-1.5 font-medium"
               >
-                <FileCheck className="w-3 h-3 text-teal-600" />
+                <FileCheck className="w-3.5 h-3.5 text-teal-600" />
                 Confirmation PDF
               </Button>
               <Button
@@ -221,301 +222,329 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => generateBookingInvoicePdf(getPdfData("PREVIEW"))}
-                className="text-[11px] h-7 gap-1"
+                className="text-xs h-8 gap-1.5 font-medium"
               >
-                <FileText className="w-3 h-3 text-blue-600" />
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
                 Invoice PDF
               </Button>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-1">
-          {/* Row 1: Service Type, Client, Vendor */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div>
-              <Label className="text-xs font-semibold">Service</Label>
-              <Select value={service} onValueChange={(val: any) => setService(val)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Ticket">Air Ticket</SelectItem>
-                  <SelectItem value="Umrah">Umrah Package</SelectItem>
-                  <SelectItem value="Visa">Visa Services</SelectItem>
-                  <SelectItem value="Insurance">Travel Insurance</SelectItem>
-                  <SelectItem value="Hotel">Hotel Booking</SelectItem>
-                  <SelectItem value="Other">Other Services</SelectItem>
-                </SelectContent>
-              </Select>
+        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
+          {/* Column 1: Service, Client, Vendor & Passengers */}
+          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            {/* Primary Service Selection */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs font-semibold">Service</Label>
+                  <Select value={service} onValueChange={(val: any) => setService(val)}>
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Ticket">Air Ticket</SelectItem>
+                      <SelectItem value="Umrah">Umrah Package</SelectItem>
+                      <SelectItem value="Visa">Visa Services</SelectItem>
+                      <SelectItem value="Insurance">Travel Insurance</SelectItem>
+                      <SelectItem value="Hotel">Hotel Booking</SelectItem>
+                      <SelectItem value="Other">Other Services</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">Client (Party)</Label>
+                  <Select value={partyId} onValueChange={setPartyId}>
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue placeholder="Select Client" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      {clientsList.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} {c.code ? `(${c.code})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">Vendor (Supplier)</Label>
+                  <Select value={vendorId} onValueChange={setVendorId}>
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue placeholder="Direct / Vendor" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      <SelectItem value="none">Direct / None</SelectItem>
+                      {vendorsList.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <Label className="text-xs font-semibold">Client (Party)</Label>
-              <Select value={partyId} onValueChange={setPartyId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select Client" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {clientsList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} {c.code ? `(${c.code})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-xs font-semibold">Vendor (Supplier)</Label>
-              <Select value={vendorId} onValueChange={setVendorId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Direct / Vendor" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  <SelectItem value="none">Direct / None</SelectItem>
-                  {vendorsList.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Row 2: Passengers List */}
-          <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Passengers ({passengers.length})
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleAddPassenger}
-                className="text-xs h-7 text-teal-600 dark:text-teal-400 gap-1"
-              >
-                <Plus className="w-3 h-3" /> Add Passenger
-              </Button>
-            </div>
-
-            {passengers.map((pax, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-bold text-slate-400 w-4">
-                  {idx + 1}.
+            {/* Passengers List */}
+            <div className="flex-1 min-h-[180px] p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Passengers ({passengers.length})
                 </span>
-                <Input
-                  value={pax.name}
-                  onChange={(e) => handlePassengerChange(idx, "name", e.target.value)}
-                  placeholder="Passenger Full Name"
-                  className="h-8 text-xs flex-1"
-                />
-                <Input
-                  value={pax.passport || ""}
-                  onChange={(e) => handlePassengerChange(idx, "passport", e.target.value)}
-                  placeholder="Passport No"
-                  className="h-8 text-xs w-28 font-mono"
-                />
-                <Select
-                  value={pax.type || "Adult"}
-                  onValueChange={(val) => handlePassengerChange(idx, "type", val)}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddPassenger}
+                  className="text-xs h-7 text-teal-600 dark:text-teal-400 gap-1 px-2"
                 >
-                  <SelectTrigger className="h-8 w-24 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Adult">Adult</SelectItem>
-                    <SelectItem value="Child">Child</SelectItem>
-                    <SelectItem value="Infant">Infant</SelectItem>
-                  </SelectContent>
-                </Select>
-                {passengers.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemovePassenger(idx)}
-                    className="h-8 w-8 text-slate-400 hover:text-red-500"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                )}
+                  <Plus className="w-3 h-3" /> Add Passenger
+                </Button>
               </div>
-            ))}
-          </div>
 
-          {/* Row 3: Financials & Live Profit Preview */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <div>
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Client Amount (PKR) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="number"
-                value={clientAmount}
-                onChange={(e) => setClientAmount(e.target.value)}
-                placeholder="0"
-                className="h-9 text-xs font-mono font-bold text-right"
-              />
-            </div>
-
-            <div>
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Vendor Payable (PKR)
-              </Label>
-              <Input
-                type="number"
-                value={vendorPayable}
-                onChange={(e) => setVendorPayable(e.target.value)}
-                placeholder="0"
-                className="h-9 text-xs font-mono text-right"
-              />
-            </div>
-
-            {/* Live Profit Preview Box */}
-            <div className="p-2.5 rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex flex-col justify-between">
-              <span className="text-[10px] font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1 uppercase tracking-wider">
-                <TrendingUp className="w-3 h-3" /> Profit Preview
-              </span>
-              <span
-                className={`text-lg font-bold font-mono text-right ${
-                  liveProfit >= 0
-                    ? "text-teal-700 dark:text-teal-300"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                PKR {liveProfit.toLocaleString()}
-              </span>
+              <div className="flex-1 overflow-y-auto space-y-2 pt-2 pr-1">
+                {passengers.map((pax, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 bg-background p-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <span className="text-[11px] font-mono font-bold text-slate-400 w-4 text-center">
+                      {idx + 1}
+                    </span>
+                    <Input
+                      value={pax.name}
+                      onChange={(e) => handlePassengerChange(idx, "name", e.target.value)}
+                      placeholder="Passenger Name"
+                      className="h-8 text-xs flex-1"
+                    />
+                    <Input
+                      value={pax.passport || ""}
+                      onChange={(e) => handlePassengerChange(idx, "passport", e.target.value)}
+                      placeholder="Passport No"
+                      className="h-8 text-xs w-24 font-mono uppercase"
+                    />
+                    <Select
+                      value={pax.type || "Adult"}
+                      onValueChange={(val) => handlePassengerChange(idx, "type", val)}
+                    >
+                      <SelectTrigger className="h-8 w-20 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Adult">Adult</SelectItem>
+                        <SelectItem value="Child">Child</SelectItem>
+                        <SelectItem value="Infant">Infant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {passengers.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemovePassenger(idx)}
+                        className="h-8 w-8 text-slate-400 hover:text-red-500 shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Additional Service Details */}
-          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">PNR</Label>
-                <Input
-                  value={pnr}
-                  onChange={(e) => setPnr(e.target.value.toUpperCase())}
-                  placeholder="PNR code"
-                  className="h-8 text-xs font-mono uppercase"
-                />
+          {/* Column 2: Financials, Profit Preview, Commission & SAR */}
+          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            {/* Financials & Live Profit */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Client Amount (PKR) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    value={clientAmount}
+                    onChange={(e) => setClientAmount(e.target.value)}
+                    placeholder="0"
+                    className="h-9 text-xs font-mono font-bold text-right mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Vendor Payable (PKR)
+                  </Label>
+                  <Input
+                    type="number"
+                    value={vendorPayable}
+                    onChange={(e) => setVendorPayable(e.target.value)}
+                    placeholder="0"
+                    className="h-9 text-xs font-mono text-right mt-1"
+                  />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Ticket Number</Label>
-                <Input
-                  value={ticketNo}
-                  onChange={(e) => setTicketNo(e.target.value)}
-                  placeholder="e.g. 214-1234567890"
-                  className="h-8 text-xs font-mono"
-                />
+
+              {/* Live Profit Preview Box */}
+              <div className="p-3 rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between">
+                <span className="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <TrendingUp className="w-4 h-4" /> Profit Preview
+                </span>
+                <span
+                  className={`text-xl font-bold font-mono ${
+                    liveProfit >= 0
+                      ? "text-teal-700 dark:text-teal-300"
+                      : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  PKR {liveProfit.toLocaleString()}
+                </span>
               </div>
+            </div>
+
+            {/* Currency (SAR) & Commission / WHT */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Currency & Commissions
+              </div>
+
+              {/* SAR Currency Fields */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-xs font-medium">SAR Exchange Rate</Label>
+                  <Input
+                    type="number"
+                    value={sarRate}
+                    onChange={(e) => setSarRate(e.target.value)}
+                    placeholder="e.g. 74.5"
+                    className="h-8 text-xs font-mono text-right mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">SAR Amount</Label>
+                  <Input
+                    type="number"
+                    value={sarAmount}
+                    onChange={(e) => setSarAmount(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs font-mono text-right mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Commission and WHT */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-xs font-medium">Commission (PKR)</Label>
+                  <Input
+                    type="number"
+                    value={commission}
+                    onChange={(e) => setCommission(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs font-mono text-right mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">WHT (PKR)</Label>
+                  <Input
+                    type="number"
+                    value={wht}
+                    onChange={(e) => setWht(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs font-mono text-right mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Booking Reference (PNR, Ticket, Passport) & Notes */}
+          <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+            {/* References */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Booking References
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-xs font-medium">PNR</Label>
+                  <Input
+                    value={pnr}
+                    onChange={(e) => setPnr(e.target.value.toUpperCase())}
+                    placeholder="PNR Code"
+                    className="h-8 text-xs font-mono uppercase mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Ticket Number</Label>
+                  <Input
+                    value={ticketNo}
+                    onChange={(e) => setTicketNo(e.target.value)}
+                    placeholder="e.g. 214-1234567890"
+                    className="h-8 text-xs font-mono mt-1"
+                  />
+                </div>
+              </div>
+
               <div>
-                <Label className="text-xs">Primary Passport</Label>
+                <Label className="text-xs font-medium">Primary Passport</Label>
                 <Input
                   value={passportNo}
                   onChange={(e) => setPassportNo(e.target.value)}
-                  placeholder="Passport No"
-                  className="h-8 text-xs font-mono uppercase"
+                  placeholder="Passport Number"
+                  className="h-8 text-xs font-mono uppercase mt-1"
                 />
               </div>
             </div>
 
-            {/* SAR Currency Fields */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">SAR Exchange Rate</Label>
-                <Input
-                  type="number"
-                  value={sarRate}
-                  onChange={(e) => setSarRate(e.target.value)}
-                  placeholder="e.g. 74.5"
-                  className="h-8 text-xs font-mono text-right"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">SAR Amount</Label>
-                <Input
-                  type="number"
-                  value={sarAmount}
-                  onChange={(e) => setSarAmount(e.target.value)}
-                  placeholder="0"
-                  className="h-8 text-xs font-mono text-right"
-                />
-              </div>
-            </div>
-
-            {/* Commission and WHT */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Commission (PKR)</Label>
-                <Input
-                  type="number"
-                  value={commission}
-                  onChange={(e) => setCommission(e.target.value)}
-                  placeholder="0"
-                  className="h-8 text-xs font-mono text-right"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">WHT (PKR)</Label>
-                <Input
-                  type="number"
-                  value={wht}
-                  onChange={(e) => setWht(e.target.value)}
-                  placeholder="0"
-                  className="h-8 text-xs font-mono text-right"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs">Booking Notes</Label>
+            {/* Notes */}
+            <div className="flex-1 p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col space-y-1.5">
+              <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Booking Notes & Remarks
+              </Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Itinerary remarks, hotel room info, special passenger requests..."
-                rows={2}
-                className="text-xs"
+                className="flex-1 min-h-[90px] text-xs resize-none"
               />
             </div>
           </div>
+        </div>
 
-          <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t">
+        <DialogFooter className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="text-xs"
+          >
+            Cancel
+          </Button>
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+              onClick={() => handleSave(true, false)}
               className="text-xs"
             >
-              Cancel
+              Save & Confirmation
             </Button>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isSubmitting}
-                onClick={() => handleSave(true, false)}
-                className="text-xs"
-              >
-                Save & Confirmation
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isSubmitting}
-                onClick={() => handleSave(false, true)}
-                className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
-              >
-                {isSubmitting ? "Saving..." : "Save & Download Invoice"}
-              </Button>
-            </div>
-          </DialogFooter>
-        </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={() => handleSave(false, true)}
+              className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
+            >
+              {isSubmitting ? "Saving..." : "Save & Download Invoice"}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

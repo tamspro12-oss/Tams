@@ -633,7 +633,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen 
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
-          : "w-[95vw] max-w-4xl max-h-[85vh]"
+          : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
       )}>
         <DialogHeader className="pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
@@ -1553,7 +1553,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
 
               {/* Add New Vendor Modal */}
               <Dialog open={showQuickVendorAdd} onOpenChange={setShowQuickVendorAdd}>
-                <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Plus className="w-5 h-5 text-primary" />
@@ -1624,7 +1624,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
 
               {/* Select from List Modal */}
               <Dialog open={vendorSearchOpen} onOpenChange={setVendorSearchOpen}>
-                <DialogContent className="max-w-md max-h-[85vh] overflow-hidden flex flex-col">
+                <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Store className="w-5 h-5 text-primary" />

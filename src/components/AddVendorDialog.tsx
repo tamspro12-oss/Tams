@@ -245,7 +245,7 @@ export function AddVendorDialog({
       )}
 
       <DialogContent
-        className="max-w-3xl w-[95vw] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col max-h-[92vh] bg-background"
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col bg-background"
         aria-describedby="add-vendor-description"
       >
         <DialogTitle className="sr-only">

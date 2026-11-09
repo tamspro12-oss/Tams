@@ -69,7 +69,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>

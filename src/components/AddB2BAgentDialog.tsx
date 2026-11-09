@@ -194,7 +194,7 @@ export function AddB2BAgentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col max-h-[92vh] bg-background"
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col bg-background"
         aria-describedby="add-b2b-agent-description"
       >
         <DialogTitle className="sr-only">

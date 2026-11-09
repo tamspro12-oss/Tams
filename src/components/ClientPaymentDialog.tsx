@@ -111,111 +111,119 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2 border-b">
+          <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <Banknote className="w-5 h-5 text-primary" />
             Adjust Payment - {client.name}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs">
             Add payment (+) or correct overpayment (-)
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Payment Summary */}
-          <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-muted">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Total Amount</p>
-              <p className="font-bold">₨ {totalReceivable.toLocaleString()}</p>
+        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-5 py-2">
+          {/* Left Column: Form & Calculations */}
+          <div className="lg:col-span-6 flex flex-col gap-3 min-h-0">
+            {/* Payment Summary */}
+            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/60 border">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Total Amount</p>
+                <p className="font-bold text-base">₨ {totalReceivable.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Already Paid</p>
+                <p className="font-bold text-base text-success">₨ {currentPaid.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Remaining</p>
+                <p className="font-bold text-base text-warning">₨ {remaining.toLocaleString()}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Already Paid</p>
-              <p className="font-bold text-success">₨ {currentPaid.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Remaining</p>
-              <p className="font-bold text-warning">₨ {remaining.toLocaleString()}</p>
-            </div>
-          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="payment">Adjustment Amount (₨)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="payment"
-                  type="number"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  placeholder="+ to add, - to reduce"
-                  required
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-3">
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="payment" className="text-xs font-semibold">Adjustment Amount (₨)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="payment"
+                      type="number"
+                      step="0.01"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder="+ to add, - to reduce"
+                      className="h-9 text-sm"
+                      required
+                    />
+                    {remaining > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePayFull}
+                        className="shrink-0 h-9"
+                      >
+                        Pay Full
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use positive (+) to add payment or negative (-) to correct mistakes
+                  </p>
+                </div>
+
+                {/* Payment Mode - ADDITIVE FIELD */}
+                <PaymentModeSelect
+                  value={paymentMode}
+                  onChange={setPaymentMode}
+                  bankName={bankName}
+                  onBankNameChange={setBankName}
                 />
-                {remaining > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handlePayFull}
-                    className="shrink-0"
-                  >
-                    Pay Full
-                  </Button>
+
+                {paymentAmount && (
+                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-xs font-semibold mb-1">After this payment:</p>
+                    <p className="text-xs text-muted-foreground">
+                      Total Paid: ₨ {(currentPaid + (parseFloat(paymentAmount) || 0)).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Remaining: ₨ {(remaining - (parseFloat(paymentAmount) || 0)).toLocaleString()}
+                    </p>
+                  </div>
                 )}
               </div>
-              <div className="flex gap-2">
-                <p className="text-xs text-muted-foreground flex-1">
-                  Use positive (+) to add payment or negative (-) to correct mistakes
-                </p>
+
+              <div className="flex gap-2 justify-end pt-3 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    setPaymentAmount("");
+                    setPaymentMode("cash");
+                    setBankName("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={isSubmitting || !paymentAmount}>
+                  {isSubmitting ? "Updating..." : "Update Payment"}
+                </Button>
               </div>
+            </form>
+          </div>
+
+          {/* Right Column: Payment History */}
+          <div className="lg:col-span-6 flex flex-col min-h-0 bg-muted/20 rounded-xl border p-3">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <PaymentHistorySection 
+                history={history} 
+                isLoading={historyLoading}
+                title="Payment History"
+              />
             </div>
-
-            {/* Payment Mode - ADDITIVE FIELD */}
-            <PaymentModeSelect
-              value={paymentMode}
-              onChange={setPaymentMode}
-              bankName={bankName}
-              onBankNameChange={setBankName}
-            />
-
-            {paymentAmount && (
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <p className="text-sm font-medium mb-1">After this payment:</p>
-                <p className="text-xs text-muted-foreground">
-                  Total Paid: ₨ {(currentPaid + (parseFloat(paymentAmount) || 0)).toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Remaining: ₨ {(remaining - (parseFloat(paymentAmount) || 0)).toLocaleString()}
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  setPaymentAmount("");
-                  setPaymentMode("cash");
-                  setBankName("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting || !paymentAmount}>
-                {isSubmitting ? "Updating..." : "Update Payment"}
-              </Button>
-            </div>
-          </form>
-
-          {/* Payment History Section */}
-          <div className="mt-6 pt-6 border-t">
-            <PaymentHistorySection 
-              history={history} 
-              isLoading={historyLoading}
-              title="Payment History"
-            />
           </div>
         </div>
       </DialogContent>

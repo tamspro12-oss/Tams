@@ -146,7 +146,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

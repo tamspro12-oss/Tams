@@ -80,188 +80,207 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2 border-b">
+          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             Add New Party
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 pt-1">
-          {/* Party Type */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs font-semibold">Type</Label>
-              <Select
-                value={type}
-                onValueChange={(val: any) => {
-                  setType(val);
-                  setCode(`${val === "client" ? "CLT" : val === "vendor" ? "VND" : "PRT"}-${Math.floor(1000 + Math.random() * 9000)}`);
-                }}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="vendor">Vendor</SelectItem>
-                  <SelectItem value="both">Both (Client & Vendor)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between">
+          <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-4 py-2">
+            {/* Column 1: Basic Information */}
+            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Party Classification & Contact
+                </div>
 
-            <div>
-              <Label className="text-xs font-semibold">Code</Label>
-              <Input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="h-9 text-xs font-mono"
-              />
-            </div>
-          </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <Label className="text-xs font-semibold">Type</Label>
+                    <Select
+                      value={type}
+                      onValueChange={(val: any) => {
+                        setType(val);
+                        setCode(`${val === "client" ? "CLT" : val === "vendor" ? "VND" : "PRT"}-${Math.floor(1000 + Math.random() * 9000)}`);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="client">Client</SelectItem>
+                        <SelectItem value="vendor">Vendor</SelectItem>
+                        <SelectItem value="both">Both (Client & Vendor)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-          {/* Name */}
-          <div>
-            <Label className="text-xs font-semibold">
-              Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Al-Madina Travels or Ali Khan"
-              className="h-9 text-xs"
-              required
-            />
-          </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Code</Label>
+                    <Input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      className="h-8 text-xs font-mono mt-1"
+                    />
+                  </div>
+                </div>
 
-          {/* Phone & WhatsApp */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs font-semibold">Phone</Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="0300 1234567"
-                className="h-9 text-xs"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold">WhatsApp</Label>
-              <Input
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="0300 1234567"
-                className="h-9 text-xs"
-              />
-            </div>
-          </div>
+                <div>
+                  <Label className="text-xs font-semibold">
+                    Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    autoFocus
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Al-Madina Travels or Ali Khan"
+                    className="h-8 text-xs mt-1"
+                    required
+                  />
+                </div>
 
-          {/* City & Address */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs font-semibold">City</Label>
-              <Input
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Lahore, Karachi..."
-                className="h-9 text-xs"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold">Credit Limit (PKR)</Label>
-              <Input
-                type="number"
-                value={creditLimit}
-                onChange={(e) => setCreditLimit(e.target.value)}
-                className="h-9 text-xs text-right tabular-nums font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Opening Balance */}
-          <div>
-            <Label className="text-xs font-semibold">Opening Balance (PKR)</Label>
-            <Input
-              type="number"
-              value={openingBalance}
-              onChange={(e) => setOpeningBalance(e.target.value)}
-              placeholder="0 (Positive = Receivable, Negative = Payable)"
-              className="h-9 text-xs text-right tabular-nums font-mono"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Positive amount = party owes you. Negative amount = you owe party.
-            </span>
-          </div>
-
-          {/* Additional details */}
-          <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">CNIC</Label>
-                <Input
-                  value={cnic}
-                  onChange={(e) => setCnic(e.target.value)}
-                  placeholder="35201-..."
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">NTN</Label>
-                <Input
-                  value={ntn}
-                  onChange={(e) => setNtn(e.target.value)}
-                  placeholder="NTN number"
-                  className="h-8 text-xs"
-                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <Label className="text-xs font-semibold">Phone</Label>
+                    <Input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="0300 1234567"
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">WhatsApp</Label>
+                    <Input
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="0300 1234567"
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Email</Label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Passport No</Label>
-                <Input
-                  value={passport}
-                  onChange={(e) => setPassport(e.target.value)}
-                  placeholder="A1234567"
-                  className="h-8 text-xs"
-                />
+            {/* Column 2: Financials & Location */}
+            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Financials & Balances
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">Opening Balance (PKR)</Label>
+                  <Input
+                    type="number"
+                    value={openingBalance}
+                    onChange={(e) => setOpeningBalance(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs text-right tabular-nums font-mono mt-1"
+                  />
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                    Positive amount = party owes you. Negative amount = you owe party.
+                  </span>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">Credit Limit (PKR)</Label>
+                  <Input
+                    type="number"
+                    value={creditLimit}
+                    onChange={(e) => setCreditLimit(e.target.value)}
+                    className="h-8 text-xs text-right tabular-nums font-mono mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">City</Label>
+                  <Input
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Lahore, Karachi..."
+                    className="h-8 text-xs mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">Address</Label>
+                  <Input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Office / residential address"
+                    className="h-8 text-xs mt-1"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <Label className="text-xs">Address</Label>
-              <Input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Office / residential address"
-                className="h-8 text-xs"
-              />
-            </div>
+            {/* Column 3: Tax, Identification & Notes */}
+            <div className="lg:col-span-4 flex flex-col gap-3 min-h-0">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex-1 flex flex-col space-y-3">
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Tax, Identification & Remarks
+                </div>
 
-            <div>
-              <Label className="text-xs">Notes</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Special remarks..."
-                rows={2}
-                className="text-xs"
-              />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <Label className="text-xs">CNIC</Label>
+                    <Input
+                      value={cnic}
+                      onChange={(e) => setCnic(e.target.value)}
+                      placeholder="35201-..."
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">NTN</Label>
+                    <Input
+                      value={ntn}
+                      onChange={(e) => setNtn(e.target.value)}
+                      placeholder="NTN number"
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <Label className="text-xs">Email</Label>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Passport No</Label>
+                    <Input
+                      value={passport}
+                      onChange={(e) => setPassport(e.target.value)}
+                      placeholder="A1234567"
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col space-y-1 mt-1">
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Special remarks or instructions..."
+                    className="flex-1 min-h-[90px] text-xs resize-none"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="shrink-0 flex items-center justify-between gap-2 pt-3 border-t">
             <Button
               type="button"
               variant="outline"
