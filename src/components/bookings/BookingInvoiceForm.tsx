@@ -13,6 +13,8 @@ import { generateBookingConfirmationPdf, generateBookingInvoicePdf, BookingPdfDa
 import { useAgency } from "@/hooks/useAgency";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { cleanPastedSearch } from "@/lib/searchUtils";
 import {
   FileText,
   Plus,
@@ -399,7 +401,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
             <Lock className="w-3 h-3 text-slate-400" />
             <span>Invoice #:</span>
-            <span className="text-blue-600 dark:text-blue-400">{autoInvoiceNo}</span>
+            <CopyValue value={autoInvoiceNo} label="invoice number" className="text-blue-600 dark:text-blue-400" />
             <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
               Auto
             </Badge>
@@ -602,6 +604,13 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   <Input
                     value={pnr}
                     onChange={(e) => setPnr(e.target.value.toUpperCase())}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      if (pasted) {
+                        e.preventDefault();
+                        setPnr(cleanPastedSearch(pasted).toUpperCase());
+                      }
+                    }}
                     placeholder="PNR Code"
                     className="h-8 text-xs font-mono uppercase mt-0.5"
                   />
@@ -613,6 +622,13 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   <Input
                     value={ticketNo}
                     onChange={(e) => setTicketNo(e.target.value)}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      if (pasted) {
+                        e.preventDefault();
+                        setTicketNo(cleanPastedSearch(pasted));
+                      }
+                    }}
                     placeholder="214-89765432"
                     className="h-8 text-xs font-mono mt-0.5"
                   />
@@ -1235,6 +1251,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           open={isAddClientOpen}
           onOpenChange={setIsAddClientOpen}
           initialType="client"
+          lockType={true}
           onSaved={(newParty: Party) => {
             setPartyId(newParty.id);
             if (newParty.phone) setContactNumber(newParty.phone);
@@ -1247,6 +1264,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           open={isAddVendorOpen}
           onOpenChange={setIsAddVendorOpen}
           initialType="vendor"
+          lockType={true}
           onSaved={(newParty: Party) => {
             setVendorId(newParty.id);
             toast.success(`Vendor ${newParty.name} added and selected`);

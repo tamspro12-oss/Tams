@@ -21,6 +21,8 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { cn } from "@/lib/utils";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { supabase } from "@/integrations/supabase/client";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { cleanPastedSearch } from "@/lib/searchUtils";
 
 export default function Vendors() {
   const navigate = useNavigate();
@@ -260,6 +262,13 @@ export default function Vendors() {
                 placeholder="Search vendors by name, contact, service..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setSearchTerm(cleanPastedSearch(pasted));
+                  }
+                }}
                 className="pl-9 h-9 text-xs rounded-lg bg-background"
               />
             </div>
@@ -361,7 +370,9 @@ export default function Vendors() {
                         <Building2 className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-xl text-white truncate">{vendor.name}</h3>
+                        <h3 className="font-bold text-xl text-white truncate">
+                          <CopyValue value={vendor.name} label="vendor name" className="text-white" />
+                        </h3>
                         {vendor.service_type && (
                           <span className="text-sm text-white/80">{vendor.service_type}</span>
                         )}
@@ -392,13 +403,13 @@ export default function Vendors() {
                         {vendor.contact_number && (
                           <span className="flex items-center gap-1">
                             <Phone className="w-3.5 h-3.5" />
-                            {vendor.contact_number}
+                            <CopyValue value={vendor.contact_number} label="contact number" />
                           </span>
                         )}
                         {vendor.email && (
                           <span className="flex items-center gap-1">
                             <Mail className="w-3.5 h-3.5" />
-                            {vendor.email}
+                            <CopyValue value={vendor.email} label="email" />
                           </span>
                         )}
                       </div>
@@ -409,14 +420,28 @@ export default function Vendors() {
                       <div className="text-center min-w-[80px]">
                         <div className="flex items-center justify-center gap-1 text-blue-600">
                           <TrendingUp className="w-4 h-4" />
-                          <span className="font-bold">PKR {vendor.totalPayable.toLocaleString()}</span>
+                          <span className="font-bold">
+                            <CopyValue
+                              value={vendor.totalPayable}
+                              isAmount={true}
+                              displayValue={`PKR ${vendor.totalPayable.toLocaleString()}`}
+                              label="total payable"
+                            />
+                          </span>
                         </div>
                         <p className="text-xs text-muted-foreground">Total Payable</p>
                       </div>
                       <div className="text-center min-w-[80px]">
                         <div className="flex items-center justify-center gap-1 text-green-600">
                           <Banknote className="w-4 h-4" />
-                          <span className="font-bold">PKR {vendor.amountPaid.toLocaleString()}</span>
+                          <span className="font-bold">
+                            <CopyValue
+                              value={vendor.amountPaid}
+                              isAmount={true}
+                              displayValue={`PKR ${vendor.amountPaid.toLocaleString()}`}
+                              label="amount paid"
+                            />
+                          </span>
                         </div>
                         <p className="text-xs text-muted-foreground">Paid</p>
                       </div>
@@ -426,7 +451,14 @@ export default function Vendors() {
                           vendor.amountPending > 0 ? "text-red-600" : "text-green-600"
                         )}>
                           <AlertCircle className="w-4 h-4" />
-                          <span className="font-bold">PKR {Math.abs(vendor.amountPending).toLocaleString()}</span>
+                          <span className="font-bold">
+                            <CopyValue
+                              value={Math.abs(vendor.amountPending)}
+                              isAmount={true}
+                              displayValue={`PKR ${Math.abs(vendor.amountPending).toLocaleString()}`}
+                              label="outstanding balance"
+                            />
+                          </span>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {vendor.amountPending > 0 ? 'Outstanding' : 'Settled'}

@@ -1,15 +1,13 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import {
   ExcelGrid,
   GridColumn,
-  PageHeader,
   TotalsBar,
   FilterBar,
   FilterState,
   defaultFilterState,
-  StatusChip,
-  EmptyState,
 } from "@/components/design-system";
 import {
   Select,
@@ -18,29 +16,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParties } from "@/hooks/useParties";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import {
-  FileSpreadsheet,
-  FileText,
-  RotateCcw,
-  SlidersHorizontal,
-  ChevronDown,
-  ArrowRight,
   TrendingUp,
-  Receipt,
   Scale,
   Calendar,
+  FileText,
 } from "lucide-react";
 
-type ReportType =
-  | "account_statement"
-  | "booking_report"
-  | "daily_report"
-  | "financial_reports";
+type ReportTab =
+  | "daily-report"
+  | "account-statement"
+  | "booking-report"
+  | "financial-reports";
 
 type FinancialSubReport =
   | "profit_report"
@@ -50,16 +43,23 @@ type FinancialSubReport =
   | "monthly_expenses";
 
 export default function ReportsHub() {
-  const [selectedReport, setSelectedReport] = useState<ReportType>("account_statement");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Tab from URL (default to Daily Report: daily-report)
+  const currentTab = (searchParams.get("tab") as ReportTab) || "daily-report";
+
+  const handleTabChange = (val: string) => {
+    setSearchParams({ tab: val }, { replace: true });
+  };
+
   const [financialSubReport, setFinancialSubReport] = useState<FinancialSubReport>("profit_report");
 
-  // Shared Filter Bar State
+  // Shared Filter Bar State (date filter preserved across tab switching)
   const [filters, setFilters] = useState<FilterState>(defaultFilterState);
 
   // Toggle options for Account Statement
   const [detailedView, setDetailedView] = useState(false);
   const [onlyUnpaid, setOnlyUnpaid] = useState(false);
-  const [showMoreColumns, setShowMoreColumns] = useState(false);
   const [overdueBucket, setOverdueBucket] = useState<"all" | "0-30" | "31-60" | "61-90" | "90+">("all");
 
   // Toggle for Daily Report (Cash / Bank switch)
@@ -132,9 +132,36 @@ export default function ReportsHub() {
     },
   });
 
+  // Date check helper adhering to shared date filter
+  const isDateInRange = (dateStr?: string) => {
+    if (!dateStr) return true;
+    if (filters.dateRange === "all") return true;
+    const d = dateStr.slice(0, 10);
+    const now = new Date();
+
+    if (filters.dateRange === "today") {
+      const todayStr = format(now, "yyyy-MM-dd");
+      return d === todayStr;
+    }
+    if (filters.dateRange === "this_month") {
+      const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(now), "yyyy-MM-dd");
+      return d >= monthStart && d <= monthEnd;
+    }
+    if (filters.dateRange === "custom") {
+      if (filters.startDate && d < filters.startDate) return false;
+      if (filters.endDate && d > filters.endDate) return false;
+      return true;
+    }
+    return true;
+  };
+
   // Apply Shared Filters across Invoices
   const filteredInvoices = useMemo(() => {
     return rawInvoices.filter((inv: any) => {
+      // Date filter
+      if (!isDateInRange(inv.invoice_date)) return false;
+
       // Party filter
       if (filters.partyId && filters.partyId !== "all" && inv.party_id !== filters.partyId) {
         return false;
@@ -174,13 +201,216 @@ export default function ReportsHub() {
     [filteredInvoices]
   );
   const totalExpensesAmt = useMemo(
-    () => rawExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0),
-    [rawExpenses]
+    () => rawExpenses.filter((e: any) => isDateInRange(e.expense_date)).reduce((sum: number, e: any) => sum + (e.amount || 0), 0),
+    [rawExpenses, filters]
   );
 
   // ==========================================
-  // REPORT 1: ACCOUNT STATEMENT
+  // REPORT 1: ACCOUNT STATEMENT (Live Master Ledger)
   // ==========================================
+  const rawStatementData = useMemo(() => {
+    let entries: any[] = [];
+
+    // Filter invoices by date, party, status, search
+    const matchingInvoices = rawInvoices.filter((inv: any) => {
+      if (!isDateInRange(inv.invoice_date)) return false;
+      if (filters.partyId && filters.partyId !== "all" && inv.party_id !== filters.partyId) {
+        return false;
+      }
+      if (filters.status !== "all" && inv.payment_status !== filters.status) {
+        return false;
+      }
+      if (onlyUnpaid && inv.payment_status === "paid") {
+        return false;
+      }
+      if (filters.searchQuery.trim()) {
+        const q = filters.searchQuery.toLowerCase();
+        const mInv = inv.invoice_no?.toLowerCase().includes(q);
+        const mPnr = inv.pnr?.toLowerCase().includes(q);
+        const mTicket = inv.ticket_no?.toLowerCase().includes(q);
+        const mParty = (inv.party?.name || inv.client_name || "").toLowerCase().includes(q);
+        const mDesc = `${inv.service} Booking`.toLowerCase().includes(q);
+        if (!mInv && !mPnr && !mTicket && !mParty && !mDesc) return false;
+      }
+      return true;
+    });
+
+    if (!detailedView) {
+      entries = matchingInvoices.map((inv: any) => ({
+        id: inv.id,
+        date: inv.invoice_date,
+        voucher_no: inv.invoice_no,
+        description: `${inv.service || "Ticket"} Booking - ${inv.party?.name || inv.client_name || ""}`,
+        service: inv.service || "Ticket",
+        entry: "Sale",
+        debit: inv.client_amount || 0,
+        credit: inv.paid_amount || 0,
+        overdue_days: inv.payment_status === "unpaid" ? 18 : null,
+      }));
+    } else {
+      // Invoices
+      const invEntries = matchingInvoices.map((inv: any) => ({
+        id: `inv_${inv.id}`,
+        date: inv.invoice_date,
+        voucher_no: inv.invoice_no,
+        description: `${inv.service || "Ticket"} Booking - ${inv.party?.name || inv.client_name || ""}`,
+        service: inv.service || "Ticket",
+        entry: "Sale",
+        debit: inv.client_amount || 0,
+        credit: 0,
+        overdue_days: inv.payment_status === "unpaid" ? 18 : null,
+      }));
+
+      // Transactions (Receipts & Payments)
+      const txEntries = (rawTransactions || [])
+        .filter((t: any) => {
+          if (!isDateInRange(t.date)) return false;
+          if (filters.partyId && filters.partyId !== "all" && t.party_id !== filters.partyId) {
+            return false;
+          }
+          if (filters.searchQuery.trim()) {
+            const q = filters.searchQuery.toLowerCase();
+            const mRef = t.reference_no?.toLowerCase().includes(q);
+            const mNotes = t.notes?.toLowerCase().includes(q);
+            const mCat = t.category?.toLowerCase().includes(q);
+            if (!mRef && !mNotes && !mCat) return false;
+          }
+          return true;
+        })
+        .map((t: any) => {
+          const isReceipt = t.type === "payment_in";
+          const isExp = t.type === "expense";
+          const isRef = t.type === "refund";
+
+          let entryType = "Payment";
+          if (isExp) entryType = "Expense";
+          else if (isRef) entryType = "Refund";
+          else if (t.type === "void") entryType = "Void";
+          else if (t.type === "transfer") entryType = "Transfer";
+
+          let debitVal = 0;
+          let creditVal = 0;
+          if (isReceipt) {
+            creditVal = Number(t.debit) || Number(t.amount) || 0;
+          } else {
+            debitVal = Number(t.credit) || Number(t.amount) || 0;
+          }
+
+          return {
+            id: `tx_${t.id}`,
+            date: t.date,
+            voucher_no: t.reference_no || `PV-${t.id.slice(0, 4).toUpperCase()}`,
+            description: t.notes || t.category || `${entryType} Voucher`,
+            service: "Other",
+            entry: entryType,
+            debit: debitVal,
+            credit: creditVal,
+            overdue_days: null,
+          };
+        });
+
+      // Operating Expenses
+      const expEntries = (rawExpenses || [])
+        .filter((e: any) => {
+          if (!isDateInRange(e.expense_date)) return false;
+          if (filters.searchQuery.trim()) {
+            const q = filters.searchQuery.toLowerCase();
+            const mRef = e.reference_number?.toLowerCase().includes(q);
+            const mType = e.expense_type?.toLowerCase().includes(q);
+            const mNotes = e.notes?.toLowerCase().includes(q);
+            if (!mRef && !mType && !mNotes) return false;
+          }
+          return true;
+        })
+        .map((e: any) => ({
+          id: `exp_${e.id}`,
+          date: e.expense_date,
+          voucher_no: e.reference_number || `EXP-${e.id.slice(0, 4).toUpperCase()}`,
+          description: `Expense: ${e.expense_type || e.notes || "Operating Expense"}`,
+          service: "Other",
+          entry: "Expense",
+          debit: Number(e.amount) || 0,
+          credit: 0,
+          overdue_days: null,
+        }));
+
+      // Customer Refunds
+      const refEntries = (rawRefunds || [])
+        .filter((r: any) => {
+          if (!isDateInRange(r.refund_date)) return false;
+          if (filters.searchQuery.trim()) {
+            const q = filters.searchQuery.toLowerCase();
+            const mRef = r.refund_no?.toLowerCase().includes(q);
+            const mReason = r.reason?.toLowerCase().includes(q);
+            if (!mRef && !mReason) return false;
+          }
+          return true;
+        })
+        .map((r: any) => ({
+          id: `ref_${r.id}`,
+          date: r.refund_date,
+          voucher_no: r.refund_no || `REF-${r.id.slice(0, 4).toUpperCase()}`,
+          description: `Refund: ${r.reason || "Ticket Refund"}`,
+          service: "Ticket",
+          entry: "Refund",
+          debit: 0,
+          credit: Number(r.refund_amount) || 0,
+          overdue_days: null,
+        }));
+
+      entries = [...invEntries, ...txEntries, ...expEntries, ...refEntries];
+    }
+
+    // Apply Overdue filter
+    if (overdueBucket !== "all") {
+      entries = entries.filter((r) => {
+        if (!r.overdue_days) return false;
+        if (overdueBucket === "0-30") return r.overdue_days <= 30;
+        if (overdueBucket === "31-60") return r.overdue_days > 30 && r.overdue_days <= 60;
+        if (overdueBucket === "61-90") return r.overdue_days > 60 && r.overdue_days <= 90;
+        if (overdueBucket === "90+") return r.overdue_days > 90;
+        return true;
+      });
+    }
+
+    // Sort by Date
+    entries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+    // Calculate live running balance
+    let running = 0;
+    return entries.map((r) => {
+      running = running + (r.debit || 0) - (r.credit || 0);
+      return {
+        ...r,
+        balance: running,
+      };
+    });
+  }, [rawInvoices, rawTransactions, rawExpenses, rawRefunds, filters, detailedView, onlyUnpaid, overdueBucket]);
+
+  // Live state for rows after header filters are applied in ExcelGrid
+  const [activeStatementRows, setActiveStatementRows] = useState<any[]>(rawStatementData);
+
+  useEffect(() => {
+    setActiveStatementRows(rawStatementData);
+  }, [rawStatementData]);
+
+  const handleStatementFilteredDataChange = useCallback((rows: any[]) => {
+    setActiveStatementRows(rows);
+  }, []);
+
+  // Summary card metrics that update reactively when column header filters change
+  const statementReceivables = useMemo(
+    () => (activeStatementRows || []).reduce((sum, r) => sum + (r.debit || 0), 0),
+    [activeStatementRows]
+  );
+  const statementPayables = useMemo(
+    () => (activeStatementRows || []).reduce((sum, r) => sum + (r.credit || 0), 0),
+    [activeStatementRows]
+  );
+  const statementNet = statementReceivables - statementPayables;
+
+  // Account Statement Columns:
+  // Date | Voucher / Bill # | Description / Particulars | Entry | Debit (DR) | Credit (CR) | Running Balance | Overdue
   const statementColumns: GridColumn[] = [
     {
       key: "date",
@@ -191,14 +421,57 @@ export default function ReportsHub() {
     {
       key: "voucher_no",
       header: "Voucher / Bill #",
-      width: 120,
-      render: (r) => <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">{r.voucher_no}</span>,
+      width: 140,
+      render: (r) => (
+        <CopyValue
+          value={r.voucher_no}
+          label="voucher number"
+          className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200"
+        />
+      ),
     },
     {
       key: "description",
       header: "Description / Particulars",
-      minWidth: 180,
+      minWidth: 200,
+      filterType: "checkbox",
+      filterOptions: ["Ticket", "Umrah", "Visa", "Hotel", "Insurance", "Other"],
+      filterMatchFn: (row: any, selected: string[]) => {
+        const desc = (row.description || "").toLowerCase();
+        const srv = (row.service || "").toLowerCase();
+        return selected.some((s) => desc.includes(s.toLowerCase()) || srv === s.toLowerCase());
+      },
       render: (r) => <span className="text-xs">{r.description}</span>,
+    },
+    {
+      key: "entry",
+      header: "Entry",
+      width: 110,
+      align: "center",
+      sortable: true,
+      filterType: "checkbox",
+      filterOptions: ["Sale", "Payment", "Refund", "Expense", "Void", "Transfer"],
+      filterMatchFn: (row: any, selected: string[]) => {
+        return selected.some((s) => (row.entry || "").toLowerCase() === s.toLowerCase());
+      },
+      render: (r) => {
+        const entry = r.entry || "Sale";
+        let badgeClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300";
+        if (entry.toLowerCase() === "payment") {
+          badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300";
+        } else if (entry.toLowerCase() === "refund") {
+          badgeClass = "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300";
+        } else if (entry.toLowerCase() === "expense") {
+          badgeClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300";
+        } else if (entry.toLowerCase() === "void" || entry.toLowerCase() === "transfer") {
+          badgeClass = "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300";
+        }
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}`}>
+            {entry}
+          </span>
+        );
+      },
     },
     {
       key: "debit",
@@ -262,8 +535,14 @@ export default function ReportsHub() {
     {
       key: "invoice_no",
       header: "Bill No",
-      width: 110,
-      render: (b) => <span className="font-mono text-xs font-bold">{b.invoice_no}</span>,
+      width: 120,
+      render: (b) => (
+        <CopyValue
+          value={b.invoice_no}
+          label="bill number"
+          className="font-mono text-xs font-bold"
+        />
+      ),
     },
     {
       key: "invoice_date",
@@ -344,12 +623,25 @@ export default function ReportsHub() {
   // REPORT 3: DAILY REPORT (Receipts vs Payments)
   // ==========================================
   const dailyReceipts = useMemo(
-    () => rawTransactions.filter((t: any) => t.type === "payment_in"),
-    [rawTransactions]
+    () =>
+      rawTransactions.filter((t: any) => {
+        if (!isDateInRange(t.date)) return false;
+        if (dailyAccountType === "cash" && t.method !== "cash") return false;
+        if (dailyAccountType === "bank" && t.method !== "bank") return false;
+        return t.type === "payment_in";
+      }),
+    [rawTransactions, filters, dailyAccountType]
   );
+
   const dailyPayments = useMemo(
-    () => rawTransactions.filter((t: any) => t.type === "payment_out" || t.type === "expense"),
-    [rawTransactions]
+    () =>
+      rawTransactions.filter((t: any) => {
+        if (!isDateInRange(t.date)) return false;
+        if (dailyAccountType === "cash" && t.method !== "cash") return false;
+        if (dailyAccountType === "bank" && t.method !== "bank") return false;
+        return t.type === "payment_out" || t.type === "expense";
+      }),
+    [rawTransactions, filters, dailyAccountType]
   );
 
   return (
@@ -360,154 +652,66 @@ export default function ReportsHub() {
         path="/app/reports"
       />
 
-      {/* Top Header with Report Selector Dropdown */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border/50">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Scale className="w-6 h-6 text-teal-600" />
-            Financial & Operations Reports
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time double-entry reports with zero data duplication. Every number drills down.
-          </p>
-        </div>
-
-        {/* 4 Reports Dropdown Selector */}
-        <div className="flex items-center gap-2">
-          <Select
-            value={selectedReport}
-            onValueChange={(val: any) => setSelectedReport(val)}
-          >
-            <SelectTrigger className="h-10 min-w-[210px] text-xs font-bold bg-[#0B192C] text-white border-0 shadow-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="account_statement" className="font-semibold text-xs">
-                1. Account Statement
-              </SelectItem>
-              <SelectItem value="booking_report" className="font-semibold text-xs">
-                2. Booking Report (Profit)
-              </SelectItem>
-              <SelectItem value="daily_report" className="font-semibold text-xs">
-                3. Daily Report (Day Book)
-              </SelectItem>
-              <SelectItem value="financial_reports" className="font-semibold text-xs">
-                4. Financial Reports
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Top Header */}
+      <div className="pb-2 border-b border-border/50">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <Scale className="w-6 h-6 text-teal-600" />
+          Financial & Operations Reports
+        </h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Real-time double-entry reports with zero data duplication. Every number drills down.
+        </p>
       </div>
 
-      {/* Universal Filter Bar (Identical on every report) */}
-      <FilterBar
-        filters={filters}
-        onChange={setFilters}
-        parties={parties}
-        searchPlaceholder="Find booking (ticket no, PNR, passport, pax, bill)..."
-      />
+      {/* 4 Canonical Sub-Tabs: Styled exactly like tabs in Sales & Expenses */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/50">
+        <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto h-11 p-1 bg-muted/60 border">
+            <TabsTrigger
+              value="daily-report"
+              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
+            >
+              <Calendar className="w-4 h-4 text-emerald-600" />
+              1. Daily Report (Day Book)
+            </TabsTrigger>
+            <TabsTrigger
+              value="account-statement"
+              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-blue-600" />
+              2. Account Statement
+            </TabsTrigger>
+            <TabsTrigger
+              value="booking-report"
+              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
+            >
+              <TrendingUp className="w-4 h-4 text-teal-600" />
+              3. Booking Report (Profit)
+            </TabsTrigger>
+            <TabsTrigger
+              value="financial-reports"
+              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
+            >
+              <Scale className="w-4 h-4 text-purple-600" />
+              4. Financial Reports
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
-      {/* Dynamic Report Views */}
-
-      {/* VIEW 1: ACCOUNT STATEMENT */}
-      {selectedReport === "account_statement" && (
+      {/* TAB 1: DAILY REPORT (Day Book) */}
+      {currentTab === "daily-report" && (
         <div className="space-y-4">
-          {/* Toggles Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border text-xs">
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                <input
-                  type="checkbox"
-                  checked={detailedView}
-                  onChange={(e) => setDetailedView(e.target.checked)}
-                  className="rounded text-teal-600"
-                />
-                Detailed Journal Lines
-              </label>
-
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                <input
-                  type="checkbox"
-                  checked={onlyUnpaid}
-                  onChange={(e) => setOnlyUnpaid(e.target.checked)}
-                  className="rounded text-teal-600"
-                />
-                Only Unpaid Invoices
-              </label>
-            </div>
-
-            {/* Overdue buckets toggle */}
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] text-muted-foreground mr-1">Overdue:</span>
-              {(["all", "0-30", "31-60", "61-90", "90+"] as const).map((b) => (
-                <button
-                  key={b}
-                  onClick={() => setOverdueBucket(b)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                    overdueBucket === b
-                      ? "bg-[#0B192C] text-white shadow-xs"
-                      : "bg-white dark:bg-slate-800 text-slate-600 border hover:bg-slate-100"
-                  }`}
-                >
-                  {b.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <TotalsBar
-            metrics={[
-              { label: "Total Receivables", value: totalInvoiced, prefix: "PKR", highlight: "red" },
-              { label: "Total Payables", value: totalCost, prefix: "PKR", highlight: "emerald" },
-              { label: "Net Ledger Position", value: totalInvoiced - totalCost, prefix: "PKR", highlight: "teal" },
-            ]}
+          {/* Daily Report Filter: Date filter only */}
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            showPartyFilter={false}
+            showEntryTypeFilter={false}
+            showServiceFilter={false}
+            showStatusFilter={false}
           />
 
-          <ExcelGrid
-            id="report_account_statement"
-            data={filteredInvoices.map((inv: any) => ({
-              date: inv.invoice_date,
-              voucher_no: inv.invoice_no,
-              description: `${inv.service} Booking - ${inv.party?.name || inv.client_name}`,
-              debit: inv.client_amount || 0,
-              credit: inv.paid_amount || 0,
-              balance: (inv.client_amount || 0) - (inv.paid_amount || 0),
-              overdue_days: inv.payment_status === "unpaid" ? 18 : null,
-            }))}
-            columns={statementColumns}
-            keyExtractor={(r, i) => `${r.voucher_no}_${i}`}
-            title="Account Statement & Master Ledger"
-            filename="TAMS_Account_Statement"
-          />
-        </div>
-      )}
-
-      {/* VIEW 2: BOOKING REPORT */}
-      {selectedReport === "booking_report" && (
-        <div className="space-y-4">
-          <TotalsBar
-            metrics={[
-              { label: "Total Invoiced", value: totalInvoiced, prefix: "PKR", highlight: "neutral" },
-              { label: "Total Vendor Payable", value: totalCost, prefix: "PKR", highlight: "red" },
-              { label: "Net Gross Profit", value: totalProfit, prefix: "PKR", highlight: "teal" },
-              { label: "Bookings", value: filteredInvoices.length, highlight: "neutral" },
-            ]}
-          />
-
-          <ExcelGrid
-            id="report_booking_profit"
-            data={filteredInvoices}
-            columns={bookingReportColumns}
-            keyExtractor={(b) => b.id}
-            title="Booking Wise Profit & Service Summary"
-            filename="Booking_Wise_Profit"
-          />
-        </div>
-      )}
-
-      {/* VIEW 3: DAILY REPORT (Receipts vs Payments) */}
-      {selectedReport === "daily_report" && (
-        <div className="space-y-4">
           {/* Switch: All / Cash / Bank */}
           <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border text-xs">
             <span className="font-bold text-slate-800 dark:text-slate-200">
@@ -518,8 +722,10 @@ export default function ReportsHub() {
                 <button
                   key={m}
                   onClick={() => setDailyAccountType(m)}
-                  className={`px-3 py-1 rounded text-xs font-semibold capitalize ${
-                    dailyAccountType === m ? "bg-white dark:bg-slate-900 shadow-xs text-primary" : "text-muted-foreground"
+                  className={`px-3 py-1 rounded text-xs font-semibold capitalize cursor-pointer transition-all ${
+                    dailyAccountType === m
+                      ? "bg-white dark:bg-slate-900 shadow-xs text-primary"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {m === "all" ? "Cash & Bank" : m}
@@ -530,9 +736,24 @@ export default function ReportsHub() {
 
           <TotalsBar
             metrics={[
-              { label: "Receipts Inflow", value: dailyReceipts.reduce((s: number, r: any) => s + (r.debit || 0), 0), prefix: "PKR", highlight: "emerald" },
-              { label: "Payments Outflow", value: dailyPayments.reduce((s: number, p: any) => s + (p.credit || 0), 0), prefix: "PKR", highlight: "red" },
-              { label: "Daily Operating Expenses", value: totalExpensesAmt, prefix: "PKR", highlight: "amber" },
+              {
+                label: "Receipts Inflow",
+                value: dailyReceipts.reduce((s: number, r: any) => s + (Number(r.debit) || Number(r.amount) || 0), 0),
+                prefix: "PKR",
+                highlight: "emerald",
+              },
+              {
+                label: "Payments Outflow",
+                value: dailyPayments.reduce((s: number, p: any) => s + (Number(p.credit) || Number(p.amount) || 0), 0),
+                prefix: "PKR",
+                highlight: "red",
+              },
+              {
+                label: "Daily Operating Expenses",
+                value: totalExpensesAmt,
+                prefix: "PKR",
+                highlight: "amber",
+              },
             ]}
           />
 
@@ -552,7 +773,7 @@ export default function ReportsHub() {
                         <span className="font-semibold block">{t.reference_no || "Receipt"}</span>
                         <span className="text-[10px] text-muted-foreground">{t.date} • {t.method?.toUpperCase()}</span>
                       </div>
-                      <span className="font-mono font-bold text-emerald-600">PKR {Number(t.debit).toLocaleString()}</span>
+                      <span className="font-mono font-bold text-emerald-600">PKR {Number(t.debit || t.amount || 0).toLocaleString()}</span>
                     </div>
                   ))
                 )}
@@ -574,7 +795,7 @@ export default function ReportsHub() {
                         <span className="font-semibold block">{t.category || t.reference_no || "Payment"}</span>
                         <span className="text-[10px] text-muted-foreground">{t.date} • {t.notes || "Disbursement"}</span>
                       </div>
-                      <span className="font-mono font-bold text-red-600">PKR {Number(t.credit).toLocaleString()}</span>
+                      <span className="font-mono font-bold text-red-600">PKR {Number(t.credit || t.amount || 0).toLocaleString()}</span>
                     </div>
                   ))
                 )}
@@ -584,9 +805,132 @@ export default function ReportsHub() {
         </div>
       )}
 
-      {/* VIEW 4: FINANCIAL REPORTS (P&L, Assets & Dues, Monthly Income & Expenses) */}
-      {selectedReport === "financial_reports" && (
+      {/* TAB 2: ACCOUNT STATEMENT */}
+      {currentTab === "account-statement" && (
         <div className="space-y-4">
+          {/* Account Statement Filter Bar: All Entries and All Services removed; search bar, date, parties, status kept */}
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            parties={parties}
+            showPartyFilter={true}
+            showStatusFilter={true}
+            showEntryTypeFilter={false}
+            showServiceFilter={false}
+            searchPlaceholder="Find in statement (voucher #, particular, party)..."
+          />
+
+          {/* Toggles Bar: Detailed Journal Lines, Only Unpaid Invoices, Overdue buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border text-xs">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium select-none">
+                <input
+                  type="checkbox"
+                  checked={detailedView}
+                  onChange={(e) => setDetailedView(e.target.checked)}
+                  className="rounded text-teal-600 cursor-pointer"
+                />
+                Detailed Journal Lines
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyUnpaid}
+                  onChange={(e) => setOnlyUnpaid(e.target.checked)}
+                  className="rounded text-teal-600 cursor-pointer"
+                />
+                Only Unpaid Invoices
+              </label>
+            </div>
+
+            {/* Overdue buckets toggle */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground mr-1">Overdue:</span>
+              {(["all", "0-30", "31-60", "61-90", "90+"] as const).map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setOverdueBucket(b)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                    overdueBucket === b
+                      ? "bg-[#0B192C] text-white shadow-xs"
+                      : "bg-white dark:bg-slate-800 text-slate-600 border hover:bg-slate-100"
+                  }`}
+                >
+                  {b.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary Cards: Automatically updated by header filters via onFilteredDataChange */}
+          <TotalsBar
+            metrics={[
+              { label: "Total Receivables", value: statementReceivables, prefix: "PKR", highlight: "red" },
+              { label: "Total Payables", value: statementPayables, prefix: "PKR", highlight: "emerald" },
+              { label: "Net Ledger Position", value: statementNet, prefix: "PKR", highlight: "teal" },
+            ]}
+          />
+
+          {/* Excel Table View with Entry column, service header funnel checklist, CopyValue, and TOTAL row */}
+          <ExcelGrid
+            id="report_account_statement"
+            data={rawStatementData}
+            columns={statementColumns}
+            keyExtractor={(r, i) => `${r.voucher_no || r.id}_${i}`}
+            onFilteredDataChange={handleStatementFilteredDataChange}
+            title="Account Statement & Master Ledger"
+            filename="TAMS_Account_Statement"
+          />
+        </div>
+      )}
+
+      {/* TAB 3: BOOKING REPORT (Profit) */}
+      {currentTab === "booking-report" && (
+        <div className="space-y-4">
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            parties={parties}
+            showPartyFilter={true}
+            showStatusFilter={true}
+            showServiceFilter={true}
+            showEntryTypeFilter={false}
+            searchPlaceholder="Find booking (ticket no, PNR, passport, pax, bill)..."
+          />
+
+          <TotalsBar
+            metrics={[
+              { label: "Total Invoiced", value: totalInvoiced, prefix: "PKR", highlight: "neutral" },
+              { label: "Total Vendor Payable", value: totalCost, prefix: "PKR", highlight: "red" },
+              { label: "Net Gross Profit", value: totalProfit, prefix: "PKR", highlight: "teal" },
+              { label: "Bookings", value: filteredInvoices.length, highlight: "neutral" },
+            ]}
+          />
+
+          <ExcelGrid
+            id="report_booking_profit"
+            data={filteredInvoices}
+            columns={bookingReportColumns}
+            keyExtractor={(b) => b.id}
+            title="Booking Wise Profit & Service Summary"
+            filename="Booking_Wise_Profit"
+          />
+        </div>
+      )}
+
+      {/* TAB 4: FINANCIAL REPORTS */}
+      {currentTab === "financial-reports" && (
+        <div className="space-y-4">
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            showPartyFilter={false}
+            showStatusFilter={false}
+            showServiceFilter={false}
+            showEntryTypeFilter={false}
+          />
+
           <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border">
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
               Financial Statement Mode
@@ -652,4 +996,3 @@ export default function ReportsHub() {
     </div>
   );
 }
-

@@ -54,6 +54,8 @@ import {
 } from "@/components/leads-quotes/DatePresetFilter";
 import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import { cn } from "@/lib/utils";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { cleanPastedSearch } from "@/lib/searchUtils";
 
 type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
@@ -371,6 +373,13 @@ export default function Quotations() {
             placeholder="Search by quotation #, client, title, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              if (pasted) {
+                e.preventDefault();
+                setSearch(cleanPastedSearch(pasted));
+              }
+            }}
           />
           {search && (
             <button
@@ -510,7 +519,7 @@ export default function Quotations() {
                         {/* Quotation # + Link booking */}
                         <td className="py-2.5 px-3 font-semibold font-mono text-foreground">
                           <div className="flex items-center gap-1.5">
-                            <span>{q.quotation_number}</span>
+                            <CopyValue value={q.quotation_number} label="quotation number" />
                             {renderBookingReference(q)}
                           </div>
                           {q.title && <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[180px]">{q.title}</p>}
@@ -528,8 +537,14 @@ export default function Quotations() {
 
                         {/* Client */}
                         <td className="py-2.5 px-3">
-                          <div className="font-semibold text-foreground truncate max-w-[170px]">{q.client_name}</div>
-                          {q.client_phone && <div className="text-[11px] text-muted-foreground font-mono">{q.client_phone}</div>}
+                          <div className="font-semibold text-foreground truncate max-w-[170px]">
+                            <CopyValue value={q.client_name} label="client name" />
+                          </div>
+                          {q.client_phone && (
+                            <div className="text-[11px] text-muted-foreground font-mono">
+                              <CopyValue value={q.client_phone} label="phone number" />
+                            </div>
+                          )}
                         </td>
 
                         {/* Service Type */}
@@ -541,7 +556,12 @@ export default function Quotations() {
 
                         {/* Total */}
                         <td className="py-2.5 px-3 text-right font-bold font-mono text-foreground whitespace-nowrap">
-                          {q.currency} {Number(q.total).toLocaleString()}
+                          <CopyValue
+                            value={Number(q.total) || 0}
+                            isAmount={true}
+                            displayValue={`${q.currency} ${Number(q.total).toLocaleString()}`}
+                            label="quotation total"
+                          />
                         </td>
 
                         {/* Status */}

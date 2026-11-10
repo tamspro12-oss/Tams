@@ -957,5 +957,11 @@ body {
   }
 }
 
+/* Global text selection integrity: ensure table cells, cards, modals can be selected cleanly */
+td, th, .card, [role="dialog"], [role="region"], .select-text {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 
 

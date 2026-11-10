@@ -12,6 +12,7 @@ import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { CopyValue } from "@/components/ui/CopyValue";
 
 interface StatementsTabProps {
   initialScope?: "all" | "cash" | "bank" | "party";
@@ -413,19 +414,44 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
 
               {statementRows.length > 0 ? (
                 statementRows.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+                  <tr key={r.id} className="hover:bg-muted/30 transition-colors select-text">
                     <td className="py-2 px-3 font-mono text-muted-foreground whitespace-nowrap">{r.date}</td>
-                    <td className="py-2 px-3 font-mono font-bold text-primary whitespace-nowrap">{r.ref}</td>
+                    <td className="py-2 px-3 font-mono font-bold text-primary whitespace-nowrap">
+                      {r.ref && r.ref !== "-" ? <CopyValue value={r.ref} label="reference" /> : "-"}
+                    </td>
                     <td className="py-2 px-3 font-medium text-foreground max-w-sm">{r.description}</td>
                     <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{r.methodOrAccount}</td>
                     <td className="py-2 px-3 text-right font-medium text-emerald-600 whitespace-nowrap">
-                      {r.debit > 0 ? r.debit.toLocaleString() : "-"}
+                      {r.debit > 0 ? (
+                        <CopyValue
+                          value={r.debit}
+                          isAmount={true}
+                          displayValue={r.debit.toLocaleString()}
+                          label="debit amount"
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-3 text-right font-medium text-red-500 whitespace-nowrap">
-                      {r.credit > 0 ? r.credit.toLocaleString() : "-"}
+                      {r.credit > 0 ? (
+                        <CopyValue
+                          value={r.credit}
+                          isAmount={true}
+                          displayValue={r.credit.toLocaleString()}
+                          label="credit amount"
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-3 text-right font-bold font-mono text-foreground whitespace-nowrap">
-                      PKR {(r.runningBalance || 0).toLocaleString()}
+                      <CopyValue
+                        value={r.runningBalance || 0}
+                        isAmount={true}
+                        displayValue={`PKR ${(r.runningBalance || 0).toLocaleString()}`}
+                        label="running balance"
+                      />
                     </td>
                   </tr>
                 ))

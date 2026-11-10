@@ -32,6 +32,8 @@ import { useAgency } from "@/hooks/useAgency";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { cleanPastedSearch } from "@/lib/searchUtils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -341,6 +343,13 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                   placeholder="Search party, PNR, note..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    if (pasted) {
+                      e.preventDefault();
+                      setSearchQuery(cleanPastedSearch(pasted));
+                    }
+                  }}
                   className="h-8 text-xs pl-8"
                 />
               </div>
@@ -486,36 +495,72 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                       {tx.date}
                     </td>
                     <td className="py-2 px-2.5 font-mono font-medium text-primary whitespace-nowrap">
-                      {tx.booking_ref || tx.reference_no || "-"}
+                      {tx.booking_ref || tx.reference_no ? (
+                        <CopyValue value={tx.booking_ref || tx.reference_no} label="reference" />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-2.5 whitespace-nowrap">
                       {getTypeBadge(tx.type, tx.is_reversed || false)}
                     </td>
                     <td className="py-2 px-2.5 font-semibold text-foreground">
                       {tx.party_id && tx.party_type ? (
-                        <button
-                          type="button"
-                          onClick={() => onOpenPartyCard && onOpenPartyCard(tx.party_id!, tx.party_type!)}
-                          className="text-left font-bold hover:underline hover:text-primary transition-colors cursor-pointer"
-                          title="Click to open this party's booking card"
-                        >
-                          {tx.party_name || "View Party"}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onOpenPartyCard && onOpenPartyCard(tx.party_id!, tx.party_type!)}
+                            className="text-left font-bold hover:underline hover:text-primary transition-colors cursor-pointer"
+                            title="Click to open this party's booking card"
+                          >
+                            {tx.party_name || "View Party"}
+                          </button>
+                          {tx.party_name && <CopyValue value={tx.party_name} label="party name" />}
+                        </div>
+                      ) : tx.party_name ? (
+                        <CopyValue value={tx.party_name} label="party name" />
                       ) : (
-                        tx.party_name || "-"
+                        "-"
                       )}
                     </td>
                     <td className="py-2 px-2.5 text-muted-foreground whitespace-nowrap">
                       {tx.account_name || "Cash"}
                     </td>
                     <td className="py-2 px-2.5 text-right font-medium text-emerald-600 whitespace-nowrap">
-                      {tx.debit > 0 ? `PKR ${tx.debit.toLocaleString()}` : "-"}
+                      {tx.debit > 0 ? (
+                        <CopyValue
+                          value={tx.debit}
+                          isAmount={true}
+                          displayValue={`PKR ${tx.debit.toLocaleString()}`}
+                          label="debit amount"
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-2.5 text-right font-medium text-red-500 whitespace-nowrap">
-                      {tx.credit > 0 ? `PKR ${tx.credit.toLocaleString()}` : "-"}
+                      {tx.credit > 0 ? (
+                        <CopyValue
+                          value={tx.credit}
+                          isAmount={true}
+                          displayValue={`PKR ${tx.credit.toLocaleString()}`}
+                          label="credit amount"
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-2.5 text-right font-bold font-mono whitespace-nowrap">
-                      {tx.running_balance !== undefined ? `PKR ${tx.running_balance.toLocaleString()}` : "-"}
+                      {tx.running_balance !== undefined ? (
+                        <CopyValue
+                          value={tx.running_balance}
+                          isAmount={true}
+                          displayValue={`PKR ${tx.running_balance.toLocaleString()}`}
+                          label="running balance"
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2 px-2.5 text-muted-foreground max-w-xs truncate" title={tx.notes || ""}>
                       {tx.notes || "-"}

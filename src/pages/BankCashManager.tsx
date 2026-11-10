@@ -19,6 +19,7 @@ import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransact
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { useLocation } from "react-router-dom";
 import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
+import { CopyValue } from "@/components/ui/CopyValue";
 
 export default function BankCashManager() {
   const { expenses } = useExpenses();
@@ -735,11 +736,32 @@ export default function BankCashManager() {
                   <TableBody>
                     {agencyBanks.map((bank: any) => (
                       <TableRow key={bank.id}>
-                        <TableCell className="font-medium">{bank.bank_name}</TableCell>
-                        <TableCell>{bank.account_number || "-"}</TableCell>
-                        <TableCell>{bank.account_title || "-"}</TableCell>
+                        <TableCell className="font-medium">
+                          <CopyValue value={bank.bank_name} label="bank name" />
+                        </TableCell>
+                        <TableCell>
+                          {bank.account_number ? (
+                            <CopyValue value={bank.account_number} label="account number" />
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {bank.account_title ? (
+                            <CopyValue value={bank.account_title} label="account title" />
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
                         <TableCell>{bank.branch_name || "-"}</TableCell>
-                        <TableCell>₨ {(bank.opening_balance || 0).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <CopyValue
+                            value={bank.opening_balance || 0}
+                            isAmount={true}
+                            displayValue={`₨ ${(bank.opening_balance || 0).toLocaleString()}`}
+                            label="opening balance"
+                          />
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm"
@@ -1055,9 +1077,16 @@ function TransactionTable({ transactions, onDelete }: { transactions: any[]; onD
               </TableCell>
               <TableCell className="max-w-xs truncate">{t.description}</TableCell>
               <TableCell className="text-right font-semibold">
-                <span className={t.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {t.amount >= 0 ? '+' : ''}₨ {t.amount.toLocaleString()}
-                </span>
+                <CopyValue
+                  value={t.amount}
+                  isAmount={true}
+                  displayValue={
+                    <span className={t.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {t.amount >= 0 ? '+' : ''}₨ {t.amount.toLocaleString()}
+                    </span>
+                  }
+                  label="transaction amount"
+                />
               </TableCell>
               {onDelete && (
                 <TableCell>

@@ -25,6 +25,9 @@ import {
   generateBookingInvoicePdf,
 } from "@/lib/pdf/bookingInvoicePdf";
 import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { matchesMultipleFields, cleanPastedSearch } from "@/lib/searchUtils";
+import { cn } from "@/lib/utils";
 import {
   FileText,
   CreditCard,
@@ -49,15 +52,27 @@ export default function SalesExpensesHub() {
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
 
-  // Filters state for Payment Vouchers
+  // Filters state for Booking Invoices (Default This Month)
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [invoiceDateFilter, setInvoiceDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
+
+  // Filters state for Payment Vouchers (Default This Month)
   const [voucherSearch, setVoucherSearch] = useState("");
   const [voucherDateFilter, setVoucherDateFilter] = useState<DatePresetFilterValue>({
     preset: "this_month",
   });
 
-  // Filters state for Refunds / Voids
+  // Filters state for Refunds / Voids (Default This Month)
   const [refundSearch, setRefundSearch] = useState("");
   const [refundDateFilter, setRefundDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
+
+  // Filters state for Expenses (Default This Month)
+  const [expenseSearch, setExpenseSearch] = useState("");
+  const [expenseDateFilter, setExpenseDateFilter] = useState<DatePresetFilterValue>({
     preset: "this_month",
   });
 
@@ -190,29 +205,81 @@ export default function SalesExpensesHub() {
     const client =
       (r.client_id && clientsLookup[r.client_id]) ||
       (r.booking_id && clientsLookup[r.booking_id]);
-    if (client?.pnr) return `PNR: ${client.pnr}`;
-    if (client?.passport_number) return `Tkt: ${client.passport_number}`;
+    if (client?.pnr) return client.pnr;
+    if (client?.passport_number) return client.passport_number;
     const matchInv = r.notes?.match(/Ref Invoice:\s*([^|]+)/);
     if (matchInv) return matchInv[1].trim();
     if (r.invoice_no) return r.invoice_no;
     return "—";
   };
 
-  // Metrics for active tab
-  const totalInvoiced = useMemo(
-    () => invoices.reduce((sum: number, inv: any) => sum + (inv.client_amount || 0), 0),
-    [invoices]
+  // -------------------------------------------------------------
+  // Filtered Booking Invoices (by Search & Date)
+  // -------------------------------------------------------------
+  const filteredInvoices = useMemo(() => {
+    return invoices
+      .map((inv: any) => {
+        const clientAmount = Number(inv.client_amount) || 0;
+        const paidAmount = Number(inv.paid_amount) || 0;
+        const remainingAmount = Math.max(0, clientAmount - paidAmount);
+        const computedStatus =
+          remainingAmount === 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
+
+        return {
+          ...inv,
+          client_amount: clientAmount,
+          paid_amount: paidAmount,
+          remaining_amount: remainingAmount,
+          payment_status: computedStatus,
+        };
+      })
+      .filter((inv: any) => {
+        // 1. Date Filter (defaults to This Month)
+        if (
+          !isDateWithinPreset(
+            inv.invoice_date,
+            invoiceDateFilter.preset,
+            invoiceDateFilter.customFrom,
+            invoiceDateFilter.customTo
+          )
+        ) {
+          return false;
+        }
+
+        // 2. Search query live-filter: invoice number, client name, PNR, ticket number, service, status
+        if (invoiceSearch.trim()) {
+          const clientName = inv.party?.name || inv.client_name || "";
+          const matches = matchesMultipleFields(
+            [
+              inv.invoice_no,
+              clientName,
+              inv.pnr,
+              inv.ticket_no,
+              inv.service,
+              inv.payment_status,
+            ],
+            invoiceSearch
+          );
+          if (!matches) return false;
+        }
+
+        return true;
+      });
+  }, [invoices, invoiceSearch, invoiceDateFilter]);
+
+  // Dynamic summary cards for Booking Invoices (match search & date filter)
+  const filteredTotalInvoiced = useMemo(
+    () => filteredInvoices.reduce((sum: number, inv: any) => sum + (inv.client_amount || 0), 0),
+    [filteredInvoices]
   );
-  const totalProfit = useMemo(
-    () => invoices.reduce((sum: number, inv: any) => sum + (inv.profit || 0), 0),
-    [invoices]
-  );
-  const totalExpenses = useMemo(
-    () => expenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0),
-    [expenses]
+  const filteredNetProfit = useMemo(
+    () => filteredInvoices.reduce((sum: number, inv: any) => sum + (inv.profit || 0), 0),
+    [filteredInvoices]
   );
 
+  // -------------------------------------------------------------
   // Filtered Vouchers (by Search & Date)
+  // -------------------------------------------------------------
   const filteredVouchers = useMemo(() => {
     return vouchers.filter((v: any) => {
       // 1. Date Filter (defaults to This Month)
@@ -229,35 +296,26 @@ export default function SalesExpensesHub() {
 
       // 2. Search query live-filter
       if (voucherSearch.trim()) {
-        const q = voucherSearch.toLowerCase().trim();
-        const matchVoucherNo = (v.voucher_no || "").toLowerCase().includes(q);
-        const matchParty = (v.party?.name || "").toLowerCase().includes(q);
-        const matchRef = (v.reference_no || "").toLowerCase().includes(q);
-        const matchNotes = (v.notes || "").toLowerCase().includes(q);
-        const matchMode = (v.payment_mode || "").toLowerCase().includes(q);
-        const matchAmount = String(v.amount || "").includes(q);
-        const matchTicket = (v.ticket_no || "").toLowerCase().includes(q);
-        const matchPnr = (v.pnr || "").toLowerCase().includes(q);
-
-        if (
-          !matchVoucherNo &&
-          !matchParty &&
-          !matchRef &&
-          !matchNotes &&
-          !matchMode &&
-          !matchAmount &&
-          !matchTicket &&
-          !matchPnr
-        ) {
-          return false;
-        }
+        const matches = matchesMultipleFields(
+          [
+            v.voucher_no,
+            v.party?.name,
+            v.reference_no,
+            v.notes,
+            v.payment_mode,
+            v.amount,
+            v.ticket_no,
+            v.pnr,
+          ],
+          voucherSearch
+        );
+        if (!matches) return false;
       }
 
       return true;
     });
   }, [vouchers, voucherSearch, voucherDateFilter]);
 
-  // Dynamic summary cards for Vouchers matching search & date
   const filteredTotalReceived = useMemo(
     () =>
       filteredVouchers
@@ -273,7 +331,9 @@ export default function SalesExpensesHub() {
     [filteredVouchers]
   );
 
+  // -------------------------------------------------------------
   // Filtered Refunds (by Search & Date)
+  // -------------------------------------------------------------
   const filteredRefunds = useMemo(() => {
     return refunds.filter((r: any) => {
       // 1. Date filter (defaults to This Month)
@@ -290,37 +350,28 @@ export default function SalesExpensesHub() {
 
       // 2. Search query live-filter
       if (refundSearch.trim()) {
-        const q = refundSearch.toLowerCase().trim();
-        const refundNo = (
-          r.refund_no ||
-          r.reference_no ||
-          `REF-${r.id.slice(0, 6)}`
-        ).toLowerCase();
-        const party = getRefundPartyName(r).toLowerCase();
-        const refInfo = getRefundRefInfo(r).toLowerCase();
-        const reason = (r.reason || "").toLowerCase();
-        const mode = (r.payment_mode || "").toLowerCase();
-        const notes = (r.notes || "").toLowerCase();
-        const amount = String(r.refund_amount || "");
-
-        if (
-          !refundNo.includes(q) &&
-          !party.includes(q) &&
-          !refInfo.includes(q) &&
-          !reason.includes(q) &&
-          !mode.includes(q) &&
-          !notes.includes(q) &&
-          !amount.includes(q)
-        ) {
-          return false;
-        }
+        const refundNo = r.refund_no || r.reference_no || `REF-${r.id.slice(0, 6)}`;
+        const party = getRefundPartyName(r);
+        const refInfo = getRefundRefInfo(r);
+        const matches = matchesMultipleFields(
+          [
+            refundNo,
+            party,
+            refInfo,
+            r.reason,
+            r.payment_mode,
+            r.notes,
+            r.refund_amount,
+          ],
+          refundSearch
+        );
+        if (!matches) return false;
       }
 
       return true;
     });
   }, [refunds, refundSearch, refundDateFilter, clientsLookup]);
 
-  // Dynamic summary cards for Refunds matching search & date
   const filteredTotalRefunds = useMemo(
     () =>
       filteredRefunds.reduce(
@@ -330,23 +381,75 @@ export default function SalesExpensesHub() {
     [filteredRefunds]
   );
 
-  // Columns for Booking Invoices
+  // -------------------------------------------------------------
+  // Filtered Expenses (by Search & Date)
+  // -------------------------------------------------------------
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((e: any) => {
+      // 1. Date Filter (defaults to This Month)
+      if (
+        !isDateWithinPreset(
+          e.expense_date,
+          expenseDateFilter.preset,
+          expenseDateFilter.customFrom,
+          expenseDateFilter.customTo
+        )
+      ) {
+        return false;
+      }
+
+      // 2. Search query live-filter: category, particulars, ref no, paid from, amount
+      if (expenseSearch.trim()) {
+        const category = e.expense_type || e.category || "";
+        const particulars = e.notes || "";
+        const refNo = e.reference_number || e.reference_no || "";
+        const paidFrom = e.payment_mode === "bank" ? "Bank Account" : "Cash in Hand";
+        const amt = String(e.amount || "");
+        const expNo =
+          e.reference_number ||
+          e.reference_no ||
+          (e.id ? `EXP-${e.id.slice(0, 6)}` : "");
+
+        const matches = matchesMultipleFields(
+          [category, particulars, refNo, paidFrom, amt, expNo, e.bank_name],
+          expenseSearch
+        );
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [expenses, expenseSearch, expenseDateFilter]);
+
+  const filteredTotalExpenses = useMemo(
+    () => filteredExpenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0),
+    [filteredExpenses]
+  );
+
+  // -------------------------------------------------------------
+  // Table Columns
+  // -------------------------------------------------------------
+
+  // 1. Booking Invoices:
+  // Invoice # | Date | Service | Client | Total Amount | Paid Amount | Remaining Amount | Status | PDF
   const invoiceColumns: GridColumn[] = [
     {
       key: "invoice_no",
       header: "Invoice #",
-      width: 110,
+      width: 120,
       render: (inv) => (
-        <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-          {inv.invoice_no}
-        </span>
+        <CopyValue
+          value={inv.invoice_no}
+          label="invoice number"
+          className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200"
+        />
       ),
     },
     {
       key: "invoice_date",
       header: "Date",
       width: 95,
-      render: (inv) => <span className="text-xs">{inv.invoice_date}</span>,
+      render: (inv) => <span className="text-xs font-mono">{inv.invoice_date}</span>,
     },
     {
       key: "service",
@@ -361,57 +464,91 @@ export default function SalesExpensesHub() {
     {
       key: "client_name",
       header: "Client",
-      minWidth: 150,
-      render: (inv) => (
-        <div>
-          <span className="font-semibold block">{inv.party?.name || inv.client_name || "—"}</span>
-          {inv.pnr && (
-            <span className="text-[10px] text-muted-foreground font-mono">PNR: {inv.pnr}</span>
-          )}
-        </div>
-      ),
+      minWidth: 160,
+      render: (inv) => {
+        const cName = inv.party?.name || inv.client_name || "—";
+        return (
+          <div className="space-y-0.5">
+            <CopyValue value={cName} label="client name" className="font-semibold block" />
+            {inv.pnr && (
+              <div className="text-[10px] text-muted-foreground font-mono">
+                PNR: <CopyValue value={inv.pnr} label="PNR" />
+              </div>
+            )}
+            {inv.ticket_no && (
+              <div className="text-[10px] text-muted-foreground font-mono">
+                Tkt: <CopyValue value={inv.ticket_no} label="ticket number" />
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "client_amount",
-      header: "Amount (PKR)",
-      width: 120,
+      header: "Total Amount (PKR)",
+      width: 135,
       isNumeric: true,
       align: "right",
       totalType: "sum",
       render: (inv) => (
-        <span className="font-mono font-bold">{(inv.client_amount || 0).toLocaleString()}</span>
+        <CopyValue
+          value={inv.client_amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-bold">
+              {(inv.client_amount || 0).toLocaleString()}
+            </span>
+          }
+          label="total amount"
+        />
       ),
     },
     {
-      key: "vendor_payable",
-      header: "Cost (PKR)",
-      width: 110,
+      key: "paid_amount",
+      header: "Paid Amount (PKR)",
+      width: 130,
       isNumeric: true,
       align: "right",
       totalType: "sum",
       render: (inv) => (
-        <span className="font-mono text-slate-500">
-          {(inv.vendor_payable || 0).toLocaleString()}
-        </span>
+        <CopyValue
+          value={inv.paid_amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
+              {(inv.paid_amount || 0).toLocaleString()}
+            </span>
+          }
+          label="paid amount"
+        />
       ),
     },
     {
-      key: "profit",
-      header: "Profit (PKR)",
-      width: 110,
+      key: "remaining_amount",
+      header: "Remaining Amount (PKR)",
+      width: 145,
       isNumeric: true,
       align: "right",
       totalType: "sum",
       render: (inv) => {
-        const p = inv.profit || 0;
+        const rem = inv.remaining_amount || 0;
         return (
-          <span
-            className={`font-mono font-bold ${
-              p >= 0 ? "text-teal-600 dark:text-teal-400" : "text-red-500"
-            }`}
-          >
-            {p.toLocaleString()}
-          </span>
+          <CopyValue
+            value={rem}
+            isAmount={true}
+            displayValue={
+              <span
+                className={cn(
+                  "font-mono font-bold",
+                  rem > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                )}
+              >
+                {rem.toLocaleString()}
+              </span>
+            }
+            label="remaining amount"
+          />
         );
       },
     },
@@ -425,7 +562,7 @@ export default function SalesExpensesHub() {
     {
       key: "actions",
       header: "PDF",
-      width: 90,
+      width: 85,
       align: "center",
       sortable: false,
       filterable: false,
@@ -442,11 +579,11 @@ export default function SalesExpensesHub() {
                 pnr: inv.pnr,
                 clientAmount: inv.client_amount || 0,
                 paidAmount: inv.paid_amount || 0,
-                balanceDue: (inv.client_amount || 0) - (inv.paid_amount || 0),
+                balanceDue: inv.remaining_amount || 0,
               });
             }}
             title="Download Confirmation"
-            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-teal-600"
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-teal-600 cursor-pointer"
           >
             <FileCheck className="w-3.5 h-3.5" />
           </button>
@@ -461,11 +598,11 @@ export default function SalesExpensesHub() {
                 pnr: inv.pnr,
                 clientAmount: inv.client_amount || 0,
                 paidAmount: inv.paid_amount || 0,
-                balanceDue: (inv.client_amount || 0) - (inv.paid_amount || 0),
+                balanceDue: inv.remaining_amount || 0,
               });
             }}
             title="Download Invoice"
-            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600"
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
           </button>
@@ -474,19 +611,25 @@ export default function SalesExpensesHub() {
     },
   ];
 
-  // Columns for Payment Vouchers
+  // 2. Payment Vouchers:
   const voucherColumns: GridColumn[] = [
     {
       key: "voucher_no",
       header: "Voucher #",
-      width: 120,
-      render: (v) => <span className="font-mono font-bold text-xs">{v.voucher_no}</span>,
+      width: 125,
+      render: (v) => (
+        <CopyValue
+          value={v.voucher_no}
+          label="voucher number"
+          className="font-mono font-bold text-xs"
+        />
+      ),
     },
     {
       key: "voucher_date",
       header: "Date",
       width: 95,
-      render: (v) => <span className="text-xs">{v.voucher_date}</span>,
+      render: (v) => <span className="text-xs font-mono">{v.voucher_date}</span>,
     },
     {
       key: "direction",
@@ -496,8 +639,8 @@ export default function SalesExpensesHub() {
         <span
           className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
             v.direction === "received"
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-              : "bg-red-50 text-red-700 border-red-200"
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300"
           }`}
         >
           {v.direction === "received" ? "RECEIPT" : "PAYMENT"}
@@ -510,8 +653,17 @@ export default function SalesExpensesHub() {
       minWidth: 160,
       render: (v) => (
         <div>
-          <span className="font-semibold block">{v.party?.name || "Direct Account"}</span>
-          {v.notes && <span className="text-[10px] text-muted-foreground">{v.notes}</span>}
+          <CopyValue
+            value={v.party?.name || "Direct Account"}
+            label="party name"
+            className="font-semibold block"
+          />
+          {v.notes && <span className="text-[10px] text-muted-foreground block">{v.notes}</span>}
+          {v.reference_no && (
+            <span className="text-[10px] text-muted-foreground font-mono block">
+              Ref: <CopyValue value={v.reference_no} label="reference" />
+            </span>
+          )}
         </div>
       ),
     },
@@ -531,13 +683,20 @@ export default function SalesExpensesHub() {
       align: "right",
       totalType: "sum",
       render: (v) => (
-        <span
-          className={`font-mono font-bold ${
-            v.direction === "received" ? "text-emerald-600" : "text-red-600"
-          }`}
-        >
-          {(v.amount || 0).toLocaleString()}
-        </span>
+        <CopyValue
+          value={v.amount || 0}
+          isAmount={true}
+          displayValue={
+            <span
+              className={`font-mono font-bold ${
+                v.direction === "received" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {(v.amount || 0).toLocaleString()}
+            </span>
+          }
+          label="amount"
+        />
       ),
     },
     {
@@ -561,7 +720,7 @@ export default function SalesExpensesHub() {
               notes: v.notes,
             });
           }}
-          className="p-1 text-slate-500 hover:text-slate-800"
+          className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
         >
           <Printer className="w-3.5 h-3.5" />
         </button>
@@ -569,74 +728,53 @@ export default function SalesExpensesHub() {
     },
   ];
 
-  // Columns for Expenses
-  const expenseColumns: GridColumn[] = [
-    {
-      key: "expense_date",
-      header: "Date",
-      width: 100,
-      render: (e) => <span className="text-xs">{e.expense_date}</span>,
-    },
-    {
-      key: "expense_type",
-      header: "Category",
-      minWidth: 140,
-      render: (e) => (
-        <span className="font-semibold text-xs text-slate-800 dark:text-slate-200">
-          {e.expense_type}
-        </span>
-      ),
-    },
-    {
-      key: "notes",
-      header: "Notes",
-      minWidth: 180,
-      render: (e) => <span className="text-xs text-muted-foreground">{e.notes || "—"}</span>,
-    },
-    {
-      key: "amount",
-      header: "Amount (PKR)",
-      width: 130,
-      isNumeric: true,
-      align: "right",
-      totalType: "sum",
-      render: (e) => (
-        <span className="font-mono font-bold text-red-600">
-          {(e.amount || 0).toLocaleString()}
-        </span>
-      ),
-    },
-  ];
-
-  // Columns for Refunds / Voids (Date | Refund No | Invoice / Ticket / PNR | Party Name | Reason | Mode | Amount (PKR))
+  // 3. Refunds / Voids:
   const refundColumns: GridColumn[] = [
     {
       key: "refund_date",
       header: "Date",
       width: 95,
-      render: (r) => <span className="text-xs">{r.refund_date}</span>,
+      render: (r) => <span className="text-xs font-mono">{r.refund_date}</span>,
     },
     {
       key: "refund_no",
       header: "Refund #",
-      width: 120,
-      render: (r) => (
-        <span className="font-mono font-bold text-xs">
-          {r.refund_no || r.reference_no || `REF-${r.id.slice(0, 6).toUpperCase()}`}
-        </span>
-      ),
+      width: 125,
+      render: (r) => {
+        const rNo = r.refund_no || r.reference_no || `REF-${r.id.slice(0, 6).toUpperCase()}`;
+        return (
+          <CopyValue
+            value={rNo}
+            label="refund number"
+            className="font-mono font-bold text-xs"
+          />
+        );
+      },
     },
     {
       key: "ref_info",
       header: "Invoice / Ticket / PNR",
       minWidth: 140,
-      render: (r) => <span className="text-xs font-mono">{getRefundRefInfo(r)}</span>,
+      render: (r) => {
+        const info = getRefundRefInfo(r);
+        return info !== "—" ? (
+          <CopyValue value={info} label="reference" className="text-xs font-mono" />
+        ) : (
+          <span className="text-xs font-mono text-muted-foreground">—</span>
+        );
+      },
     },
     {
       key: "party_name",
       header: "Party Name",
       minWidth: 150,
-      render: (r) => <span className="text-xs font-semibold">{getRefundPartyName(r)}</span>,
+      render: (r) => (
+        <CopyValue
+          value={getRefundPartyName(r)}
+          label="party name"
+          className="text-xs font-semibold"
+        />
+      ),
     },
     {
       key: "reason",
@@ -669,9 +807,129 @@ export default function SalesExpensesHub() {
       align: "right",
       totalType: "sum",
       render: (r) => (
-        <span className="font-mono font-bold text-purple-600">
-          {(r.refund_amount || 0).toLocaleString()}
+        <CopyValue
+          value={r.refund_amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+              {(r.refund_amount || 0).toLocaleString()}
+            </span>
+          }
+          label="amount"
+        />
+      ),
+    },
+  ];
+
+  // 4. Expenses:
+  // Date | Expense No | Category | Type (Normal/Recurring) | Paid From | Ref / Receipt # | Particulars | Amount (PKR)
+  const expenseColumns: GridColumn[] = [
+    {
+      key: "expense_date",
+      header: "Date",
+      width: 95,
+      render: (e) => <span className="text-xs font-mono">{e.expense_date}</span>,
+    },
+    {
+      key: "expense_no",
+      header: "Expense #",
+      width: 120,
+      render: (e) => {
+        const expNo =
+          e.reference_number ||
+          e.reference_no ||
+          (e.id ? `EXP-${e.id.slice(0, 6).toUpperCase()}` : "EXP-1001");
+        return (
+          <CopyValue
+            value={expNo}
+            label="expense number"
+            className="font-mono font-bold text-xs"
+          />
+        );
+      },
+    },
+    {
+      key: "expense_type",
+      header: "Category",
+      minWidth: 140,
+      render: (e) => (
+        <CopyValue
+          value={e.expense_type || e.category || "General"}
+          label="category"
+          className="font-semibold text-xs text-slate-800 dark:text-slate-200"
+        />
+      ),
+    },
+    {
+      key: "is_recurring",
+      header: "Type",
+      width: 110,
+      render: (e) => {
+        const isRec = Boolean(e.is_recurring && !e.recurring_parent_id);
+        return isRec ? (
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200">
+            Recurring ({e.recurring_frequency || "Monthly"})
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border">
+            Normal
+          </span>
+        );
+      },
+    },
+    {
+      key: "payment_mode",
+      header: "Paid From",
+      width: 120,
+      render: (e) => (
+        <span className="text-xs text-slate-600 dark:text-slate-400 capitalize">
+          {e.payment_mode === "bank"
+            ? e.bank_name
+              ? `Bank (${e.bank_name})`
+              : "Bank Account"
+            : "Cash in Hand"}
         </span>
+      ),
+    },
+    {
+      key: "reference_no",
+      header: "Ref / Receipt #",
+      width: 120,
+      render: (e) => {
+        const ref = e.reference_number || e.reference_no;
+        return ref ? (
+          <CopyValue value={ref} label="reference" className="text-xs font-mono text-slate-500" />
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+    },
+    {
+      key: "notes",
+      header: "Particulars",
+      minWidth: 180,
+      render: (e) => (
+        <span className="text-xs text-muted-foreground select-text">{e.notes || "—"}</span>
+      ),
+    },
+    {
+      key: "amount",
+      header: "Amount (PKR)",
+      width: 130,
+      isNumeric: true,
+      align: "right",
+      totalType: "sum",
+      render: (e) => (
+        <CopyValue
+          value={e.amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-bold text-red-600 dark:text-red-400">
+              {(e.amount || 0).toLocaleString()}
+            </span>
+          }
+          label="amount"
+        />
       ),
     },
   ];
@@ -684,7 +942,7 @@ export default function SalesExpensesHub() {
         path="/app/sales-expenses"
       />
 
-      {/* Header with 4 Sub-section Tabs */}
+      {/* Header with Action Buttons */}
       <PageHeader
         title="Sales & Expenses"
         subtitle="Manage booking invoices, payment vouchers, customer refunds, and operating expenses with automatic double-entry posting."
@@ -727,7 +985,7 @@ export default function SalesExpensesHub() {
                 className="bg-[#0B192C] hover:bg-[#1E3E62] text-white text-xs gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Record Expense
+                Record Daily Expense
               </Button>
             )}
           </div>
@@ -775,18 +1033,71 @@ export default function SalesExpensesHub() {
         <div className="space-y-4">
           <TotalsBar
             metrics={[
-              { label: "Total Invoiced", value: totalInvoiced, prefix: "PKR", highlight: "neutral" },
-              { label: "Net Profit", value: totalProfit, prefix: "PKR", highlight: "teal" },
-              { label: "Total Bookings", value: invoices.length, highlight: "neutral" },
+              {
+                label: "Total Invoiced",
+                value: filteredTotalInvoiced,
+                prefix: "PKR",
+                highlight: "neutral",
+              },
+              {
+                label: "Net Profit",
+                value: filteredNetProfit,
+                prefix: "PKR",
+                highlight: "teal",
+              },
+              {
+                label: "Total Bookings",
+                value: filteredInvoices.length,
+                highlight: "neutral",
+              },
             ]}
           />
+
+          {/* Search bar + Date filter toolbar (Booking Invoices) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={invoiceSearch}
+                onChange={(e) => setInvoiceSearch(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setInvoiceSearch(cleanPastedSearch(pasted));
+                  }
+                }}
+                placeholder="Search invoices by invoice #, client name, PNR, ticket #, service, status..."
+                className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
+              />
+              {invoiceSearch && (
+                <button
+                  type="button"
+                  onClick={() => setInvoiceSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <DateFilter
+              value={invoiceDateFilter}
+              onChange={setInvoiceDateFilter}
+              className="h-9 shrink-0"
+            />
+          </div>
+
           <ExcelGrid
             id="sales_booking_invoices"
-            data={invoices}
+            data={filteredInvoices}
             columns={invoiceColumns}
             keyExtractor={(inv) => inv.id}
             title="Booking Invoices Register"
             filename="Booking_Invoices"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
             emptyState={
               <EmptyState
                 type="empty"
@@ -801,7 +1112,6 @@ export default function SalesExpensesHub() {
       {/* Tab 2: Payment Vouchers */}
       {currentTab === "payment-vouchers" && (
         <div className="space-y-4">
-          {/* Dynamic Summary Cards updated to match search & date filter */}
           <TotalsBar
             metrics={[
               {
@@ -831,6 +1141,13 @@ export default function SalesExpensesHub() {
               <Input
                 value={voucherSearch}
                 onChange={(e) => setVoucherSearch(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setVoucherSearch(cleanPastedSearch(pasted));
+                  }
+                }}
                 placeholder="Search vouchers by #, client/vendor, invoice #, ticket, PNR, cheque/ref, bank, mode, amount..."
                 className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
               />
@@ -876,7 +1193,6 @@ export default function SalesExpensesHub() {
       {/* Tab 3: Refunds / Voids */}
       {currentTab === "refunds-voids" && (
         <div className="space-y-4">
-          {/* Dynamic Summary Cards updated to match search & date filter */}
           <TotalsBar
             metrics={[
               {
@@ -900,6 +1216,13 @@ export default function SalesExpensesHub() {
               <Input
                 value={refundSearch}
                 onChange={(e) => setRefundSearch(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setRefundSearch(cleanPastedSearch(pasted));
+                  }
+                }}
                 placeholder="Search refunds / voids by #, invoice #, ticket, PNR, party name, reason, mode, amount..."
                 className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
               />
@@ -947,17 +1270,65 @@ export default function SalesExpensesHub() {
         <div className="space-y-4">
           <TotalsBar
             metrics={[
-              { label: "Total Operating Expenses", value: totalExpenses, prefix: "PKR", highlight: "red" },
-              { label: "Expense Entries", value: expenses.length, highlight: "neutral" },
+              {
+                label: "Total Operating Expenses",
+                value: filteredTotalExpenses,
+                prefix: "PKR",
+                highlight: "red",
+              },
+              {
+                label: "Expense Entries",
+                value: filteredExpenses.length,
+                highlight: "neutral",
+              },
             ]}
           />
+
+          {/* Search bar + Date filter toolbar (Expenses) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={expenseSearch}
+                onChange={(e) => setExpenseSearch(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setExpenseSearch(cleanPastedSearch(pasted));
+                  }
+                }}
+                placeholder="Search expenses by category, particulars, ref #, paid from, amount..."
+                className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
+              />
+              {expenseSearch && (
+                <button
+                  type="button"
+                  onClick={() => setExpenseSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <DateFilter
+              value={expenseDateFilter}
+              onChange={setExpenseDateFilter}
+              className="h-9 shrink-0"
+            />
+          </div>
+
           <ExcelGrid
             id="sales_expenses"
-            data={expenses}
+            data={filteredExpenses}
             columns={expenseColumns}
             keyExtractor={(e) => e.id}
             title="Operating Expenses Register"
             filename="Daily_Expenses"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
             emptyState={
               <EmptyState
                 type="empty"

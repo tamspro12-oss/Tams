@@ -36,6 +36,9 @@ export interface GridColumn<T = any> {
   isNumeric?: boolean;
   sortable?: boolean;
   filterable?: boolean;
+  filterType?: "text" | "checkbox";
+  filterOptions?: string[];
+  filterMatchFn?: (row: T, filterValues: string[]) => boolean;
   render?: (row: T, index: number) => React.ReactNode;
   exportValue?: (row: T) => any;
   totalType?: "sum" | "count" | "avg" | "none";
@@ -60,6 +63,7 @@ export interface ExcelGridProps<T = any> {
   hideColumnsButton?: boolean;
   hideCopyButton?: boolean;
   hideExportButton?: boolean;
+  onFilteredDataChange?: (data: T[]) => void;
 }
 
 export function ExcelGrid<T = any>({
@@ -80,6 +84,7 @@ export function ExcelGrid<T = any>({
   hideColumnsButton = false,
   hideCopyButton = false,
   hideExportButton = false,
+  onFilteredDataChange,
 }: ExcelGridProps<T>) {
   // 1. Column Visibility and Order State (persisted in localStorage)
   const storageKey = `tams_grid_cols_${id}`;
@@ -130,6 +135,7 @@ export function ExcelGrid<T = any>({
 
   // 3. Per-Column Filters
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [checkboxFilters, setCheckboxFilters] = useState<Record<string, string[]>>({});
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
 
   const setColumnFilter = (key: string, val: string) => {
@@ -141,6 +147,29 @@ export function ExcelGrid<T = any>({
         next[key] = val;
       }
       return next;
+    });
+  };
+
+  const toggleCheckboxFilter = (key: string, val: string) => {
+    setCheckboxFilters((prev) => {
+      const current = prev[key] || [];
+      const next = current.includes(val)
+        ? current.filter((item) => item !== val)
+        : [...current, val];
+      if (next.length === 0) {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      }
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const clearCheckboxFilter = (key: string) => {
+    setCheckboxFilters((prev) => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
     });
   };
 
@@ -191,6 +220,21 @@ export function ExcelGrid<T = any>({
       });
     });
 
+    // Apply per-column checkbox filters
+    Object.entries(checkboxFilters).forEach(([colKey, selectedValues]) => {
+      if (!selectedValues || selectedValues.length === 0) return;
+      const colDef = columns.find((c) => c.key === colKey);
+      if (colDef?.filterMatchFn) {
+        result = result.filter((row) => colDef.filterMatchFn!(row, selectedValues));
+      } else {
+        result = result.filter((row: any) => {
+          const val = row[colKey];
+          if (val === null || val === undefined) return false;
+          return selectedValues.some((sv) => String(val).toLowerCase() === sv.toLowerCase());
+        });
+      }
+    });
+
     // Apply sorting
     if (sortKey) {
       result.sort((a: any, b: any) => {
@@ -210,7 +254,14 @@ export function ExcelGrid<T = any>({
     }
 
     return result;
-  }, [data, columnFilters, sortKey, sortDir]);
+  }, [data, columnFilters, checkboxFilters, columns, sortKey, sortDir]);
+
+  // Notify parent of processed / filtered rows
+  useEffect(() => {
+    if (onFilteredDataChange) {
+      onFilteredDataChange(processedData);
+    }
+  }, [processedData, onFilteredDataChange]);
 
   // 6. Keyboard Navigation (Arrow Keys, Tab, Enter, Esc)
   const handleKeyDown = useCallback(
@@ -279,7 +330,12 @@ export function ExcelGrid<T = any>({
           break;
         case "c":
           if (e.ctrlKey || e.metaKey) {
-            // Copy active or selected cells
+            // If user has selected text on screen, let native browser copy handle it
+            const selection = window.getSelection()?.toString();
+            if (selection && selection.length > 0) {
+              return;
+            }
+            // Otherwise copy active or selected cells
             handleCopy();
           }
           break;
@@ -416,7 +472,7 @@ export function ExcelGrid<T = any>({
       ref={gridContainerRef}
       onKeyDown={handleKeyDown}
       tabIndex={0}
-      className="outline-none space-y-2 select-none"
+      className="outline-none space-y-2"
     >
       {/* Top Toolbar: Search summary, Columns toggle, Mobile mode switch, Export */}
       <div className="flex items-center justify-between gap-2 px-1 py-1">
@@ -429,14 +485,17 @@ export function ExcelGrid<T = any>({
           <span className="text-[11px] text-muted-foreground font-mono">
             {processedData.length} records
           </span>
-          {Object.keys(columnFilters).length > 0 && (
+          {(Object.keys(columnFilters).length > 0 || Object.keys(checkboxFilters).length > 0) && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setColumnFilters({})}
+              onClick={() => {
+                setColumnFilters({});
+                setCheckboxFilters({});
+              }}
               className="h-6 text-[10px] text-amber-600 hover:text-amber-700 px-1.5"
             >
-              Clear filters ({Object.keys(columnFilters).length})
+              Clear filters ({Object.keys(columnFilters).length + Object.keys(checkboxFilters).length})
             </Button>
           )}
         </div>
@@ -525,8 +584,8 @@ export function ExcelGrid<T = any>({
         </div>
       </div>
 
-      {/* Main Grid or Mobile Cards */}
-      {mobileMode === "cards" && renderMobileCard ? (
+      {/* Mobile Cards (only visible on mobile screens when renderMobileCard is passed and mobileMode is cards) */}
+      {renderMobileCard && mobileMode === "cards" && (
         <div className="md:hidden space-y-2">
           {processedData.length === 0 ? (
             emptyState || <div className="p-8 text-center text-xs text-muted-foreground">No records</div>
@@ -542,111 +601,158 @@ export function ExcelGrid<T = any>({
             ))
           )}
         </div>
-      ) : (
-        /* Excel Table View */
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-          <div className="overflow-x-auto max-h-[70vh] relative">
-            <table className="w-full border-collapse text-xs text-left">
-              {/* Navy Table Header */}
-              <thead className="sticky top-0 z-20 bg-[#0B192C] text-slate-100 uppercase text-[11px] font-semibold tracking-wider select-none">
-                <tr>
-                  {activeColumns.map((col, colIdx) => {
-                    const isSticky = stickyFirstColumn && colIdx === 0;
-                    const isSorted = sortKey === col.key;
-                    const hasFilter = Boolean(columnFilters[col.key]);
+      )}
 
-                    return (
-                      <th
-                        key={col.key}
-                        style={{
-                          width: col.width,
-                          minWidth: col.minWidth || 100,
-                        }}
+      {/* Excel Table View (Always rendered on desktop; on mobile rendered when mobileMode is grid or no renderMobileCard) */}
+      <div
+        className={cn(
+          "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm",
+          renderMobileCard && mobileMode === "cards" ? "hidden md:block" : "block"
+        )}
+      >
+        <div className="overflow-x-auto max-h-[70vh] relative">
+          <table className="w-full border-collapse text-xs text-left">
+            {/* Navy Table Header */}
+            <thead className="sticky top-0 z-20 bg-[#0B192C] text-slate-100 uppercase text-[11px] font-semibold tracking-wider select-none">
+              <tr>
+                {activeColumns.map((col, colIdx) => {
+                  const isSticky = stickyFirstColumn && colIdx === 0;
+                  const isSorted = sortKey === col.key;
+                  const hasFilter = Boolean(columnFilters[col.key]) || Boolean(checkboxFilters[col.key]?.length);
+
+                  return (
+                    <th
+                      key={col.key}
+                      style={{
+                        width: col.width,
+                        minWidth: col.minWidth || 100,
+                      }}
+                      className={cn(
+                        "px-3 py-3 font-semibold border-b border-slate-700/80 transition-colors whitespace-nowrap",
+                        col.align === "right"
+                          ? "text-right"
+                          : col.align === "center"
+                          ? "text-center"
+                          : "text-left",
+                        isSticky ? "sticky left-0 z-30 bg-[#0B192C] shadow-[1px_0_0_0_#1e293b]" : ""
+                      )}
+                    >
+                      <div
                         className={cn(
-                          "px-3 py-3 font-semibold border-b border-slate-700/80 transition-colors whitespace-nowrap",
-                          col.align === "right"
-                            ? "text-right"
-                            : col.align === "center"
-                            ? "text-center"
-                            : "text-left",
-                          isSticky ? "sticky left-0 z-30 bg-[#0B192C] shadow-[1px_0_0_0_#1e293b]" : ""
+                          "flex items-center gap-1",
+                          col.align === "right" ? "justify-end" : col.align === "center" ? "justify-center" : "justify-start"
                         )}
                       >
-                        <div
+                        <span
+                          onClick={() => col.sortable !== false && handleHeaderSort(col.key)}
                           className={cn(
-                            "flex items-center gap-1",
-                            col.align === "right" ? "justify-end" : col.align === "center" ? "justify-center" : "justify-start"
+                            "cursor-pointer hover:text-teal-300 transition-colors inline-flex items-center gap-1",
+                            isSorted ? "text-teal-400 font-bold" : ""
                           )}
                         >
-                          <span
-                            onClick={() => col.sortable !== false && handleHeaderSort(col.key)}
-                            className={cn(
-                              "cursor-pointer hover:text-teal-300 transition-colors inline-flex items-center gap-1",
-                              isSorted ? "text-teal-400 font-bold" : ""
-                            )}
-                          >
-                            {col.header}
-                            {col.sortable !== false && (
-                              <span className="text-[10px]">
-                                {isSorted ? (
-                                  sortDir === "asc" ? (
-                                    <ArrowUp className="w-3 h-3 text-teal-400" />
-                                  ) : (
-                                    <ArrowDown className="w-3 h-3 text-teal-400" />
-                                  )
+                          {col.header}
+                          {col.sortable !== false && (
+                            <span className="text-[10px]">
+                              {isSorted ? (
+                                sortDir === "asc" ? (
+                                  <ArrowUp className="w-3 h-3 text-teal-400" />
                                 ) : (
-                                  <ArrowUpDown className="w-2.5 h-2.5 opacity-40 hover:opacity-100" />
-                                )}
-                              </span>
-                            )}
-                          </span>
-
-                          {/* Per-column filter trigger */}
-                          {col.filterable !== false && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveFilterCol(activeFilterCol === col.key ? null : col.key);
-                              }}
-                              className={cn(
-                                "p-0.5 rounded hover:bg-slate-800 transition-colors ml-0.5",
-                                hasFilter ? "text-amber-400 font-bold" : "text-slate-400 opacity-60 hover:opacity-100"
+                                  <ArrowDown className="w-3 h-3 text-teal-400" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-2.5 h-2.5 opacity-40 hover:opacity-100" />
                               )}
-                              title="Filter column"
-                            >
-                              <Filter className="w-2.5 h-2.5" />
-                            </button>
+                            </span>
+                          )}
+                        </span>
+
+                        {/* Per-column filter trigger */}
+                        {col.filterable !== false && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterCol(activeFilterCol === col.key ? null : col.key);
+                            }}
+                            className={cn(
+                              "p-0.5 rounded hover:bg-slate-800 transition-colors ml-0.5 cursor-pointer",
+                              hasFilter ? "text-amber-400 font-bold" : "text-slate-400 opacity-60 hover:opacity-100"
+                            )}
+                            title="Filter column"
+                          >
+                            <Filter className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Inline Filter Input / Checklist Pop-down */}
+                      {activeFilterCol === col.key && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1.5 pt-1.5 border-t border-slate-700 text-slate-900 dark:text-slate-100 text-[11px] font-normal"
+                        >
+                          {col.filterType === "checkbox" && col.filterOptions ? (
+                            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 shadow-xl min-w-[150px] space-y-1.5 normal-case text-left">
+                              <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {col.header}
+                                </span>
+                                {Boolean(checkboxFilters[col.key]?.length) && (
+                                  <button
+                                    onClick={() => clearCheckboxFilter(col.key)}
+                                    className="text-[10px] text-amber-600 hover:text-amber-700 font-medium cursor-pointer"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                              <div className="max-h-44 overflow-y-auto space-y-1">
+                                {col.filterOptions.map((opt) => {
+                                  const isChecked = checkboxFilters[col.key]?.includes(opt) || false;
+                                  return (
+                                    <label
+                                      key={opt}
+                                      className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded text-xs select-none"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleCheckboxFilter(col.key, opt)}
+                                        className="rounded text-teal-600 w-3.5 h-3.5 cursor-pointer"
+                                      />
+                                      <span className="text-slate-800 dark:text-slate-200 text-xs font-medium">
+                                        {opt}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                autoFocus
+                                value={columnFilters[col.key] || ""}
+                                onChange={(e) => setColumnFilter(col.key, e.target.value)}
+                                placeholder={`Filter ${col.header}...`}
+                                className="h-6 text-[10px] text-slate-900 bg-white dark:text-slate-100 dark:bg-slate-800 px-1.5 py-0 rounded"
+                              />
+                              {columnFilters[col.key] && (
+                                <button
+                                  onClick={() => setColumnFilter(col.key, "")}
+                                  className="text-slate-400 hover:text-white"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-
-                        {/* Inline Filter Input Pop-down */}
-                        {activeFilterCol === col.key && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-1.5 pt-1.5 border-t border-slate-700 flex items-center gap-1"
-                          >
-                            <Input
-                              autoFocus
-                              value={columnFilters[col.key] || ""}
-                              onChange={(e) => setColumnFilter(col.key, e.target.value)}
-                              placeholder={`Filter ${col.header}...`}
-                              className="h-6 text-[10px] text-slate-900 bg-white dark:text-slate-100 dark:bg-slate-800 px-1.5 py-0 rounded"
-                            />
-                            {columnFilters[col.key] && (
-                              <button
-                                onClick={() => setColumnFilter(col.key, "")}
-                                className="text-slate-400 hover:text-white"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
 
               {/* Table Body */}
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -668,6 +774,8 @@ export function ExcelGrid<T = any>({
                       <tr
                         key={keyExtractor(row, rowIdx)}
                         onClick={() => {
+                          const selection = window.getSelection()?.toString();
+                          if (selection && selection.length > 0) return;
                           setActiveRow(rowIdx);
                           if (onRowClick) onRowClick(row);
                         }}
@@ -685,24 +793,12 @@ export function ExcelGrid<T = any>({
                       >
                         {activeColumns.map((col, colIdx) => {
                           const isSticky = stickyFirstColumn && colIdx === 0;
-                          const isCellActive = isRowActive && activeCol === colIdx;
 
                           return (
                             <td
                               key={col.key}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveRow(rowIdx);
-                                setActiveCol(colIdx);
-                                if (e.shiftKey) {
-                                  // Range selection
-                                  setSelectedCells((prev) => [...prev, { row: rowIdx, col: colIdx }]);
-                                } else {
-                                  setSelectedCells([{ row: rowIdx, col: colIdx }]);
-                                }
-                              }}
                               className={cn(
-                                "px-3 py-2 text-slate-800 dark:text-slate-200 whitespace-nowrap transition-colors",
+                                "px-3 py-2 text-slate-800 dark:text-slate-200 whitespace-nowrap transition-colors select-text",
                                 col.align === "right" || col.isNumeric
                                   ? "text-right tabular-nums font-mono font-medium"
                                   : col.align === "center"
@@ -710,9 +806,6 @@ export function ExcelGrid<T = any>({
                                   : "text-left",
                                 isSticky
                                   ? "sticky left-0 z-10 bg-inherit font-semibold shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1e293b]"
-                                  : "",
-                                isCellActive
-                                  ? "outline outline-2 outline-teal-500 -outline-offset-2 bg-teal-100/40 dark:bg-teal-900/40"
                                   : ""
                               )}
                             >
@@ -790,7 +883,6 @@ export function ExcelGrid<T = any>({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

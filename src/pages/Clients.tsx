@@ -34,6 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { InlinePaymentHistory } from "@/components/InlinePaymentHistory";
 import { AllPaymentHistory } from "@/components/AllPaymentHistory";
+import { CopyValue } from "@/components/ui/CopyValue";
+import { cleanPastedSearch } from "@/lib/searchUtils";
 import { exportToExcel, downloadFile } from "@/lib/excelExport";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -543,6 +545,13 @@ export default function Clients() {
                 placeholder="Search name, passport, PNR, vendor..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setSearchQuery(cleanPastedSearch(pasted));
+                  }
+                }}
                 className="pl-9 h-10 bg-card/60 border-border/60 rounded-xl text-sm placeholder:text-muted-foreground/70"
               />
               {searchQuery && (
@@ -889,6 +898,13 @@ export default function Clients() {
                 placeholder="Search by name, passport, or PNR..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setSearchQuery(cleanPastedSearch(pasted));
+                  }
+                }}
                 className="pl-9"
               />
             </div>
@@ -977,7 +993,9 @@ export default function Clients() {
                                 )}
                               </Button>
                               <div>
-                                <div className="font-medium">{client.name}</div>
+                                <div className="font-medium">
+                                  <CopyValue value={client.name} label="client name" />
+                                </div>
                                 {client.group_size && client.group_size > 1 && (
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <Users className="h-3 w-3" />
@@ -1070,7 +1088,13 @@ export default function Clients() {
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                   <div>
                                     <div className="text-sm text-muted-foreground">Passport</div>
-                                    <div className="font-medium">{client.passport_number || "—"}</div>
+                                    <div className="font-medium">
+                                      {client.passport_number ? (
+                                        <CopyValue value={client.passport_number} label="passport number" />
+                                      ) : (
+                                        "—"
+                                      )}
+                                    </div>
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Group Info</div>
@@ -1082,23 +1106,58 @@ export default function Clients() {
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Purchase Price</div>
-                                    <div className="font-medium">Rs. {purchasePrice.toLocaleString()}</div>
+                                    <div className="font-medium">
+                                      <CopyValue
+                                        value={purchasePrice}
+                                        isAmount={true}
+                                        displayValue={`Rs. ${purchasePrice.toLocaleString()}`}
+                                        label="purchase price"
+                                      />
+                                    </div>
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Total Amount</div>
-                                    <div className="font-medium">Rs. {sellingPrice.toLocaleString()}</div>
+                                    <div className="font-medium">
+                                      <CopyValue
+                                        value={sellingPrice}
+                                        isAmount={true}
+                                        displayValue={`Rs. ${sellingPrice.toLocaleString()}`}
+                                        label="total amount"
+                                      />
+                                    </div>
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Paid</div>
-                                    <div className="font-medium text-blue-600">Rs. {amountPaid.toLocaleString()}</div>
+                                    <div className="font-medium text-blue-600">
+                                      <CopyValue
+                                        value={amountPaid}
+                                        isAmount={true}
+                                        displayValue={`Rs. ${amountPaid.toLocaleString()}`}
+                                        label="paid amount"
+                                      />
+                                    </div>
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Pending</div>
-                                    <div className="font-medium text-orange-600">Rs. {pending.toLocaleString()}</div>
+                                    <div className="font-medium text-orange-600">
+                                      <CopyValue
+                                        value={pending}
+                                        isAmount={true}
+                                        displayValue={`Rs. ${pending.toLocaleString()}`}
+                                        label="pending amount"
+                                      />
+                                    </div>
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Profit</div>
-                                    <div className="font-medium text-green-600">Rs. {profit.toLocaleString()}</div>
+                                    <div className="font-medium text-green-600">
+                                      <CopyValue
+                                        value={profit}
+                                        isAmount={true}
+                                        displayValue={`Rs. ${profit.toLocaleString()}`}
+                                        label="profit"
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                                 

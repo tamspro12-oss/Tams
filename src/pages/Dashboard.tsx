@@ -37,6 +37,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { DashboardSkeleton } from "@/components/SkeletonLoaders";
+import { CopyValue } from "@/components/ui/CopyValue";
 
 // Dynamic dialogs for frictionless dashboard workflows
 import { AddClientDialog } from "@/components/AddClientDialog";
@@ -550,7 +551,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
-                {formatCurrency(cashAndBankTotal)}
+                <CopyValue isAmount={true} value={cashAndBankTotal} displayValue={formatCurrency(cashAndBankTotal)} label="cash & bank total" />
               </p>
               <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium group-hover:underline">
                 View Vouchers →
@@ -573,7 +574,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums">
-                {formatCurrency(totalClientsPending)}
+                <CopyValue isAmount={true} value={totalClientsPending} displayValue={formatCurrency(totalClientsPending)} label="client dues" />
               </p>
               <span className="text-[10px] text-amber-600 font-medium group-hover:underline">
                 View Clients →
@@ -596,7 +597,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-rose-600 dark:text-rose-400 tabular-nums">
-                {formatCurrency(vendorPayables)}
+                <CopyValue isAmount={true} value={vendorPayables} displayValue={formatCurrency(vendorPayables)} label="vendor dues" />
               </p>
               <span className="text-[10px] text-rose-600 font-medium group-hover:underline">
                 View Vendors →
@@ -619,7 +620,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
-                {formatCurrency(profitThisMonth)}
+                <CopyValue isAmount={true} value={profitThisMonth} displayValue={formatCurrency(profitThisMonth)} label="profit" />
               </p>
               <span className="text-[10px] text-emerald-600 font-medium group-hover:underline">
                 Reports P&L →

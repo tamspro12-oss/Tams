@@ -29,6 +29,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { CopyValue } from "@/components/ui/CopyValue";
 import { useVendors, useClients } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
 import { useVouchers } from "@/hooks/useVouchers";
@@ -286,25 +287,45 @@ export function DirectBookingDetailModal({
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Selling Price</span>
               <span className="text-base sm:text-lg font-bold text-foreground">
-                PKR {sellingPrice.toLocaleString()}
+                <CopyValue
+                  value={sellingPrice}
+                  isAmount={true}
+                  displayValue={`PKR ${sellingPrice.toLocaleString()}`}
+                  label="selling price"
+                />
               </span>
             </div>
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Purchase Cost</span>
               <span className="text-base sm:text-lg font-bold text-foreground">
-                PKR {purchasePrice.toLocaleString()}
+                <CopyValue
+                  value={purchasePrice}
+                  isAmount={true}
+                  displayValue={`PKR ${purchasePrice.toLocaleString()}`}
+                  label="purchase cost"
+                />
               </span>
             </div>
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Profit</span>
               <span className="text-base sm:text-lg font-bold text-emerald-600">
-                PKR {profit.toLocaleString()}
+                <CopyValue
+                  value={profit}
+                  isAmount={true}
+                  displayValue={`PKR ${profit.toLocaleString()}`}
+                  label="profit"
+                />
               </span>
             </div>
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Paid Amount</span>
               <span className="text-base sm:text-lg font-bold text-emerald-600">
-                PKR {amountPaid.toLocaleString()}
+                <CopyValue
+                  value={amountPaid}
+                  isAmount={true}
+                  displayValue={`PKR ${amountPaid.toLocaleString()}`}
+                  label="paid amount"
+                />
               </span>
             </div>
             <div className="bg-card border rounded-lg p-3">
@@ -315,7 +336,12 @@ export function DirectBookingDetailModal({
                   remaining > 0 ? "text-amber-600" : "text-muted-foreground"
                 )}
               >
-                PKR {remaining.toLocaleString()}
+                <CopyValue
+                  value={remaining}
+                  isAmount={true}
+                  displayValue={`PKR ${remaining.toLocaleString()}`}
+                  label="remaining due"
+                />
               </span>
             </div>
           </div>
