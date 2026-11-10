@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 // SMTP status is exposed as a boolean flag only.
 const AGENCY_COLUMNS = [
   "id",
+  "agency_no",
+  "agency_code",
   "name",
   "contact_info",
   "license_status",

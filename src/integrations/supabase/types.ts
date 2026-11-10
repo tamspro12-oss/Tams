@@ -183,6 +183,8 @@ export type Database = {
       }
       agencies: {
         Row: {
+          agency_code: string | null
+          agency_no: number | null
           contact_email: string | null
           contact_info: string | null
           created_at: string | null
@@ -202,6 +204,8 @@ export type Database = {
           subscription_plan: string | null
         }
         Insert: {
+          agency_code?: string | null
+          agency_no?: number | null
           contact_email?: string | null
           contact_info?: string | null
           created_at?: string | null
@@ -221,6 +225,8 @@ export type Database = {
           subscription_plan?: string | null
         }
         Update: {
+          agency_code?: string | null
+          agency_no?: number | null
           contact_email?: string | null
           contact_info?: string | null
           created_at?: string | null
@@ -281,6 +287,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "agency_banks_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agency_counters: {
+        Row: {
+          agency_id: string
+          counter_type: string
+          last_value: number
+          updated_at: string
+        }
+        Insert: {
+          agency_id: string
+          counter_type: string
+          last_value?: number
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string
+          counter_type?: string
+          last_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_counters_agency_id_fkey"
             columns: ["agency_id"]
             isOneToOne: false
             referencedRelation: "agencies"
@@ -663,6 +698,7 @@ export type Database = {
           agency_id: string
           airline: string | null
           amount_paid: number | null
+          client_code: string | null
           cnic: string | null
           contact_number: string | null
           contact_person: string | null
@@ -692,6 +728,7 @@ export type Database = {
           agency_id: string
           airline?: string | null
           amount_paid?: number | null
+          client_code?: string | null
           cnic?: string | null
           contact_number?: string | null
           contact_person?: string | null
@@ -721,6 +758,7 @@ export type Database = {
           agency_id?: string
           airline?: string | null
           amount_paid?: number | null
+          client_code?: string | null
           cnic?: string | null
           contact_number?: string | null
           contact_person?: string | null
@@ -1273,6 +1311,7 @@ export type Database = {
           reason: string | null
           refund_amount: number
           refund_date: string
+          refund_no: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1288,6 +1327,7 @@ export type Database = {
           reason?: string | null
           refund_amount: number
           refund_date?: string
+          refund_no?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1303,6 +1343,7 @@ export type Database = {
           reason?: string | null
           refund_amount?: number
           refund_date?: string
+          refund_no?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1441,6 +1482,7 @@ export type Database = {
           payment_status: string | null
           service_type: string | null
           updated_at: string | null
+          vendor_code: string | null
         }
         Insert: {
           agency_id: string
@@ -1457,6 +1499,7 @@ export type Database = {
           payment_status?: string | null
           service_type?: string | null
           updated_at?: string | null
+          vendor_code?: string | null
         }
         Update: {
           agency_id?: string
@@ -1473,6 +1516,7 @@ export type Database = {
           payment_status?: string | null
           service_type?: string | null
           updated_at?: string | null
+          vendor_code?: string | null
         }
         Relationships: []
       }
@@ -1637,7 +1681,24 @@ export type Database = {
         Returns: boolean
       }
       count_sub_users: { Args: { _main_user_id: string }; Returns: number }
+      current_agency_id: { Args: never; Returns: string }
       current_user_agency_id: { Args: never; Returns: string }
+      format_agency_number: {
+        Args: { p_agency_id: string; p_counter_type: string; p_val: number }
+        Returns: string
+      }
+      next_number: {
+        Args: { p_agency_id: string; p_counter_type: string }
+        Returns: number
+      }
+      next_formatted_number: {
+        Args: { p_agency_id: string; p_counter_type: string }
+        Returns: string
+      }
+      preview_next_number: {
+        Args: { p_counter_type: string }
+        Returns: string
+      }
       delete_all_user_sessions: {
         Args: { p_user_id: string }
         Returns: undefined

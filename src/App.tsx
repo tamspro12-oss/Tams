@@ -56,6 +56,8 @@ const PwaOnboardModal = lazy(() =>
   import("@/components/PwaOnboardModal").then((m) => ({ default: m.PwaOnboardModal }))
 );
 
+import { registerGlobalQueryClient } from "@/lib/cacheManager";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -70,6 +72,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+registerGlobalQueryClient(queryClient);
 
 const idle = (fn: () => void, timeout = 2000) => {
   if (typeof (window as any).requestIdleCallback === "function") {

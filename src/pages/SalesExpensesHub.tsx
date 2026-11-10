@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ExcelGrid,
   GridColumn,
@@ -15,6 +16,8 @@ import { BookingInvoiceForm } from "@/components/bookings/BookingInvoiceForm";
 import { PaymentVoucherForm } from "@/components/vouchers/PaymentVoucherForm";
 import { RefundVoidForm } from "@/components/refunds/RefundVoidForm";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
+import { DateFilter, DatePresetFilterValue } from "@/components/DateFilter";
+import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -30,6 +33,8 @@ import {
   Plus,
   Printer,
   FileCheck,
+  Search,
+  X,
 } from "lucide-react";
 
 type SalesTab = "booking-invoice" | "payment-vouchers" | "refunds-voids" | "expenses";
@@ -43,6 +48,18 @@ export default function SalesExpensesHub() {
   const [isVoucherOpen, setIsVoucherOpen] = useState(false);
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+
+  // Filters state for Payment Vouchers
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const [voucherDateFilter, setVoucherDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
+
+  // Filters state for Refunds / Voids
+  const [refundSearch, setRefundSearch] = useState("");
+  const [refundDateFilter, setRefundDateFilter] = useState<DatePresetFilterValue>({
+    preset: "this_month",
+  });
 
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
@@ -127,7 +144,26 @@ export default function SalesExpensesHub() {
     },
   });
 
-  // 4. Fetch Refunds
+  // 4. Fetch Clients Lookup (for refund party / pnr resolution)
+  const { data: clientsData = [] } = useQuery({
+    queryKey: ["clients_refund_lookup"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, pnr, passport_number");
+      return data || [];
+    },
+  });
+
+  const clientsLookup = useMemo(() => {
+    const map: Record<string, { name: string; pnr?: string; passport_number?: string }> = {};
+    clientsData.forEach((c: any) => {
+      map[c.id] = c;
+    });
+    return map;
+  }, [clientsData]);
+
+  // 5. Fetch Refunds
   const { data: refunds = [], refetch: refetchRefunds } = useQuery({
     queryKey: ["sales_refunds"],
     queryFn: async () => {
@@ -139,6 +175,29 @@ export default function SalesExpensesHub() {
     },
   });
 
+  // Helper resolvers for refund party & reference info
+  const getRefundPartyName = (r: any) => {
+    const client =
+      (r.client_id && clientsLookup[r.client_id]) ||
+      (r.booking_id && clientsLookup[r.booking_id]);
+    if (client?.name) return client.name;
+    const match = r.notes?.match(/Party:\s*([^|]+)/);
+    if (match) return match[1].trim();
+    return "Customer";
+  };
+
+  const getRefundRefInfo = (r: any) => {
+    const client =
+      (r.client_id && clientsLookup[r.client_id]) ||
+      (r.booking_id && clientsLookup[r.booking_id]);
+    if (client?.pnr) return `PNR: ${client.pnr}`;
+    if (client?.passport_number) return `Tkt: ${client.passport_number}`;
+    const matchInv = r.notes?.match(/Ref Invoice:\s*([^|]+)/);
+    if (matchInv) return matchInv[1].trim();
+    if (r.invoice_no) return r.invoice_no;
+    return "—";
+  };
+
   // Metrics for active tab
   const totalInvoiced = useMemo(
     () => invoices.reduce((sum: number, inv: any) => sum + (inv.client_amount || 0), 0),
@@ -148,23 +207,127 @@ export default function SalesExpensesHub() {
     () => invoices.reduce((sum: number, inv: any) => sum + (inv.profit || 0), 0),
     [invoices]
   );
-  const totalReceived = useMemo(
-    () =>
-      vouchers
-        .filter((v: any) => v.direction === "received")
-        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
-    [vouchers]
-  );
-  const totalPaidOut = useMemo(
-    () =>
-      vouchers
-        .filter((v: any) => v.direction === "paid")
-        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
-    [vouchers]
-  );
   const totalExpenses = useMemo(
     () => expenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0),
     [expenses]
+  );
+
+  // Filtered Vouchers (by Search & Date)
+  const filteredVouchers = useMemo(() => {
+    return vouchers.filter((v: any) => {
+      // 1. Date Filter (defaults to This Month)
+      if (
+        !isDateWithinPreset(
+          v.voucher_date,
+          voucherDateFilter.preset,
+          voucherDateFilter.customFrom,
+          voucherDateFilter.customTo
+        )
+      ) {
+        return false;
+      }
+
+      // 2. Search query live-filter
+      if (voucherSearch.trim()) {
+        const q = voucherSearch.toLowerCase().trim();
+        const matchVoucherNo = (v.voucher_no || "").toLowerCase().includes(q);
+        const matchParty = (v.party?.name || "").toLowerCase().includes(q);
+        const matchRef = (v.reference_no || "").toLowerCase().includes(q);
+        const matchNotes = (v.notes || "").toLowerCase().includes(q);
+        const matchMode = (v.payment_mode || "").toLowerCase().includes(q);
+        const matchAmount = String(v.amount || "").includes(q);
+        const matchTicket = (v.ticket_no || "").toLowerCase().includes(q);
+        const matchPnr = (v.pnr || "").toLowerCase().includes(q);
+
+        if (
+          !matchVoucherNo &&
+          !matchParty &&
+          !matchRef &&
+          !matchNotes &&
+          !matchMode &&
+          !matchAmount &&
+          !matchTicket &&
+          !matchPnr
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [vouchers, voucherSearch, voucherDateFilter]);
+
+  // Dynamic summary cards for Vouchers matching search & date
+  const filteredTotalReceived = useMemo(
+    () =>
+      filteredVouchers
+        .filter((v: any) => v.direction === "received")
+        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
+    [filteredVouchers]
+  );
+  const filteredTotalPaidOut = useMemo(
+    () =>
+      filteredVouchers
+        .filter((v: any) => v.direction === "paid")
+        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
+    [filteredVouchers]
+  );
+
+  // Filtered Refunds (by Search & Date)
+  const filteredRefunds = useMemo(() => {
+    return refunds.filter((r: any) => {
+      // 1. Date filter (defaults to This Month)
+      if (
+        !isDateWithinPreset(
+          r.refund_date,
+          refundDateFilter.preset,
+          refundDateFilter.customFrom,
+          refundDateFilter.customTo
+        )
+      ) {
+        return false;
+      }
+
+      // 2. Search query live-filter
+      if (refundSearch.trim()) {
+        const q = refundSearch.toLowerCase().trim();
+        const refundNo = (
+          r.refund_no ||
+          r.reference_no ||
+          `REF-${r.id.slice(0, 6)}`
+        ).toLowerCase();
+        const party = getRefundPartyName(r).toLowerCase();
+        const refInfo = getRefundRefInfo(r).toLowerCase();
+        const reason = (r.reason || "").toLowerCase();
+        const mode = (r.payment_mode || "").toLowerCase();
+        const notes = (r.notes || "").toLowerCase();
+        const amount = String(r.refund_amount || "");
+
+        if (
+          !refundNo.includes(q) &&
+          !party.includes(q) &&
+          !refInfo.includes(q) &&
+          !reason.includes(q) &&
+          !mode.includes(q) &&
+          !notes.includes(q) &&
+          !amount.includes(q)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [refunds, refundSearch, refundDateFilter, clientsLookup]);
+
+  // Dynamic summary cards for Refunds matching search & date
+  const filteredTotalRefunds = useMemo(
+    () =>
+      filteredRefunds.reduce(
+        (sum: number, r: any) => sum + (r.refund_amount || 0),
+        0
+      ),
+    [filteredRefunds]
   );
 
   // Columns for Booking Invoices
@@ -445,29 +608,55 @@ export default function SalesExpensesHub() {
     },
   ];
 
-  // Columns for Refunds / Voids
+  // Columns for Refunds / Voids (Date | Refund No | Invoice / Ticket / PNR | Party Name | Reason | Mode | Amount (PKR))
   const refundColumns: GridColumn[] = [
     {
       key: "refund_date",
       header: "Date",
-      width: 100,
+      width: 95,
       render: (r) => <span className="text-xs">{r.refund_date}</span>,
     },
     {
+      key: "refund_no",
+      header: "Refund #",
+      width: 120,
+      render: (r) => (
+        <span className="font-mono font-bold text-xs">
+          {r.refund_no || r.reference_no || `REF-${r.id.slice(0, 6).toUpperCase()}`}
+        </span>
+      ),
+    },
+    {
+      key: "ref_info",
+      header: "Invoice / Ticket / PNR",
+      minWidth: 140,
+      render: (r) => <span className="text-xs font-mono">{getRefundRefInfo(r)}</span>,
+    },
+    {
+      key: "party_name",
+      header: "Party Name",
+      minWidth: 150,
+      render: (r) => <span className="text-xs font-semibold">{getRefundPartyName(r)}</span>,
+    },
+    {
       key: "reason",
-      header: "Reason / Particulars",
-      minWidth: 180,
+      header: "Reason",
+      minWidth: 160,
       render: (r) => (
         <div>
           <span className="font-semibold text-xs block">{r.reason || "Refund"}</span>
-          {r.notes && <span className="text-[10px] text-muted-foreground">{r.notes}</span>}
+          {r.notes && (
+            <span className="text-[10px] text-muted-foreground line-clamp-1">
+              {r.notes}
+            </span>
+          )}
         </div>
       ),
     },
     {
       key: "payment_mode",
       header: "Mode",
-      width: 80,
+      width: 85,
       render: (r) => (
         <span className="text-xs uppercase font-medium">{r.payment_mode || "CASH"}</span>
       ),
@@ -612,20 +801,67 @@ export default function SalesExpensesHub() {
       {/* Tab 2: Payment Vouchers */}
       {currentTab === "payment-vouchers" && (
         <div className="space-y-4">
+          {/* Dynamic Summary Cards updated to match search & date filter */}
           <TotalsBar
             metrics={[
-              { label: "Total Receipts (CRV)", value: totalReceived, prefix: "PKR", highlight: "emerald" },
-              { label: "Total Payments (CPV)", value: totalPaidOut, prefix: "PKR", highlight: "red" },
-              { label: "Vouchers Count", value: vouchers.length, highlight: "neutral" },
+              {
+                label: "Total Receipts (CRV)",
+                value: filteredTotalReceived,
+                prefix: "PKR",
+                highlight: "emerald",
+              },
+              {
+                label: "Total Payments (CPV)",
+                value: filteredTotalPaidOut,
+                prefix: "PKR",
+                highlight: "red",
+              },
+              {
+                label: "Vouchers Count",
+                value: filteredVouchers.length,
+                highlight: "neutral",
+              },
             ]}
           />
+
+          {/* Search bar + Date filter toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={voucherSearch}
+                onChange={(e) => setVoucherSearch(e.target.value)}
+                placeholder="Search vouchers by #, client/vendor, invoice #, ticket, PNR, cheque/ref, bank, mode, amount..."
+                className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
+              />
+              {voucherSearch && (
+                <button
+                  type="button"
+                  onClick={() => setVoucherSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <DateFilter
+              value={voucherDateFilter}
+              onChange={setVoucherDateFilter}
+              className="h-9 shrink-0"
+            />
+          </div>
+
           <ExcelGrid
             id="sales_payment_vouchers"
-            data={vouchers}
+            data={filteredVouchers}
             columns={voucherColumns}
             keyExtractor={(v) => v.id}
             title="Payment Vouchers Register"
             filename="Payment_Vouchers"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
             emptyState={
               <EmptyState
                 type="empty"
@@ -640,19 +876,61 @@ export default function SalesExpensesHub() {
       {/* Tab 3: Refunds / Voids */}
       {currentTab === "refunds-voids" && (
         <div className="space-y-4">
+          {/* Dynamic Summary Cards updated to match search & date filter */}
           <TotalsBar
             metrics={[
-              { label: "Total Refunds Processed", value: refunds.reduce((s: number, r: any) => s + (r.refund_amount || 0), 0), prefix: "PKR", highlight: "neutral" },
-              { label: "Total Records", value: refunds.length, highlight: "neutral" },
+              {
+                label: "Total Refunds Processed",
+                value: filteredTotalRefunds,
+                prefix: "PKR",
+                highlight: "neutral",
+              },
+              {
+                label: "Total Records",
+                value: filteredRefunds.length,
+                highlight: "neutral",
+              },
             ]}
           />
+
+          {/* Search bar + Date filter toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={refundSearch}
+                onChange={(e) => setRefundSearch(e.target.value)}
+                placeholder="Search refunds / voids by #, invoice #, ticket, PNR, party name, reason, mode, amount..."
+                className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
+              />
+              {refundSearch && (
+                <button
+                  type="button"
+                  onClick={() => setRefundSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <DateFilter
+              value={refundDateFilter}
+              onChange={setRefundDateFilter}
+              className="h-9 shrink-0"
+            />
+          </div>
+
           <ExcelGrid
             id="sales_refunds_voids"
-            data={refunds}
+            data={filteredRefunds}
             columns={refundColumns}
             keyExtractor={(r) => r.id}
             title="Refunds & Voids Register"
             filename="Refunds_Voids"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
             emptyState={
               <EmptyState
                 type="empty"
@@ -715,4 +993,3 @@ export default function SalesExpensesHub() {
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,19 +15,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   FileText,
-  FileCheck,
   Plus,
   Trash2,
   TrendingUp,
-  Plane,
-  Building,
-  Shield,
-  FileSpreadsheet,
-  Compass,
-  UserPlus,
-  Calendar,
   Lock,
-  Layers,
 } from "lucide-react";
 
 export type ServiceType = "Ticket" | "Umrah" | "Visa" | "Insurance" | "Hotel" | "Other";
@@ -69,15 +60,15 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   // Read-only auto invoice number
   const [autoInvoiceNo, setAutoInvoiceNo] = useState<string>("INV-1001");
 
-  // Row 1: Primary Service & Client/Vendor
+  // Top Row: Date, Service Type, Client, Vendor
+  const [invoiceDate, setInvoiceDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10)
+  );
   const [service, setService] = useState<ServiceType>("Ticket");
   const [partyId, setPartyId] = useState<string>("");
   const [vendorId, setVendorId] = useState<string>("");
   const [contactNumber, setContactNumber] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [invoiceDate, setInvoiceDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
-  );
 
   // Quick Add Party Popups
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
@@ -101,6 +92,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   ]);
 
   // B. Umrah
+  const [ziyaratIncluded, setZiyaratIncluded] = useState(true);
   const [umrahDepartureCity, setUmrahDepartureCity] = useState("Karachi");
   const [umrahArrivalCity, setUmrahArrivalCity] = useState("Jeddah");
   const [umrahAirline, setUmrahAirline] = useState("Saudia");
@@ -113,9 +105,8 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [makkahNights, setMakkahNights] = useState("7");
   const [madinahHotel, setMadinahHotel] = useState("");
   const [madinahNights, setMadinahNights] = useState("7");
-  const [ziyaratIncluded, setZiyaratIncluded] = useState(true);
 
-  // C. Other services (Visa, Insurance, Hotel, Other)
+  // C. Other services (Visa, Hotel, Insurance, Other)
   const [visaCountry, setVisaCountry] = useState("Saudi Arabia");
   const [visaType, setVisaType] = useState("Tourist / E-Visa");
   const [visaValidity, setVisaValidity] = useState("30 Days");
@@ -145,7 +136,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   );
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
 
-  // Booking Notes
+  // Booking Remarks
   const [notes, setNotes] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,34 +145,27 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   useEffect(() => {
     async function fetchNextInvoiceNo() {
       try {
-        const { data } = await (supabase as any)
-          .from("invoices")
-          .select("invoice_number")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data, error } = await supabase.rpc("preview_next_number", {
+          p_counter_type: "invoice",
+        });
 
-        if (data?.invoice_number) {
-          const match = data.invoice_number.match(/(\d+)/);
-          if (match) {
-            const nextVal = parseInt(match[1], 10) + 1;
-            setAutoInvoiceNo(`INV-${nextVal}`);
-            return;
-          }
+        if (!error && data) {
+          setAutoInvoiceNo(data);
+          return;
         }
-        // Fallback default
-        setAutoInvoiceNo(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
-      } catch {
-        setAutoInvoiceNo(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
+      } catch (err) {
+        console.warn("Could not preview next invoice number:", err);
       }
+      const code = agency?.agency_code || "A00001";
+      setAutoInvoiceNo(`INV-${code}-00000001`);
     }
 
     if (open) {
       fetchNextInvoiceNo();
     }
-  }, [open]);
+  }, [open, agency?.agency_code]);
 
-  // Filter clients and vendors from parties
+  // Filter clients and vendors
   const clientsList = useMemo(
     () => parties.filter((p) => p.type === "client" || p.type === "both"),
     [parties]
@@ -191,7 +175,6 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     [parties]
   );
 
-  // Sync phone/email when client is selected
   const handleClientSelect = (id: string) => {
     setPartyId(id);
     const client = parties.find((p) => p.id === id);
@@ -252,7 +235,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   const selectedParty = parties.find((p) => p.id === partyId);
 
-  // PDF Data generator
+  // PDF Data generator helper
   const getPdfData = (invNo: string): BookingPdfData => ({
     invoiceNo: invNo,
     invoiceDate,
@@ -319,7 +302,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         p_invoice_no: invoiceNo,
         p_service: service,
         p_party_id: partyId || null,
-        p_vendor_id: vendorId || null,
+        p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
         p_client_amount: clientAmtNum,
         p_vendor_payable: vendorPayNum,
         p_invoice_date: invoiceDate,
@@ -382,15 +365,14 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         }
       }
 
+      const assignedInvoiceNo = data?.invoice_no || invoiceNo;
       toast.success("Booking Invoice created successfully");
 
-      // PDF downloads
-      const pdfData = getPdfData(invoiceNo);
       if (downloadConfirmation) {
-        generateBookingConfirmationPdf(pdfData);
+        generateBookingConfirmationPdf(getPdfData(assignedInvoiceNo));
       }
       if (downloadInvoice) {
-        generateBookingInvoicePdf(pdfData);
+        generateBookingInvoicePdf(getPdfData(assignedInvoiceNo));
       }
 
       onOpenChange(false);
@@ -404,352 +386,325 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* 1. Header with Locked Auto Invoice Number & PDF Buttons */}
-        <div className="px-6 py-3 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                New Booking Invoice
-              </DialogTitle>
-            </div>
-
-            {/* Read-Only Auto Invoice Number */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-md border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
-              <Lock className="w-3.5 h-3.5 text-slate-400" />
-              <span>Invoice #:</span>
-              <span className="text-blue-600 dark:text-blue-400">{autoInvoiceNo}</span>
-              <Badge variant="secondary" className="text-[9px] px-1 h-4 ml-1">
-                Auto
-              </Badge>
-            </div>
+      <DialogContent className="w-[96vw] max-w-6xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* HEADER: Title, Auto Invoice # badge, Close (X is standard from DialogContent) */}
+        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-2.5">
+            <FileText className="w-4 h-4 text-blue-600" />
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+              New Booking Invoice
+            </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-2 mr-6">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => generateBookingConfirmationPdf(getPdfData(autoInvoiceNo))}
-              className="text-xs h-8 gap-1.5 font-medium cursor-pointer"
-            >
-              <FileCheck className="w-3.5 h-3.5 text-teal-600" />
-              Confirmation PDF
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => generateBookingInvoicePdf(getPdfData(autoInvoiceNo))}
-              className="text-xs h-8 gap-1.5 font-medium cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5 text-blue-600" />
-              Invoice PDF
-            </Button>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span>Invoice #:</span>
+            <span className="text-blue-600 dark:text-blue-400">{autoInvoiceNo}</span>
+            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
+              Auto
+            </Badge>
           </div>
         </div>
 
-        {/* 2. Flexible Form Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Row 1: Equal Columns (Service Type, Client + Quick Add, Vendor + Quick Add, Contact Number, Email) */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Row 1: Primary Service & Parties
+        {/* BODY: One flat form, tight grid, fits on one screen with light scroll if needed */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+          {/* TOP ROW: Date, Service Type, Client, Vendor, + Trip Type / Ziyarat inline */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 items-end">
+            {/* 1. Date (FIRST, default today, editable) */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Date <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+                required
+              />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full items-end">
-              {/* Service Type */}
-              <div>
-                <Label className="text-xs font-semibold">
-                  Service Type <span className="text-red-500">*</span>
+            {/* 2. Service Type */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Service Type <span className="text-red-500">*</span>
+              </Label>
+              <Select value={service} onValueChange={(val: any) => setService(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Ticket">Air Ticket</SelectItem>
+                  <SelectItem value="Umrah">Umrah Package</SelectItem>
+                  <SelectItem value="Visa">Visa Services</SelectItem>
+                  <SelectItem value="Hotel">Hotel Booking</SelectItem>
+                  <SelectItem value="Insurance">Travel Insurance</SelectItem>
+                  <SelectItem value="Other">Other Services</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 3. Client (with + Quick Add) */}
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Client <span className="text-red-500">*</span>
                 </Label>
-                <Select value={service} onValueChange={(val: any) => setService(val)}>
-                  <SelectTrigger className="h-9 text-xs mt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddClientOpen(true)}
+                  className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-2.5 h-2.5" /> Quick Add
+                </button>
+              </div>
+              <Select value={partyId} onValueChange={handleClientSelect}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue placeholder="Select Client" />
+                </SelectTrigger>
+                <SelectContent className="max-h-56">
+                  {clientsList.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} {c.code ? `(${c.code})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 4. Vendor (with + Quick Add) */}
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Vendor
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddVendorOpen(true)}
+                  className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-2.5 h-2.5" /> Quick Add
+                </button>
+              </div>
+              <Select value={vendorId} onValueChange={setVendorId}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue placeholder="Direct / None" />
+                </SelectTrigger>
+                <SelectContent className="max-h-56">
+                  <SelectItem value="none">Direct / None</SelectItem>
+                  {vendorsList.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Service-Specific Top Row Field */}
+            {service === "Ticket" ? (
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Trip Type
+                </Label>
+                <Select value={tripType} onValueChange={(val: any) => setTripType(val)}>
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Ticket">Air Ticket</SelectItem>
-                    <SelectItem value="Umrah">Umrah Package</SelectItem>
-                    <SelectItem value="Visa">Visa Services</SelectItem>
-                    <SelectItem value="Hotel">Hotel Booking</SelectItem>
-                    <SelectItem value="Insurance">Travel Insurance</SelectItem>
-                    <SelectItem value="Other">Other Services</SelectItem>
+                    <SelectItem value="One Way">One Way</SelectItem>
+                    <SelectItem value="Return">Return</SelectItem>
+                    <SelectItem value="Multicity">Multicity</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Client with + Quick Add */}
+            ) : service === "Umrah" ? (
               <div>
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">
-                    Client (Party) <span className="text-red-500">*</span>
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddClientOpen(true)}
-                    className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5"
-                  >
-                    <Plus className="w-3 h-3" /> Quick Add
-                  </button>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Ziyarat
+                </Label>
+                <div className="flex items-center justify-between h-8 px-2.5 bg-background border rounded-md mt-0.5">
+                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                    {ziyaratIncluded ? "Included" : "Excluded"}
+                  </span>
+                  <Switch
+                    checked={ziyaratIncluded}
+                    onCheckedChange={setZiyaratIncluded}
+                    className="scale-75 origin-right"
+                  />
                 </div>
-                <Select value={partyId} onValueChange={handleClientSelect}>
-                  <SelectTrigger className="h-9 text-xs mt-1">
-                    <SelectValue placeholder="Select Client" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    {clientsList.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} {c.code ? `(${c.code})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
-
-              {/* Vendor with + Quick Add */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">Vendor (Supplier)</Label>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddVendorOpen(true)}
-                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5"
-                  >
-                    <Plus className="w-3 h-3" /> Quick Add
-                  </button>
-                </div>
-                <Select value={vendorId} onValueChange={setVendorId}>
-                  <SelectTrigger className="h-9 text-xs mt-1">
-                    <SelectValue placeholder="Direct / None" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    <SelectItem value="none">Direct / None</SelectItem>
-                    {vendorsList.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Contact Number */}
-              <div>
-                <Label className="text-xs font-semibold">Contact Number</Label>
-                <Input
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  placeholder="e.g. 0300-1234567"
-                  className="h-9 text-xs mt-1"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <Label className="text-xs font-semibold">Email Address</Label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="client@example.com"
-                  className="h-9 text-xs mt-1"
-                />
-              </div>
-            </div>
+            ) : null}
           </div>
 
-          {/* ==================== DYNAMIC SERVICE SECTION ==================== */}
-
-          {/* A. Air Ticket Details */}
+          {/* SERVICE-SPECIFIC FIELDS */}
           {service === "Ticket" && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <Plane className="w-4 h-4 text-blue-600" />
-                  Air Ticket Flight Details
-                </span>
-
-                {/* Trip Type Segmented */}
-                <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg border text-xs">
-                  {(["One Way", "Return", "Multicity"] as TripType[]).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTripType(t)}
-                      className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                        tripType === t
-                          ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Flight Row 1 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 w-full items-end">
+            <div className="space-y-1.5 pt-0.5">
+              {/* Row: Flight Date, Time, Sector (KHI -> DXB), Airline, PNR, Ticket No */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 items-end">
                 <div>
-                  <Label className="text-xs font-semibold">Flight Date</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Flight Date
+                  </Label>
                   <Input
                     type="date"
                     value={flightDate}
                     onChange={(e) => setFlightDate(e.target.value)}
-                    className="h-9 text-xs mt-1"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Flight Time</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Flight Time
+                  </Label>
                   <Input
                     type="time"
                     value={flightTime}
                     onChange={(e) => setFlightTime(e.target.value)}
-                    className="h-9 text-xs mt-1"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Destination (Sector)</Label>
-                  <div className="flex items-center gap-1 mt-1">
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Sector
+                  </Label>
+                  <div className="flex items-center gap-1 mt-0.5">
                     <Input
                       value={origin}
                       onChange={(e) => setOrigin(e.target.value.toUpperCase())}
-                      placeholder="Origin (KHI)"
-                      className="h-9 text-xs font-mono uppercase w-20"
+                      placeholder="KHI"
+                      className="h-8 text-xs font-mono uppercase w-14 px-1.5 text-center"
                     />
                     <span className="text-xs text-muted-foreground">→</span>
                     <Input
                       value={destination}
                       onChange={(e) => setDestination(e.target.value.toUpperCase())}
-                      placeholder="Dest (DXB)"
-                      className="h-9 text-xs font-mono uppercase flex-1"
+                      placeholder="DXB"
+                      className="h-8 text-xs font-mono uppercase flex-1 px-1.5 text-center"
                     />
                   </div>
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Airline</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Airline
+                  </Label>
                   <Input
                     value={airline}
                     onChange={(e) => setAirline(e.target.value)}
-                    placeholder="e.g. Emirates / PIA"
-                    className="h-9 text-xs mt-1"
+                    placeholder="e.g. PIA / Emirates"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">PNR Code</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    PNR
+                  </Label>
                   <Input
                     value={pnr}
                     onChange={(e) => setPnr(e.target.value.toUpperCase())}
-                    placeholder="PNR (e.g. ABC123)"
-                    className="h-9 text-xs font-mono uppercase mt-1"
+                    placeholder="PNR Code"
+                    className="h-8 text-xs font-mono uppercase mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Ticket Number</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Ticket No
+                  </Label>
                   <Input
                     value={ticketNo}
                     onChange={(e) => setTicketNo(e.target.value)}
-                    placeholder="e.g. 214-89765432"
-                    className="h-9 text-xs font-mono mt-1"
+                    placeholder="214-89765432"
+                    className="h-8 text-xs font-mono mt-0.5"
                   />
                 </div>
               </div>
 
-              {/* If Return Trip */}
+              {/* Show return date & time only for Return */}
               {tripType === "Return" && (
-                <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/40 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end bg-blue-50/40 dark:bg-blue-950/20 p-2 rounded border border-blue-100 dark:border-blue-900/40">
                   <div>
-                    <Label className="text-xs font-semibold text-blue-900 dark:text-blue-300">
+                    <Label className="text-[11px] font-semibold text-blue-900 dark:text-blue-300">
                       Return Flight Date
                     </Label>
                     <Input
                       type="date"
                       value={returnDate}
                       onChange={(e) => setReturnDate(e.target.value)}
-                      className="h-9 text-xs mt-1"
+                      className="h-8 text-xs mt-0.5"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs font-semibold text-blue-900 dark:text-blue-300">
+                    <Label className="text-[11px] font-semibold text-blue-900 dark:text-blue-300">
                       Return Flight Time
                     </Label>
                     <Input
                       type="time"
                       value={returnTime}
                       onChange={(e) => setReturnTime(e.target.value)}
-                      className="h-9 text-xs mt-1"
+                      className="h-8 text-xs mt-0.5"
                     />
                   </div>
                 </div>
               )}
 
-              {/* If Multicity Trip */}
+              {/* Extra sector rows only for Multicity */}
               {tripType === "Multicity" && (
-                <div className="space-y-2 pt-2 border-t">
+                <div className="space-y-1.5 bg-slate-50 dark:bg-slate-900/40 p-2 rounded border">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold">Additional Flight Legs</span>
-                    <Button
+                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Multicity Additional Sectors
+                    </span>
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
                       onClick={handleAddMulticityLeg}
-                      className="h-7 text-xs text-blue-600 gap-1 px-2"
+                      className="text-[10px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-0.5 cursor-pointer"
                     >
-                      <Plus className="w-3 h-3" /> Add Leg
-                    </Button>
+                      <Plus className="w-2.5 h-2.5" /> Add Sector
+                    </button>
                   </div>
-
                   {multicityLegs.map((leg, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-background p-2 rounded-lg border">
-                      <span className="text-xs font-bold text-muted-foreground w-6 text-center">
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono font-bold text-muted-foreground w-4 text-center">
                         #{idx + 2}
                       </span>
                       <Input
                         value={leg.from}
                         onChange={(e) => handleLegChange(idx, "from", e.target.value.toUpperCase())}
                         placeholder="From"
-                        className="h-8 text-xs font-mono uppercase w-20"
+                        className="h-7 text-xs font-mono uppercase w-16"
                       />
                       <Input
                         value={leg.to}
                         onChange={(e) => handleLegChange(idx, "to", e.target.value.toUpperCase())}
                         placeholder="To"
-                        className="h-8 text-xs font-mono uppercase w-20"
+                        className="h-7 text-xs font-mono uppercase w-16"
                       />
                       <Input
                         type="date"
                         value={leg.date}
                         onChange={(e) => handleLegChange(idx, "date", e.target.value)}
-                        className="h-8 text-xs flex-1"
+                        className="h-7 text-xs w-32"
                       />
                       <Input
                         value={leg.airline}
                         onChange={(e) => handleLegChange(idx, "airline", e.target.value)}
                         placeholder="Airline"
-                        className="h-8 text-xs w-28"
+                        className="h-7 text-xs flex-1"
                       />
                       <Input
                         value={leg.pnr}
                         onChange={(e) => handleLegChange(idx, "pnr", e.target.value.toUpperCase())}
-                        placeholder="Leg PNR"
-                        className="h-8 text-xs font-mono uppercase w-24"
+                        placeholder="PNR"
+                        className="h-7 text-xs font-mono uppercase w-20"
                       />
                       {multicityLegs.length > 1 && (
-                        <Button
+                        <button
                           type="button"
-                          variant="ghost"
-                          size="icon"
                           onClick={() => handleRemoveMulticityLeg(idx)}
-                          className="h-8 w-8 text-slate-400 hover:text-red-500"
+                          className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        </button>
                       )}
                     </div>
                   ))}
@@ -758,104 +713,99 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             </div>
           )}
 
-          {/* B. Umrah Details */}
+          {/* Umrah Package Fields: 2 compact rows */}
           {service === "Umrah" && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <Compass className="w-4 h-4 text-teal-600" />
-                  Umrah Package Details
-                </span>
-
-                {/* Ziyarat Included Toggle */}
-                <div className="flex items-center gap-2 bg-teal-50 dark:bg-teal-950/40 px-3 py-1.5 rounded-lg border border-teal-200 dark:border-teal-800">
-                  <Label className="text-xs font-bold text-teal-900 dark:text-teal-200 cursor-pointer">
-                    Ziyarat Included
-                  </Label>
-                  <Switch
-                    checked={ziyaratIncluded}
-                    onCheckedChange={setZiyaratIncluded}
-                  />
-                </div>
-              </div>
-
-              {/* Flights & Transport */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 w-full items-end">
+            <div className="space-y-2 pt-0.5">
+              {/* Row 1: Departure, Arrival, Airline, Flight Date, Flight Time, Return Date, Return Time, Transport */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end">
                 <div>
-                  <Label className="text-xs font-semibold">Departure City</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Departure City
+                  </Label>
                   <Input
                     value={umrahDepartureCity}
                     onChange={(e) => setUmrahDepartureCity(e.target.value)}
-                    placeholder="e.g. Karachi"
-                    className="h-9 text-xs mt-1"
+                    placeholder="Karachi"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Arrival City</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Arrival City
+                  </Label>
                   <Input
                     value={umrahArrivalCity}
                     onChange={(e) => setUmrahArrivalCity(e.target.value)}
-                    placeholder="e.g. Jeddah"
-                    className="h-9 text-xs mt-1"
+                    placeholder="Jeddah"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Airline</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Airline
+                  </Label>
                   <Input
                     value={umrahAirline}
                     onChange={(e) => setUmrahAirline(e.target.value)}
-                    placeholder="e.g. Saudia"
-                    className="h-9 text-xs mt-1"
+                    placeholder="Saudia"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Flight Date/Time</Label>
-                  <div className="flex gap-1 mt-1">
-                    <Input
-                      type="date"
-                      value={umrahFlightDate}
-                      onChange={(e) => setUmrahFlightDate(e.target.value)}
-                      className="h-9 text-xs flex-1"
-                    />
-                    <Input
-                      type="time"
-                      value={umrahFlightTime}
-                      onChange={(e) => setUmrahFlightTime(e.target.value)}
-                      className="h-9 text-xs w-20"
-                    />
-                  </div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Flight Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={umrahFlightDate}
+                    onChange={(e) => setUmrahFlightDate(e.target.value)}
+                    className="h-8 text-xs mt-0.5"
+                  />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Return Date/Time</Label>
-                  <div className="flex gap-1 mt-1">
-                    <Input
-                      type="date"
-                      value={umrahReturnDate}
-                      onChange={(e) => setUmrahReturnDate(e.target.value)}
-                      className="h-9 text-xs flex-1"
-                    />
-                    <Input
-                      type="time"
-                      value={umrahReturnTime}
-                      onChange={(e) => setUmrahReturnTime(e.target.value)}
-                      className="h-9 text-xs w-20"
-                    />
-                  </div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Flight Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={umrahFlightTime}
+                    onChange={(e) => setUmrahFlightTime(e.target.value)}
+                    className="h-8 text-xs mt-0.5"
+                  />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Transport</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Return Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={umrahReturnDate}
+                    onChange={(e) => setUmrahReturnDate(e.target.value)}
+                    className="h-8 text-xs mt-0.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Return Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={umrahReturnTime}
+                    onChange={(e) => setUmrahReturnTime(e.target.value)}
+                    className="h-8 text-xs mt-0.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Transport
+                  </Label>
                   <Select value={umrahTransport} onValueChange={setUmrahTransport}>
-                    <SelectTrigger className="h-9 text-xs mt-1">
+                    <SelectTrigger className="h-8 text-xs mt-0.5">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Shared Bus">Shared Bus</SelectItem>
-                      <SelectItem value="Private Car / GMC">Private Car / GMC</SelectItem>
+                      <SelectItem value="Private Car / GMC">Private GMC</SelectItem>
                       <SelectItem value="Haramain High-Speed Train">Haramain Train</SelectItem>
                       <SelectItem value="Self Arranged">Self Arranged</SelectItem>
                     </SelectContent>
@@ -863,393 +813,358 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </div>
               </div>
 
-              {/* Hotels: Makkah & Madinah */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 w-full items-end pt-2 border-t">
-                <div className="md:col-span-1">
-                  <Label className="text-xs font-semibold">Makkah Hotel Name</Label>
+              {/* Row 2: Makkah Hotel, Nights, Madinah Hotel, Nights */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Makkah Hotel
+                  </Label>
                   <Input
                     value={makkahHotel}
                     onChange={(e) => setMakkahHotel(e.target.value)}
-                    placeholder="e.g. Pullman Zamzam Makkah"
-                    className="h-9 text-xs mt-1"
+                    placeholder="e.g. Pullman Zamzam"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Makkah Nights</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Makkah Nights
+                  </Label>
                   <Input
                     type="number"
                     value={makkahNights}
                     onChange={(e) => setMakkahNights(e.target.value)}
                     placeholder="7"
-                    className="h-9 text-xs mt-1"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
-                <div className="md:col-span-1">
-                  <Label className="text-xs font-semibold">Madinah Hotel Name</Label>
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Madinah Hotel
+                  </Label>
                   <Input
                     value={madinahHotel}
                     onChange={(e) => setMadinahHotel(e.target.value)}
-                    placeholder="e.g. Anwar Al Madinah Movenpick"
-                    className="h-9 text-xs mt-1"
+                    placeholder="e.g. Anwar Al Madinah"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
-
                 <div>
-                  <Label className="text-xs font-semibold">Madinah Nights</Label>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Madinah Nights
+                  </Label>
                   <Input
                     type="number"
                     value={madinahNights}
                     onChange={(e) => setMadinahNights(e.target.value)}
                     placeholder="7"
-                    className="h-9 text-xs mt-1"
+                    className="h-8 text-xs mt-0.5"
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* C. Other Services (Visa, Hotel, Insurance, Other) */}
-          {service !== "Ticket" && service !== "Umrah" && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-purple-600" />
-                {service} Service Information
-              </span>
-
-              {service === "Visa" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-                  <div>
-                    <Label className="text-xs font-semibold">Country</Label>
-                    <Input
-                      value={visaCountry}
-                      onChange={(e) => setVisaCountry(e.target.value)}
-                      placeholder="e.g. Saudi Arabia / UAE"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Visa Type</Label>
-                    <Input
-                      value={visaType}
-                      onChange={(e) => setVisaType(e.target.value)}
-                      placeholder="e.g. Tourist / 1 Year Multiple"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Validity / Duration</Label>
-                    <Input
-                      value={visaValidity}
-                      onChange={(e) => setVisaValidity(e.target.value)}
-                      placeholder="e.g. 30 Days / 90 Days"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {service === "Hotel" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 w-full">
-                  <div>
-                    <Label className="text-xs font-semibold">Hotel Name</Label>
-                    <Input
-                      value={hotelName}
-                      onChange={(e) => setHotelName(e.target.value)}
-                      placeholder="Hotel Name"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">City</Label>
-                    <Input
-                      value={hotelCity}
-                      onChange={(e) => setHotelCity(e.target.value)}
-                      placeholder="City"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Check-In</Label>
-                    <Input
-                      type="date"
-                      value={hotelCheckIn}
-                      onChange={(e) => setHotelCheckIn(e.target.value)}
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Check-Out</Label>
-                    <Input
-                      type="date"
-                      value={hotelCheckOut}
-                      onChange={(e) => setHotelCheckOut(e.target.value)}
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Room Type</Label>
-                    <Input
-                      value={hotelRoomType}
-                      onChange={(e) => setHotelRoomType(e.target.value)}
-                      placeholder="e.g. Deluxe Double"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {service === "Insurance" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                  <div>
-                    <Label className="text-xs font-semibold">Insurance Plan / Provider</Label>
-                    <Input
-                      value={insurancePlan}
-                      onChange={(e) => setInsurancePlan(e.target.value)}
-                      placeholder="e.g. EFU / Jubilee Travel Insurance"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold">Duration (Days)</Label>
-                    <Input
-                      value={insuranceDuration}
-                      onChange={(e) => setInsuranceDuration(e.target.value)}
-                      placeholder="e.g. 30"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {service === "Other" && (
-                <div>
-                  <Label className="text-xs font-semibold">Service Description / Particulars</Label>
-                  <Input
-                    value={generalDescription}
-                    onChange={(e) => setGeneralDescription(e.target.value)}
-                    placeholder="Describe custom travel or concierge service..."
-                    className="h-9 text-xs mt-1"
-                  />
-                </div>
-              )}
+          {/* Visa Services: Country, Visa Type, Validity in one row */}
+          {service === "Visa" && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end pt-0.5">
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Country
+                </Label>
+                <Input
+                  value={visaCountry}
+                  onChange={(e) => setVisaCountry(e.target.value)}
+                  placeholder="e.g. Saudi Arabia / UAE"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Visa Type
+                </Label>
+                <Input
+                  value={visaType}
+                  onChange={(e) => setVisaType(e.target.value)}
+                  placeholder="Tourist / E-Visa / 1 Year"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Validity
+                </Label>
+                <Input
+                  value={visaValidity}
+                  onChange={(e) => setVisaValidity(e.target.value)}
+                  placeholder="30 Days / 90 Days"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
             </div>
           )}
 
-          {/* ==================== PASSENGERS TABLE (ALL SERVICES) ==================== */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+          {/* Hotel Booking */}
+          {service === "Hotel" && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end pt-0.5">
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Hotel Name
+                </Label>
+                <Input
+                  value={hotelName}
+                  onChange={(e) => setHotelName(e.target.value)}
+                  placeholder="Hotel Name"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  City
+                </Label>
+                <Input
+                  value={hotelCity}
+                  onChange={(e) => setHotelCity(e.target.value)}
+                  placeholder="City"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Check-In
+                </Label>
+                <Input
+                  type="date"
+                  value={hotelCheckIn}
+                  onChange={(e) => setHotelCheckIn(e.target.value)}
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Check-Out
+                </Label>
+                <Input
+                  type="date"
+                  value={hotelCheckOut}
+                  onChange={(e) => setHotelCheckOut(e.target.value)}
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Room Type
+                </Label>
+                <Input
+                  value={hotelRoomType}
+                  onChange={(e) => setHotelRoomType(e.target.value)}
+                  placeholder="Deluxe Double"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Travel Insurance */}
+          {service === "Insurance" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end pt-0.5">
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Insurance Provider / Plan
+                </Label>
+                <Input
+                  value={insurancePlan}
+                  onChange={(e) => setInsurancePlan(e.target.value)}
+                  placeholder="EFU / Jubilee Travel Care"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Duration (Days)
+                </Label>
+                <Input
+                  value={insuranceDuration}
+                  onChange={(e) => setInsuranceDuration(e.target.value)}
+                  placeholder="30"
+                  className="h-8 text-xs mt-0.5"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Other Services */}
+          {service === "Other" && (
+            <div className="pt-0.5">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Service Description
+              </Label>
+              <Input
+                value={generalDescription}
+                onChange={(e) => setGeneralDescription(e.target.value)}
+                placeholder="Describe custom service particulars..."
+                className="h-8 text-xs mt-0.5"
+              />
+            </div>
+          )}
+
+          {/* PASSENGERS: Inline, compact, no heading box */}
+          <div className="space-y-1 pt-1 border-t">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                 Passengers ({passengers.length})
               </span>
-              <Button
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
                 onClick={handleAddPassenger}
-                className="text-xs h-7 text-teal-600 dark:text-teal-400 gap-1 px-2.5"
+                className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Passenger
-              </Button>
+                <Plus className="w-2.5 h-2.5" /> Add Passenger
+              </button>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-1">
               {passengers.map((pax, idx) => (
-                <div
-                  key={idx}
-                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2 bg-background p-2.5 rounded-lg border items-center"
-                >
-                  <span className="md:col-span-1 text-xs font-mono font-bold text-slate-400 text-center">
+                <div key={idx} className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-center">
                     #{idx + 1}
                   </span>
-
-                  {/* Name */}
-                  <div className="md:col-span-3">
-                    <Input
-                      value={pax.name}
-                      onChange={(e) => handlePassengerChange(idx, "name", e.target.value)}
-                      placeholder="Full Name as on Passport"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-
-                  {/* Passport */}
-                  <div className="md:col-span-2">
-                    <Input
-                      value={pax.passport || ""}
-                      onChange={(e) =>
-                        handlePassengerChange(idx, "passport", e.target.value.toUpperCase())
-                      }
-                      placeholder="Passport #"
-                      className="h-8 text-xs font-mono uppercase"
-                    />
-                  </div>
-
-                  {/* Category */}
-                  <div className="md:col-span-2">
-                    <Select
-                      value={pax.type || "Adult"}
-                      onValueChange={(val: any) => handlePassengerChange(idx, "type", val)}
+                  <Input
+                    value={pax.name}
+                    onChange={(e) => handlePassengerChange(idx, "name", e.target.value)}
+                    placeholder="Passenger Name"
+                    className="h-7 text-xs flex-1"
+                  />
+                  <Input
+                    value={pax.passport || ""}
+                    onChange={(e) => handlePassengerChange(idx, "passport", e.target.value.toUpperCase())}
+                    placeholder="Passport #"
+                    className="h-7 text-xs font-mono uppercase w-28"
+                  />
+                  <Select
+                    value={pax.type || "Adult"}
+                    onValueChange={(val: any) => handlePassengerChange(idx, "type", val)}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Adult">Adult</SelectItem>
+                      <SelectItem value="Child">Child</SelectItem>
+                      <SelectItem value="Infant">Infant</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={pax.gender || "Male"}
+                    onValueChange={(val: any) => handlePassengerChange(idx, "gender", val)}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-16">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">M</SelectItem>
+                      <SelectItem value="Female">F</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    value={pax.dob || ""}
+                    onChange={(e) => handlePassengerChange(idx, "dob", e.target.value)}
+                    className="h-7 text-xs w-32"
+                  />
+                  {passengers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePassenger(idx)}
+                      className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
                     >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Adult">Adult</SelectItem>
-                        <SelectItem value="Child">Child</SelectItem>
-                        <SelectItem value="Infant">Infant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Gender */}
-                  <div className="md:col-span-1">
-                    <Select
-                      value={pax.gender || "Male"}
-                      onValueChange={(val: any) => handlePassengerChange(idx, "gender", val)}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">M</SelectItem>
-                        <SelectItem value="Female">F</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Date of Birth */}
-                  <div className="md:col-span-2">
-                    <Input
-                      type="date"
-                      value={pax.dob || ""}
-                      onChange={(e) => handlePassengerChange(idx, "dob", e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-
-                  {/* Remove Button */}
-                  <div className="md:col-span-1 flex justify-center">
-                    {passengers.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemovePassenger(idx)}
-                        className="h-8 w-8 text-slate-400 hover:text-red-500 shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
-          {/* ==================== MONEY SECTION (ONE CLEAN ROW, EQUAL COLUMNS) ==================== */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Financials & Settlement Breakdown
-              </span>
-
-              {/* Profit Preview */}
-              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800">
-                <span className="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" /> Profit Preview:
-                </span>
-                <span
-                  className={`text-sm font-bold font-mono ${
-                    liveProfit >= 0
-                      ? "text-teal-700 dark:text-teal-300"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  PKR {liveProfit.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Money Row: Equal 6 columns */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 w-full items-end">
-              {/* Purchasing Cost (Vendor Payable) */}
+          {/* MONEY: One single row with Profit Preview badge */}
+          <div className="pt-1 border-t space-y-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
+              {/* Purchasing Cost */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Purchasing Cost (PKR)
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Purchasing Cost
                 </Label>
                 <Input
                   type="number"
                   value={vendorPayable}
                   onChange={(e) => setVendorPayable(e.target.value)}
                   placeholder="0"
-                  className="h-9 text-xs font-mono text-right mt-1"
+                  className="h-8 text-xs font-mono text-right mt-0.5"
                 />
               </div>
 
-              {/* Total Amount (Client Pays) */}
+              {/* Total Amount * */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Total Amount (PKR) <span className="text-red-500">*</span>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Total Amount <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   type="number"
                   value={totalAmount}
                   onChange={(e) => setTotalAmount(e.target.value)}
                   placeholder="0"
-                  className="h-9 text-xs font-mono font-bold text-right mt-1"
+                  className="h-8 text-xs font-mono font-bold text-right mt-0.5"
                   required
                 />
               </div>
 
-              {/* Amount Paid by Client */}
+              {/* Amount Paid */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Amount Paid (PKR)
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Amount Paid
                 </Label>
                 <Input
                   type="number"
                   value={amountPaid}
                   onChange={(e) => setAmountPaid(e.target.value)}
                   placeholder="0"
-                  className="h-9 text-xs font-mono font-bold text-teal-600 dark:text-teal-400 text-right mt-1"
+                  className="h-8 text-xs font-mono font-bold text-teal-600 dark:text-teal-400 text-right mt-0.5"
                 />
               </div>
 
-              {/* Remaining Amount (Auto-Calculated, Read-Only) */}
+              {/* Remaining (auto) */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Remaining Amount (PKR)
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Remaining (auto)
                 </Label>
                 <Input
                   type="text"
                   readOnly
                   value={`PKR ${remainingAmountNum.toLocaleString()}`}
-                  className="h-9 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 text-right mt-1 cursor-not-allowed"
+                  className="h-8 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 text-right mt-0.5 cursor-not-allowed"
                 />
               </div>
 
-              {/* Remaining Payment Due Date */}
+              {/* Due Date */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Remaining Due Date
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Due Date
                 </Label>
                 <Input
                   type="date"
                   value={remainingDueDate}
                   onChange={(e) => setRemainingDueDate(e.target.value)}
-                  className="h-9 text-xs mt-1"
+                  className="h-8 text-xs mt-0.5"
                 />
               </div>
 
               {/* Payment Mode */}
               <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Payment Mode
                 </Label>
                 <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                  <SelectTrigger className="h-9 text-xs mt-1">
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1258,52 +1173,60 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Profit Preview Badge */}
+              <div className="flex flex-col justify-end">
+                <div className="h-8 px-2 flex items-center justify-between rounded bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-[11px]">
+                  <span className="text-[10px] text-teal-800 dark:text-teal-300 flex items-center gap-0.5 font-medium">
+                    <TrendingUp className="w-3 h-3" /> Profit:
+                  </span>
+                  <span
+                    className={`font-mono font-bold ${
+                      liveProfit >= 0
+                        ? "text-teal-700 dark:text-teal-300"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {liveProfit.toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* ==================== BOOKING NOTES & REMARKS ==================== */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-            <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Booking Notes & Remarks
+          {/* NOTES: Single-line input labelled "Remarks" (grows if user types more) */}
+          <div className="pt-1 border-t">
+            <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              Remarks
             </Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Itinerary remarks, hotel room info, meal preferences, special passenger requests..."
-              className="w-full min-h-[75px] max-h-[120px] text-xs resize-none"
+              placeholder="Itinerary remarks, hotel room info, meal preferences, special requests..."
+              className="w-full min-h-[32px] h-8 max-h-[80px] text-xs resize-y mt-0.5 py-1.5 leading-snug"
             />
           </div>
         </div>
 
-        {/* 3. Pinned Bottom Footer */}
-        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
+        {/* FOOTER: Only Cancel and Save */}
+        <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer"
           >
             Cancel
           </Button>
           <Button
             type="button"
-            variant="outline"
             size="sm"
             disabled={isSubmitting}
-            onClick={() => handleSave(true, false)}
-            className="text-xs cursor-pointer"
+            onClick={() => handleSave(false, false)}
+            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px]"
           >
-            Save & Confirmation
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={isSubmitting}
-            onClick={() => handleSave(false, true)}
-            className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[170px]"
-          >
-            {isSubmitting ? "Saving..." : "Save & Download Invoice"}
+            {isSubmitting ? "Saving..." : "Save"}
           </Button>
         </div>
 

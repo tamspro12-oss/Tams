@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import React, { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { AddBankDialog } from "@/components/banks/AddBankDialog";
+import { useAgencyBanks } from "@/hooks/useAgencyBanks";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RotateCcw, Ban, Search, CheckCircle2, AlertTriangle, FileText, ArrowRight } from "lucide-react";
+import {
+  RotateCcw,
+  Search,
+  CheckCircle2,
+  Lock,
+  Plus,
+} from "lucide-react";
 
 interface RefundVoidFormProps {
   open: boolean;
@@ -28,33 +36,110 @@ interface MatchedBooking {
   service?: string;
 }
 
+const DEFAULT_BANKS = [
+  "Meezan Bank",
+  "Habib Bank Limited (HBL)",
+  "United Bank Limited (UBL)",
+  "MCB Bank",
+  "Allied Bank Limited",
+  "Bank Alfalah",
+  "Faysal Bank",
+  "Askari Bank",
+  "Dubai Islamic Bank",
+  "Standard Chartered",
+];
+
 export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   open,
   onOpenChange,
   onSuccess,
 }) => {
-  // Top Toggle: Refund vs Void
-  const [actionType, setActionType] = useState<"refund" | "void">("refund");
+  const { allBankNames = [] } = useAgencyBanks();
 
-  // Row 1: Search & Invoice Reference
+  // Line 1: Date | Type | Original Invoice / PNR / Ticket No * | Party
+  const [refundDate, setRefundDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10)
+  );
+  const [actionType, setActionType] = useState<"refund" | "void">("refund");
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [matchedBooking, setMatchedBooking] = useState<MatchedBooking | null>(null);
+  const [partyName, setPartyName] = useState("");
 
-  // Row 2: Equal columns
+  // Line 2: Client Refund | Supplier Refund | Deductions | Refund Mode | Bank
   const [clientRefundAmount, setClientRefundAmount] = useState<string>("0");
   const [vendorRefundAmount, setVendorRefundAmount] = useState<string>("0");
   const [deductionsAmount, setDeductionsAmount] = useState<string>("0");
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
+  const [selectedBank, setSelectedBank] = useState<string>("");
+  const [dbBanks, setDbBanks] = useState<string[]>([]);
+  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
 
-  // Row 3: Pending Vendor Refund Toggle
-  const [pendingVendorRefund, setPendingVendorRefund] = useState<boolean>(true);
-
-  // Row 4 & 5: Reason & Notes
+  // Line 3: Reason | Notes | Pending Vendor Toggle
   const [reason, setReason] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [pendingVendorRefund, setPendingVendorRefund] = useState<boolean>(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-generated sequence for Refund No
+  const [refundSeq, setRefundSeq] = useState<string>("1001");
+
+  // Load banks
+  useEffect(() => {
+    async function loadBankAccounts() {
+      try {
+        const { data } = await (supabase as any)
+          .from("accounts")
+          .select("name, type, active")
+          .eq("type", "bank")
+          .eq("active", true);
+
+        const accountNames = (data || []).map((a: any) => a.name);
+        const combined = Array.from(new Set([...allBankNames, ...accountNames, ...DEFAULT_BANKS]));
+        setDbBanks(combined);
+
+        if (!selectedBank && combined[0]) {
+          setSelectedBank(combined[0]);
+        }
+      } catch {
+        setDbBanks(DEFAULT_BANKS);
+        if (!selectedBank) setSelectedBank(DEFAULT_BANKS[0]);
+      }
+    }
+
+    if (open) {
+      loadBankAccounts();
+    }
+  }, [open, allBankNames]);
+
+  // Generate sequence on open or actionType change
+  useEffect(() => {
+    async function fetchNextNumber() {
+      try {
+        const { data, error } = await supabase.rpc("preview_next_number", {
+          p_counter_type: "refund",
+        });
+        if (!error && data) {
+          const match = String(data).match(/\d+$/);
+          if (match) {
+            setRefundSeq(match[0]);
+            return;
+          }
+        }
+      } catch {}
+      const randomSeq = String(Math.floor(1000 + Math.random() * 9000));
+      setRefundSeq(randomSeq);
+    }
+
+    if (open) {
+      fetchNextNumber();
+    }
+  }, [open, actionType]);
+
+  const recordPrefix = actionType === "void" ? "VOID" : "REF";
+  const autoRecordNo = `${recordPrefix}-${refundSeq}`;
+  const bankOptions = dbBanks.length > 0 ? dbBanks : DEFAULT_BANKS;
 
   // Search booking / invoice by Invoice No, PNR, or Ticket No
   const handleSearchInvoice = async () => {
@@ -75,27 +160,27 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         .maybeSingle();
 
       if (invData) {
-        // Fetch client name
-        let clientName = "Customer";
+        let name = "Customer";
         if (invData.client_id) {
           const { data: client } = await (supabase as any)
             .from("clients")
             .select("name, pnr, passport_number")
             .eq("id", invData.client_id)
             .maybeSingle();
-          if (client?.name) clientName = client.name;
+          if (client?.name) name = client.name;
         }
 
         const match: MatchedBooking = {
           id: invData.id,
           invoiceNo: invData.invoice_number,
-          clientName,
+          clientName: name,
           totalAmount: Number(invData.amount) || 0,
           paidAmount: Number(invData.amount_paid) || 0,
           service: invData.item_description || "Booking",
         };
 
         setMatchedBooking(match);
+        setPartyName(name);
         setClientRefundAmount(String(match.paidAmount || match.totalAmount));
         toast.success(`Matched invoice: ${match.invoiceNo} (${match.clientName})`);
         return;
@@ -121,6 +206,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         };
 
         setMatchedBooking(match);
+        setPartyName(bookingData.name);
         setClientRefundAmount(String(match.paidAmount || match.totalAmount));
         toast.success(`Matched booking: ${match.clientName} (PNR: ${match.pnr || "N/A"})`);
         return;
@@ -136,22 +222,39 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   };
 
   const handleSave = async () => {
+    if (!invoiceSearch.trim() && !matchedBooking) {
+      toast.error("Please specify target invoice, PNR, or ticket number");
+      return;
+    }
+
     if (!reason.trim()) {
       toast.error(`Please provide a ${actionType === "void" ? "void" : "refund"} reason`);
       return;
     }
 
+    const clientAmt = parseFloat(clientRefundAmount) || 0;
+    if (actionType === "refund" && clientAmt <= 0) {
+      toast.error("Client refund amount must be greater than zero");
+      return;
+    }
+
+    if (paymentMode === "bank" && !selectedBank) {
+      toast.error("Please select a bank account");
+      return;
+    }
+
     setIsSubmitting(true);
-    const recordNo = `${actionType === "void" ? "VOID" : "REF"}-${Date.now().toString().slice(-6)}`;
+    const recordNo = autoRecordNo;
 
     try {
-      const clientAmt = parseFloat(clientRefundAmount) || 0;
       const deductions = parseFloat(deductionsAmount) || 0;
       const combinedNotes = [
         notes,
+        paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
         deductions > 0 ? `Service Charges/Deductions: PKR ${deductions}` : null,
-        pendingVendorRefund ? `Track as pending vendor refund: YES` : null,
+        pendingVendorRefund && actionType === "refund" ? `Track as pending vendor refund: YES` : null,
         matchedBooking ? `Ref Invoice: ${matchedBooking.invoiceNo || matchedBooking.pnr}` : null,
+        partyName ? `Party: ${partyName}` : null,
       ]
         .filter(Boolean)
         .join(" | ");
@@ -162,7 +265,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         p_account_id: null,
         p_party_id: null,
         p_booking_id: matchedBooking?.id || null,
-        p_date: new Date().toISOString().slice(0, 10),
+        p_date: refundDate,
         p_method: paymentMode,
         p_reference_no: recordNo,
         p_reason: reason,
@@ -181,153 +284,154 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* 1. Top Header with Refund | Void Toggle at Very Top */}
-        <div className="px-6 py-3 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2">
-            {actionType === "refund" ? (
-              <RotateCcw className="w-5 h-5 text-purple-600" />
-            ) : (
-              <Ban className="w-5 h-5 text-red-600" />
-            )}
-            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {actionType === "void" ? "Void Booking Invoice" : "Process Client / Vendor Refund"}
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* HEADER: Title, Auto-generated Refund # badge, Close (X) */}
+        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-purple-600" />
+              Process Refund / Void
             </DialogTitle>
-          </div>
 
-          {/* Top Segmented Action Toggle */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => setActionType("refund")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                actionType === "refund"
-                  ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Process Refund
-            </button>
-            <button
-              type="button"
-              onClick={() => setActionType("void")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                actionType === "void"
-                  ? "bg-white dark:bg-slate-900 text-red-700 dark:text-red-400 shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Ban className="w-3.5 h-3.5" />
-              Void Invoice
-            </button>
+            {/* Read-Only Refund # badge */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>{actionType === "void" ? "Void #:" : "Refund #:"}</span>
+              <span className={actionType === "void" ? "text-red-600 dark:text-red-400" : "text-purple-600 dark:text-purple-400"}>
+                {autoRecordNo}
+              </span>
+              <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
+                Auto
+              </Badge>
+            </div>
           </div>
         </div>
 
-        {/* 2. Flexible Form Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Row 1: Original Invoice / PNR / Ticket No + Search Button */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Step 1: Locate Target Invoice / Booking
+        {/* BODY: ONE FLAT COMPACT FORM, NO SCROLLING */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+          {/* LINE 1: Date | Type | Original Invoice / PNR / Ticket No * | Party */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
+            {/* Date: NEW field, defaults to today, editable */}
+            <div className="lg:col-span-2">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Date <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={refundDate}
+                onChange={(e) => setRefundDate(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+                required
+              />
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full">
-              <div className="flex-1">
-                <Label className="text-xs font-semibold">
-                  Original Invoice / PNR / Ticket No <span className="text-red-500">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <Input
-                    value={invoiceSearch}
-                    onChange={(e) => setInvoiceSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleSearchInvoice();
-                      }
-                    }}
-                    placeholder="e.g. INV-1004, PNR: M8K9LP, or Ticket # 214-89765432"
-                    className="h-9 text-xs font-mono uppercase pr-24"
-                  />
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleSearchInvoice}
-                      disabled={isSearching}
-                      className="h-7 text-xs px-2.5 bg-[#0B192C] hover:bg-[#1E3E62] text-white"
-                    >
-                      <Search className="w-3.5 h-3.5 mr-1" />
-                      {isSearching ? "Searching..." : "Search"}
-                    </Button>
-                  </div>
+            {/* Type: DROPDOWN styled like Service Type */}
+            <div className="lg:col-span-2">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Type <span className="text-red-500">*</span>
+              </Label>
+              <Select value={actionType} onValueChange={(val: any) => setActionType(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="refund">Refund</SelectItem>
+                  <SelectItem value="void">Void</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Original Invoice / PNR / Ticket No * (Search button inside input) */}
+            <div className="lg:col-span-5">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Original Invoice / PNR / Ticket No <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative mt-0.5">
+                <Input
+                  value={invoiceSearch}
+                  onChange={(e) => setInvoiceSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearchInvoice();
+                    }
+                  }}
+                  placeholder="e.g. INV-1004, PNR, Ticket #"
+                  className="h-8 text-xs font-mono uppercase pr-20"
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSearchInvoice}
+                    disabled={isSearching}
+                    className="h-6 text-[10px] px-2 bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
+                  >
+                    <Search className="w-2.5 h-2.5 mr-1" />
+                    {isSearching ? "..." : "Search"}
+                  </Button>
                 </div>
               </div>
             </div>
 
-            {/* Matched Booking Preview Card */}
-            {matchedBooking && (
-              <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-purple-600" />
-                  <span className="font-bold text-purple-900 dark:text-purple-200">
-                    {matchedBooking.clientName}
-                  </span>
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    {matchedBooking.invoiceNo || matchedBooking.pnr}
-                  </Badge>
-                  {matchedBooking.service && (
-                    <span className="text-muted-foreground text-[11px]">
-                      • {matchedBooking.service}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4 font-mono text-[11px]">
-                  <span>Total: <strong>PKR {matchedBooking.totalAmount.toLocaleString()}</strong></span>
-                  <span>Paid: <strong className="text-teal-600">PKR {matchedBooking.paidAmount.toLocaleString()}</strong></span>
-                </div>
-              </div>
-            )}
+            {/* Party (auto-filled, read-only) */}
+            <div className="lg:col-span-3">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Party Name
+              </Label>
+              <Input
+                value={partyName || (matchedBooking ? matchedBooking.clientName : "")}
+                readOnly
+                placeholder="Auto-filled on search"
+                className="h-8 text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 mt-0.5 cursor-not-allowed font-medium"
+              />
+            </div>
           </div>
 
-          {/* Void Protection Banner (If Void Selected) */}
-          {actionType === "void" && (
-            <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-900 text-xs space-y-2">
-              <div className="flex items-center gap-1.5 font-bold text-red-700 dark:text-red-300 text-sm">
-                <AlertTriangle className="w-4 h-4" />
-                Financial Void Protection
+          {/* Matched booking brief preview */}
+          {matchedBooking && (
+            <div className="p-2 bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 rounded flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+                <span className="font-bold text-purple-900 dark:text-purple-200">
+                  {matchedBooking.clientName}
+                </span>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  {matchedBooking.invoiceNo || matchedBooking.pnr}
+                </Badge>
+                {matchedBooking.service && (
+                  <span className="text-muted-foreground text-[10px]">• {matchedBooking.service}</span>
+                )}
               </div>
-              <p className="text-red-600 dark:text-red-400 leading-relaxed text-xs">
-                Voiding reverses the associated accounting entries and voids the invoice with an immutable audit timestamp.
-              </p>
+              <div className="flex items-center gap-3 font-mono text-[11px]">
+                <span>Total: <strong>PKR {matchedBooking.totalAmount.toLocaleString()}</strong></span>
+                <span>Paid: <strong className="text-teal-600">PKR {matchedBooking.paidAmount.toLocaleString()}</strong></span>
+              </div>
             </div>
           )}
 
-          {/* Row 2: Equal 4 Columns (Refund Mode & Amounts) */}
-          {actionType === "refund" && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Step 2: Refund Financial Breakdown & Mode
-              </div>
+          {/* LINE 2: Client Refund | Supplier Refund | Deductions | Refund Mode | Bank */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
+            {/* Client Refund (PKR) * */}
+            <div className={actionType === "void" ? "lg:col-span-6" : paymentMode === "bank" ? "lg:col-span-3" : "lg:col-span-3"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Client Refund (PKR) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="number"
+                value={clientRefundAmount}
+                onChange={(e) => setClientRefundAmount(e.target.value)}
+                placeholder="0"
+                className="h-8 text-xs font-mono font-bold text-right mt-0.5"
+                required
+              />
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Client Refund (PKR) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="number"
-                    value={clientRefundAmount}
-                    onChange={(e) => setClientRefundAmount(e.target.value)}
-                    placeholder="0"
-                    className="h-9 text-xs font-mono font-bold text-right mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {/* If Type != Void, show Supplier Refund and Deductions */}
+            {actionType !== "void" && (
+              <>
+                <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Supplier Refund (PKR)
                   </Label>
                   <Input
@@ -335,99 +439,131 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
                     value={vendorRefundAmount}
                     onChange={(e) => setVendorRefundAmount(e.target.value)}
                     placeholder="0"
-                    className="h-9 text-xs font-mono text-right mt-1"
+                    className="h-8 text-xs font-mono text-right mt-0.5"
                   />
                 </div>
 
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Service Charges / Deductions (PKR)
+                <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Deductions (PKR)
                   </Label>
                   <Input
                     type="number"
                     value={deductionsAmount}
                     onChange={(e) => setDeductionsAmount(e.target.value)}
                     placeholder="0"
-                    className="h-9 text-xs font-mono text-right mt-1"
+                    className="h-8 text-xs font-mono text-right mt-0.5"
                   />
                 </div>
+              </>
+            )}
 
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Refund Mode
+            {/* Refund Mode */}
+            <div className={actionType === "void" ? "lg:col-span-6" : paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Refund Mode
+              </Label>
+              <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash in Hand</SelectItem>
+                  <SelectItem value="bank">Bank Account</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Bank Dropdown (when Refund Mode = Bank Account) */}
+            {paymentMode === "bank" && (
+              <div className={actionType === "void" ? "lg:col-span-12" : "lg:col-span-3"}>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Bank Account <span className="text-red-500">*</span>
                   </Label>
-                  <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                    <SelectTrigger className="h-9 text-xs mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash in Hand</SelectItem>
-                      <SelectItem value="bank">Bank Account</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBankOpen(true)}
+                    className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Quick Add Bank
+                  </button>
                 </div>
+                <Select value={selectedBank} onValueChange={setSelectedBank}>
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                    <SelectValue placeholder="Select Bank" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {bankOptions.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-          )}
-
-          {/* Row 3: Track as Pending Refund from Vendor Toggle */}
-          {actionType === "refund" && (
-            <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
-                  Track as Pending Refund from Vendor
-                </Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Flag this ticket/service in Accounts as awaiting supplier refund recovery
-                </p>
-              </div>
-              <Switch
-                checked={pendingVendorRefund}
-                onCheckedChange={setPendingVendorRefund}
-              />
-            </div>
-          )}
-
-          {/* Row 4: Refund Reason (Required) */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-            <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              {actionType === "void" ? "Void Reason" : "Refund Reason"} <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={
-                actionType === "void"
-                  ? "e.g. Passenger cancelled before ticket issuance"
-                  : "e.g. Flight cancellation by airline, medical emergency, visa rejection..."
-              }
-              className="h-9 text-xs mt-1"
-              required
-            />
+            )}
           </div>
 
-          {/* Row 5: Notes / Deductions Breakdown (Full width) */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-            <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Notes / Deductions Breakdown
-            </Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Provide breakdown of airline penalty, agency service fee, vendor refund claim reference, etc..."
-              className="w-full min-h-[85px] max-h-[140px] text-xs resize-none"
-            />
+          {/* LINE 3: Refund Reason * | Notes / Deductions Breakdown | Track as Pending toggle inline */}
+          <div className="space-y-1.5 pt-1 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+              {/* Refund Reason * */}
+              <div className="md:col-span-5">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  {actionType === "void" ? "Void Reason" : "Refund Reason"} <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={
+                    actionType === "void"
+                      ? "e.g. Cancelled before ticket issuance"
+                      : "e.g. Flight cancellation, medical emergency, visa refusal"
+                  }
+                  className="h-8 text-xs mt-0.5"
+                  required
+                />
+              </div>
+
+              {/* Notes / Deductions Breakdown */}
+              <div className="md:col-span-5">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Notes / Deductions Breakdown
+                </Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Airline penalty, service fee, vendor claim reference..."
+                  className="w-full min-h-[32px] h-8 max-h-[80px] text-xs resize-y mt-0.5 py-1.5 leading-snug"
+                />
+              </div>
+
+              {/* Track as Pending Refund from Vendor: small inline toggle with tooltip */}
+              {actionType === "refund" && (
+                <div className="md:col-span-2 flex items-center justify-between h-8 px-2 bg-background border rounded-md mt-0.5" title="Flag this in Accounts as awaiting supplier refund recovery">
+                  <Label className="text-[10px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer truncate mr-1">
+                    Pending Vendor
+                  </Label>
+                  <Switch
+                    checked={pendingVendorRefund}
+                    onCheckedChange={setPendingVendorRefund}
+                    className="scale-75 origin-right"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Footer: Fixed at bottom */}
-        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
+        {/* FOOTER: Only Cancel and Record Refund */}
+        <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer"
           >
             Cancel
           </Button>
@@ -436,19 +572,29 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             size="sm"
             disabled={isSubmitting}
             onClick={handleSave}
-            className={`text-xs text-white cursor-pointer min-w-[130px] ${
+            className={`h-8 text-xs text-white cursor-pointer min-w-[120px] ${
               actionType === "void"
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-purple-600 hover:bg-purple-700"
             }`}
           >
             {isSubmitting
-              ? "Processing..."
+              ? "Saving..."
               : actionType === "void"
               ? "Confirm Void"
               : "Record Refund"}
           </Button>
         </div>
+
+        {/* Quick Add Bank Popup */}
+        <AddBankDialog
+          open={isAddBankOpen}
+          onOpenChange={setIsAddBankOpen}
+          onSaved={(bankName: string) => {
+            setDbBanks((prev) => Array.from(new Set([bankName, ...prev])));
+            setSelectedBank(bankName);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import { toast } from "@/hooks/use-toast";
 import { sessionManager } from "@/lib/sessionManager";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,8 +30,9 @@ export function useAuth() {
         setSession(newSession);
         setUser(newSession?.user ?? null);
         
-        // Handle session events
+        // Handle session events with strict multi-tenant cache isolation
         if (event === 'SIGNED_IN' && newSession?.user) {
+          clearAllAgencyDataCache();
           sessionManager.startSession(newSession.user.id);
           toast({
             title: "Welcome back!",
@@ -38,6 +40,7 @@ export function useAuth() {
           });
         } else if (event === 'SIGNED_OUT') {
           sessionManager.endSession();
+          clearAllAgencyDataCache();
         } else if (event === 'TOKEN_REFRESHED') {
           // Update last activity on token refresh
           if (newSession?.user) {

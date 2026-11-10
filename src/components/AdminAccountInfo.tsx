@@ -7,7 +7,7 @@ import { useAgency } from '@/hooks/useAgency';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { UserCircle2, Monitor, AlertTriangle, Loader2, Trash2, Shield, Calendar, Smartphone, Crown, Infinity, ChevronDown, LogOut } from 'lucide-react';
+import { UserCircle2, Monitor, AlertTriangle, Loader2, Trash2, Shield, Calendar, Smartphone, Crown, Infinity, ChevronDown, LogOut, Building2, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -158,6 +158,49 @@ export const AdminAccountInfo = () => {
         </div>
       </CardHeader>
       <CardContent className="pt-6 space-y-6">
+        {/* Agency Profile (Read-Only) */}
+        <div className="p-4 rounded-xl border border-border/60 bg-background/50 backdrop-blur-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Agency Profile</h3>
+            </div>
+            {agency?.agency_code && (
+              <Badge variant="outline" className="font-mono text-xs font-bold bg-primary/10 text-primary border-primary/20">
+                {agency.agency_code}
+              </Badge>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Agency Name</p>
+              <p className="text-sm font-medium text-foreground">{agency?.name || '—'}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Public Agency Code (Read-Only)</p>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-semibold text-primary">
+                  {agency?.agency_code || 'A00001'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={() => {
+                    navigator.clipboard.writeText(agency?.agency_code || 'A00001');
+                    toast.success("Agency code copied to clipboard");
+                  }}
+                  title="Copy Agency Code"
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Subscription Info */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">

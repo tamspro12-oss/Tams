@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Party, useParties } from "@/hooks/useParties";
+import { supabase } from "@/integrations/supabase/client";
+import { Lock } from "lucide-react";
 import { toast } from "sonner";
 
 interface AddPartyDialogProps {
@@ -24,13 +26,35 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
   const { addParty, isSaving } = useParties();
   const [type, setType] = useState<"client" | "vendor" | "both">(initialType);
   const [name, setName] = useState("");
-  const [code, setCode] = useState(() => `${initialType === "client" ? "CLT" : initialType === "vendor" ? "VND" : "PRT"}-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [codePreview, setCodePreview] = useState<string>("Loading...");
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [creditLimit, setCreditLimit] = useState<string>("0");
   const [openingBalance, setOpeningBalance] = useState<string>("0");
+
+  useEffect(() => {
+    async function fetchCodePreview() {
+      try {
+        const counterType = type === "vendor" ? "vendor" : "client";
+        const { data, error } = await supabase.rpc("preview_next_number", {
+          p_counter_type: counterType,
+        });
+        if (!error && data) {
+          setCodePreview(data);
+          return;
+        }
+      } catch (err) {
+        console.warn("Could not preview party code:", err);
+      }
+      setCodePreview(type === "vendor" ? "V-000001" : "C-000001");
+    }
+
+    if (open) {
+      fetchCodePreview();
+    }
+  }, [open, type]);
 
   // Additional details (always visible)
   const [cnic, setCnic] = useState("");
@@ -50,7 +74,6 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       const saved = await addParty({
         type,
         name: name.trim(),
-        code: code.trim(),
         phone: phone.trim() || undefined,
         whatsapp: whatsapp.trim() || phone.trim() || undefined,
         city: city.trim() || undefined,
@@ -103,7 +126,6 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
                       value={type}
                       onValueChange={(val: any) => {
                         setType(val);
-                        setCode(`${val === "client" ? "CLT" : val === "vendor" ? "VND" : "PRT"}-${Math.floor(1000 + Math.random() * 9000)}`);
                       }}
                     >
                       <SelectTrigger className="h-8 text-xs mt-1">
@@ -118,11 +140,17 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
                   </div>
 
                   <div>
-                    <Label className="text-xs font-semibold">Code</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Party Code</Label>
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                        <Lock className="w-2.5 h-2.5" /> Auto
+                      </span>
+                    </div>
                     <Input
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      className="h-8 text-xs font-mono mt-1"
+                      value={codePreview}
+                      readOnly
+                      disabled
+                      className="h-8 text-xs font-mono mt-1 bg-muted/60 text-foreground cursor-not-allowed border-dashed"
                     />
                   </div>
                 </div>

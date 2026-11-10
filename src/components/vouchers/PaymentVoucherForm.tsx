@@ -1,27 +1,31 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useParties } from "@/hooks/useParties";
+import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
+import { AddBankDialog } from "@/components/banks/AddBankDialog";
+import { useParties, Party } from "@/hooks/useParties";
 import { useAgency } from "@/hooks/useAgency";
-import { generateVoucherPdf, VoucherPdfData } from "@/lib/pdf/voucherReceiptPdf";
+import { useAgencyBanks } from "@/hooks/useAgencyBanks";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ArrowLeftRight,
   Search,
   CheckCircle2,
-  Printer,
-  FileCheck,
-  Building2,
-  Wallet,
-  AlertCircle,
+  Lock,
+  Plus,
 } from "lucide-react";
 
 interface PaymentVoucherFormProps {
@@ -61,42 +65,49 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 }) => {
   const { parties } = useParties();
   const { data: agency } = useAgency();
+  const { allBankNames = [] } = useAgencyBanks();
 
-  // Row 1: Direction, Mode, Date
+  // Direction: Received | Paid | Transfer
   const [direction, setDirection] = useState<"received" | "paid" | "transfer">("received");
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
   const [voucherDate, setVoucherDate] = useState<string>(
     () => new Date().toISOString().slice(0, 10)
   );
 
-  // Transfer Mode: From & To
-  const [fromMode, setFromMode] = useState<"cash" | "bank">("cash");
-  const [fromBank, setFromBank] = useState<string>(DEFAULT_BANKS[0]);
-  const [toMode, setToMode] = useState<"cash" | "bank">("bank");
-  const [toBank, setToBank] = useState<string>(DEFAULT_BANKS[1]);
-
-  // Bank accounts fetched from DB
+  // Bank selection
+  const [selectedBank, setSelectedBank] = useState<string>("");
   const [dbBanks, setDbBanks] = useState<string[]>([]);
 
-  // Row 2: Search & Link Invoice
+  // Transfer accounts
+  const [fromAccount, setFromAccount] = useState<string>("Cash in Hand");
+  const [toAccount, setToAccount] = useState<string>("");
+
+  // Invoice & Party Linking
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [matchedInvoice, setMatchedInvoice] = useState<MatchedInvoice | null>(null);
   const [partyId, setPartyId] = useState<string>("");
-  const [partyType, setPartyType] = useState<"client" | "vendor">("client");
 
-  // Row 3: Amount & Ref
+  // Amount & Reference
   const [amount, setAmount] = useState<string>("0");
   const [referenceNo, setReferenceNo] = useState<string>("");
 
-  // Row 4: Remarks & Adjustment
+  // Remarks & Write-off
   const [notes, setNotes] = useState<string>("");
   const [isAdjustment, setIsAdjustment] = useState<boolean>(false);
   const [adjustmentReason, setAdjustmentReason] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Fetch registered bank accounts
+  // Quick Add Dialogs
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false);
+  const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
+  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
+
+  // Auto Voucher Number
+  const [voucherSeq, setVoucherSeq] = useState<string>("1001");
+
+  // Load banks
   useEffect(() => {
     async function loadBankAccounts() {
       try {
@@ -106,29 +117,67 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           .eq("type", "bank")
           .eq("active", true);
 
-        if (data && data.length > 0) {
-          const names = data.map((a: any) => a.name);
-          setDbBanks(names);
-          if (names[0]) setFromBank(names[0]);
-          if (names[1] || names[0]) setToBank(names[1] || names[0]);
+        const accountNames = (data || []).map((a: any) => a.name);
+        const combined = Array.from(new Set([...allBankNames, ...accountNames, ...DEFAULT_BANKS]));
+        setDbBanks(combined);
+
+        if (!selectedBank && combined[0]) {
+          setSelectedBank(combined[0]);
+        }
+        if (!toAccount && combined[0]) {
+          setToAccount(combined[0]);
         }
       } catch {
-        // Fallback to DEFAULT_BANKS
+        setDbBanks(DEFAULT_BANKS);
+        if (!selectedBank) setSelectedBank(DEFAULT_BANKS[0]);
+        if (!toAccount) setToAccount(DEFAULT_BANKS[0]);
       }
     }
-    loadBankAccounts();
-  }, []);
+
+    if (open) {
+      loadBankAccounts();
+    }
+  }, [open, allBankNames]);
+
+  // Generate sequence on open or direction change
+  useEffect(() => {
+    async function fetchNextNumber() {
+      try {
+        const { data, error } = await supabase.rpc("preview_next_number", {
+          p_counter_type: "voucher",
+        });
+        if (!error && data) {
+          const match = String(data).match(/\d+$/);
+          if (match) {
+            setVoucherSeq(match[0]);
+            return;
+          }
+        }
+      } catch {}
+      const randomSeq = String(Math.floor(1000 + Math.random() * 9000));
+      setVoucherSeq(randomSeq);
+    }
+
+    if (open) {
+      fetchNextNumber();
+    }
+  }, [open, direction]);
+
+  const voucherPrefix =
+    direction === "received" ? "CRV" : direction === "paid" ? "CPV" : "ITV";
+  const autoVoucherNo = `${voucherPrefix}-${voucherSeq}`;
+
+  const typeLabel =
+    direction === "received"
+      ? "Cash / Bank Receipt Voucher (CRV)"
+      : direction === "paid"
+      ? "Cash / Bank Payment Voucher (CPV)"
+      : "Internal Account Transfer (ITV)";
 
   const bankOptions = dbBanks.length > 0 ? dbBanks : DEFAULT_BANKS;
 
-  // Filter clients/vendors
-  const filteredParties = useMemo(() => {
-    return parties.filter((p) => {
-      if (direction === "received") return p.type === "client" || p.type === "both";
-      if (direction === "paid") return p.type === "vendor" || p.type === "both";
-      return true;
-    });
-  }, [parties, direction]);
+  const clients = useMemo(() => parties.filter((p) => p.type === "client" || p.type === "both"), [parties]);
+  const vendors = useMemo(() => parties.filter((p) => p.type === "vendor" || p.type === "both"), [parties]);
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const numericAmount = parseFloat(amount) || 0;
@@ -143,7 +192,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
     setIsSearching(true);
     try {
-      // 1. Try invoices table
+      // 1. Invoices table
       const { data: invData } = await (supabase as any)
         .from("invoices")
         .select("id, invoice_number, amount, amount_paid, balance_due, client_id, item_description")
@@ -183,7 +232,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         return;
       }
 
-      // 2. Try clients table (PNR / Ticket / Passport)
+      // 2. Clients / Bookings table (PNR / Ticket / Name)
       const { data: bookingData } = await (supabase as any)
         .from("clients")
         .select("id, name, pnr, selling_price, amount_paid, passport_number")
@@ -213,7 +262,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         return;
       }
 
-      toast.info("No matching invoice or booking found. You can select client manually below.");
+      toast.info("No matching invoice found. You can select party manually.");
       setMatchedInvoice(null);
     } catch (err: any) {
       toast.error(err.message || "Failed to search invoice");
@@ -222,19 +271,19 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     }
   };
 
-  const handleSave = async (printPdf = false) => {
+  const handleSave = async () => {
     if (direction === "transfer") {
-      if (fromMode === toMode && fromMode === "cash") {
-        toast.error("Source and destination cannot both be Cash in Hand");
-        return;
-      }
-      if (fromMode === "bank" && toMode === "bank" && fromBank === toBank) {
-        toast.error("Source and destination cannot be the same bank account");
+      if (fromAccount === toAccount) {
+        toast.error("Source and destination accounts cannot be the same");
         return;
       }
     } else {
       if (!partyId && !matchedInvoice?.clientName) {
         toast.error("Please select a client or vendor, or link an invoice");
+        return;
+      }
+      if (paymentMode === "bank" && !selectedBank) {
+        toast.error("Please select a bank account");
         return;
       }
     }
@@ -245,15 +294,11 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     }
 
     setIsSubmitting(true);
-    const voucherPrefix =
-      direction === "received" ? "CRV" : direction === "paid" ? "CPV" : "ITV";
-    const voucherNo = `${voucherPrefix}-${Date.now().toString().slice(-6)}`;
+    const voucherNo = autoVoucherNo;
 
     try {
       if (direction === "transfer") {
-        const transferDesc = `Transfer from ${
-          fromMode === "bank" ? fromBank : "Cash in Hand"
-        } to ${toMode === "bank" ? toBank : "Cash in Hand"}`;
+        const transferDesc = `Transfer from ${fromAccount} to ${toAccount}`;
 
         await (supabase as any).rpc("record_transfer", {
           p_from_account_id: null,
@@ -265,7 +310,6 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         });
         toast.success("Internal transfer recorded successfully");
       } else {
-        // Record payment voucher
         const { error } = await (supabase as any).rpc("save_payment_voucher", {
           p_direction: direction,
           p_amount: numericAmount,
@@ -277,7 +321,10 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           p_reference_no: referenceNo || null,
           p_is_adjustment: isAdjustment,
           p_adjustment_reason: adjustmentReason || null,
-          p_notes: notes || null,
+          p_notes: [
+            paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+            notes,
+          ].filter(Boolean).join(" — ") || null,
         });
 
         if (error) {
@@ -297,39 +344,6 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         toast.success("Payment voucher recorded successfully");
       }
 
-      if (printPdf) {
-        const partyDisplayName =
-          direction === "transfer"
-            ? "Internal Account Transfer"
-            : selectedParty?.name || matchedInvoice?.clientName || "Direct Party";
-
-        const pdfData: VoucherPdfData = {
-          voucherNo,
-          voucherDate,
-          direction: direction === "transfer" ? "received" : direction,
-          paymentMode: direction === "transfer" ? "transfer" : paymentMode,
-          partyName: partyDisplayName,
-          partyPhone: selectedParty?.phone,
-          amount: numericAmount,
-          accountName:
-            direction === "transfer"
-              ? `${fromMode === "bank" ? fromBank : "Cash"} -> ${
-                  toMode === "bank" ? toBank : "Cash"
-                }`
-              : paymentMode === "cash"
-              ? "Cash in Hand"
-              : "Bank Account",
-          referenceNo: referenceNo || undefined,
-          notes: notes || undefined,
-          isAdjustment,
-          agency: {
-            name: agency?.name,
-            phone: agency?.contact_info,
-          },
-        };
-        generateVoucherPdf(pdfData);
-      }
-
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -341,240 +355,150 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* 1. Header */}
-        <div className="px-6 py-3 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2">
-            {direction === "received" ? (
-              <ArrowDownLeft className="w-5 h-5 text-teal-600" />
-            ) : direction === "paid" ? (
-              <ArrowUpRight className="w-5 h-5 text-blue-600" />
-            ) : (
-              <ArrowLeftRight className="w-5 h-5 text-purple-600" />
-            )}
-            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              Payment Voucher
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* HEADER: Title, Auto-generated Voucher # badge, Type Label, Close (X) */}
+        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+              New Payment Voucher
             </DialogTitle>
+
+            {/* Read-Only Voucher # badge */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>Voucher #:</span>
+              <span className="text-emerald-600 dark:text-emerald-400">{autoVoucherNo}</span>
+              <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
+                Auto
+              </Badge>
+            </div>
           </div>
 
-          <Badge variant="outline" className="text-xs">
-            {direction === "received"
-              ? "Cash / Bank Receipt Voucher (CRV)"
-              : direction === "paid"
-              ? "Cash / Bank Payment Voucher (CPV)"
-              : "Internal Account Transfer (ITV)"}
+          <Badge variant="outline" className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+            {typeLabel}
           </Badge>
         </div>
 
-        {/* 2. Flexible Form Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Row 1: Direction, Mode, Date (Equal Columns) */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Row 1: Transaction Flow & Date
+        {/* BODY: ONE FLAT COMPACT FORM, NO SCROLLING */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+          {/* LINE 1: Voucher Date | Direction | Payment Mode | Amount (PKR) * | Cheque / Reference No */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
+            {/* Voucher Date */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Voucher Date <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={voucherDate}
+                onChange={(e) => setVoucherDate(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+                required
+              />
             </div>
 
+            {/* Direction */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Direction <span className="text-red-500">*</span>
+              </Label>
+              <Select value={direction} onValueChange={(val: any) => setDirection(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="received">Received (CRV)</SelectItem>
+                  <SelectItem value="paid">Paid (CPV)</SelectItem>
+                  <SelectItem value="transfer">Transfer (ITV)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Mode (only when direction != transfer) */}
             {direction !== "transfer" ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-end">
-                {/* Transaction Direction Toggle */}
-                <div>
-                  <Label className="text-xs font-semibold">Transaction Direction</Label>
-                  <div className="grid grid-cols-3 gap-1 bg-muted/70 p-1 rounded-lg border mt-1">
-                    <button
-                      type="button"
-                      onClick={() => setDirection("received")}
-                      className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        direction === "received"
-                          ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <ArrowDownLeft className="w-3.5 h-3.5" /> Received
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDirection("paid")}
-                      className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        direction === "paid"
-                          ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <ArrowUpRight className="w-3.5 h-3.5" /> Paid
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDirection("transfer")}
-                      className="flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer text-muted-foreground hover:text-foreground"
-                    >
-                      <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
-                    </button>
-                  </div>
-                </div>
-
-                {/* Payment Mode Toggle */}
-                <div>
-                  <Label className="text-xs font-semibold">Payment Mode</Label>
-                  <div className="grid grid-cols-2 gap-1 bg-muted/70 p-1 rounded-lg border mt-1">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMode("cash")}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        paymentMode === "cash"
-                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Wallet className="w-3.5 h-3.5 text-amber-600" /> Cash in Hand
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMode("bank")}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        paymentMode === "bank"
-                          ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5 text-blue-600" /> Bank Account
-                    </button>
-                  </div>
-                </div>
-
-                {/* Voucher Date */}
-                <div>
-                  <Label className="text-xs font-semibold">Voucher Date</Label>
-                  <Input
-                    type="date"
-                    value={voucherDate}
-                    onChange={(e) => setVoucherDate(e.target.value)}
-                    className="h-9 text-xs mt-1"
-                  />
-                </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Payment Mode <span className="text-red-500">*</span>
+                </Label>
+                <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash in Hand</SelectItem>
+                    <SelectItem value="bank">Bank Account</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             ) : (
-              /* Transfer Mode Layout */
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-end">
-                {/* Direction Switcher */}
-                <div>
-                  <Label className="text-xs font-semibold">Transaction Direction</Label>
-                  <div className="grid grid-cols-3 gap-1 bg-muted/70 p-1 rounded-lg border mt-1">
-                    <button
-                      type="button"
-                      onClick={() => setDirection("received")}
-                      className="py-1.5 rounded-md text-xs font-semibold text-muted-foreground"
-                    >
-                      Received
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDirection("paid")}
-                      className="py-1.5 rounded-md text-xs font-semibold text-muted-foreground"
-                    >
-                      Paid
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDirection("transfer")}
-                      className="bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 py-1.5 rounded-md text-xs font-semibold shadow-sm"
-                    >
-                      Transfer
-                    </button>
-                  </div>
-                </div>
-
-                {/* Transfer Source (From) */}
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-red-600 dark:text-red-400">
-                    From (Source Account)
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-semibold text-red-600 dark:text-red-400">
+                    From Account
                   </Label>
-                  <div className="flex gap-2">
-                    <Select value={fromMode} onValueChange={(val: any) => setFromMode(val)}>
-                      <SelectTrigger className="h-9 text-xs w-32 shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash in Hand</SelectItem>
-                        <SelectItem value="bank">Bank Account</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {fromMode === "bank" && (
-                      <Select value={fromBank} onValueChange={setFromBank}>
-                        <SelectTrigger className="h-9 text-xs flex-1">
-                          <SelectValue placeholder="Select Bank" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bankOptions.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBankOpen(true)}
+                    className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Quick Add Bank
+                  </button>
                 </div>
-
-                {/* Transfer Destination (To) */}
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-teal-600 dark:text-teal-400">
-                    To (Destination Account)
-                  </Label>
-                  <div className="flex gap-2">
-                    <Select value={toMode} onValueChange={(val: any) => setToMode(val)}>
-                      <SelectTrigger className="h-9 text-xs w-32 shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash in Hand</SelectItem>
-                        <SelectItem value="bank">Bank Account</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {toMode === "bank" && (
-                      <Select value={toBank} onValueChange={setToBank}>
-                        <SelectTrigger className="h-9 text-xs flex-1">
-                          <SelectValue placeholder="Select Bank" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bankOptions.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-
-                {/* Voucher Date */}
-                <div>
-                  <Label className="text-xs font-semibold">Voucher Date</Label>
-                  <Input
-                    type="date"
-                    value={voucherDate}
-                    onChange={(e) => setVoucherDate(e.target.value)}
-                    className="h-9 text-xs"
-                  />
-                </div>
+                <Select value={fromAccount} onValueChange={setFromAccount}>
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    <SelectItem value="Cash in Hand">Cash in Hand</SelectItem>
+                    {bankOptions.map((b) => (
+                      <SelectItem key={`from-${b}`} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
+
+            {/* Amount (PKR) * */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Amount (PKR) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+                className="h-8 text-xs font-mono font-bold text-right mt-0.5"
+                required
+              />
+            </div>
+
+            {/* Cheque / Reference No */}
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Cheque / Reference No
+              </Label>
+              <Input
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                placeholder="CHQ / IBFT / Ref #"
+                className="h-8 text-xs font-mono mt-0.5"
+              />
+            </div>
           </div>
 
-          {/* Row 2: Link to Invoice or Client Selector (Hidden if Transfer) */}
-          {direction !== "transfer" && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Row 2: Link to Invoice or Party
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
-                {/* Search Box */}
-                <div className="lg:col-span-7">
-                  <Label className="text-xs font-semibold">
-                    Link to Invoice (Search Invoice No / Ticket No / PNR)
+          {/* LINE 2: Link to Invoice | Party dropdown (or To Account if Transfer) | Bank dropdown (if Bank Account) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end">
+            {direction !== "transfer" ? (
+              <>
+                {/* Link to Invoice (with search button inside input) */}
+                <div className={paymentMode === "bank" ? "lg:col-span-4" : "lg:col-span-6"}>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Link to Invoice
                   </Label>
-                  <div className="relative mt-1">
+                  <div className="relative mt-0.5">
                     <Input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -584,8 +508,8 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                           handleSearchInvoice();
                         }
                       }}
-                      placeholder="Type Invoice #, Ticket # or PNR..."
-                      className="h-9 text-xs font-mono pr-24 uppercase"
+                      placeholder="Invoice #, Ticket # or PNR..."
+                      className="h-8 text-xs font-mono pr-20 uppercase"
                     />
                     <div className="absolute right-1 top-1/2 -translate-y-1/2">
                       <Button
@@ -593,163 +517,238 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                         size="sm"
                         onClick={handleSearchInvoice}
                         disabled={isSearching}
-                        className="h-7 text-xs px-2.5 bg-[#0B192C] hover:bg-[#1E3E62] text-white"
+                        className="h-6 text-[10px] px-2 bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
                       >
-                        <Search className="w-3.5 h-3.5 mr-1" />
-                        {isSearching ? "Searching..." : "Search"}
+                        <Search className="w-2.5 h-2.5 mr-1" />
+                        {isSearching ? "..." : "Search"}
                       </Button>
                     </div>
                   </div>
                 </div>
 
-                {/* Direct Party / Client Selector */}
-                <div className="lg:col-span-5">
-                  <Label className="text-xs font-semibold">
-                    Or Select {direction === "received" ? "Client" : "Vendor"} Manually
-                  </Label>
+                {/* Party (dropdown grouped Clients & Vendors with Quick Add links) */}
+                <div className={paymentMode === "bank" ? "lg:col-span-4" : "lg:col-span-6"}>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Party <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddClientOpen(true)}
+                        className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-2.5 h-2.5" /> Client
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddVendorOpen(true)}
+                        className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-2.5 h-2.5" /> Vendor
+                      </button>
+                    </div>
+                  </div>
                   <Select value={partyId} onValueChange={setPartyId}>
-                    <SelectTrigger className="h-9 text-xs mt-1">
-                      <SelectValue placeholder="Select Party" />
+                    <SelectTrigger className="h-8 text-xs mt-0.5">
+                      <SelectValue placeholder="Select Client or Vendor" />
                     </SelectTrigger>
                     <SelectContent className="max-h-56">
-                      {filteredParties.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} {p.code ? `(${p.code})` : ""}
-                        </SelectItem>
-                      ))}
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase">
+                          Clients
+                        </SelectLabel>
+                        {clients.map((c) => (
+                          <SelectItem key={`client-${c.id}`} value={c.id}>
+                            {c.name} {c.code ? `(${c.code})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase">
+                          Vendors
+                        </SelectLabel>
+                        {vendors.map((v) => (
+                          <SelectItem key={`vendor-${v.id}`} value={v.id}>
+                            {v.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              {/* Matched Invoice Summary Card */}
-              {matchedInvoice && (
-                <div className="p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                    <span className="font-bold text-teal-900 dark:text-teal-200">
-                      {matchedInvoice.clientName}
-                    </span>
-                    <Badge variant="outline" className="font-mono text-[10px]">
-                      {matchedInvoice.invoiceNo}
-                    </Badge>
+                {/* BANK (only when Payment Mode = Bank Account) */}
+                {paymentMode === "bank" && (
+                  <div className="lg:col-span-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                        Bank Account <span className="text-red-500">*</span>
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddBankOpen(true)}
+                        className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-2.5 h-2.5" /> Quick Add Bank
+                      </button>
+                    </div>
+                    <Select value={selectedBank} onValueChange={setSelectedBank}>
+                      <SelectTrigger className="h-8 text-xs mt-0.5">
+                        <SelectValue placeholder="Select Bank" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-56">
+                        {bankOptions.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex items-center gap-4 font-mono text-[11px]">
-                    <span>Total: <strong>PKR {matchedInvoice.totalAmount.toLocaleString()}</strong></span>
-                    <span>Paid: <strong>PKR {matchedInvoice.paidAmount.toLocaleString()}</strong></span>
-                    <span className="text-teal-700 dark:text-teal-300 font-bold">
-                      Remaining: PKR {matchedInvoice.remainingAmount.toLocaleString()}
-                    </span>
-                  </div>
+                )}
+              </>
+            ) : (
+              /* TRANSFER MODE: To Account */
+              <div className="lg:col-span-12">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
+                    To (Destination Account) <span className="text-red-500">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBankOpen(true)}
+                    className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Quick Add Bank
+                  </button>
                 </div>
-              )}
+                <Select value={toAccount} onValueChange={setToAccount}>
+                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                    <SelectValue placeholder="Select destination account" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    <SelectItem value="Cash in Hand">Cash in Hand</SelectItem>
+                    {bankOptions.map((b) => (
+                      <SelectItem key={`to-${b}`} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* Matched Invoice compact preview banner */}
+          {matchedInvoice && direction !== "transfer" && (
+            <div className="p-2 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                <span className="font-bold text-teal-900 dark:text-teal-200">
+                  {matchedInvoice.clientName}
+                </span>
+                <Badge variant="outline" className="font-mono text-[10px]">
+                  {matchedInvoice.invoiceNo}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 font-mono text-[11px]">
+                <span>Total: <strong>PKR {matchedInvoice.totalAmount.toLocaleString()}</strong></span>
+                <span>Paid: <strong>PKR {matchedInvoice.paidAmount.toLocaleString()}</strong></span>
+                <span className="text-teal-700 dark:text-teal-300 font-bold">
+                  Remaining: PKR {matchedInvoice.remainingAmount.toLocaleString()}
+                </span>
+              </div>
             </div>
           )}
 
-          {/* Row 3: Amount (PKR), Cheque / Reference / Slip No (Equal Columns) */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Row 3: Amount & Banking References
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-              <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Amount (PKR) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0"
-                  className="h-9 text-xs font-mono font-bold text-right mt-1"
-                  required
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Cheque / Reference / Deposit Slip No
-                </Label>
-                <Input
-                  value={referenceNo}
-                  onChange={(e) => setReferenceNo(e.target.value)}
-                  placeholder="e.g. CHQ-98124 or IBFT-675241"
-                  className="h-9 text-xs font-mono mt-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Row 4: Description / Remarks (Full Width) & Write-off */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-            <Label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Row 4: Description / Remarks
-            </Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Received partial advance payment for ticket booking, remaining on passport collection..."
-              className="w-full min-h-[75px] max-h-[120px] text-xs resize-none"
-            />
-
-            {/* Write-off / Discount adjustment checkbox */}
-            {direction !== "transfer" && (
-              <div className="pt-2 border-t space-y-2">
-                <label className="flex items-center gap-2 text-xs cursor-pointer text-slate-700 dark:text-slate-300">
+          {/* LINE 3: Single-line "Remarks" input (grows only if user types more) + inline write-off toggle */}
+          <div className="space-y-1.5 pt-1 border-t">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Remarks
+              </Label>
+              {direction !== "transfer" && (
+                <label className="flex items-center gap-1 text-[11px] cursor-pointer text-slate-600 dark:text-slate-400">
                   <input
                     type="checkbox"
                     checked={isAdjustment}
                     onChange={(e) => setIsAdjustment(e.target.checked)}
-                    className="rounded border-slate-300 text-teal-600"
+                    className="rounded border-slate-300 text-teal-600 h-3 w-3"
                   />
-                  <span>Mark as write-off / discount adjustment</span>
+                  <span>Write-off / Discount adjustment</span>
                 </label>
-                {isAdjustment && (
-                  <Input
-                    value={adjustmentReason}
-                    onChange={(e) => setAdjustmentReason(e.target.value)}
-                    placeholder="Reason for write-off or discount adjustment (e.g. Goodwill waiver, negotiated discount)..."
-                    className="h-8 text-xs"
-                  />
-                )}
-              </div>
+              )}
+            </div>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Advance payment for ticket booking, remaining on passport collection..."
+              className="w-full min-h-[32px] h-8 max-h-[80px] text-xs resize-y py-1.5 leading-snug"
+            />
+            {isAdjustment && direction !== "transfer" && (
+              <Input
+                value={adjustmentReason}
+                onChange={(e) => setAdjustmentReason(e.target.value)}
+                placeholder="Reason for write-off or discount adjustment..."
+                className="h-7 text-xs"
+              />
             )}
           </div>
         </div>
 
-        {/* Footer: Fixed at bottom */}
-        <div className="px-6 py-3.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-3 shrink-0">
+        {/* FOOTER: Only Cancel and Save Voucher */}
+        <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer"
           >
             Cancel
           </Button>
           <Button
             type="button"
-            variant="outline"
             size="sm"
             disabled={isSubmitting}
-            onClick={() => handleSave(true)}
-            className="text-xs gap-1.5 cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-blue-600" />
-            Save & Print
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={isSubmitting}
-            onClick={() => handleSave(false)}
-            className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[120px]"
+            onClick={handleSave}
+            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[110px]"
           >
             {isSubmitting ? "Saving..." : "Save Voucher"}
           </Button>
         </div>
+
+        {/* Quick Add Popups */}
+        <AddPartyDialog
+          open={isAddClientOpen}
+          onOpenChange={setIsAddClientOpen}
+          initialType="client"
+          onSaved={(newParty: Party) => {
+            setPartyId(newParty.id);
+            toast.success(`Client ${newParty.name} added and selected`);
+          }}
+        />
+
+        <AddPartyDialog
+          open={isAddVendorOpen}
+          onOpenChange={setIsAddVendorOpen}
+          initialType="vendor"
+          onSaved={(newParty: Party) => {
+            setPartyId(newParty.id);
+            toast.success(`Vendor ${newParty.name} added and selected`);
+          }}
+        />
+
+        <AddBankDialog
+          open={isAddBankOpen}
+          onOpenChange={setIsAddBankOpen}
+          onSaved={(bankName: string) => {
+            setDbBanks((prev) => Array.from(new Set([bankName, ...prev])));
+            setSelectedBank(bankName);
+            setToAccount(bankName);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

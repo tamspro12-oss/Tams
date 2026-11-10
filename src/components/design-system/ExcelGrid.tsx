@@ -57,6 +57,9 @@ export interface ExcelGridProps<T = any> {
   stickyFirstColumn?: boolean;
   defaultSortKey?: string;
   defaultSortDir?: "asc" | "desc";
+  hideColumnsButton?: boolean;
+  hideCopyButton?: boolean;
+  hideExportButton?: boolean;
 }
 
 export function ExcelGrid<T = any>({
@@ -74,6 +77,9 @@ export function ExcelGrid<T = any>({
   stickyFirstColumn = true,
   defaultSortKey,
   defaultSortDir = "desc",
+  hideColumnsButton = false,
+  hideCopyButton = false,
+  hideExportButton = false,
 }: ExcelGridProps<T>) {
   // 1. Column Visibility and Order State (persisted in localStorage)
   const storageKey = `tams_grid_cols_${id}`;
@@ -461,55 +467,61 @@ export function ExcelGrid<T = any>({
           </div>
 
           {/* Column Visibility Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800"
-              >
-                <Columns3 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Columns</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 max-h-72 overflow-y-auto">
-              <DropdownMenuLabel className="text-xs">Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {columns.map((c) => (
-                <DropdownMenuCheckboxItem
-                  key={c.key}
-                  checked={visibleColumns[c.key] !== false}
-                  onCheckedChange={() => toggleColumnVisibility(c.key)}
-                  className="text-xs cursor-pointer"
+          {!hideColumnsButton && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800"
                 >
-                  {c.header}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Columns3 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Columns</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 max-h-72 overflow-y-auto">
+                <DropdownMenuLabel className="text-xs">Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {columns.map((c) => (
+                  <DropdownMenuCheckboxItem
+                    key={c.key}
+                    checked={visibleColumns[c.key] !== false}
+                    onCheckedChange={() => toggleColumnVisibility(c.key)}
+                    className="text-xs cursor-pointer"
+                  >
+                    {c.header}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Quick Copy Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            title="Copy selected (Ctrl+C)"
-            className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800 hidden sm:flex"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span>Copy</span>
-          </Button>
+          {!hideCopyButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopy}
+              title="Copy selected (Ctrl+C)"
+              className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800 hidden sm:flex"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </Button>
+          )}
 
           {/* Excel Export */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800 text-emerald-700 dark:text-emerald-400"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+          {!hideExportButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800 text-emerald-700 dark:text-emerald-400"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
+            </Button>
+          )}
         </div>
       </div>
 

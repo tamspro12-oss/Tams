@@ -1,3 +1,5 @@
+import { clearAllAgencyDataCache } from "./cacheManager";
+
 // Session management with auto-timeout and single-device enforcement
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARNING_TIME = 10 * 60 * 1000; // 10 minutes before timeout
@@ -107,6 +109,7 @@ export class SessionManager {
     if (this.warningId) clearTimeout(this.warningId);
     this.cleanupActivityListeners();
     localStorage.removeItem(SESSION_KEY);
+    clearAllAgencyDataCache();
   }
 
   // Get current session
