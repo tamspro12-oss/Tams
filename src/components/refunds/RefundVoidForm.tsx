@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AddBankDialog } from "@/components/banks/AddBankDialog";
-import { useAgencyBanks } from "@/hooks/useAgencyBanks";
+import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
+import { LockedDateField } from "@/components/ui/LockedDateField";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -59,7 +60,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   onSuccess,
 }) => {
   const queryClient = useQueryClient();
-  const { allBankNames = [] } = useAgencyBanks();
+  const { data: currentAgencyId } = useCurrentAgencyId();
 
   // Line 1: Date | Type | Original Invoice / PNR / Ticket No * | Party
   const [refundDate, setRefundDate] = useState<string>(
@@ -273,6 +274,12 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
     const recordNo = autoRecordNo;
 
     try {
+      let activeAgencyId = currentAgencyId;
+      if (!activeAgencyId) {
+        const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
+        activeAgencyId = await getAuthenticatedAgencyId();
+      }
+
       const deductions = parseFloat(deductionsAmount) || 0;
       const combinedNotes = [
         notes,
@@ -286,7 +293,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         .join(" | ");
 
       // Call atomic refund RPC
-      await (supabase as any).rpc("record_refund", {
+      const { error: rpcError } = await (supabase as any).rpc("record_refund", {
         p_amount: clientAmt > 0 ? clientAmt : (actionType === "void" ? 0 : 1),
         p_account_id: null,
         p_party_id: null,
@@ -295,8 +302,32 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         p_method: paymentMode,
         p_reference_no: recordNo,
         p_reason: reason,
+        p_agency_id: activeAgencyId || null,
         p_notes: combinedNotes || undefined,
       });
+
+      if (rpcError) {
+        // Fallback: direct insert to refunds table
+        const { error: directError } = await (supabase as any).from("refunds").insert({
+          agency_id: activeAgencyId,
+          refund_no: recordNo,
+          refund_date: refundDate,
+          refund_type: actionType,
+          client_refund_amount: clientAmt,
+          vendor_refund_amount: parseFloat(vendorRefundAmount) || 0,
+          deductions: deductions,
+          payment_mode: paymentMode,
+          bank_name: paymentMode === "bank" ? selectedBank : null,
+          reason,
+          notes: combinedNotes || null,
+          party_name: partyName || null,
+          invoice_search: invoiceSearch || null,
+        });
+
+        if (directError) {
+          throw new Error(`Failed to save refund: ${directError.message}`);
+        }
+      }
 
       toast.success(`${actionType === "void" ? "Void recorded" : "Refund recorded"} successfully`);
 
@@ -306,6 +337,8 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       queryClient.invalidateQueries({ queryKey: ["recent_sales_refunds"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       refetchRecentRefunds();
 
       // Clear input fields (keep Date, Mode, Type)
@@ -359,16 +392,12 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
           {/* LINE 1: Date | Type | Original Invoice / PNR / Ticket No * | Party */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
-            {/* Date */}
+            {/* Date (Locked to System Date) */}
             <div className="lg:col-span-2">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Date <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="date"
+              <LockedDateField
+                label="Date"
                 value={refundDate}
-                onChange={(e) => setRefundDate(e.target.value)}
-                className="h-8 text-xs mt-0.5"
+                onChange={setRefundDate}
                 required
               />
             </div>
