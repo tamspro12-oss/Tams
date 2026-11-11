@@ -76,7 +76,7 @@ export function NewReminderDialog({
       if (!agencyId) return [];
       const { data } = await (supabase as any)
         .from("booking_invoices")
-        .select("id, invoice_no, party:parties(name)")
+        .select("id, invoice_no, party:parties!party_id(name)")
         .eq("agency_id", agencyId)
         .order("invoice_date", { ascending: false })
         .limit(30);

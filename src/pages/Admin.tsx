@@ -1,9 +1,9 @@
-import { Shield, UserCircle2 } from "lucide-react";
+import { Shield, UserCircle2, Loader2 } from "lucide-react";
 import { AdminUserManagement } from "@/components/AdminUserManagement";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Admin() {
   const { isAdmin, loading } = useIsAdmin();
@@ -11,7 +11,10 @@ export default function Admin() {
 
   useEffect(() => {
     if (!loading && !isAdmin) {
-      navigate("/");
+      toast.error("Unauthorized: Full administrator privileges are restricted exclusively to usmn4u@gmail.com", {
+        id: "unauthorized-admin-page",
+      });
+      navigate("/app/dashboard", { replace: true });
     }
   }, [isAdmin, loading, navigate]);
 

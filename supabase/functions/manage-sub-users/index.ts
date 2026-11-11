@@ -53,14 +53,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Determine super-admin from user_roles table (never trust email).
-    const { data: adminRow } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle();
-    const isSuperAdmin = !!adminRow;
+    // Master Admin Email Whitelist & Super Admin Authorization Check
+    let isSuperAdmin = user.email?.trim().toLowerCase() === 'usmn4u@gmail.com';
+    if (!isSuperAdmin) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('is_super_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.is_super_admin) {
+        isSuperAdmin = true;
+      }
+    }
 
     // Look up the caller's own agency_id server-side. This is the ONLY value
     // we trust for scoping — never accept agency_id from the client body.

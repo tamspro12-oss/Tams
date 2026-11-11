@@ -153,7 +153,7 @@ export function useUnifiedAlerts() {
       if (!agencyId) return [];
       const { data } = await (supabase as any)
         .from("booking_invoices")
-        .select("*, party:parties(name, phone), vendor:parties!vendor_id(name)")
+        .select("*, party:parties!party_id(name, phone), vendor:parties!vendor_id(name)")
         .eq("agency_id", agencyId)
         .order("invoice_date", { ascending: false });
       return data || [];

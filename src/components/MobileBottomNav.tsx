@@ -15,11 +15,13 @@ import {
   Settings,
   Mail,
   BookOpen,
+  Shield,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useReminders } from "@/hooks/useReminders";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const navItems = [
   {
@@ -64,6 +66,7 @@ export function MobileBottomNav() {
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
   const { pendingRemindersCount } = useReminders();
+  const { isAdmin } = useIsAdmin();
 
   const handleMoreItemClick = (href: string) => {
     setSheetOpen(false);
@@ -71,6 +74,14 @@ export function MobileBottomNav() {
   };
 
   const moreItems = [
+    ...(isAdmin ? [{
+      icon: Shield,
+      label: "Admin Panel",
+      desc: "User management & system controls",
+      href: "/app/admin",
+      badge: null,
+      color: "text-red-500 bg-red-50 dark:bg-red-950/40",
+    }] : []),
     {
       icon: Bell,
       label: "Notifications & Alerts",

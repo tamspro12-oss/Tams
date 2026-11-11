@@ -33,6 +33,12 @@ import {
   CreditCard,
   Send,
   Users,
+  Phone,
+  Mail,
+  MapPin,
+  Building,
+  Wallet,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -103,13 +109,13 @@ export default function ClientsVendors() {
       .reduce((sum, p) => sum + Math.abs(p.current_balance), 0);
   }, [parties]);
 
-  // Grid Columns definition in required order:
-  // Party Code | Name | Type | Phone | Email | City | Address | Opening Balance | Credit Limit | Current Balance | Actions
+  // Condensed Grid Columns for Single-Screen Viewport Fit
+  // Party Code | Name | Type | Current Balance | Actions
   const columns: GridColumn<Party>[] = [
     {
       key: "code",
       header: "Party Code",
-      width: 110,
+      width: 120,
       render: (p) => (
         <CopyValue
           value={p.code || "—"}
@@ -121,7 +127,7 @@ export default function ClientsVendors() {
     {
       key: "name",
       header: "Name",
-      minWidth: 160,
+      minWidth: 180,
       render: (p) => (
         <CopyValue
           value={p.name}
@@ -133,7 +139,7 @@ export default function ClientsVendors() {
     {
       key: "type",
       header: "Type",
-      width: 100,
+      width: 110,
       align: "center",
       render: (p) => {
         let tag = "Client";
@@ -153,74 +159,9 @@ export default function ClientsVendors() {
       },
     },
     {
-      key: "phone",
-      header: "Phone",
-      width: 125,
-      render: (p) => (
-        <CopyValue
-          value={p.phone || p.whatsapp || "—"}
-          label="phone"
-          className="font-mono text-xs text-slate-600 dark:text-slate-400"
-        />
-      ),
-    },
-    {
-      key: "email",
-      header: "Email",
-      width: 150,
-      render: (p) => (
-        <CopyValue
-          value={p.email || "—"}
-          label="email"
-          className="text-xs text-slate-600 dark:text-slate-400"
-        />
-      ),
-    },
-    {
-      key: "city",
-      header: "City",
-      width: 110,
-      render: (p) => <span className="text-xs text-slate-700 dark:text-slate-300">{p.city || "—"}</span>,
-    },
-    {
-      key: "address",
-      header: "Address",
-      minWidth: 150,
-      render: (p) => (
-        <span className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-xs block">
-          {p.address || "—"}
-        </span>
-      ),
-    },
-    {
-      key: "opening_balance",
-      header: "Opening Balance",
-      width: 130,
-      isNumeric: true,
-      align: "right",
-      totalType: "sum",
-      render: (p) => (
-        <span className="font-mono text-xs">
-          PKR {(p.opening_balance || 0).toLocaleString()}
-        </span>
-      ),
-    },
-    {
-      key: "credit_limit",
-      header: "Credit Limit",
-      width: 120,
-      isNumeric: true,
-      align: "right",
-      render: (p) => (
-        <span className="font-mono text-xs">
-          {(p.credit_limit || 0) > 0 ? `PKR ${(p.credit_limit || 0).toLocaleString()}` : "—"}
-        </span>
-      ),
-    },
-    {
       key: "current_balance",
       header: "Current Balance",
-      width: 140,
+      width: 160,
       isNumeric: true,
       align: "right",
       totalType: "sum",
@@ -249,7 +190,7 @@ export default function ClientsVendors() {
     {
       key: "actions",
       header: "Actions",
-      width: 150,
+      width: 160,
       align: "center",
       sortable: false,
       filterable: false,
@@ -282,6 +223,81 @@ export default function ClientsVendors() {
       ),
     },
   ];
+
+  // Secondary Information Drawer (Accordion row details on click expand)
+  const renderExpandedRow = (p: Party) => {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white dark:bg-slate-900/90 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
+        {/* Contact Info */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
+            <Phone className="w-3.5 h-3.5" /> Contact Details
+          </span>
+          <div className="space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 w-16">Phone:</span>
+              <CopyValue value={p.phone || "—"} label="phone" className="font-mono font-medium" />
+            </div>
+            {p.whatsapp && p.whatsapp !== p.phone && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 w-16">WhatsApp:</span>
+                <CopyValue value={p.whatsapp} label="whatsapp" className="font-mono font-medium" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 w-16">Email:</span>
+              <CopyValue value={p.email || "—"} label="email" />
+            </div>
+          </div>
+        </div>
+
+        {/* Location & Address */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5" /> Address & Location
+          </span>
+          <div className="space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 w-16">City:</span>
+              <span className="font-medium">{p.city || "—"}</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-slate-500 w-16 shrink-0">Address:</span>
+              <span className="font-medium">{p.address || "—"}</span>
+            </div>
+            {(p.cnic || p.ntn) && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 w-16">Tax / ID:</span>
+                <span className="font-mono text-[11px]">{p.cnic || p.ntn}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Financial Terms & Metadata */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <Wallet className="w-3.5 h-3.5" /> Financial Balances
+          </span>
+          <div className="space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Opening Balance:</span>
+              <span className="font-mono font-semibold">PKR {(p.opening_balance || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Credit Limit:</span>
+              <span className="font-mono font-semibold">{(p.credit_limit || 0) > 0 ? `PKR ${(p.credit_limit || 0).toLocaleString()}` : "Unlimited"}</span>
+            </div>
+            {p.notes && (
+              <div className="pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 italic">
+                Notes: {p.notes}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -376,13 +392,13 @@ export default function ClientsVendors() {
         </Select>
       </div>
 
-      {/* Main Party List Table: Styled exactly like Booking Invoices Register (dark header, sort/filter icons, row hover, horizontal scroll). Columns, Copy and Export removed */}
+      {/* Main Party List Table: Condensed Single-Screen Viewport with Expandable Details */}
       <ExcelGrid
         id="parties_master_grid"
         data={filteredParties}
         columns={columns}
         keyExtractor={(p) => p.id}
-        onRowClick={(p) => setSelectedParty(p)}
+        renderExpandedRow={renderExpandedRow}
         title="Parties & Accounts Ledger"
         filename="TAMS_Parties_Master"
         hideColumnsButton={true}

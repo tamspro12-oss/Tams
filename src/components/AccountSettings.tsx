@@ -1,9 +1,10 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, Users, Lock, Shield, Mail, FileText, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePolicyAcknowledgment } from "@/hooks/usePolicyAcknowledgment";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { SettingsTabSkeleton } from "@/components/SettingsSkeleton";
 
 // Lazy-load sub-components so they only fetch and render when active
@@ -15,8 +16,20 @@ export type AccountSubView = "admin" | "subusers" | "security" | "legal";
 
 export function AccountSettings() {
   const navigate = useNavigate();
-  const [subView, setSubView] = useState<AccountSubView>("admin");
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const [subView, setSubView] = useState<AccountSubView>("security");
   const { acknowledgment, currentVersions } = usePolicyAcknowledgment();
+
+  // Switch to admin default if master admin, otherwise restrict to security
+  useEffect(() => {
+    if (!adminLoading) {
+      if (isAdmin) {
+        setSubView("admin");
+      } else if (subView === "admin" || subView === "subusers") {
+        setSubView("security");
+      }
+    }
+  }, [isAdmin, adminLoading]);
 
   return (
     <div className="space-y-3">
@@ -24,20 +37,24 @@ export function AccountSettings() {
       <div className="sticky top-[52px] z-20 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/40">
         <Tabs value={subView} onValueChange={(v) => setSubView(v as AccountSubView)} className="w-full">
           <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-full sm:w-fit overflow-x-auto shadow-xs">
-            <TabsTrigger
-              value="admin"
-              className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
-            >
-              <User className="w-3.5 h-3.5 text-primary" />
-              Admin & Subscription
-            </TabsTrigger>
-            <TabsTrigger
-              value="subusers"
-              className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
-            >
-              <Users className="w-3.5 h-3.5 text-blue-500" />
-              Sub-Users
-            </TabsTrigger>
+            {isAdmin && (
+              <>
+                <TabsTrigger
+                  value="admin"
+                  className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
+                >
+                  <User className="w-3.5 h-3.5 text-primary" />
+                  Admin & Subscription
+                </TabsTrigger>
+                <TabsTrigger
+                  value="subusers"
+                  className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
+                >
+                  <Users className="w-3.5 h-3.5 text-blue-500" />
+                  Sub-Users
+                </TabsTrigger>
+              </>
+            )}
             <TabsTrigger
               value="security"
               className="gap-1.5 text-xs font-semibold px-3 py-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-md transition-all shrink-0"
@@ -59,13 +76,13 @@ export function AccountSettings() {
       {/* Sub-view Content with Suspense */}
       <div className="pt-1">
         <Suspense fallback={<SettingsTabSkeleton />}>
-          {subView === "admin" && (
+          {isAdmin && subView === "admin" && (
             <div className="max-w-4xl mx-auto">
               <AdminAccountInfo />
             </div>
           )}
 
-          {subView === "subusers" && (
+          {isAdmin && subView === "subusers" && (
             <div className="max-w-4xl mx-auto">
               <SubUserManagement />
             </div>

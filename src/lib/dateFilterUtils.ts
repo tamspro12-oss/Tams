@@ -81,6 +81,32 @@ export function getDateRangeForPreset(
   }
 }
 
+export function parseDateSafe(rawDate: string | Date | null | undefined): Date | null {
+  if (!rawDate) return null;
+  if (rawDate instanceof Date) return isValid(rawDate) ? rawDate : null;
+
+  if (typeof rawDate === "string") {
+    // If it starts with YYYY-MM-DD (e.g. "2026-11-12" or "2026-11-12T..."), parse year, month, day explicitly
+    const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1;
+      const day = parseInt(match[3], 10);
+      // Set to noon local time to completely prevent timezone boundary shifts
+      const localNoon = new Date(year, month, day, 12, 0, 0);
+      if (isValid(localNoon)) return localNoon;
+    }
+
+    const parsed = parseISO(rawDate);
+    if (isValid(parsed)) return parsed;
+
+    const fallback = new Date(rawDate);
+    if (isValid(fallback)) return fallback;
+  }
+
+  return null;
+}
+
 export function isDateWithinPreset(
   rawDate: string | Date | null | undefined,
   preset: DatePresetKey,
@@ -90,8 +116,8 @@ export function isDateWithinPreset(
   if (preset === "all") return true;
   if (!rawDate) return false;
 
-  const date = typeof rawDate === "string" ? parseISO(rawDate) : rawDate;
-  if (!isValid(date)) return false;
+  const date = parseDateSafe(rawDate);
+  if (!date) return false;
 
   const range = getDateRangeForPreset(preset, customFrom, customTo);
   if (!range) return true;

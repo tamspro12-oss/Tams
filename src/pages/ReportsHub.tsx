@@ -210,20 +210,32 @@ export default function ReportsHub() {
 
   // 1. Fetch Invoices
   const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
-    queryKey: ["report_invoices"],
+    queryKey: ["report_invoices", agency?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("booking_invoices")
-        .select("*, party:parties(name), vendor:parties!vendor_id(name)")
+        .select("*, party:parties!party_id(name), vendor:parties!vendor_id(name)")
         .order("invoice_date", { ascending: false });
+
+      if (agency?.id) {
+        query = query.eq("agency_id", agency.id);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) return data;
 
       // Fallback: clients table
-      const { data: clientsData } = await supabase
+      let clientQuery = supabase
         .from("clients")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (agency?.id) {
+        clientQuery = clientQuery.eq("agency_id", agency.id);
+      }
+
+      const { data: clientsData } = await clientQuery;
 
       return (clientsData || []).map((c: any) => ({
         id: c.id,
@@ -247,30 +259,44 @@ export default function ReportsHub() {
 
   // 2. Fetch Transactions / Vouchers
   const { data: rawTransactions = [], isLoading: loadingTransactions } = useQuery({
-    queryKey: ["report_transactions"],
+    queryKey: ["report_transactions", agency?.id],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      let q = (supabase as any)
         .from("transactions")
         .select("*")
         .order("date", { ascending: false });
+
+      if (agency?.id) {
+        q = q.eq("agency_id", agency.id);
+      }
+
+      const { data } = await q;
       return data || [];
     },
   });
 
   // 3. Fetch Expenses
   const { data: rawExpenses = [], isLoading: loadingExpenses } = useQuery({
-    queryKey: ["report_expenses"],
+    queryKey: ["report_expenses", agency?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("expenses").select("*").order("expense_date", { ascending: false });
+      let q = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
+      if (agency?.id) {
+        q = q.eq("agency_id", agency.id);
+      }
+      const { data } = await q;
       return data || [];
     },
   });
 
   // 4. Fetch Refunds
   const { data: rawRefunds = [], isLoading: loadingRefunds } = useQuery({
-    queryKey: ["report_refunds"],
+    queryKey: ["report_refunds", agency?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("refunds").select("*").order("refund_date", { ascending: false });
+      let q = supabase.from("refunds").select("*").order("refund_date", { ascending: false });
+      if (agency?.id) {
+        q = q.eq("agency_id", agency.id);
+      }
+      const { data } = await q;
       return data || [];
     },
   });

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
@@ -156,7 +157,7 @@ const App = () => {
                   <Route path="/app/sales-expenses" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Sales & Expenses"><SalesExpensesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/clients-vendors" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Clients & Vendors"><ClientsVendors /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/reports" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Reports"><ReportsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/admin" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/admin" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
                   <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Bookings"><BookingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />

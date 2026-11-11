@@ -68,6 +68,7 @@ export interface ExcelGridProps<T = any> {
   exportClassName?: string;
   onExportClick?: () => void;
   onFilteredDataChange?: (data: T[]) => void;
+  renderExpandedRow?: (row: T, index: number) => React.ReactNode;
 }
 
 export function ExcelGrid<T = any>({
@@ -93,7 +94,20 @@ export function ExcelGrid<T = any>({
   exportClassName,
   onExportClick,
   onFilteredDataChange,
+  renderExpandedRow,
 }: ExcelGridProps<T>) {
+  // Expandable row state
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const toggleRowExpanded = useCallback((key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   // 1. Column Visibility and Order State (persisted in localStorage)
   const storageKey = `tams_grid_cols_${id}`;
   const [columnOrder, setColumnOrder] = useState<string[]>(() => {
@@ -626,6 +640,11 @@ export function ExcelGrid<T = any>({
             {/* Navy Table Header */}
             <thead className="sticky top-0 z-20 bg-[#0B192C] text-slate-100 uppercase text-[11px] font-semibold tracking-wider select-none">
               <tr>
+                {renderExpandedRow && (
+                  <th className="w-8 min-w-[32px] px-1 py-3 text-center border-b border-slate-700/80">
+                    <span className="sr-only">Expand</span>
+                  </th>
+                )}
                 {activeColumns.map((col, colIdx) => {
                   const isSticky = stickyFirstColumn && colIdx === 0;
                   const isSorted = sortKey === col.key;
@@ -769,7 +788,7 @@ export function ExcelGrid<T = any>({
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {processedData.length === 0 ? (
                   <tr>
-                    <td colSpan={activeColumns.length} className="py-12">
+                    <td colSpan={activeColumns.length + (renderExpandedRow ? 1 : 0)} className="py-12">
                       {emptyState || (
                         <div className="text-center text-xs text-muted-foreground">
                           No records found
@@ -779,56 +798,88 @@ export function ExcelGrid<T = any>({
                   </tr>
                 ) : (
                   processedData.map((row, rowIdx) => {
+                    const rowKey = keyExtractor(row, rowIdx);
                     const isRowActive = activeRow === rowIdx;
+                    const isExpanded = expandedKeys.has(rowKey);
 
                     return (
-                      <tr
-                        key={keyExtractor(row, rowIdx)}
-                        onClick={() => {
-                          const selection = window.getSelection()?.toString();
-                          if (selection && selection.length > 0) return;
-                          setActiveRow(rowIdx);
-                          if (onRowClick) onRowClick(row);
-                        }}
-                        onDoubleClick={() => {
-                          if (onRowDoubleClick) onRowDoubleClick(row);
-                        }}
-                        className={cn(
-                          "transition-colors group h-10 hover:bg-teal-50/40 dark:hover:bg-teal-950/20 cursor-pointer",
-                          isRowActive
-                            ? "bg-teal-50/60 dark:bg-teal-950/30"
-                            : rowIdx % 2 === 0
-                            ? "bg-white dark:bg-slate-900"
-                            : "bg-slate-50/30 dark:bg-slate-800/20"
-                        )}
-                      >
-                        {activeColumns.map((col, colIdx) => {
-                          const isSticky = stickyFirstColumn && colIdx === 0;
-
-                          return (
+                      <React.Fragment key={rowKey}>
+                        <tr
+                          onClick={() => {
+                            const selection = window.getSelection()?.toString();
+                            if (selection && selection.length > 0) return;
+                            setActiveRow(rowIdx);
+                            if (onRowClick) onRowClick(row);
+                          }}
+                          onDoubleClick={() => {
+                            if (onRowDoubleClick) onRowDoubleClick(row);
+                          }}
+                          className={cn(
+                            "transition-colors group h-10 hover:bg-teal-50/40 dark:hover:bg-teal-950/20 cursor-pointer",
+                            isRowActive
+                              ? "bg-teal-50/60 dark:bg-teal-950/30"
+                              : rowIdx % 2 === 0
+                              ? "bg-white dark:bg-slate-900"
+                              : "bg-slate-50/30 dark:bg-slate-800/20"
+                          )}
+                        >
+                          {renderExpandedRow && (
                             <td
-                              key={col.key}
-                              className={cn(
-                                "px-3 py-2 text-slate-800 dark:text-slate-200 whitespace-nowrap transition-colors select-text",
-                                col.align === "right" || col.isNumeric
-                                  ? "text-right tabular-nums font-mono font-medium"
-                                  : col.align === "center"
-                                  ? "text-center"
-                                  : "text-left",
-                                isSticky
-                                  ? "sticky left-0 z-10 bg-inherit font-semibold shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1e293b]"
-                                  : ""
-                              )}
+                              className="w-8 min-w-[32px] px-2 py-1 text-center select-none"
+                              onClick={(e) => toggleRowExpanded(rowKey, e)}
                             >
-                              {col.render
-                                ? col.render(row, rowIdx)
-                                : col.isNumeric && typeof (row as any)[col.key] === "number"
-                                ? (row as any)[col.key].toLocaleString()
-                                : (row as any)[col.key] ?? "-"}
+                              <button
+                                type="button"
+                                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-500"
+                                title={isExpanded ? "Collapse row details" : "Expand row details"}
+                              >
+                                <ChevronRight
+                                  className={cn(
+                                    "w-3.5 h-3.5 transition-transform duration-200",
+                                    isExpanded && "rotate-90 text-teal-600 dark:text-teal-400 font-bold"
+                                  )}
+                                />
+                              </button>
                             </td>
-                          );
-                        })}
-                      </tr>
+                          )}
+                          {activeColumns.map((col, colIdx) => {
+                            const isSticky = stickyFirstColumn && colIdx === 0;
+
+                            return (
+                              <td
+                                key={col.key}
+                                className={cn(
+                                  "px-3 py-2 text-slate-800 dark:text-slate-200 whitespace-nowrap transition-colors select-text",
+                                  col.align === "right" || col.isNumeric
+                                    ? "text-right tabular-nums font-mono font-medium"
+                                    : col.align === "center"
+                                    ? "text-center"
+                                    : "text-left",
+                                  isSticky
+                                    ? "sticky left-0 z-10 bg-inherit font-semibold shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1e293b]"
+                                    : ""
+                                )}
+                              >
+                                {col.render
+                                  ? col.render(row, rowIdx)
+                                  : col.isNumeric && typeof (row as any)[col.key] === "number"
+                                  ? (row as any)[col.key].toLocaleString()
+                                  : (row as any)[col.key] ?? "-"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {renderExpandedRow && isExpanded && (
+                          <tr className="bg-slate-50/95 dark:bg-slate-900/90 border-b border-teal-500/20 shadow-inner">
+                            <td
+                              colSpan={activeColumns.length + 1}
+                              className="p-3 sm:p-4 text-xs animate-in fade-in-50 duration-150"
+                            >
+                              {renderExpandedRow(row, rowIdx)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -838,6 +889,9 @@ export function ExcelGrid<T = any>({
               {Object.keys(columnTotals).length > 0 && processedData.length > 0 && (
                 <tfoot className="sticky bottom-0 z-20 bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-300 dark:border-slate-700">
                   <tr>
+                    {renderExpandedRow && (
+                      <td className="w-8 min-w-[32px] px-1 py-2.5 bg-slate-100 dark:bg-slate-800" />
+                    )}
                     {activeColumns.map((col, colIdx) => {
                       const isSticky = stickyFirstColumn && colIdx === 0;
                       const total = columnTotals[col.key];

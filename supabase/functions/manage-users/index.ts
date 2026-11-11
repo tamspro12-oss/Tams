@@ -41,16 +41,25 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: roleData } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle();
+    // Master Admin Email Whitelist & Super Admin Authorization Check
+    const isMasterAdminEmail = user.email?.trim().toLowerCase() === 'usmn4u@gmail.com';
+    let isSuperAdmin = isMasterAdminEmail;
 
-    if (!roleData) {
+    if (!isSuperAdmin) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('is_super_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.is_super_admin) {
+        isSuperAdmin = true;
+      }
+    }
+
+    if (!isSuperAdmin) {
+      console.error(`Forbidden: Unauthorized user ${user.email} attempted admin manage-users.`);
       return new Response(
-        JSON.stringify({ error: 'Forbidden: Admin role required' }),
+        JSON.stringify({ error: '403 Forbidden: Full administrator privileges are restricted exclusively to usmn4u@gmail.com' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

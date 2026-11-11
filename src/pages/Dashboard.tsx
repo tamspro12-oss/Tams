@@ -73,20 +73,32 @@ export default function Dashboard() {
 
   // 3. Booking Invoices for Profit, Today's Bookings & Overdue Invoices
   const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
-    queryKey: ["dashboard_invoices"],
+    queryKey: ["dashboard_invoices", agency?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("booking_invoices")
-        .select("*, party:parties(name)")
+        .select("*, party:parties!party_id(name)")
         .order("invoice_date", { ascending: false });
+
+      if (agency?.id) {
+        query = query.eq("agency_id", agency.id);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) return data;
 
       // Fallback: clients table
-      const { data: clientsData } = await supabase
+      let clientQuery = supabase
         .from("clients")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (agency?.id) {
+        clientQuery = clientQuery.eq("agency_id", agency.id);
+      }
+
+      const { data: clientsData } = await clientQuery;
 
       return (clientsData || []).map((c: any) => ({
         id: c.id,
