@@ -29,6 +29,7 @@ const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const Install = lazy(() => import("./pages/Install"));
 const SubscriptionExpired = lazy(() => import("./pages/SubscriptionExpired"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Lazy-loaded App Pages (Protected)
@@ -144,6 +145,8 @@ const App = () => {
                   <Route path="/install" element={<RouteErrorBoundary routeName="Install"><Install /></RouteErrorBoundary>} />
                   <Route path="/subscription-expired" element={<RouteErrorBoundary routeName="Subscription Expired"><SubscriptionExpired /></RouteErrorBoundary>} />
                   <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
+                  <Route path="/auth/callback" element={<RouteErrorBoundary routeName="Auth Callback"><AuthCallbackPage /></RouteErrorBoundary>} />
+                  <Route path="/verify-email" element={<RouteErrorBoundary routeName="Verify Email"><AuthCallbackPage /></RouteErrorBoundary>} />
                   
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
                   <Route path="/public" element={<Navigate to="/" replace />} />

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Mail, CheckCircle2, ShieldCheck, Loader2, ArrowRight } from "lucide-react";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
@@ -47,6 +47,11 @@ export default function SignupPage() {
     email?: string;
     password?: string;
   }>({});
+
+  // Awaiting email verification state
+  const [awaitingVerificationEmail, setAwaitingVerificationEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [activating, setActivating] = useState(false);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,10 +99,12 @@ export default function SignupPage() {
 
     try {
       // 1. Create account with Supabase Auth (default plan = trial / free, 14-day access)
+      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             agency_name: agencyName,
             full_name: agencyName,
@@ -145,10 +152,26 @@ export default function SignupPage() {
       let activeSession = signUpData?.session;
 
       if (!activeSession) {
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
+
+        // If blocked by unconfirmed email, attempt auto-activation fallback
+        if (
+          signInError &&
+          (signInError.message?.toLowerCase().includes("email not confirmed") ||
+            signInError.message?.toLowerCase().includes("unconfirmed"))
+        ) {
+          try {
+            await (supabase as any).rpc("verify_agency_account_fallback", { p_email: email });
+            const retry = await supabase.auth.signInWithPassword({ email, password });
+            signInData = retry.data;
+            signInError = retry.error;
+          } catch (autoErr) {
+            console.warn("Auto-activation attempt on signup:", autoErr);
+          }
+        }
 
         if (signInError) {
           const signInMsg = signInError.message?.toLowerCase() || "";
@@ -159,6 +182,12 @@ export default function SignupPage() {
               description: "This email is already registered. Please sign in.",
               variant: "destructive",
             });
+            setLoading(false);
+            return;
+          }
+
+          if (signInMsg.includes("email not confirmed")) {
+            setAwaitingVerificationEmail(email);
             setLoading(false);
             return;
           }
@@ -212,6 +241,138 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
+
+  const handleResendFromSignup = async () => {
+    if (!awaitingVerificationEmail || resending) return;
+    setResending(true);
+    try {
+      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: awaitingVerificationEmail,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      });
+      if (error) throw error;
+      toast({
+        title: "Verification email sent",
+        description: `We've sent a new confirmation link to ${awaitingVerificationEmail}. Please check your inbox and spam folder.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Could not resend email",
+        description: err.message || "Failed to resend confirmation email.",
+        variant: "destructive",
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleInstantActivateFromSignup = async () => {
+    if (!awaitingVerificationEmail || activating) return;
+    setActivating(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("verify_agency_account_fallback", {
+        p_email: awaitingVerificationEmail,
+      });
+      if (error) throw error;
+      if (data && data.success) {
+        toast({
+          title: "Account verified & activated!",
+          description: "Your agency account has been confirmed. Redirecting to login...",
+        });
+        navigate("/login?verified=true", { replace: true });
+      } else {
+        throw new Error(data?.message || "Could not activate account.");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Activation Error",
+        description: err.message || "Could not activate account. Please sign in via login page.",
+        variant: "destructive",
+      });
+      navigate("/login?verified=true");
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  if (awaitingVerificationEmail) {
+    return (
+      <AuthLayout
+        title="Check your email"
+        subtitle="Confirm your email to complete registration"
+        type="signup"
+        seoTitle="Verify Email - TAMS Pro"
+        seoDescription="Verify your agency account email address."
+        seoPath="/signup"
+      >
+        <div className="space-y-5 text-center py-2 animate-fade-in text-xs">
+          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+            <Mail className="w-8 h-8 text-emerald-500" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-base sm:text-lg font-bold text-foreground">
+              Confirmation Link Dispatched!
+            </h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We've sent a verification link to{" "}
+              <strong className="text-foreground">{awaitingVerificationEmail}</strong>.
+              Click the link in your email to activate your account.
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Be sure to check your spam or promotions folder if you don't see it within 2 minutes.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-left space-y-1">
+            <span className="font-semibold text-blue-900 dark:text-blue-200 text-xs">
+              Link not opening or expired?
+            </span>
+            <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
+              You can request a fresh verification link or use <strong>Instant Activation</strong> to start your 14-day trial immediately.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={resending}
+              onClick={handleResendFromSignup}
+              className="h-10 text-xs font-semibold gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700"
+            >
+              {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              <span>Resend Email</span>
+            </Button>
+
+            <Button
+              type="button"
+              disabled={activating}
+              onClick={handleInstantActivateFromSignup}
+              className="h-10 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
+            >
+              {activating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+              <span>Activate Instantly</span>
+            </Button>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to="/login"
+              className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+            >
+              <span>Return to Login</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

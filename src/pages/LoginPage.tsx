@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Mail, ShieldCheck, Loader2 } from "lucide-react";
 import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
+import { ResendVerificationDialog } from "@/components/auth/ResendVerificationDialog";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
@@ -32,6 +33,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+
+  // Email verification recovery states
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [lastTypedPassword, setLastTypedPassword] = useState<string>("");
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [activatingFromLogin, setActivatingFromLogin] = useState(false);
 
   const emailInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +81,7 @@ export default function LoginPage() {
     }
 
     const { email, password } = result.data;
+    setLastTypedPassword(password);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -81,14 +89,32 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setFieldErrors({
-        password: "Email or password does not match our records",
-      });
-      toast({
-        title: "Unable to sign in",
-        description: "Please check your email and password and try again",
-        variant: "destructive",
-      });
+      const isUnconfirmed =
+        error.message?.toLowerCase().includes("email not confirmed") ||
+        error.message?.toLowerCase().includes("unconfirmed") ||
+        (error as any).code === "email_not_confirmed";
+
+      if (isUnconfirmed) {
+        setUnverifiedEmail(email);
+        setFieldErrors({
+          email: "Email verification is required before signing in",
+        });
+        toast({
+          title: "Email verification required",
+          description: "Your account is not verified yet. Please check your inbox or use the buttons below to activate.",
+          variant: "destructive",
+        });
+      } else {
+        setUnverifiedEmail(null);
+        setFieldErrors({
+          password: "Email or password does not match our records",
+        });
+        toast({
+          title: "Unable to sign in",
+          description: "Please check your email and password and try again",
+          variant: "destructive",
+        });
+      }
       setLoading(false);
     } else if (data.user) {
       // Fire-and-forget — never block redirect
@@ -103,6 +129,81 @@ export default function LoginPage() {
       });
       navigate("/app/dashboard");
       // keep loading=true to prevent flash before redirect
+    }
+  };
+
+  const handleResendVerificationFromLogin = async (targetEmail: string) => {
+    if (!targetEmail || resendingVerification) return;
+    setResendingVerification(true);
+    try {
+      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: targetEmail,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      });
+      if (error) throw error;
+      toast({
+        title: "Verification email sent",
+        description: `A fresh confirmation link has been sent to ${targetEmail}. Please check your inbox and spam folder.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Could not resend email",
+        description: err.message || "Failed to resend email. Please try instant activation.",
+        variant: "destructive",
+      });
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
+  const handleActivateAndLogin = async (targetEmail: string) => {
+    if (!targetEmail || activatingFromLogin) return;
+    setActivatingFromLogin(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("verify_agency_account_fallback", {
+        p_email: targetEmail,
+      });
+      if (error) throw error;
+
+      toast({
+        title: "Account verified & activated!",
+        description: "Signing in to your dashboard...",
+      });
+
+      // If user typed password, auto sign-in
+      if (lastTypedPassword) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: targetEmail,
+          password: lastTypedPassword,
+        });
+
+        if (!signInError && signInData?.user) {
+          import("@/lib/sessionManager").then(({ sessionManager }) => {
+            sessionManager.startSession(signInData.user.id);
+          });
+          preloadEssentialData(queryClient);
+          navigate("/app/dashboard");
+          return;
+        }
+      }
+
+      setUnverifiedEmail(null);
+      toast({
+        title: "Account activated",
+        description: "Please click Sign In with your password.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Activation Error",
+        description: err.message || "Could not activate account. Please contact support.",
+        variant: "destructive",
+      });
+    } finally {
+      setActivatingFromLogin(false);
     }
   };
 
@@ -153,7 +254,21 @@ export default function LoginPage() {
             <Label htmlFor="login-password" className="text-[13px] font-medium text-foreground">
               Password
             </Label>
-            <ForgotPasswordDialog />
+            <div className="flex items-center gap-2.5">
+              <ResendVerificationDialog
+                initialEmail={unverifiedEmail || ""}
+                trigger={
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                  >
+                    Resend link?
+                  </button>
+                }
+              />
+              <span className="text-muted-foreground/40 text-xs">•</span>
+              <ForgotPasswordDialog />
+            </div>
           </div>
           <div className="relative">
             <Input
@@ -195,6 +310,48 @@ export default function LoginPage() {
             </p>
           )}
         </div>
+
+        {/* Unverified Email Warning Card & Resend/Activation Actions */}
+        {unverifiedEmail && (
+          <div className="p-3.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 space-y-2.5 animate-fade-in text-xs shadow-xs">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-amber-900 dark:text-amber-200">
+                  Email Verification Required
+                </h4>
+                <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                  Your account is registered, but your email (<strong className="font-semibold">{unverifiedEmail}</strong>) has not completed verification.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={resendingVerification}
+                onClick={() => handleResendVerificationFromLogin(unverifiedEmail)}
+                className="h-8 text-xs font-semibold gap-1.5 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
+              >
+                {resendingVerification ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3 text-amber-600" />}
+                <span>Resend Email</span>
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                disabled={activatingFromLogin}
+                onClick={() => handleActivateAndLogin(unverifiedEmail)}
+                className="h-8 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
+              >
+                {activatingFromLogin ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                <span>Activate Now</span>
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Sign In Button */}
         <div className="pt-1">
