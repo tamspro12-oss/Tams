@@ -566,33 +566,15 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
               </Select>
             </div>
 
-            {/* Bank Dropdown (when Refund / Void Mode = Bank Account) */}
+            {/* Bank Dropdown (strictly agency banks with Quick Add) */}
             {paymentMode === "bank" && (
               <div className={actionType === "void" ? "lg:col-span-12" : "lg:col-span-3"}>
-                <div className="flex items-center justify-between">
-                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                    Bank Account <span className="text-red-500">*</span>
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddBankOpen(true)}
-                    className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <Plus className="w-2.5 h-2.5" /> Quick Add Bank
-                  </button>
-                </div>
-                <Select value={selectedBank} onValueChange={setSelectedBank}>
-                  <SelectTrigger className="h-8 text-xs mt-0.5">
-                    <SelectValue placeholder="Select Bank" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    {bankOptions.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AgencyBankSelect
+                  value={selectedBank}
+                  onChange={setSelectedBank}
+                  label="Bank Account"
+                  required={true}
+                />
               </div>
             )}
           </div>
@@ -754,17 +736,6 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
               : "Record Refund"}
           </Button>
         </div>
-
-        {/* Quick Add Bank Popup */}
-        <AddBankDialog
-          open={isAddBankOpen}
-          onOpenChange={setIsAddBankOpen}
-          onSaved={(bankName: string) => {
-            setDbBanks((prev) => Array.from(new Set([bankName, ...prev])));
-            setSelectedBank(bankName);
-            toast.success(`Bank ${bankName} added and selected`);
-          }}
-        />
       </DialogContent>
     </Dialog>
   );
