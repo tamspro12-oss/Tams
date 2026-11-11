@@ -63,6 +63,10 @@ export interface ExcelGridProps<T = any> {
   hideColumnsButton?: boolean;
   hideCopyButton?: boolean;
   hideExportButton?: boolean;
+  exportLabel?: string;
+  exportIcon?: React.ReactNode;
+  exportClassName?: string;
+  onExportClick?: () => void;
   onFilteredDataChange?: (data: T[]) => void;
 }
 
@@ -84,6 +88,10 @@ export function ExcelGrid<T = any>({
   hideColumnsButton = false,
   hideCopyButton = false,
   hideExportButton = false,
+  exportLabel,
+  exportIcon,
+  exportClassName,
+  onExportClick,
   onFilteredDataChange,
 }: ExcelGridProps<T>) {
   // 1. Column Visibility and Order State (persisted in localStorage)
@@ -569,16 +577,19 @@ export function ExcelGrid<T = any>({
             </Button>
           )}
 
-          {/* Excel Export */}
+          {/* Excel / PDF Export */}
           {!hideExportButton && (
             <Button
               variant="outline"
               size="sm"
-              onClick={handleExportExcel}
-              className="h-8 text-xs gap-1 border-slate-200 dark:border-slate-800 text-emerald-700 dark:text-emerald-400"
+              onClick={onExportClick || handleExportExcel}
+              className={cn(
+                "h-8 text-xs gap-1.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:text-rose-600 cursor-pointer shadow-xs",
+                exportClassName
+              )}
             >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Export</span>
+              {exportIcon || <Download className="w-3.5 h-3.5 text-emerald-600" />}
+              <span className="hidden sm:inline">{exportLabel || "Export"}</span>
             </Button>
           )}
         </div>

@@ -21,6 +21,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParties, type Party } from "@/hooks/useParties";
 import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
+import { useAgency } from "@/hooks/useAgency";
+import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -201,6 +203,10 @@ export default function ReportsHub() {
 
   const { parties = [], isLoading: loadingParties } = useParties();
   const { accounts = [], isLoading: loadingAccounts } = useAccounts();
+  const { data: agency } = useAgency();
+
+  // Shared Report Export PDF Dialog State
+  const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
 
   // 1. Fetch Invoices
   const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
@@ -908,25 +914,36 @@ export default function ReportsHub() {
             showStatusFilter={false}
           />
 
-          {/* Switch: All / Cash / Bank */}
-          <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border text-xs">
+          {/* Switch: All / Cash / Bank + Export PDF Button */}
+          <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border text-xs gap-2">
             <span className="font-bold text-slate-800 dark:text-slate-200">
               Daily Day Book (Receipts & Payments)
             </span>
-            <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border">
-              {(["all", "cash", "bank"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setDailyAccountType(m)}
-                  className={`px-3 py-1 rounded text-xs font-semibold capitalize cursor-pointer transition-all ${
-                    dailyAccountType === m
-                      ? "bg-white dark:bg-slate-900 shadow-xs text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {m === "all" ? "Cash & Bank" : m}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border">
+                {(["all", "cash", "bank"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setDailyAccountType(m)}
+                    className={`px-3 py-1 rounded text-xs font-semibold capitalize cursor-pointer transition-all ${
+                      dailyAccountType === m
+                        ? "bg-white dark:bg-slate-900 shadow-xs text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "all" ? "Cash & Bank" : m}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setExportDialogOpen(true)}
+                className="h-8 text-xs gap-1.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:text-rose-600 cursor-pointer shadow-xs shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5 text-rose-600" />
+                <span>Export</span>
+              </Button>
             </div>
           </div>
 
@@ -1077,6 +1094,11 @@ export default function ReportsHub() {
             onFilteredDataChange={handleStatementFilteredDataChange}
             title="Account Statement & Master Ledger"
             filename="TAMS_Account_Statement"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            exportLabel="Export"
+            exportIcon={<FileText className="w-3.5 h-3.5 text-rose-600" />}
+            onExportClick={() => setExportDialogOpen(true)}
           />
         </div>
       )}
@@ -1123,6 +1145,11 @@ export default function ReportsHub() {
             keyExtractor={(b) => b.id}
             title="Booking Wise Profit & Service Summary"
             filename="Booking_Wise_Profit"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            exportLabel="Export"
+            exportIcon={<FileText className="w-3.5 h-3.5 text-rose-600" />}
+            onExportClick={() => setExportDialogOpen(true)}
           />
         </div>
       )}
@@ -1141,51 +1168,62 @@ export default function ReportsHub() {
             searchPlaceholder="Search in accounts, services, categories..."
           />
 
-          {/* 5 Toggle Buttons (Segmented Tabs) - Styled exactly like the top bar, all on ONE line, horizontally scrollable on mobile */}
-          <div className="w-full overflow-x-auto no-scrollbar pb-1">
-            <Tabs
-              value={financialSubReport}
-              onValueChange={(val) => handleFinancialModeChange(val as FinancialSubReport)}
-              className="w-full"
+          {/* 5 Toggle Buttons (Segmented Tabs) + Single Export Button */}
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <div className="flex-1 overflow-x-auto no-scrollbar">
+              <Tabs
+                value={financialSubReport}
+                onValueChange={(val) => handleFinancialModeChange(val as FinancialSubReport)}
+                className="w-full"
+              >
+                <TabsList className="w-full justify-start overflow-x-auto h-11 p-1 bg-muted/60 border flex flex-nowrap shrink-0">
+                  <TabsTrigger
+                    value="pnl"
+                    className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                  >
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    1. Profit & Loss Report
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="accounts_summary"
+                    className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                  >
+                    <Wallet className="w-4 h-4 text-blue-600" />
+                    2. Accounts Summary
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="assets_dues"
+                    className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                  >
+                    <Scale className="w-4 h-4 text-purple-600" />
+                    3. Assets & Dues
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="monthly_income"
+                    className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                  >
+                    <Calendar className="w-4 h-4 text-teal-600" />
+                    4. Monthly Income
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="monthly_expenses"
+                    className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                  >
+                    <FileText className="w-4 h-4 text-red-600" />
+                    5. Monthly Expenses
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExportDialogOpen(true)}
+              className="h-10 px-3 text-xs gap-1.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:text-rose-600 cursor-pointer shadow-xs shrink-0 mb-0.5"
             >
-              <TabsList className="w-full justify-start overflow-x-auto h-11 p-1 bg-muted/60 border flex flex-nowrap shrink-0">
-                <TabsTrigger
-                  value="pnl"
-                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-                >
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                  1. Profit & Loss Report
-                </TabsTrigger>
-                <TabsTrigger
-                  value="accounts_summary"
-                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-                >
-                  <Wallet className="w-4 h-4 text-blue-600" />
-                  2. Accounts Summary
-                </TabsTrigger>
-                <TabsTrigger
-                  value="assets_dues"
-                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-                >
-                  <Scale className="w-4 h-4 text-purple-600" />
-                  3. Assets & Dues
-                </TabsTrigger>
-                <TabsTrigger
-                  value="monthly_income"
-                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-                >
-                  <Calendar className="w-4 h-4 text-teal-600" />
-                  4. Monthly Income
-                </TabsTrigger>
-                <TabsTrigger
-                  value="monthly_expenses"
-                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-                >
-                  <FileText className="w-4 h-4 text-red-600" />
-                  5. Monthly Expenses
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              <FileText className="w-3.5 h-3.5 text-rose-600" />
+              <span>Export</span>
+            </Button>
           </div>
 
           {/* Top Summary Cards: Gross Booking Revenue, Cost of Sales, Operating Expenses, Net Agency Profit */}
@@ -2437,6 +2475,29 @@ export default function ReportsHub() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Shared Report Export PDF Dialog */}
+      <ReportExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        reportTab={currentTab}
+        agency={agency || undefined}
+        parties={parties}
+        accounts={accounts}
+        rawInvoices={rawInvoices}
+        rawExpenses={rawExpenses}
+        rawTransactions={rawTransactions}
+        rawStatementData={rawStatementData}
+        financialSubReport={financialSubReport}
+        initialDateRange={filters.dateRange}
+        initialStartDate={filters.startDate}
+        initialEndDate={filters.endDate}
+        initialPartyId={filters.partyId}
+        initialDetailedView={detailedView}
+        initialOnlyUnpaid={onlyUnpaid}
+        initialOverdueBucket={overdueBucket}
+        quotationSummary={quoteStats}
+      />
     </div>
   );
 }

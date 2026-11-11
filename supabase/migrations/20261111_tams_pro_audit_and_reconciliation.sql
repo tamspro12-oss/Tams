@@ -706,3 +706,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.reconcile_agency_balances TO authenticated;
+
