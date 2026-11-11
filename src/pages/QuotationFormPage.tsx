@@ -457,8 +457,8 @@ export default function QuotationFormPage() {
         </Button>
       </div>
 
-      {/* Main Content: Single Screen Card Layout, No Page Scrolling */}
-      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2.5 sm:p-4 flex flex-col justify-between gap-2.5 min-w-0">
+      {/* Main Content: Scrollable flex layout with proper bottom padding */}
+      <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 flex flex-col gap-3 min-w-0 pb-6">
         
         {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4 with explicit CSS Grid) */}
         <div
@@ -982,58 +982,61 @@ export default function QuotationFormPage() {
           </div>
         </div>
 
-        {/* Bottom Footer Bar: Placed at the Bottom Right Side-by-Side: Save & PDF + Save Quotation */}
+        {/* Bottom Footer Bar: Sticky footer with Cancel and Save Buttons */}
         <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: "8px",
-            paddingTop: "8px",
-            borderTop: "1px solid hsl(var(--border) / 0.6)",
-            width: "100%",
-          }}
-          className="shrink-0"
+          className="sticky bottom-0 bg-background/95 backdrop-blur-sm py-2.5 px-3 sm:px-4 border-t border-border/70 flex items-center justify-between gap-3 shrink-0 z-30 shadow-md mt-auto"
         >
-          {isEdit && !convertedBookingId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            className="h-8.5 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </Button>
+
+          <div className="flex items-center gap-2">
+            {isEdit && !convertedBookingId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleConvertToBooking}
+                className="h-8.5 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+              >
+                <ArrowRightCircle className="w-3.5 h-3.5" />
+                <span>Convert to Booking</span>
+              </Button>
+            )}
+
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleConvertToBooking}
-              className="mr-auto h-8 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+              tabIndex={13}
+              onClick={() => handleSave(true)}
+              disabled={isSubmitting}
+              className="h-8.5 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
+              title="Save and download PDF (Ctrl+Shift+Enter)"
             >
-              <ArrowRightCircle className="w-3.5 h-3.5" />
-              <span>Convert to Booking</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Save & PDF</span>
             </Button>
-          )}
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            tabIndex={13}
-            onClick={() => handleSave(true)}
-            disabled={isSubmitting}
-            className="h-8 sm:h-9 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
-            title="Save and download PDF (Ctrl+Shift+Enter)"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Save & PDF</span>
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            tabIndex={14}
-            onClick={() => handleSave(false)}
-            disabled={isSubmitting}
-            className="h-8 sm:h-9 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Save Quotation (Ctrl+Enter)"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              tabIndex={14}
+              onClick={() => handleSave(false)}
+              disabled={isSubmitting}
+              className="h-8.5 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+              title="Save Quotation (Ctrl+Enter)"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

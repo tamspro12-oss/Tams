@@ -1,17 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 import { StorageProvider } from './types';
+import { getAuthenticatedAgencyId } from '@/lib/agencyContext';
 
 export class CloudStorageProvider implements StorageProvider {
   private async getAgencyId(): Promise<string> {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('agency_id')
-      .single();
-    
-    if (error) throw new Error(`Failed to get agency ID: ${error.message}`);
-    if (!profile?.agency_id) throw new Error('Agency ID not found in profile');
-    
-    return profile.agency_id;
+    const agencyId = await getAuthenticatedAgencyId();
+    if (!agencyId) {
+      throw new Error('No active agency context found for authenticated user');
+    }
+    return agencyId;
   }
 
   // Clients

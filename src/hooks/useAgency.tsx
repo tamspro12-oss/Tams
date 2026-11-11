@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 // NOTE: email_password and license_key are intentionally NOT selected here.
 // They are no longer readable by app users directly (column-level revoke).
@@ -28,24 +29,27 @@ export function useAgency() {
   return useQuery({
     queryKey: ["agency"],
     queryFn: async () => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("agency_id")
-        .single();
+      const agencyId = await getAuthenticatedAgencyId();
+      if (!agencyId) return null;
 
-      if (!profile?.agency_id) return null;
-
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("agencies")
         .select(AGENCY_COLUMNS)
-        .eq("id", profile.agency_id)
-        .single();
+        .eq("id", agencyId)
+        .maybeSingle();
 
-      if (!data) return null;
+      if (error || !data) return null;
 
-      const { data: smtpConfigured } = await supabase.rpc("agency_smtp_configured");
+      let smtpConfigured = false;
+      try {
+        const { data: res } = await supabase.rpc("agency_smtp_configured");
+        smtpConfigured = !!res;
+      } catch {
+        // ignore RPC error
+      }
 
-      return { ...(data as any), smtp_configured: !!smtpConfigured } as any;
+      return { ...(data as any), smtp_configured: smtpConfigured } as any;
     },
+    staleTime: 5 * 60 * 1000,
   });
 }

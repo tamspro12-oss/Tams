@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { FileText, MessageSquare } from "lucide-react";
 import { useQuotations } from "@/hooks/useQuotations";
@@ -12,12 +12,27 @@ import Queries from "@/pages/Queries";
 type LeadsQuotesTab = "quotations" | "queries";
 
 export default function LeadsQuotesHub() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get("tab");
   const currentTab: LeadsQuotesTab = rawTab === "queries" ? "queries" : "quotations";
 
   const { quotations = [] } = useQuotations();
   const { queries = [] } = useQueries();
+
+  // If new=1 passed in URL, navigate directly to corresponding form
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+      if (currentTab === "queries") {
+        navigate("/app/leads-quotes/queries/new");
+      } else {
+        navigate("/app/leads-quotes/quotations/new");
+      }
+    }
+  }, [searchParams, currentTab, navigate, setSearchParams]);
 
   // If no tab param, set ?tab=quotations by default without polluting history
   useEffect(() => {

@@ -1,5 +1,6 @@
 // Professional email service using Resend via Edge Function
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 export interface EmailAttachment {
   name: string;
@@ -58,11 +59,7 @@ export const sendEmail = async (
 
     // Get user and agency info for logging
     const { data: { user } } = await supabase.auth.getUser();
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('agency_id')
-      .eq('id', user?.id)
-      .maybeSingle();
+    const agencyId = await getAuthenticatedAgencyId();
 
     // Check if online
     if (!navigator.onLine) {
@@ -70,9 +67,9 @@ export const sendEmail = async (
       queueEmail(options);
       
       // Log as queued
-      if (user && profile) {
+      if (user && agencyId) {
         await supabase.from('email_logs').insert({
-          agency_id: profile.agency_id,
+          agency_id: agencyId,
           sent_by: user.id,
           recipient_email: options.to,
           subject: options.subject,
@@ -104,9 +101,9 @@ export const sendEmail = async (
       console.error('[Email Service] Edge function error:', error);
       
       // Log failure
-      if (user && profile) {
+      if (user && agencyId) {
         await supabase.from('email_logs').insert({
-          agency_id: profile.agency_id,
+          agency_id: agencyId,
           sent_by: user.id,
           recipient_email: options.to,
           subject: options.subject,
@@ -130,9 +127,9 @@ export const sendEmail = async (
       console.error('[Email Service] Email sending failed:', data.error);
       
       // Log failure
-      if (user && profile) {
+      if (user && agencyId) {
         await supabase.from('email_logs').insert({
-          agency_id: profile.agency_id,
+          agency_id: agencyId,
           sent_by: user.id,
           recipient_email: options.to,
           subject: options.subject,
@@ -147,9 +144,9 @@ export const sendEmail = async (
     }
 
     // Log success
-    if (user && profile) {
+    if (user && agencyId) {
       await supabase.from('email_logs').insert({
-        agency_id: profile.agency_id,
+        agency_id: agencyId,
         sent_by: user.id,
         recipient_email: options.to,
         subject: options.subject,

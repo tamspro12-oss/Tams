@@ -29,24 +29,15 @@ export async function executeOrQueue<T>(
   }
 }
 
+import { getAuthenticatedAgencyId } from '@/lib/agencyContext';
+
 // Get agency ID for offline operations
 export async function getCachedAgencyId(): Promise<string | null> {
   try {
     const cached = localStorage.getItem('tams_agency_id');
     if (cached) return cached;
 
-    // Try to fetch if online
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('agency_id')
-      .single();
-
-    if (profile?.agency_id) {
-      localStorage.setItem('tams_agency_id', profile.agency_id);
-      return profile.agency_id;
-    }
-
-    return null;
+    return await getAuthenticatedAgencyId();
   } catch {
     return localStorage.getItem('tams_agency_id');
   }

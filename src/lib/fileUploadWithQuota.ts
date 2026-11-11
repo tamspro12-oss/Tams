@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 export interface UploadFileOptions {
   file: File;
@@ -23,25 +24,14 @@ export async function uploadFileWithQuota(
   const { file, path, isTemporary = false, expiresInHours = 1 } = options;
 
   try {
-    // Get current user and agency
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: "Not authenticated" };
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("agency_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.agency_id) {
+    const agencyId = await getAuthenticatedAgencyId();
+    if (!agencyId) {
       return { success: false, error: "Agency not found" };
     }
 
     // Check quota
     const { data: canUpload, error: quotaError } = await supabase.rpc('can_upload_file', {
-      p_agency_id: profile.agency_id,
+      p_agency_id: agencyId,
       p_file_size: file.size
     });
 
@@ -72,15 +62,18 @@ export async function uploadFileWithQuota(
       ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
       : null;
 
+    // Get current authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+
     // Insert metadata into files table
     const { data: fileRecord, error: metadataError } = await supabase
       .from("files")
       .insert({
-        agency_id: profile.agency_id,
+        agency_id: agencyId,
         path: uploadData.path,
         filename: file.name,
         size_bytes: file.size,
-        uploaded_by: user.id,
+        uploaded_by: user?.id || null,
         is_temporary: isTemporary,
         expires_at: expiresAt
       })

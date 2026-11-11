@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -78,6 +78,31 @@ export default function SalesExpensesHub() {
 
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
+  };
+
+  // Sync URL search parameters for ?new=1 and ?date=today
+  useEffect(() => {
+    const isNew = searchParams.get("new") === "1" || searchParams.get("action") === "new";
+    if (isNew) {
+      if (currentTab === "booking-invoice") setIsInvoiceOpen(true);
+      else if (currentTab === "payment-vouchers") setIsVoucherOpen(true);
+      else if (currentTab === "refunds-voids") setIsRefundOpen(true);
+      else if (currentTab === "expenses") setIsExpenseOpen(true);
+    }
+
+    if (searchParams.get("date") === "today") {
+      setInvoiceDateFilter({ preset: "today" });
+    }
+  }, [searchParams, currentTab]);
+
+  const handleModalClose = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (open: boolean) => {
+    setter(open);
+    if (!open && (searchParams.get("new") || searchParams.get("action"))) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("new");
+      nextParams.delete("action");
+      setSearchParams(nextParams, { replace: true });
+    }
   };
 
   // 1. Fetch Invoices
@@ -1343,22 +1368,22 @@ export default function SalesExpensesHub() {
       {/* Modals */}
       <BookingInvoiceForm
         open={isInvoiceOpen}
-        onOpenChange={setIsInvoiceOpen}
+        onOpenChange={handleModalClose(setIsInvoiceOpen)}
         onSuccess={refetchInvoices}
       />
       <PaymentVoucherForm
         open={isVoucherOpen}
-        onOpenChange={setIsVoucherOpen}
+        onOpenChange={handleModalClose(setIsVoucherOpen)}
         onSuccess={refetchVouchers}
       />
       <RefundVoidForm
         open={isRefundOpen}
-        onOpenChange={setIsRefundOpen}
+        onOpenChange={handleModalClose(setIsRefundOpen)}
         onSuccess={refetchRefunds}
       />
       <ExpenseFormModal
         open={isExpenseOpen}
-        onOpenChange={setIsExpenseOpen}
+        onOpenChange={handleModalClose(setIsExpenseOpen)}
         onSuccess={refetchExpenses}
       />
     </div>

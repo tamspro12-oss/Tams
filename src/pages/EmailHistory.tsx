@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAgency } from '@/hooks/useAgency';
+import { getAuthenticatedAgencyId } from '@/lib/agencyContext';
 import {
   DateFilter,
   DEFAULT_DATE_FILTER,
@@ -69,12 +70,9 @@ export default function EmailHistory() {
   const deleteMutation = useMutation({
     mutationFn: async ({ type, id }: { type: 'single' | 'bulk', id?: string }) => {
       // Get current user's agency_id for RLS
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('agency_id')
-        .single();
+      const agencyId = await getAuthenticatedAgencyId();
 
-      if (!profile?.agency_id) {
+      if (!agencyId) {
         throw new Error('Agency not found');
       }
 
@@ -83,7 +81,7 @@ export default function EmailHistory() {
           .from('email_logs')
           .delete()
           .eq('id', id)
-          .eq('agency_id', profile.agency_id);
+          .eq('agency_id', agencyId);
         if (error) throw error;
         return { deleted: 1 };
       } else if (type === 'bulk') {
@@ -91,7 +89,7 @@ export default function EmailHistory() {
         let query = supabase
           .from('email_logs')
           .delete()
-          .eq('agency_id', profile.agency_id);
+          .eq('agency_id', agencyId);
         
         if (statusFilter !== 'all') {
           query = query.eq('status', statusFilter);

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useToast } from "@/hooks/use-toast";
 import { triggerAutoBackup } from '@/lib/autoBackupTrigger';
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 // Client Payment History
 export function useClientPaymentHistory(clientId?: string) {
@@ -45,16 +46,13 @@ export function useClientPaymentHistory(clientId?: string) {
       payment_type: "partial" | "full";
       notes?: string;
     }) => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("agency_id")
-        .single();
+      const agencyId = await getAuthenticatedAgencyId();
 
       const { error } = await supabase
         .from("client_payment_history")
         .insert({
           ...payment,
-          agency_id: profile?.agency_id,
+          agency_id: agencyId,
         });
 
       if (error) throw error;
@@ -123,16 +121,13 @@ export function useVendorPaymentHistory(vendorId?: string) {
       payment_type: "partial" | "full";
       notes?: string;
     }) => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("agency_id")
-        .single();
+      const agencyId = await getAuthenticatedAgencyId();
 
       const { error } = await supabase
         .from("vendor_payment_history")
         .insert({
           ...payment,
-          agency_id: profile?.agency_id,
+          agency_id: agencyId,
         });
 
       if (error) throw error;

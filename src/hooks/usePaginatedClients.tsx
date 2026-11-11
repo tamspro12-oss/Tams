@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 const PAGE_SIZE = 50;
 
@@ -27,21 +28,13 @@ export function usePaginatedClients(page: number = 0, filters?: {
     queryFn: async () => {
       // Always use Supabase cloud storage
         // Cloud pagination with Supabase
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Not authenticated');
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('agency_id')
-          .eq('id', user.id)
-          .single();
-
-        if (!profile) throw new Error('Profile not found');
+        const agencyId = await getAuthenticatedAgencyId();
+        if (!agencyId) throw new Error('Agency not found');
 
         let query = supabase
           .from('clients')
           .select('*, vendors(*)', { count: 'exact' })
-          .eq('agency_id', profile.agency_id)
+          .eq('agency_id', agencyId)
           .order('created_at', { ascending: false });
 
         // Apply filters

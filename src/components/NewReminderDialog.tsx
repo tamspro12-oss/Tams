@@ -1,367 +1,580 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { format, addDays } from "date-fns";
-import { Plus } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { format } from "date-fns";
+import { X, Lock, Plus, Bell, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { useReminders } from "@/hooks/useReminders";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useParties, type Party } from "@/hooks/useParties";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
+import { CopyValue } from "@/components/ui/CopyValue";
 import { cn } from "@/lib/utils";
 
 export interface NewReminderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  prefill?: {
+    title?: string;
+    date?: string;
+    time?: string;
+    type?: string;
+    priority?: "low" | "normal" | "high";
+    linkTo?: "none" | "client" | "vendor" | "invoice" | "query" | "quote";
+    linkId?: string;
+    linkTitle?: string;
+    remarks?: string;
+  };
 }
-
-const CATEGORIES = [
-  { value: "manual", label: "General Task" },
-  { value: "flight", label: "Flight Departure" },
-  { value: "umrah", label: "Umrah Package" },
-  { value: "daily_expense", label: "Daily Expense" },
-] as const;
-
-type CategoryType = (typeof CATEGORIES)[number]["value"];
 
 export function NewReminderDialog({
   open,
   onOpenChange,
   onSuccess,
+  prefill,
 }: NewReminderDialogProps) {
-  const { addReminder } = useReminders();
+  const queryClient = useQueryClient();
+  const { data: agencyId } = useCurrentAgencyId();
+  const { parties = [] } = useParties();
+
+  // Form Fields
+  const [remDate, setRemDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [remTime, setRemTime] = useState("09:00");
+  const [remType, setRemType] = useState<string>("Call Client");
+  const [priority, setPriority] = useState<"low" | "normal" | "high">("normal");
 
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [time, setTime] = useState("09:00");
-  const [category, setCategory] = useState<CategoryType>("manual");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [linkTo, setLinkTo] = useState<"none" | "client" | "vendor" | "invoice" | "query" | "quote">("none");
+  const [selectedRecordId, setSelectedRecordId] = useState("");
+  const [selectedRecordLabel, setSelectedRecordLabel] = useState("");
+
+  const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "monthly">("none");
+  const [remindBefore, setRemindBefore] = useState<"at_time" | "15min" | "1hour" | "1day">("at_time");
+  const [remarks, setRemarks] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAddPartyOpen, setIsAddPartyOpen] = useState(false);
+  const [addPartyType, setAddPartyType] = useState<"client" | "vendor">("client");
 
-  const titleRef = useRef<HTMLInputElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const categoryRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Running auto reminder sequence: REM-YYYY-0001
+  const [reminderSeq, setReminderSeq] = useState("0001");
 
-  // Focus Title input when dialog opens
+  // Query records for linking
+  const { data: bookingInvoices = [] } = useQuery({
+    queryKey: ["rem_booking_invoices", agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data } = await (supabase as any)
+        .from("booking_invoices")
+        .select("id, invoice_no, party:parties(name)")
+        .eq("agency_id", agencyId)
+        .order("invoice_date", { ascending: false })
+        .limit(30);
+      return data || [];
+    },
+    enabled: open && linkTo === "invoice",
+  });
+
+  const { data: queriesList = [] } = useQuery({
+    queryKey: ["rem_queries", agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data } = await (supabase as any)
+        .from("queries")
+        .select("*")
+        .eq("agency_id", agencyId)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      return data || [];
+    },
+    enabled: open && linkTo === "query",
+  });
+
+  const { data: quotesList = [] } = useQuery({
+    queryKey: ["rem_quotes", agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data } = await supabase
+        .from("quotations")
+        .select("id, quotation_number, client_name, created_at")
+        .eq("agency_id", agencyId)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      return data || [];
+    },
+    enabled: open && linkTo === "quote",
+  });
+
+  // Query Recent Reminders sheet below form
+  const { data: recentReminders = [], refetch: refetchRecent } = useQuery({
+    queryKey: ["recent_reminders_sheet", agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data } = await supabase
+        .from("reminders" as any)
+        .select("*")
+        .eq("agency_id", agencyId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  // Fetch sequence
   useEffect(() => {
     if (open) {
-      const timer = setTimeout(() => {
-        titleRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    } else {
-      setError(null);
+      const year = new Date().getFullYear();
+      const count = (recentReminders.length || 0) + 1;
+      const pad = String(count).padStart(4, "0");
+      setReminderSeq(`${year}-${pad}`);
+
+      // Apply prefill if supplied
+      if (prefill) {
+        if (prefill.title) setTitle(prefill.title);
+        if (prefill.date) setRemDate(prefill.date);
+        if (prefill.time) setRemTime(prefill.time);
+        if (prefill.type) setRemType(prefill.type);
+        if (prefill.priority) setPriority(prefill.priority);
+        if (prefill.linkTo) setLinkTo(prefill.linkTo);
+        if (prefill.linkId) setSelectedRecordId(prefill.linkId);
+        if (prefill.linkTitle) setSelectedRecordLabel(prefill.linkTitle);
+        if (prefill.remarks) setRemarks(prefill.remarks);
+      }
     }
-  }, [open]);
+  }, [open, prefill, recentReminders.length]);
 
-  // Quick Chips Options
-  const todayStr = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  const tomorrowStr = useMemo(() => format(addDays(new Date(), 1), "yyyy-MM-dd"), []);
-  const nextWeekStr = useMemo(() => format(addDays(new Date(), 7), "yyyy-MM-dd"), []);
+  const autoReminderNo = `REM-${reminderSeq}`;
 
-  const dateQuickOptions = [
-    { label: "Today", value: todayStr },
-    { label: "Tomorrow", value: tomorrowStr },
-    { label: "Next Week", value: nextWeekStr },
-  ];
+  const clientParties = useMemo(() => parties.filter((p) => p.type === "client" || p.type === "both"), [parties]);
+  const vendorParties = useMemo(() => parties.filter((p) => p.type === "vendor" || p.type === "both"), [parties]);
 
-  const timeQuickOptions = [
-    { label: "9:00 AM", value: "09:00" },
-    { label: "12:00 PM", value: "12:00" },
-    { label: "5:00 PM", value: "17:00" },
-  ];
-
-  const resetForm = () => {
-    setTitle("");
-    setDate(format(new Date(), "yyyy-MM-dd"));
-    setTime("09:00");
-    setCategory("manual");
-    setNotes("");
-    setError(null);
-    if (notesRef.current) {
-      notesRef.current.style.height = "auto";
-    }
-  };
-
-  const handleClose = () => {
-    onOpenChange(false);
-    resetForm();
-  };
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
+  const handleSave = async () => {
     if (!title.trim()) {
-      setError("Please enter a title");
-      titleRef.current?.focus();
+      toast.error("Reminder title is required");
+      return;
+    }
+    if (!remDate) {
+      toast.error("Reminder date is required");
+      return;
+    }
+    if (!agencyId) {
+      toast.error("Agency session not resolved");
       return;
     }
 
-    setError(null);
     setIsSubmitting(true);
-
     try {
-      await addReminder.mutateAsync({
+      const payload: any = {
+        agency_id: agencyId,
         title: title.trim(),
-        type: category,
-        remind_date: date,
-        remind_time: time ? `${time}:00` : null,
+        type: remType.toLowerCase().includes("flight") ? "flight" : remType.toLowerCase().includes("umrah") ? "umrah" : remType.toLowerCase().includes("expense") ? "daily_expense" : "manual",
+        remind_date: remDate,
+        remind_time: remTime ? `${remTime}:00` : "09:00:00",
+        notes: [
+          `Type: ${remType}`,
+          `Priority: ${priority.toUpperCase()}`,
+          linkTo !== "none" ? `Linked To: ${linkTo.toUpperCase()} (${selectedRecordLabel || selectedRecordId})` : null,
+          repeat !== "none" ? `Repeat: ${repeat}` : null,
+          remindBefore !== "at_time" ? `Remind Before: ${remindBefore}` : null,
+          remarks ? `Remarks: ${remarks}` : null,
+          `No: ${autoReminderNo}`,
+        ]
+          .filter(Boolean)
+          .join(" | "),
         is_completed: false,
-        notes: notes.trim() || null,
-      });
+        is_recurring_daily: repeat === "daily",
+      };
 
-      toast.success("Reminder created successfully");
-      handleClose();
-      onSuccess?.();
+      const { error } = await supabase.from("reminders" as any).insert(payload);
+      if (error) throw error;
+
+      toast.success("Reminder saved successfully");
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["recent_reminders_sheet"] });
+      queryClient.invalidateQueries({ queryKey: ["alert_custom_reminders"] });
+      refetchRecent();
+
+      // Clear input fields (keep Date/Time)
+      setTitle("");
+      setRemarks("");
+      setLinkTo("none");
+      setSelectedRecordId("");
+      setSelectedRecordLabel("");
+
+      if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error("Failed to create reminder", { description: err.message });
+      toast.error(err.message || "Failed to save reminder");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Keyboard navigation for categories (radio group)
-  const handleCategoryKeyDown = (e: React.KeyboardEvent, index: number) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-      e.preventDefault();
-      const nextIndex = (index + 1) % CATEGORIES.length;
-      setCategory(CATEGORIES[nextIndex].value);
-      categoryRefs.current[nextIndex]?.focus();
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-      e.preventDefault();
-      const prevIndex = (index - 1 + CATEGORIES.length) % CATEGORIES.length;
-      setCategory(CATEGORIES[prevIndex].value);
-      categoryRefs.current[prevIndex]?.focus();
-    }
-  };
-
-  // Auto-expand textarea
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNotes(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = `${Math.max(52, el.scrollHeight)}px`;
-  };
-
-  // Global keydown: Ctrl/Cmd + Enter saves from anywhere, Esc closes
-  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    } else if (e.key === "Escape") {
-      handleClose();
-    }
-  };
-
-  // Enter key in Title, Date, or Time saves if title filled
-  const handleInputKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        onKeyDown={handleContainerKeyDown}
-        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6 overflow-hidden flex flex-col rounded-xl"
-      >
-        {/* Mobile drag handle */}
-        <div className="w-10 h-1.5 rounded-full bg-muted-foreground/25 mx-auto -mt-1 mb-1 md:hidden" />
+      <DialogContent className="w-[96vw] max-w-4xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+        {/* Header: title, auto Reminder No badge (read-only), close (X) */}
+        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-2.5">
+            <Bell className="w-4 h-4 text-amber-500" />
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+              New Reminder
+            </DialogTitle>
+          </div>
 
-        {/* Dialog Header: 18px semibold title + small plus icon, subtitle removed */}
-        <DialogHeader className="p-0 text-left">
-          <DialogTitle className="text-[18px] font-semibold text-foreground flex items-center gap-1.5 leading-none">
-            <Plus className="w-4 h-4 text-primary shrink-0" />
-            New Reminder
-          </DialogTitle>
-          <DialogDescription className="sr-only">Create a new reminder task</DialogDescription>
-        </DialogHeader>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span>Reminder #:</span>
+            <CopyValue value={autoReminderNo} label="reminder number" className="text-amber-600 dark:text-amber-400" />
+            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
+              Auto
+            </Badge>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 pt-1">
-          {/* Row 1: Title input */}
-          <div className="space-y-1">
-            <Input
-              ref={titleRef}
-              autoFocus
-              placeholder="What do you need to do?"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (error) setError(null);
-              }}
-              onKeyDown={handleInputKeyDown}
-              enterKeyHint="done"
-              className={cn(
-                "h-10 text-base md:text-sm rounded-lg transition-colors",
-                error && "border-destructive focus-visible:ring-destructive"
-              )}
-            />
-            {error && (
-              <p className="text-xs text-destructive font-medium mt-1 animate-in fade-in-50">
-                {error}
-              </p>
+        {/* Body: Flat single screen, tight grid, no section headers */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3">
+          {/* LINE 1: Date | Time | Type | Priority */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Date <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={remDate}
+                onChange={(e) => setRemDate(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+                required
+              />
+            </div>
+
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Time
+              </Label>
+              <Input
+                type="time"
+                value={remTime}
+                onChange={(e) => setRemTime(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+              />
+            </div>
+
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Type
+              </Label>
+              <Select value={remType} onValueChange={setRemType}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Call Client">Call Client</SelectItem>
+                  <SelectItem value="Payment Follow-up">Payment Follow-up</SelectItem>
+                  <SelectItem value="Flight/Umrah">Flight / Umrah</SelectItem>
+                  <SelectItem value="Visa/Documents">Visa / Documents</SelectItem>
+                  <SelectItem value="Vendor Payment">Vendor Payment</SelectItem>
+                  <SelectItem value="Meeting">Meeting</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Priority
+              </Label>
+              <Select value={priority} onValueChange={(val: any) => setPriority(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* LINE 2: Title * | Link To | Select Record (with + Quick Add) */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+            <div className={linkTo === "none" ? "sm:col-span-8" : "sm:col-span-5"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Title <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g., Follow up with Ahmed regarding ticket payment"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="h-8 text-xs mt-0.5"
+                required
+              />
+            </div>
+
+            <div className={linkTo === "none" ? "sm:col-span-4" : "sm:col-span-3"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Link To
+              </Label>
+              <Select
+                value={linkTo}
+                onValueChange={(val: any) => {
+                  setLinkTo(val);
+                  setSelectedRecordId("");
+                  setSelectedRecordLabel("");
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="vendor">Vendor</SelectItem>
+                  <SelectItem value="invoice">Invoice</SelectItem>
+                  <SelectItem value="query">Query</SelectItem>
+                  <SelectItem value="quote">Quote</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {linkTo !== "none" && (
+              <div className="sm:col-span-4 flex items-center gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Select {linkTo.charAt(0).toUpperCase() + linkTo.slice(1)}
+                  </Label>
+                  <Select
+                    value={selectedRecordId}
+                    onValueChange={(val) => {
+                      setSelectedRecordId(val);
+                      if (linkTo === "client" || linkTo === "vendor") {
+                        const p = parties.find((item) => item.id === val);
+                        if (p) setSelectedRecordLabel(p.name);
+                      } else if (linkTo === "invoice") {
+                        const inv = bookingInvoices.find((item: any) => item.id === val);
+                        if (inv) setSelectedRecordLabel(inv.invoice_no);
+                      } else if (linkTo === "query") {
+                        const q = queriesList.find((item: any) => item.id === val);
+                        if (q) setSelectedRecordLabel((q as any).client_name || (q as any).name || "Inquiry");
+                      } else if (linkTo === "quote") {
+                        const qt = quotesList.find((item: any) => item.id === val);
+                        if (qt) setSelectedRecordLabel(qt.quotation_number);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-0.5 truncate">
+                      <SelectValue placeholder={`Choose ${linkTo}...`} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      {linkTo === "client" &&
+                        clientParties.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name} {p.phone ? `(${p.phone})` : ""}
+                          </SelectItem>
+                        ))}
+                      {linkTo === "vendor" &&
+                        vendorParties.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.name}
+                          </SelectItem>
+                        ))}
+                      {linkTo === "invoice" &&
+                        bookingInvoices.map((inv: any) => (
+                          <SelectItem key={inv.id} value={inv.id}>
+                            {inv.invoice_no} ({inv.party?.name || "Client"})
+                          </SelectItem>
+                        ))}
+                      {linkTo === "query" &&
+                        queriesList.map((q: any) => (
+                          <SelectItem key={q.id} value={q.id}>
+                            {q.name} ({q.travel_type || "Trip"})
+                          </SelectItem>
+                        ))}
+                      {linkTo === "quote" &&
+                        quotesList.map((qt: any) => (
+                          <SelectItem key={qt.id} value={qt.id}>
+                            {qt.quotation_number} ({qt.client_name})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {linkTo === "client" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAddPartyType("client");
+                      setIsAddPartyOpen(true);
+                    }}
+                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0"
+                    title="Quick Add Client"
+                  >
+                    + Client
+                  </Button>
+                )}
+                {linkTo === "vendor" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAddPartyType("vendor");
+                      setIsAddPartyOpen(true);
+                    }}
+                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0"
+                    title="Quick Add Vendor"
+                  >
+                    + Vendor
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Row 2: Date and Time side by side with quick chips */}
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Date column */}
-            <div className="space-y-1">
+          {/* LINE 3: Repeat | Remind me before | Remarks (single-line input that grows) */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+            <div className="sm:col-span-3">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Repeat
+              </Label>
+              <Select value={repeat} onValueChange={(val: any) => setRepeat(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="sm:col-span-3">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Remind Me Before
+              </Label>
+              <Select value={remindBefore} onValueChange={(val: any) => setRemindBefore(val)}>
+                <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="at_time">At time</SelectItem>
+                  <SelectItem value="15min">15 minutes</SelectItem>
+                  <SelectItem value="1hour">1 hour</SelectItem>
+                  <SelectItem value="1day">1 day</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="sm:col-span-6">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Remarks
+              </Label>
               <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                onKeyDown={handleInputKeyDown}
-                className="h-10 text-base md:text-sm rounded-lg"
+                placeholder="Additional notes or action steps..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                className="h-8 text-xs mt-0.5"
               />
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
-                {dateQuickOptions.map((opt) => {
-                  const isSelected = date === opt.value;
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      tabIndex={0}
-                      onClick={() => setDate(opt.value)}
-                      className={cn(
-                        "px-2 py-0.5 text-[11px] rounded-md border transition-all shrink-0 font-medium min-h-[30px] md:min-h-[22px] flex items-center justify-center",
-                        isSelected
-                          ? "bg-primary/10 text-primary border-primary/40 font-semibold"
-                          : "bg-muted/40 text-muted-foreground border-transparent hover:border-border hover:bg-muted/70"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Time column */}
-            <div className="space-y-1">
-              <Input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                onKeyDown={handleInputKeyDown}
-                className="h-10 text-base md:text-sm rounded-lg"
-              />
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
-                {timeQuickOptions.map((opt) => {
-                  const isSelected = time === opt.value;
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      tabIndex={0}
-                      onClick={() => setTime(opt.value)}
-                      className={cn(
-                        "px-2 py-0.5 text-[11px] rounded-md border transition-all shrink-0 font-medium min-h-[30px] md:min-h-[22px] flex items-center justify-center",
-                        isSelected
-                          ? "bg-primary/10 text-primary border-primary/40 font-semibold"
-                          : "bg-muted/40 text-muted-foreground border-transparent hover:border-border hover:bg-muted/70"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           </div>
 
-          {/* Row 3: Category horizontal segmented chip group */}
-          <div className="space-y-1">
-            <div
-              role="radiogroup"
-              aria-label="Category"
-              className="grid grid-cols-2 md:grid-cols-4 gap-1.5 py-0.5 max-md:flex max-md:overflow-x-auto max-md:no-scrollbar"
-            >
-              {CATEGORIES.map((cat, idx) => {
-                const isSelected = category === cat.value;
-                return (
-                  <button
-                    key={cat.value}
-                    ref={(el) => (categoryRefs.current[idx] = el)}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    tabIndex={isSelected ? 0 : -1}
-                    onClick={() => setCategory(cat.value)}
-                    onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
-                    className={cn(
-                      "px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border shrink-0 min-h-[44px] md:min-h-[32px] flex items-center justify-center text-center",
-                      isSelected
-                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                        : "bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground border-border/60"
-                    )}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
+          {/* Recent Reminders Sheet Below Form */}
+          <div className="pt-2 border-t">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Recent Reminders
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                Showing latest 5 entries
+              </span>
+            </div>
+
+            <div className="border rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+              {recentReminders.length === 0 ? (
+                <div className="py-4 text-center text-xs text-muted-foreground">
+                  No reminders yet
+                </div>
+              ) : (
+                <div className="divide-y text-xs">
+                  {recentReminders.slice(0, 5).map((r: any) => (
+                    <div key={r.id} className="p-2 flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-mono text-[11px] text-muted-foreground shrink-0">
+                          {r.remind_date} {r.remind_time?.slice(0, 5)}
+                        </span>
+                        <span className="font-semibold text-foreground truncate">
+                          {r.title}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 uppercase">
+                          {r.type}
+                        </Badge>
+                        <span className={cn(
+                          "text-[10px] font-bold px-1.5 py-0.2 rounded",
+                          r.is_completed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                        )}>
+                          {r.is_completed ? "Done" : "Active"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Row 4: Notes (optional), auto-expanding textarea */}
-          <div className="space-y-1">
-            <Textarea
-              ref={notesRef}
-              rows={2}
-              placeholder="Notes (optional)..."
-              value={notes}
-              onChange={handleNotesChange}
-              className="min-h-[52px] text-base md:text-sm rounded-lg resize-none overflow-hidden transition-all"
-            />
-          </div>
-
-          {/* Desktop Footer (>= 768px): Cancel (ghost) + Save (primary) right-aligned, keyboard hint on left */}
-          <div className="hidden md:flex items-center justify-between pt-2 border-t border-border/50">
-            <span className="text-[11px] text-muted-foreground select-none">
-              Enter = Save &nbsp;|&nbsp; Esc = Cancel
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleClose}
-                className="h-9 px-3 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="h-9 px-4 text-xs font-semibold"
-              >
-                {isSubmitting ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Mobile Footer (< 768px): Sticky full-width Save button at bottom */}
-          <div className="md:hidden sticky bottom-0 -mx-4 -mb-4 p-3.5 bg-background/95 backdrop-blur-sm border-t border-border/60 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full min-h-[48px] text-base font-semibold"
-            >
-              {isSubmitting ? "Saving..." : "Save Reminder"}
-            </Button>
-          </div>
-        </form>
+        {/* Footer: ONLY Cancel and Save Reminder */}
+        <div className="px-5 py-2.5 border-t bg-slate-50 dark:bg-slate-900/60 flex items-center justify-end gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="h-8 text-xs font-semibold"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="h-8 text-xs font-bold px-5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
+          >
+            {isSubmitting ? "Saving..." : "Save Reminder"}
+          </Button>
+        </div>
       </DialogContent>
+
+      {/* Quick Add Party Dialog */}
+      <AddPartyDialog
+        open={isAddPartyOpen}
+        onOpenChange={setIsAddPartyOpen}
+        initialType={addPartyType}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["parties"] });
+        }}
+      />
     </Dialog>
   );
 }
-
 export default NewReminderDialog;

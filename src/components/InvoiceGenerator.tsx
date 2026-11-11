@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileText, Download, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -64,13 +65,9 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
 
   const generateUniqueInvoiceNumber = async (prefix: string): Promise<string> => {
     const year = new Date().getFullYear();
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("agency_id")
-      .eq("id", (await supabase.auth.getUser()).data.user?.id)
-      .single();
+    const agencyId = await getAuthenticatedAgencyId();
 
-    if (!profile?.agency_id) {
+    if (!agencyId) {
       throw new Error("Agency not found");
     }
 
@@ -78,7 +75,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
     const { count, error } = await supabase
       .from("invoices")
       .select("*", { count: "exact", head: true })
-      .eq("agency_id", profile.agency_id)
+      .eq("agency_id", agencyId)
       .gte("created_at", `${year}-01-01`)
       .lte("created_at", `${year}-12-31`);
 
@@ -111,13 +108,8 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("agency_id")
-        .eq("id", user.id)
-        .single();
-
-      if (!profile?.agency_id) throw new Error("Agency not found");
+      const agencyId = await getAuthenticatedAgencyId();
+      if (!agencyId) throw new Error("Agency not found");
 
       // Generate unique invoice number
       const invoiceNumber = await generateUniqueInvoiceNumber(template.prefix || "INV");
@@ -300,7 +292,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
         .insert({
           invoice_number: invoiceNumber,
           client_id: client.id,
-          agency_id: profile.agency_id,
+          agency_id: agencyId,
           generated_by: user.id,
           amount,
           amount_paid: paid,

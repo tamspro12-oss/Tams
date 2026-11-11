@@ -15,6 +15,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   LayoutDashboard,
   Calendar,
@@ -63,6 +64,7 @@ import {
 
 
 import { useReminders } from "@/hooks/useReminders";
+import { useUnifiedAlerts } from "@/hooks/useUnifiedAlerts";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -71,12 +73,12 @@ interface DashboardLayoutProps {
 function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: agency } = useAgency();
+  const { data: agency, isLoading: agencyLoading } = useAgency();
   const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const { isAdmin } = useIsAdmin();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const { pendingRemindersCount } = useReminders();
+  const { unreadCount: unreadAlertsCount } = useUnifiedAlerts();
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -113,7 +115,7 @@ function AppSidebar() {
     { name: "Reports", href: "/app/reports", icon: BarChart3, badge: null },
     { name: "Queries & Quotes", href: "/app/leads-quotes", icon: MessageSquare, badge: null },
     { name: "Umrah Calculator", href: "/app/umrah-calculator", icon: Calculator, badge: null },
-    { name: "Notifications", href: "/app/notifications", icon: Bell, badge: pendingRemindersCount > 0 ? pendingRemindersCount : null },
+    { name: "Notifications", href: "/app/notifications", icon: Bell, badge: unreadAlertsCount > 0 ? unreadAlertsCount : null },
     { name: "Settings", href: "/app/settings", icon: Settings, badge: null },
   ];
 
@@ -149,9 +151,13 @@ function AppSidebar() {
             <Plane className="w-5 h-5 md:w-5 md:h-5 text-accent-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <span className="block font-bold text-sidebar-foreground text-sm md:text-base truncate tracking-tight">
-              {agency?.name || 'Loading...'}
-            </span>
+            {agencyLoading ? (
+              <Skeleton className="h-4 w-28 my-1" />
+            ) : (
+              <span className="block font-bold text-sidebar-foreground text-sm md:text-base truncate tracking-tight">
+                {agency?.name || 'TAMS Pro'}
+              </span>
+            )}
             <p className="text-[11px] text-sidebar-foreground/50 font-medium hidden md:block tracking-wide uppercase">Agency Manager</p>
           </div>
         </div>
@@ -250,9 +256,13 @@ function AppSidebar() {
         {/* Footer */}
         <div className="p-4 border-t border-sidebar-border/40 flex-shrink-0">
           <div className="text-[11px] text-sidebar-foreground/40">
-            <p className="font-semibold text-sidebar-foreground/60 text-xs truncate">
-              {agency?.name || 'Loading...'}
-            </p>
+            {agencyLoading ? (
+              <Skeleton className="h-3.5 w-24 my-0.5" />
+            ) : (
+              <p className="font-semibold text-sidebar-foreground/60 text-xs truncate">
+                {agency?.name || 'TAMS Pro'}
+              </p>
+            )}
             <p className="font-medium mt-0.5">Developed by TAMS Pro</p>
           </div>
         </div>
@@ -262,7 +272,7 @@ function AppSidebar() {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { data: agency } = useAgency();
+  const { data: agency, isLoading: agencyLoading } = useAgency();
   const location = useLocation();
   useDocumentTitle();
 
@@ -292,7 +302,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
                   <Plane className="w-4 h-4 text-primary-foreground" />
                 </div>
-                <span className="font-semibold text-sm text-foreground truncate">{agency?.name || 'TAMS'}</span>
+                {agencyLoading ? (
+                  <Skeleton className="h-4 w-28" />
+                ) : (
+                  <span className="font-semibold text-sm text-foreground truncate">{agency?.name || 'TAMS Pro'}</span>
+                )}
               </div>
             </div>
 

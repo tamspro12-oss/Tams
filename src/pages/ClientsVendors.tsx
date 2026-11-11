@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { useParties, Party } from "@/hooks/useParties";
 import {
@@ -38,24 +39,37 @@ import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
 
 export default function ClientsVendors() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { parties, updateParty } = useParties();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [partyToEdit, setPartyToEdit] = useState<Party | null>(null);
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
 
-  // Filters
+  // Filters from URL
+  const urlType = searchParams.get("type") as "client" | "vendor" | "both" | "all" | null;
+  const urlBalance = searchParams.get("balance") as "has_dues" | "zero" | "all" | null;
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">("all");
-  const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">(urlType || "all");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">(urlBalance || "all");
+
+  useEffect(() => {
+    if (urlType) setTypeFilter(urlType);
+    if (urlBalance) setBalanceFilter(urlBalance);
+  }, [urlType, urlBalance]);
 
   // Filtered dataset
   const filteredParties = useMemo(() => {
     return parties.filter((p) => {
       // Type
-      if (typeFilter !== "all" && p.type !== typeFilter) return false;
+      if (typeFilter !== "all" && p.type !== typeFilter && p.type !== "both") return false;
 
       // Balance
-      if (balanceFilter === "has_dues" && p.current_balance === 0) return false;
+      if (balanceFilter === "has_dues") {
+        if (typeFilter === "client" && p.current_balance <= 0) return false;
+        if (typeFilter === "vendor" && p.current_balance >= 0) return false;
+        if (p.current_balance === 0) return false;
+      }
       if (balanceFilter === "zero" && p.current_balance !== 0) return false;
 
       // Search live-filters by party code, name, phone, email, city and address

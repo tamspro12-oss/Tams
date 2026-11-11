@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParties } from "@/hooks/useParties";
+import { useQuotations } from "@/hooks/useQuotations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -59,8 +60,35 @@ export default function ReportsHub() {
 
   // Toggle options for Account Statement
   const [detailedView, setDetailedView] = useState(false);
-  const [onlyUnpaid, setOnlyUnpaid] = useState(false);
-  const [overdueBucket, setOverdueBucket] = useState<"all" | "0-30" | "31-60" | "61-90" | "90+">("all");
+  const [onlyUnpaid, setOnlyUnpaid] = useState(searchParams.get("unpaid") === "1");
+  const [overdueBucket, setOverdueBucket] = useState<"none" | "all" | "0-30" | "31-60" | "61-90" | "90+">(
+    searchParams.get("overdue") === "all" ? "all" : "none"
+  );
+
+  // Sync searchParams on mount or change
+  useEffect(() => {
+    const monthParam = searchParams.get("month");
+    if (monthParam) {
+      try {
+        const [y, m] = monthParam.split("-").map(Number);
+        const start = new Date(y, m - 1, 1);
+        const end = endOfMonth(start);
+        setFilters((prev) => ({
+          ...prev,
+          dateRange: "custom",
+          startDate: format(start, "yyyy-MM-dd"),
+          endDate: format(end, "yyyy-MM-dd"),
+        }));
+      } catch (e) {
+        console.warn("Could not parse month param:", e);
+      }
+    }
+
+    if (searchParams.get("overdue") === "all") {
+      setOverdueBucket("all");
+      setOnlyUnpaid(true);
+    }
+  }, [searchParams]);
 
   // Toggle for Daily Report (Cash / Bank switch)
   const [dailyAccountType, setDailyAccountType] = useState<"all" | "cash" | "bank">("all");
@@ -200,10 +228,35 @@ export default function ReportsHub() {
     () => filteredInvoices.reduce((sum: number, i: any) => sum + (i.profit || 0), 0),
     [filteredInvoices]
   );
+  const { quotations = [] } = useQuotations();
+  const quoteStats = useMemo(() => {
+    const totalQuotes = quotations.length;
+    const acceptedQuotes = quotations.filter((q) => q.status === "accepted").length;
+    const convertedQuotes = quotations.filter((q) => q.converted_booking_id || q.booking_id || q.status === "accepted").length;
+    const conversionRate = totalQuotes > 0 ? Math.round((convertedQuotes / totalQuotes) * 100) : 0;
+    return { totalQuotes, acceptedQuotes, convertedQuotes, conversionRate };
+  }, [quotations]);
+
   const totalExpensesAmt = useMemo(
     () => rawExpenses.filter((e: any) => isDateInRange(e.expense_date)).reduce((sum: number, e: any) => sum + (e.amount || 0), 0),
     [rawExpenses, filters]
   );
+
+  // Helper to compute overdue days adhering to Remaining Due Date logic
+  const getOverdueDays = (inv: any): number | null => {
+    const isPaid = inv.payment_status === "paid" || ((Number(inv.client_amount) || 0) <= (Number(inv.paid_amount) || 0));
+    if (isPaid) return null;
+
+    const now = new Date();
+    const todayStr = format(now, "yyyy-MM-dd");
+    const dueDate = inv.more_details?.remaining_due_date || inv.remaining_payment_date || inv.invoice_date || todayStr;
+
+    if (dueDate < todayStr) {
+      const diffTime = now.getTime() - new Date(dueDate).getTime();
+      return Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    }
+    return null;
+  };
 
   // ==========================================
   // REPORT 1: ACCOUNT STATEMENT (Live Master Ledger)
@@ -245,7 +298,7 @@ export default function ReportsHub() {
         entry: "Sale",
         debit: inv.client_amount || 0,
         credit: inv.paid_amount || 0,
-        overdue_days: inv.payment_status === "unpaid" ? 18 : null,
+        overdue_days: getOverdueDays(inv),
       }));
     } else {
       // Invoices
@@ -258,7 +311,7 @@ export default function ReportsHub() {
         entry: "Sale",
         debit: inv.client_amount || 0,
         credit: 0,
-        overdue_days: inv.payment_status === "unpaid" ? 18 : null,
+        overdue_days: getOverdueDays(inv),
       }));
 
       // Transactions (Receipts & Payments)
@@ -362,9 +415,10 @@ export default function ReportsHub() {
     }
 
     // Apply Overdue filter
-    if (overdueBucket !== "all") {
+    if (overdueBucket !== "none") {
       entries = entries.filter((r) => {
         if (!r.overdue_days) return false;
+        if (overdueBucket === "all") return r.overdue_days > 0;
         if (overdueBucket === "0-30") return r.overdue_days <= 30;
         if (overdueBucket === "31-60") return r.overdue_days > 30 && r.overdue_days <= 60;
         if (overdueBucket === "61-90") return r.overdue_days > 60 && r.overdue_days <= 90;
@@ -847,7 +901,7 @@ export default function ReportsHub() {
             {/* Overdue buckets toggle */}
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-muted-foreground mr-1">Overdue:</span>
-              {(["all", "0-30", "31-60", "61-90", "90+"] as const).map((b) => (
+              {(["none", "all", "0-30", "31-60", "61-90", "90+"] as const).map((b) => (
                 <button
                   key={b}
                   onClick={() => setOverdueBucket(b)}
@@ -857,7 +911,7 @@ export default function ReportsHub() {
                       : "bg-white dark:bg-slate-800 text-slate-600 border hover:bg-slate-100"
                   }`}
                 >
-                  {b.toUpperCase()}
+                  {b === "none" ? "ALL" : b === "all" ? "ALL OVERDUE" : b.toUpperCase()}
                 </button>
               ))}
             </div>
@@ -907,6 +961,18 @@ export default function ReportsHub() {
               { label: "Bookings", value: filteredInvoices.length, highlight: "neutral" },
             ]}
           />
+
+          <div className="flex flex-wrap items-center justify-between text-xs px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border text-slate-600 dark:text-slate-300 gap-2">
+            <span className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+              <span>📋</span> Quotation Conversion Pipeline:
+            </span>
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <span>Total Quotations: <strong className="text-slate-900 dark:text-white">{quoteStats.totalQuotes}</strong></span>
+              <span>Accepted: <strong className="text-emerald-600">{quoteStats.acceptedQuotes}</strong></span>
+              <span>Converted to Invoices: <strong className="text-teal-600">{quoteStats.convertedQuotes}</strong></span>
+              <span>Conversion Rate: <strong className="text-blue-600 font-bold">{quoteStats.conversionRate}%</strong></span>
+            </div>
+          </div>
 
           <ExcelGrid
             id="report_booking_profit"
