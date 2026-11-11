@@ -76,6 +76,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [vendorId, setVendorId] = useState<string>("");
   const [contactNumber, setContactNumber] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [selectedBank, setSelectedBank] = useState<string>("");
 
   // Quick Add Party Popups
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
@@ -1205,6 +1206,18 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </Select>
               </div>
 
+              {/* Agency Bank Select inline when Bank is selected */}
+              {paymentMode === "bank" && (
+                <div>
+                  <AgencyBankSelect
+                    value={selectedBank}
+                    onChange={setSelectedBank}
+                    label="Bank Account"
+                    required={true}
+                  />
+                </div>
+              )}
+
               {/* Profit Preview Badge */}
               <div className="flex flex-col justify-end">
                 <div className="h-8 px-2 flex items-center justify-between rounded bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-[11px]">
@@ -1260,31 +1273,6 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             {isSubmitting ? "Saving..." : "Save"}
           </Button>
         </div>
-
-        {/* Quick Add Popups */}
-        <AddPartyDialog
-          open={isAddClientOpen}
-          onOpenChange={setIsAddClientOpen}
-          initialType="client"
-          lockType={true}
-          onSaved={(newParty: Party) => {
-            setPartyId(newParty.id);
-            if (newParty.phone) setContactNumber(newParty.phone);
-            if (newParty.email) setEmail(newParty.email);
-            toast.success(`Client ${newParty.name} added and selected`);
-          }}
-        />
-
-        <AddPartyDialog
-          open={isAddVendorOpen}
-          onOpenChange={setIsAddVendorOpen}
-          initialType="vendor"
-          lockType={true}
-          onSaved={(newParty: Party) => {
-            setVendorId(newParty.id);
-            toast.success(`Vendor ${newParty.name} added and selected`);
-          }}
-        />
       </DialogContent>
     </Dialog>
   );
