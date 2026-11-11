@@ -41,19 +41,6 @@ interface MatchedBooking {
   service?: string;
 }
 
-const DEFAULT_BANKS = [
-  "Meezan Bank",
-  "Habib Bank Limited (HBL)",
-  "United Bank Limited (UBL)",
-  "MCB Bank",
-  "Allied Bank Limited",
-  "Bank Alfalah",
-  "Faysal Bank",
-  "Askari Bank",
-  "Dubai Islamic Bank",
-  "Standard Chartered",
-];
-
 export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   open,
   onOpenChange,
@@ -78,8 +65,6 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   const [deductionsAmount, setDeductionsAmount] = useState<string>("0");
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
   const [selectedBank, setSelectedBank] = useState<string>("");
-  const [dbBanks, setDbBanks] = useState<string[]>([]);
-  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
 
   // Line 3: Reason | Notes | Pending Vendor Toggle
   const [reason, setReason] = useState<string>("");
@@ -90,34 +75,6 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   // Auto-generated sequence for Refund No
   const [refundSeq, setRefundSeq] = useState<string>("1001");
-
-  // Load banks
-  useEffect(() => {
-    async function loadBankAccounts() {
-      try {
-        const { data } = await (supabase as any)
-          .from("accounts")
-          .select("name, type, active")
-          .eq("type", "bank")
-          .eq("active", true);
-
-        const accountNames = (data || []).map((a: any) => a.name);
-        const combined = Array.from(new Set([...allBankNames, ...accountNames, ...DEFAULT_BANKS]));
-        setDbBanks(combined);
-
-        if (!selectedBank && combined[0]) {
-          setSelectedBank(combined[0]);
-        }
-      } catch {
-        setDbBanks(DEFAULT_BANKS);
-        if (!selectedBank) setSelectedBank(DEFAULT_BANKS[0]);
-      }
-    }
-
-    if (open) {
-      loadBankAccounts();
-    }
-  }, [open, allBankNames]);
 
   // Generate sequence on open or actionType change
   const fetchNextNumber = useCallback(async () => {
@@ -159,7 +116,6 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   const recordPrefix = actionType === "void" ? "VOID" : "REF";
   const autoRecordNo = `${recordPrefix}-${refundSeq}`;
-  const bankOptions = dbBanks.length > 0 ? dbBanks : DEFAULT_BANKS;
 
   // Search booking / invoice by Invoice No, PNR, or Ticket No
   const executeSearchInvoice = async (queryText?: string) => {

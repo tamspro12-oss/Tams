@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { FormSectionNav } from "@/components/FormSectionNav";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
+import { LockedDateField } from "@/components/ui/LockedDateField";
 
 interface AddExpenseDialogProps {
   open: boolean;
@@ -143,20 +144,12 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
               </CardHeader>
               <CardContent className="space-y-4 pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="expenseDate" className="text-sm font-medium flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-amber-600" />
-                      Date *
-                    </Label>
-                    <Input 
-                      id="expenseDate" 
-                      name="expenseDate" 
-                      type="date" 
-                      required 
-                      defaultValue={editExpense?.expense_date || ''} 
-                      className="enterprise-input"
-                    />
-                  </div>
+                  <LockedDateField
+                    label="Date"
+                    name="expenseDate"
+                    value={editExpense?.expense_date}
+                    required
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="amount" className="text-sm font-medium flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-amber-600" />

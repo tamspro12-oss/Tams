@@ -12,9 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { AddBankDialog } from "@/components/banks/AddBankDialog";
 import { useExpenses } from "@/hooks/useStorage";
-import { useAgencyBanks } from "@/hooks/useAgencyBanks";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { LockedDateField } from "@/components/ui/LockedDateField";
+import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -46,27 +47,14 @@ const DEFAULT_CATEGORIES = [
   "Other",
 ];
 
-const DEFAULT_BANKS = [
-  "Meezan Bank",
-  "Habib Bank Limited (HBL)",
-  "United Bank Limited (UBL)",
-  "MCB Bank",
-  "Allied Bank Limited",
-  "Bank Alfalah",
-  "Faysal Bank",
-  "Askari Bank",
-  "Dubai Islamic Bank",
-  "Standard Chartered",
-];
-
 export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   open,
   onOpenChange,
   onSuccess,
 }) => {
   const queryClient = useQueryClient();
+  const { data: currentAgencyId } = useCurrentAgencyId();
   const { expenses = [] } = useExpenses();
-  const { allBankNames = [] } = useAgencyBanks();
 
   // Top toggle: Normal vs Recurring
   const [expenseMode, setExpenseMode] = useState<"normal" | "recurring">("normal");
@@ -104,38 +92,10 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   }, [startDate, frequency]);
 
   // Dialogs
-  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [newCatInput, setNewCatInput] = useState("");
-  const [dbBanks, setDbBanks] = useState<string[]>([]);
   const [autoExpenseNo, setAutoExpenseNo] = useState<string>("EXP-1001");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  // Load banks
-  useEffect(() => {
-    async function loadBanks() {
-      try {
-        const { data } = await (supabase as any)
-          .from("accounts")
-          .select("name, type, active")
-          .eq("type", "bank")
-          .eq("active", true);
-
-        const accNames = (data || []).map((a: any) => a.name);
-        const combined = Array.from(new Set([...allBankNames, ...accNames, ...DEFAULT_BANKS]));
-        setDbBanks(combined);
-        if (!selectedBank && combined[0]) {
-          setSelectedBank(combined[0]);
-        }
-      } catch {
-        setDbBanks(DEFAULT_BANKS);
-        if (!selectedBank) setSelectedBank(DEFAULT_BANKS[0]);
-      }
-    }
-    if (open) {
-      loadBanks();
-    }
-  }, [open, allBankNames]);
 
   // Fetch / preview auto expense number
   const fetchNextExpenseNumber = async () => {
@@ -161,8 +121,6 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   const allCategories = useMemo(() => {
     return Array.from(new Set([...DEFAULT_CATEGORIES, ...customCategories]));
   }, [customCategories]);
-
-  const bankOptions = dbBanks.length > 0 ? dbBanks : DEFAULT_BANKS;
 
   // Latest 5 records for the compact sheet below form
   const recentFiveExpenses = useMemo(() => {
@@ -207,8 +165,15 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      let activeAgencyId = currentAgencyId;
+      if (!activeAgencyId) {
+        const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
+        activeAgencyId = await getAuthenticatedAgencyId();
+      }
+
       if (expenseMode === "recurring") {
         const recurringPayload: any = {
+          agency_id: activeAgencyId,
           expense_type: category,
           amount: numAmount,
           payment_mode: paymentMode,
@@ -226,13 +191,14 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         if (error) throw error;
         toast.success(`Recurring expense (${frequency}) registered successfully`);
       } else {
-        await (supabase as any).rpc("record_expense", {
+        const { error: rpcError } = await (supabase as any).rpc("record_expense", {
           p_amount: numAmount,
           p_account_id: null,
           p_category: category,
           p_date: expenseDate,
           p_method: paymentMode,
           p_reference_no: referenceNo || null,
+          p_agency_id: activeAgencyId || null,
           p_notes: [
             paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
             notes,
@@ -240,6 +206,25 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
             .filter(Boolean)
             .join(" — ") || null,
         });
+
+        if (rpcError) {
+          // Direct insert fallback to expenses table with agency_id
+          const { error: directError } = await (supabase as any).from("expenses").insert({
+            agency_id: activeAgencyId,
+            expense_type: category,
+            amount: numAmount,
+            payment_mode: paymentMode,
+            bank_name: paymentMode === "bank" ? selectedBank : null,
+            expense_date: expenseDate,
+            reference_number: referenceNo || null,
+            notes: notes || null,
+            is_paid: true,
+          });
+
+          if (directError) {
+            throw new Error(`Failed to save expense: ${directError.message}`);
+          }
+        }
         toast.success("Expense recorded successfully");
       }
 
@@ -248,6 +233,8 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ["sales_expenses"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
 
       // Clear form inputs (keep Date, Mode and Type)
       setAmount("");
@@ -325,16 +312,12 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
           <div className="px-5 py-3 space-y-2.5">
             {/* LINE 1: Expense Date | Category * | Amount (PKR) * | Paid From | (Bank if Bank Account) | Bill / Receipt / Ref No */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-end">
-              {/* Expense Date: FIRST field, defaults to today, editable */}
+              {/* Expense Date: Standardized Locked System Date */}
               <div className="lg:col-span-2">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Expense Date <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="date"
+                <LockedDateField
+                  label="Expense Date"
                   value={expenseDate}
-                  onChange={(e) => setExpenseDate(e.target.value)}
-                  className="h-8 text-xs mt-0.5"
+                  onChange={setExpenseDate}
                   required
                 />
               </div>
@@ -398,33 +381,15 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                 </Select>
               </div>
 
-              {/* Bank dropdown when Paid From = Bank Account, with + Quick Add Bank link */}
+              {/* Bank dropdown when Paid From = Bank Account (strictly agency banks) */}
               {paymentMode === "bank" && (
                 <div className="lg:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      Bank <span className="text-red-500">*</span>
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddBankOpen(true)}
-                      className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Plus className="w-2.5 h-2.5" /> Quick Add Bank
-                    </button>
-                  </div>
-                  <Select value={selectedBank} onValueChange={setSelectedBank}>
-                    <SelectTrigger className="h-8 text-xs mt-0.5">
-                      <SelectValue placeholder="Select bank" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      {bankOptions.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <AgencyBankSelect
+                    value={selectedBank}
+                    onChange={setSelectedBank}
+                    label="Bank Account"
+                    required={true}
+                  />
                 </div>
               )}
 
@@ -628,17 +593,6 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
             </Button>
           </div>
         </form>
-
-        {/* Quick Add Bank Popup */}
-        <AddBankDialog
-          open={isAddBankOpen}
-          onOpenChange={setIsAddBankOpen}
-          onSaved={(bankName: string) => {
-            setDbBanks((prev) => Array.from(new Set([bankName, ...prev])));
-            setSelectedBank(bankName);
-            toast.success(`Bank ${bankName} added and selected`);
-          }}
-        />
 
         {/* Quick Add Category Inline Dialog */}
         <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>

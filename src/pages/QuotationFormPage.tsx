@@ -32,6 +32,8 @@ import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { cn } from "@/lib/utils";
+import { LockedDateField } from "@/components/ui/LockedDateField";
+import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
 
 type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
@@ -523,24 +525,14 @@ export default function QuotationFormPage() {
               )}
             </div>
 
-            {/* Column 2: Date * */}
+            {/* Column 2: Date * (Standardized Locked System Date) */}
             <div style={{ width: "100%", minWidth: 0 }}>
-              <Label htmlFor="quote_date" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Date <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="quote_date"
-                  ref={quotationDateRef}
-                  tabIndex={2}
-                  type="date"
-                  value={quotationDate}
-                  onChange={(e) => setQuotationDate(e.target.value)}
-                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
+              <LockedDateField
+                label="Date"
+                value={quotationDate}
+                onChange={setQuotationDate}
+                required
+              />
             </div>
 
             {/* Column 3: Valid Until (with +7d, +14d, +30d quick buttons in header) */}

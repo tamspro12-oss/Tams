@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useQueries } from "@/hooks/useStorage";
 import { cn } from "@/lib/utils";
+import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 type Status = "pending" | "in-progress" | "completed" | "cancelled";
@@ -263,6 +264,21 @@ export default function QueryFormPage() {
           className="bg-card rounded-2xl border border-border/70 shadow-sm p-3.5 sm:p-5 flex flex-col justify-between min-w-0"
           style={{ width: "100%", gap: "10px" }}
         >
+          {/* Party Quick Selector */}
+          <div style={{ width: "100%", minWidth: 0 }}>
+            <UniversalPartySelect
+              value=""
+              onChange={(_id, p) => {
+                if (p?.name) setClientName(p.name);
+                if (p?.phone) setContactNumber(p.phone);
+                if (errors.clientName) setErrors((prev) => ({ ...prev, clientName: undefined }));
+              }}
+              label="Select Existing Party (Client / Vendor) or Quick Add"
+              placeholder="Search existing party to auto-fill..."
+              defaultQuickAddType="client"
+            />
+          </div>
+
           {/* ROW 1: Full Width - 1 Column (Client Name *) */}
           <div style={{ width: "100%", minWidth: 0 }}>
             <Label htmlFor="client_name" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-between">

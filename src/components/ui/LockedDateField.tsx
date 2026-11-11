@@ -6,6 +6,7 @@ import { format } from "date-fns";
 
 interface LockedDateFieldProps {
   label?: string;
+  name?: string;
   value?: string;
   onChange?: (date: string) => void;
   required?: boolean;
@@ -15,6 +16,7 @@ interface LockedDateFieldProps {
 
 export const LockedDateField: React.FC<LockedDateFieldProps> = ({
   label = "Transaction Date",
+  name,
   value,
   onChange,
   required = true,
@@ -54,6 +56,7 @@ export const LockedDateField: React.FC<LockedDateFieldProps> = ({
           title={helperText}
           className="h-8 text-xs font-mono bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-not-allowed select-none pr-7 opacity-90"
         />
+        {name && <input type="hidden" name={name} value={currentDate} />}
         <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
           <Lock className="w-3.5 h-3.5 text-slate-400" />
         </div>
