@@ -6,17 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Mail } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { isMasterAdminEmail } from "@/lib/adminAuth";
 
 export default function SubscriptionExpired() {
   const navigate = useNavigate();
   const { data: subscription, isLoading } = useSubscription();
 
   useEffect(() => {
-    const logoutUser = async () => {
+    const checkMasterAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (isMasterAdminEmail(user?.email)) {
+        navigate("/app/dashboard", { replace: true });
+        return;
+      }
       await supabase.auth.signOut({ scope: 'local' });
     };
-    logoutUser();
-  }, []);
+    checkMasterAdmin();
+  }, [navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: 'local' });

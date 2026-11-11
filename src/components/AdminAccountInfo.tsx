@@ -208,8 +208,8 @@ export const AdminAccountInfo = () => {
               <UserCircle2 className="h-4 w-4" />
               <span>Subscription Plan</span>
             </div>
-            <Badge variant="default" className="text-base px-3 py-1 capitalize">
-              {agency?.subscription_plan || 'Free'}
+            <Badge variant="default" className="text-base px-3 py-1 capitalize bg-emerald-600 text-white font-semibold">
+              {isAdmin ? 'Lifetime Master Admin' : (agency?.subscription_plan || 'Free')}
             </Badge>
           </div>
           

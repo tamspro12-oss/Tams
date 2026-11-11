@@ -847,6 +847,35 @@ export default function ReportsHub() {
     },
   ];
 
+  const renderBookingReportExpandedRow = (b: any) => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white dark:bg-slate-900/90 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
+      <div>
+        <span className="font-semibold text-slate-500 uppercase text-[10px]">Passenger & Travel</span>
+        <div className="mt-1 space-y-1">
+          <div><span className="text-slate-400">Pax Name:</span> <span className="font-medium text-slate-700 dark:text-slate-200">{b.passenger_name || "—"}</span></div>
+          <div><span className="text-slate-400">Sector:</span> <span className="font-medium text-slate-700 dark:text-slate-200">{b.sector || "—"}</span></div>
+          <div><span className="text-slate-400">Airline:</span> <span className="font-medium text-slate-700 dark:text-slate-200">{b.airline || "—"}</span></div>
+        </div>
+      </div>
+      <div>
+        <span className="font-semibold text-slate-500 uppercase text-[10px]">Document Numbers</span>
+        <div className="mt-1 space-y-1">
+          <div><span className="text-slate-400">PNR:</span> <span className="font-mono font-bold text-slate-800 dark:text-slate-100">{b.pnr || "—"}</span></div>
+          <div><span className="text-slate-400">Ticket #:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{b.ticket_no || "—"}</span></div>
+          <div><span className="text-slate-400">Passport:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{b.passport_no || "—"}</span></div>
+        </div>
+      </div>
+      <div>
+        <span className="font-semibold text-slate-500 uppercase text-[10px]">Financials & Notes</span>
+        <div className="mt-1 space-y-1">
+          <div><span className="text-slate-400">Paid Amount:</span> <span className="font-mono font-medium text-emerald-600">PKR {(b.paid_amount || 0).toLocaleString()}</span></div>
+          <div><span className="text-slate-400">Balance Due:</span> <span className="font-mono font-medium text-amber-600">PKR {((b.client_amount || 0) - (b.paid_amount || 0)).toLocaleString()}</span></div>
+          {b.remarks && <div><span className="text-slate-400">Remarks:</span> <span className="text-slate-600 dark:text-slate-300">{b.remarks}</span></div>}
+        </div>
+      </div>
+    </div>
+  );
+
   // ==========================================
   // REPORT 3: DAILY REPORT (Receipts vs Payments)
   // ==========================================
@@ -1173,6 +1202,8 @@ export default function ReportsHub() {
             filename="Booking_Wise_Profit"
             hideColumnsButton={true}
             hideCopyButton={true}
+            hideExportButton={true}
+            renderExpandedRow={renderBookingReportExpandedRow}
             exportLabel="Export"
             exportIcon={<FileText className="w-3.5 h-3.5 text-rose-600" />}
             onExportClick={() => setExportDialogOpen(true)}

@@ -68,67 +68,67 @@ Deno.serve(async (req) => {
 
     // LIST USERS
     if (action === 'list') {
-      const { data: profiles, error } = await supabaseAdmin
+      try {
+        // 1. Attempt using optimized SQL RPC first
+        const { data: rpcUsers, error: rpcError } = await supabaseAdmin.rpc('admin_get_registered_users');
+        if (!rpcError && Array.isArray(rpcUsers) && rpcUsers.length > 0) {
+          return new Response(
+            JSON.stringify({ users: rpcUsers }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (rpcEx) {
+        console.warn('RPC admin_get_registered_users fallback:', rpcEx);
+      }
+
+      // 2. Direct fallback
+      const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+      if (authError) throw authError;
+
+      const userEmailMap = new Map(authUsers.users.map(u => [u.id, u.email]));
+      const userMetaMap = new Map(authUsers.users.map(u => [u.id, u.user_metadata]));
+
+      const { data: profiles } = await supabaseAdmin
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          agency_id,
-          created_at,
-          agencies!inner (
-            id,
-            name,
-            subscription_plan,
-            license_expiry,
-            license_status
-          )
-        `)
+        .select('id, full_name, agency_id, created_at, is_super_admin')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
-      // Get user emails and roles
-      const userIds = profiles.map(p => p.id);
-      
-      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const userEmailMap = new Map(authUsers.users.map(u => [u.id, u.email]));
+      const agencyIds = Array.from(new Set((profiles || []).map(p => p.agency_id).filter(Boolean)));
+      const { data: agencies } = agencyIds.length > 0
+        ? await supabaseAdmin
+            .from('agencies')
+            .select('id, name, subscription_plan, license_expiry, license_status')
+            .in('id', agencyIds)
+        : { data: [] };
+
+      const agencyMap = new Map((agencies || []).map(a => [a.id, a]));
 
       const { data: roles } = await supabaseAdmin
         .from('user_roles')
-        .select('user_id, role')
-        .in('user_id', userIds);
+        .select('user_id, role');
 
-      const roleMap = new Map(roles?.map(r => [r.user_id, r.role]) || []);
+      const roleMap = new Map((roles || []).map(r => [r.user_id, r.role]));
 
-      // Get active session counts for all users
-      const sessionCountMap = new Map<string, number>();
-      try {
-        // Query auth.sessions table directly using RPC
-        const { data: sessionData, error: sessionError } = await supabaseAdmin.rpc('get_active_session_counts');
-        
-        if (!sessionError && sessionData) {
-          sessionData.forEach((row: any) => {
-            sessionCountMap.set(row.user_id, row.session_count);
-          });
-        }
-      } catch (e) {
-        console.log('Could not fetch session counts:', e);
-        // Set all to 0 if query fails
-        userIds.forEach(id => sessionCountMap.set(id, 0));
-      }
+      const enrichedProfiles = authUsers.users.map(u => {
+        const prof = profileMap.get(u.id);
+        const agency = prof?.agency_id ? agencyMap.get(prof.agency_id) : null;
+        const isMaster = u.email?.toLowerCase() === 'usmn4u@gmail.com' || prof?.is_super_admin === true;
 
-      const enrichedProfiles = profiles.map(profile => {
-        const agency = Array.isArray(profile.agencies) ? profile.agencies[0] : profile.agencies;
-        
         return {
-          ...profile,
-          email: userEmailMap.get(profile.id) || 'N/A',
-          role: roleMap.get(profile.id) || 'user',
-          agency_name: agency?.name || 'N/A',
-          subscription_plan: agency?.subscription_plan || 'free',
-          license_expiry: agency?.license_expiry,
-          license_status: agency?.license_status,
-          active_sessions: sessionCountMap.get(profile.id) || 0
+          id: u.id,
+          email: u.email || 'N/A',
+          full_name: prof?.full_name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
+          role: isMaster ? 'admin' : (roleMap.get(u.id) || 'user'),
+          agency_id: prof?.agency_id || null,
+          agency_name: isMaster ? 'Master Admin HQ' : (agency?.name || 'Primary Agency'),
+          subscription_plan: isMaster ? 'lifetime' : (agency?.subscription_plan || 'free'),
+          license_expiry: isMaster ? '2099-12-31T23:59:59.000Z' : agency?.license_expiry,
+          license_status: isMaster ? 'active' : (agency?.license_status || 'active'),
+          created_at: u.created_at,
+          email_confirmed_at: u.email_confirmed_at,
+          active_sessions: 1
         };
       });
 

@@ -18,8 +18,11 @@ import { RefundVoidForm } from "@/components/refunds/RefundVoidForm";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { DateFilter, DatePresetFilterValue } from "@/components/DateFilter";
 import { isDateWithinPreset } from "@/lib/dateFilterUtils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import {
   generateBookingConfirmationPdf,
   generateBookingInvoicePdf,
@@ -43,6 +46,8 @@ import {
 type SalesTab = "booking-invoice" | "payment-vouchers" | "refunds-voids" | "expenses";
 
 export default function SalesExpensesHub() {
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get("tab") as SalesTab) || "booking-invoice";
 
@@ -76,6 +81,55 @@ export default function SalesExpensesHub() {
     preset: "this_month",
   });
 
+  // Real-time live sync across devices for all sales and financial operations
+  useRealtimeMultiTable({
+    channelPrefix: "sales-hub-live-sync",
+    enabled: !!userAgencyId,
+    subscriptions: [
+      {
+        table: "booking_invoices",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => {
+          queryClient.invalidateQueries({ queryKey: ["booking_invoices"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard_invoices"] });
+          queryClient.invalidateQueries({ queryKey: ["report_invoices"] });
+        },
+      },
+      {
+        table: "payment_vouchers",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => {
+          queryClient.invalidateQueries({ queryKey: ["payment_vouchers"] });
+          queryClient.invalidateQueries({ queryKey: ["booking_invoices"] });
+          queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        },
+      },
+      {
+        table: "expenses",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => {
+          queryClient.invalidateQueries({ queryKey: ["sales_expenses"] });
+          queryClient.invalidateQueries({ queryKey: ["expenses"] });
+        },
+      },
+      {
+        table: "refunds",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => {
+          queryClient.invalidateQueries({ queryKey: ["sales_refunds"] });
+          queryClient.invalidateQueries({ queryKey: ["refunds"] });
+        },
+      },
+      {
+        table: "parties",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => {
+          queryClient.invalidateQueries({ queryKey: ["parties"] });
+        },
+      },
+    ],
+  });
+
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
   };
@@ -105,22 +159,37 @@ export default function SalesExpensesHub() {
     }
   };
 
-  // 1. Fetch Invoices
+  // 1. Fetch Invoices (Strictly scoped by agency_id with unambiguous relations)
   const { data: invoices = [], refetch: refetchInvoices } = useQuery({
-    queryKey: ["booking_invoices"],
+    queryKey: ["booking_invoices", userAgencyId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
+
+      let query = (supabase as any)
         .from("booking_invoices")
-        .select("*, party:parties(name), vendor:parties!vendor_id(name)")
+        .select("*, party:parties!party_id(name), vendor:parties!vendor_id(name)")
         .order("invoice_date", { ascending: false });
+
+      if (activeAgencyId) {
+        query = query.eq("agency_id", activeAgencyId);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) return data;
 
-      // Fallback: read from clients table
-      const { data: clientsData } = await supabase
+      // Fallback: read from clients table for this agency
+      let clientQuery = supabase
         .from("clients")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (activeAgencyId) {
+        clientQuery = clientQuery.eq("agency_id", activeAgencyId);
+      }
+
+      const { data: clientsData } = await clientQuery;
 
       return (clientsData || []).map((c: any) => ({
         id: c.id,
@@ -140,23 +209,38 @@ export default function SalesExpensesHub() {
     },
   });
 
-  // 2. Fetch Vouchers
+  // 2. Fetch Vouchers (Strictly scoped by agency_id)
   const { data: vouchers = [], refetch: refetchVouchers } = useQuery({
-    queryKey: ["payment_vouchers"],
+    queryKey: ["payment_vouchers", userAgencyId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
+
+      let query = (supabase as any)
         .from("payment_vouchers")
-        .select("*, party:parties(name)")
+        .select("*, party:parties!party_id(name)")
         .order("voucher_date", { ascending: false });
+
+      if (activeAgencyId) {
+        query = query.eq("agency_id", activeAgencyId);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) return data;
 
       // Fallback: read from transactions table
-      const { data: txData } = await (supabase as any)
+      let txQuery = (supabase as any)
         .from("transactions")
         .select("*")
         .in("type", ["payment_in", "payment_out"])
         .order("date", { ascending: false });
+
+      if (activeAgencyId) {
+        txQuery = txQuery.eq("agency_id", activeAgencyId);
+      }
+
+      const { data: txData } = await txQuery;
 
       return (txData || []).map((t: any) => ({
         id: t.id,
@@ -172,25 +256,41 @@ export default function SalesExpensesHub() {
     },
   });
 
-  // 3. Fetch Expenses
+  // 3. Fetch Expenses (Strictly scoped by agency_id)
   const { data: expenses = [], refetch: refetchExpenses } = useQuery({
-    queryKey: ["sales_expenses"],
+    queryKey: ["sales_expenses", userAgencyId],
     queryFn: async () => {
-      const { data } = await supabase
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
+
+      let query = supabase
         .from("expenses")
         .select("*")
         .order("expense_date", { ascending: false });
+
+      if (activeAgencyId) {
+        query = query.eq("agency_id", activeAgencyId);
+      }
+
+      const { data } = await query;
       return data || [];
     },
   });
 
   // 4. Fetch Clients Lookup (for refund party / pnr resolution)
   const { data: clientsData = [] } = useQuery({
-    queryKey: ["clients_refund_lookup"],
+    queryKey: ["clients_refund_lookup", userAgencyId],
     queryFn: async () => {
-      const { data } = await supabase
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      let query = supabase
         .from("clients")
         .select("id, name, pnr, passport_number");
+
+      if (activeAgencyId) {
+        query = query.eq("agency_id", activeAgencyId);
+      }
+
+      const { data } = await query;
       return data || [];
     },
   });
@@ -203,14 +303,23 @@ export default function SalesExpensesHub() {
     return map;
   }, [clientsData]);
 
-  // 5. Fetch Refunds
+  // 5. Fetch Refunds (Strictly scoped by agency_id)
   const { data: refunds = [], refetch: refetchRefunds } = useQuery({
-    queryKey: ["sales_refunds"],
+    queryKey: ["sales_refunds", userAgencyId],
     queryFn: async () => {
-      const { data } = await supabase
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
+
+      let query = supabase
         .from("refunds")
         .select("*")
         .order("refund_date", { ascending: false });
+
+      if (activeAgencyId) {
+        query = query.eq("agency_id", activeAgencyId);
+      }
+
+      const { data } = await query;
       return data || [];
     },
   });
@@ -455,13 +564,13 @@ export default function SalesExpensesHub() {
   // Table Columns
   // -------------------------------------------------------------
 
-  // 1. Booking Invoices:
-  // Invoice # | Date | Service | Client | Total Amount | Paid Amount | Remaining Amount | Status | PDF
+  // 1. Booking Invoices (Single-Screen Viewport Fit):
+  // Invoice # | Date | Service | Client | Total Amount (PKR) | Paid Amount (PKR) | Remaining Amount (PKR) | Status | PDF
   const invoiceColumns: GridColumn[] = [
     {
       key: "invoice_no",
       header: "Invoice #",
-      width: 120,
+      width: 115,
       render: (inv) => (
         <CopyValue
           value={inv.invoice_no}
@@ -473,15 +582,15 @@ export default function SalesExpensesHub() {
     {
       key: "invoice_date",
       header: "Date",
-      width: 95,
+      width: 90,
       render: (inv) => <span className="text-xs font-mono">{inv.invoice_date}</span>,
     },
     {
       key: "service",
       header: "Service",
-      width: 90,
+      width: 85,
       render: (inv) => (
-        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 border">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 border">
           {inv.service}
         </span>
       ),
@@ -489,30 +598,18 @@ export default function SalesExpensesHub() {
     {
       key: "client_name",
       header: "Client",
-      minWidth: 160,
+      minWidth: 140,
       render: (inv) => {
         const cName = inv.party?.name || inv.client_name || "—";
         return (
-          <div className="space-y-0.5">
-            <CopyValue value={cName} label="client name" className="font-semibold block" />
-            {inv.pnr && (
-              <div className="text-[10px] text-muted-foreground font-mono">
-                PNR: <CopyValue value={inv.pnr} label="PNR" />
-              </div>
-            )}
-            {inv.ticket_no && (
-              <div className="text-[10px] text-muted-foreground font-mono">
-                Tkt: <CopyValue value={inv.ticket_no} label="ticket number" />
-              </div>
-            )}
-          </div>
+          <CopyValue value={cName} label="client name" className="font-semibold text-xs block truncate" />
         );
       },
     },
     {
       key: "client_amount",
       header: "Total Amount (PKR)",
-      width: 135,
+      width: 125,
       isNumeric: true,
       align: "right",
       totalType: "sum",
@@ -521,7 +618,7 @@ export default function SalesExpensesHub() {
           value={inv.client_amount || 0}
           isAmount={true}
           displayValue={
-            <span className="font-mono font-bold">
+            <span className="font-mono font-bold text-xs">
               {(inv.client_amount || 0).toLocaleString()}
             </span>
           }
@@ -532,7 +629,7 @@ export default function SalesExpensesHub() {
     {
       key: "paid_amount",
       header: "Paid Amount (PKR)",
-      width: 130,
+      width: 120,
       isNumeric: true,
       align: "right",
       totalType: "sum",
@@ -541,7 +638,7 @@ export default function SalesExpensesHub() {
           value={inv.paid_amount || 0}
           isAmount={true}
           displayValue={
-            <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="font-mono font-medium text-xs text-emerald-600 dark:text-emerald-400">
               {(inv.paid_amount || 0).toLocaleString()}
             </span>
           }
@@ -552,7 +649,7 @@ export default function SalesExpensesHub() {
     {
       key: "remaining_amount",
       header: "Remaining Amount (PKR)",
-      width: 145,
+      width: 130,
       isNumeric: true,
       align: "right",
       totalType: "sum",
@@ -565,7 +662,7 @@ export default function SalesExpensesHub() {
             displayValue={
               <span
                 className={cn(
-                  "font-mono font-bold",
+                  "font-mono font-bold text-xs",
                   rem > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                 )}
               >
@@ -580,14 +677,14 @@ export default function SalesExpensesHub() {
     {
       key: "payment_status",
       header: "Status",
-      width: 85,
+      width: 80,
       align: "center",
       render: (inv) => <StatusChip status={inv.payment_status} size="sm" />,
     },
     {
       key: "actions",
       header: "PDF",
-      width: 85,
+      width: 80,
       align: "center",
       sortable: false,
       filterable: false,
@@ -635,6 +732,125 @@ export default function SalesExpensesHub() {
       ),
     },
   ];
+
+  // Secondary Booking Details Drawer (Accordion for Bookings)
+  const renderInvoiceExpandedRow = (inv: any) => {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white dark:bg-slate-900/90 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
+        {/* Travel & Ticket Identifiers */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" /> Travel & Service Metadata
+          </span>
+          <div className="space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 w-20">PNR:</span>
+              <CopyValue value={inv.pnr || "—"} label="PNR" className="font-mono font-bold" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 w-20">Ticket #:</span>
+              <CopyValue value={inv.ticket_no || "—"} label="ticket number" className="font-mono font-bold" />
+            </div>
+            {inv.passport_no && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 w-20">Passport:</span>
+                <CopyValue value={inv.passport_no} label="passport number" className="font-mono" />
+              </div>
+            )}
+            {inv.vendor?.name && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 w-20">Vendor:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{inv.vendor.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Financial Breakdown */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <Receipt className="w-3.5 h-3.5" /> Financial Accounting
+          </span>
+          <div className="space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Total Invoiced:</span>
+              <span className="font-mono font-semibold">PKR {(inv.client_amount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Vendor Payable:</span>
+              <span className="font-mono text-slate-600 dark:text-slate-400">PKR {(inv.vendor_payable || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between font-bold pt-1 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-slate-700 dark:text-slate-200">Gross Profit:</span>
+              <span className={cn("font-mono", (inv.profit || 0) >= 0 ? "text-teal-600 dark:text-teal-400" : "text-red-500")}>
+                PKR {(inv.profit || 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Remarks & Quick Document Buttons */}
+        <div className="space-y-2 flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+              <Printer className="w-3.5 h-3.5" /> Documents & Notes
+            </span>
+            {inv.notes ? (
+              <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-400 italic line-clamp-3 bg-slate-50 dark:bg-slate-800/50 p-2 rounded border">
+                {inv.notes}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-slate-400 italic">No notes</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                generateBookingConfirmationPdf({
+                  invoiceNo: inv.invoice_no,
+                  invoiceDate: inv.invoice_date,
+                  service: inv.service,
+                  clientName: inv.party?.name || inv.client_name || "Client",
+                  pnr: inv.pnr,
+                  clientAmount: inv.client_amount || 0,
+                  paidAmount: inv.paid_amount || 0,
+                  balanceDue: inv.remaining_amount || 0,
+                });
+              }}
+              className="h-7 text-xs gap-1.5 text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 cursor-pointer"
+            >
+              <FileCheck className="w-3 h-3" /> Confirmation PDF
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                generateBookingInvoicePdf({
+                  invoiceNo: inv.invoice_no,
+                  invoiceDate: inv.invoice_date,
+                  service: inv.service,
+                  clientName: inv.party?.name || inv.client_name || "Client",
+                  pnr: inv.pnr,
+                  clientAmount: inv.client_amount || 0,
+                  paidAmount: inv.paid_amount || 0,
+                  balanceDue: inv.remaining_amount || 0,
+                });
+              }}
+              className="h-7 text-xs gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 hover:bg-slate-100 cursor-pointer"
+            >
+              <Printer className="w-3 h-3" /> Invoice PDF
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // 2. Payment Vouchers:
   const voucherColumns: GridColumn[] = [
@@ -1123,6 +1339,7 @@ export default function SalesExpensesHub() {
             hideColumnsButton={true}
             hideCopyButton={true}
             hideExportButton={true}
+            renderExpandedRow={renderInvoiceExpandedRow}
             emptyState={
               <EmptyState
                 type="empty"

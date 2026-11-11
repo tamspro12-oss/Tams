@@ -963,5 +963,24 @@ td, th, .card, [role="dialog"], [role="region"], .select-text {
   -webkit-user-select: text;
 }
 
+/* Global Non-Blocking Notification & Toast Overlays */
+[data-sonner-toaster],
+[data-radix-toast-viewport],
+.toaster,
+div[role="region"][aria-label*="Notifications" i],
+div[role="region"][aria-label*="notification" i],
+div[aria-live="polite"]:not([role="dialog"]),
+div[aria-live="assertive"]:not([role="dialog"]) {
+  pointer-events: none !important;
+}
+
+[data-sonner-toast],
+[data-radix-toast-root],
+[data-sonner-toast] *,
+[data-radix-toast-root] * {
+  pointer-events: auto !important;
+}
+
+
 
 

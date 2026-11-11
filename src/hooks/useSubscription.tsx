@@ -1,12 +1,42 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { isMasterAdminEmail } from "@/lib/adminAuth";
 
 export function useSubscription() {
   return useQuery({
     queryKey: ["subscription"],
     queryFn: async () => {
+      // Check if logged in user is Master Admin (usmn4u@gmail.com)
+      const { data: { user } } = await supabase.auth.getUser();
+      const isMaster = isMasterAdminEmail(user?.email);
+
       const agencyId = await getAuthenticatedAgencyId();
+      
+      // Master Admin always has unconditional Lifetime Access
+      if (isMaster) {
+        let agencyName = "Master Admin HQ";
+        if (agencyId) {
+          const { data: agency } = await supabase
+            .from("agencies")
+            .select("name")
+            .eq("id", agencyId)
+            .maybeSingle();
+          if (agency?.name) agencyName = agency.name;
+        }
+
+        return {
+          isExpired: false,
+          daysRemaining: 999999,
+          plan: "lifetime",
+          expiryDate: "2099-12-31T23:59:59.000Z",
+          isActive: true,
+          status: "active",
+          agencyName,
+          isLifetime: true,
+        };
+      }
+
       if (!agencyId) return null;
 
       const { data: agency, error } = await supabase
@@ -33,6 +63,7 @@ export function useSubscription() {
         isActive: agency.license_active,
         status: agency.license_status,
         agencyName: agency.name,
+        isLifetime: false,
       };
     },
     staleTime: 5 * 60 * 1000,

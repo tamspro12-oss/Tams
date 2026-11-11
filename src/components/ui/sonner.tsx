@@ -9,7 +9,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className="toaster group pointer-events-none"
+      closeButton
+      duration={3500}
       style={{
         ["--top-offset" as any]: "calc(env(safe-area-inset-top, 0px) + 8px)",
       }}
@@ -17,10 +19,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
         duration: 3500,
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg text-sm py-2.5 px-3.5 rounded-xl",
+            "group toast pointer-events-auto group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg text-sm py-2.5 px-3.5 rounded-xl",
           description: "group-[.toast]:text-muted-foreground text-xs",
           actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground text-xs",
           cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground text-xs",
+          closeButton: "group-[.toast]:bg-slate-100 dark:group-[.toast]:bg-slate-800 text-slate-600 dark:text-slate-300 pointer-events-auto",
         },
       }}
       {...props}

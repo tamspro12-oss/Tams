@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
+import { isMasterAdminEmail } from "@/lib/adminAuth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -36,8 +37,11 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect only when subscription is confirmed expired
-  if (subscription && subscription.isExpired) {
+  // Master Admin (usmn4u@gmail.com) has unconditional Lifetime Access
+  const isMaster = isMasterAdminEmail(user?.email);
+
+  // Redirect only when subscription is confirmed expired for non-admin accounts
+  if (!isMaster && subscription && subscription.isExpired) {
     return <Navigate to="/subscription-expired" replace />;
   }
 
