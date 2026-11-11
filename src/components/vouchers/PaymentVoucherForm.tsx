@@ -308,6 +308,11 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   };
 
   const handleSave = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
+
     if (direction === "transfer") {
       if (fromAccount === toAccount) {
         toast.error("Source and destination accounts cannot be the same");
@@ -403,7 +408,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
       if (onSuccess) onSuccess();
       // Keep modal open so user can enter next record quickly!
     } catch (err: any) {
-      toast.error(err.message || "Failed to record payment voucher");
+      toast.error(`Could not save: ${err.message || "Failed to record payment voucher"}`);
     } finally {
       setIsSubmitting(false);
     }

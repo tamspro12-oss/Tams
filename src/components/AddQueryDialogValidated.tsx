@@ -23,6 +23,11 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
+
     setIsSubmitting(true);
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -61,7 +66,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
       onOpenChange(false);
     } catch (error: any) {
       const errorMessage = error?.message || (editQuery ? "Failed to update query" : "Failed to add query");
-      toast.error(errorMessage);
+      toast.error(`Could not save: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }

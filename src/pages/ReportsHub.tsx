@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import {
   ExcelGrid,
@@ -8,6 +8,7 @@ import {
   FilterBar,
   FilterState,
   defaultFilterState,
+  EmptyState,
 } from "@/components/design-system";
 import {
   Select,
@@ -17,18 +18,54 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useParties } from "@/hooks/useParties";
+import { useParties, type Party } from "@/hooks/useParties";
+import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, parseISO } from "date-fns";
+import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   TrendingUp,
   Scale,
   Calendar,
   FileText,
+  Wallet,
+  Building2,
+  Receipt,
+  ArrowUpRight,
+  ArrowDownRight,
+  Eye,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  HelpCircle,
+  DollarSign,
+  ArrowRight,
+  Layers,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  Cell,
+  AreaChart,
+  Area,
+} from "recharts";
 
 type ReportTab =
   | "daily-report"
@@ -37,23 +74,92 @@ type ReportTab =
   | "financial-reports";
 
 type FinancialSubReport =
-  | "profit_report"
+  | "pnl"
   | "accounts_summary"
   | "assets_dues"
   | "monthly_income"
   | "monthly_expenses";
 
 export default function ReportsHub() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Tab from URL (default to Daily Report: daily-report)
   const currentTab = (searchParams.get("tab") as ReportTab) || "daily-report";
 
   const handleTabChange = (val: string) => {
-    setSearchParams({ tab: val }, { replace: true });
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", val);
+    setSearchParams(next, { replace: true });
   };
 
-  const [financialSubReport, setFinancialSubReport] = useState<FinancialSubReport>("profit_report");
+  // Financial Sub-report Mode from URL (default: pnl)
+  const modeParam = searchParams.get("mode");
+  const financialSubReport: FinancialSubReport = useMemo(() => {
+    if (!modeParam) return "pnl";
+    if (modeParam === "pnl" || modeParam === "profit_report" || modeParam === "profit") return "pnl";
+    if (modeParam === "accounts" || modeParam === "accounts_summary") return "accounts_summary";
+    if (modeParam === "assets" || modeParam === "assets_dues") return "assets_dues";
+    if (modeParam === "monthly_income" || modeParam === "income") return "monthly_income";
+    if (modeParam === "monthly_expenses" || modeParam === "expenses") return "monthly_expenses";
+    return "pnl";
+  }, [modeParam]);
+
+  const handleFinancialModeChange = (mode: FinancialSubReport) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "financial-reports");
+    next.set("mode", mode);
+    setSearchParams(next, { replace: true });
+  };
+
+  // Drilldown Modal State
+  const [drilldownModal, setDrilldownModal] = useState<{
+    open: boolean;
+    title: string;
+    subtitle?: string;
+    totalAmount?: number;
+    items: Array<{
+      id: string;
+      date: string;
+      reference: string;
+      title: string;
+      type: string;
+      amount: number;
+      secondaryAmount?: number;
+      badgeVariant?: "emerald" | "red" | "blue" | "purple" | "neutral";
+    }>;
+  }>({
+    open: false,
+    title: "",
+    items: [],
+  });
+
+  const openDrilldown = useCallback(
+    (config: {
+      title: string;
+      subtitle?: string;
+      totalAmount?: number;
+      items: Array<{
+        id: string;
+        date: string;
+        reference: string;
+        title: string;
+        type: string;
+        amount: number;
+        secondaryAmount?: number;
+        badgeVariant?: "emerald" | "red" | "blue" | "purple" | "neutral";
+      }>;
+    }) => {
+      setDrilldownModal({
+        open: true,
+        title: config.title,
+        subtitle: config.subtitle,
+        totalAmount: config.totalAmount,
+        items: config.items,
+      });
+    },
+    []
+  );
 
   // Shared Filter Bar State (date filter preserved across tab switching)
   const [filters, setFilters] = useState<FilterState>(defaultFilterState);
@@ -93,10 +199,11 @@ export default function ReportsHub() {
   // Toggle for Daily Report (Cash / Bank switch)
   const [dailyAccountType, setDailyAccountType] = useState<"all" | "cash" | "bank">("all");
 
-  const { parties } = useParties();
+  const { parties = [], isLoading: loadingParties } = useParties();
+  const { accounts = [], isLoading: loadingAccounts } = useAccounts();
 
   // 1. Fetch Invoices
-  const { data: rawInvoices = [] } = useQuery({
+  const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
     queryKey: ["report_invoices"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -115,7 +222,7 @@ export default function ReportsHub() {
       return (clientsData || []).map((c: any) => ({
         id: c.id,
         invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || c.created_at.slice(0, 10),
+        invoice_date: c.flight_date || (c.created_at ? c.created_at.slice(0, 10) : ""),
         service: c.travel_type || "Ticket",
         client_name: c.name,
         party: { name: c.name },
@@ -126,15 +233,17 @@ export default function ReportsHub() {
         payment_status: (c.payment_status || "Pending").toLowerCase(),
         pnr: c.pnr,
         ticket_no: c.passport_number,
+        more_details: { remaining_due_date: c.remaining_payment_date },
+        remaining_payment_date: c.remaining_payment_date,
       }));
     },
   });
 
   // 2. Fetch Transactions / Vouchers
-  const { data: rawTransactions = [] } = useQuery({
+  const { data: rawTransactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ["report_transactions"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data } = await (supabase as any)
         .from("transactions")
         .select("*")
         .order("date", { ascending: false });
@@ -143,7 +252,7 @@ export default function ReportsHub() {
   });
 
   // 3. Fetch Expenses
-  const { data: rawExpenses = [] } = useQuery({
+  const { data: rawExpenses = [], isLoading: loadingExpenses } = useQuery({
     queryKey: ["report_expenses"],
     queryFn: async () => {
       const { data } = await supabase.from("expenses").select("*").order("expense_date", { ascending: false });
@@ -152,7 +261,7 @@ export default function ReportsHub() {
   });
 
   // 4. Fetch Refunds
-  const { data: rawRefunds = [] } = useQuery({
+  const { data: rawRefunds = [], isLoading: loadingRefunds } = useQuery({
     queryKey: ["report_refunds"],
     queryFn: async () => {
       const { data } = await supabase.from("refunds").select("*").order("refund_date", { ascending: false });
@@ -174,6 +283,12 @@ export default function ReportsHub() {
     if (filters.dateRange === "this_month") {
       const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
       const monthEnd = format(endOfMonth(now), "yyyy-MM-dd");
+      return d >= monthStart && d <= monthEnd;
+    }
+    if (filters.dateRange === "last_month") {
+      const lastMonth = subMonths(now, 1);
+      const monthStart = format(startOfMonth(lastMonth), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(lastMonth), "yyyy-MM-dd");
       return d >= monthStart && d <= monthEnd;
     }
     if (filters.dateRange === "custom") {
@@ -215,19 +330,61 @@ export default function ReportsHub() {
     });
   }, [rawInvoices, filters]);
 
-  // Aggregate Metrics for Top Totals Bar
+  // Filtered Expenses
+  const filteredExpenses = useMemo(() => {
+    return rawExpenses.filter((e: any) => {
+      if (!isDateInRange(e.expense_date)) return false;
+      if (filters.searchQuery.trim()) {
+        const q = filters.searchQuery.toLowerCase();
+        const mRef = (e.reference_number || "").toLowerCase().includes(q);
+        const mType = (e.expense_type || "").toLowerCase().includes(q);
+        const mNotes = (e.notes || "").toLowerCase().includes(q);
+        if (!mRef && !mType && !mNotes) return false;
+      }
+      return true;
+    });
+  }, [rawExpenses, filters]);
+
+  // Filtered Refunds
+  const filteredRefunds = useMemo(() => {
+    return rawRefunds.filter((r: any) => {
+      if (!isDateInRange(r.refund_date)) return false;
+      if (filters.searchQuery.trim()) {
+        const q = filters.searchQuery.toLowerCase();
+        const mRef = (r.refund_no || "").toLowerCase().includes(q);
+        const mReason = (r.reason || "").toLowerCase().includes(q);
+        if (!mRef && !mReason) return false;
+      }
+      return true;
+    });
+  }, [rawRefunds, filters]);
+
+  // Aggregate Metrics for Top Totals Bar & Financial Statement
   const totalInvoiced = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (i.client_amount || 0), 0),
+    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.client_amount) || 0), 0),
     [filteredInvoices]
   );
   const totalCost = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (i.vendor_payable || 0), 0),
+    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.vendor_payable) || 0), 0),
     [filteredInvoices]
   );
   const totalProfit = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (i.profit || 0), 0),
+    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.profit) || 0), 0),
     [filteredInvoices]
   );
+  const totalExpensesAmt = useMemo(
+    () => filteredExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0),
+    [filteredExpenses]
+  );
+  const totalRefundsAmt = useMemo(
+    () => filteredRefunds.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0),
+    [filteredRefunds]
+  );
+  const netCleanProfit = useMemo(
+    () => totalProfit - totalExpensesAmt - totalRefundsAmt,
+    [totalProfit, totalExpensesAmt, totalRefundsAmt]
+  );
+
   const { quotations = [] } = useQuotations();
   const quoteStats = useMemo(() => {
     const totalQuotes = quotations.length;
@@ -237,25 +394,10 @@ export default function ReportsHub() {
     return { totalQuotes, acceptedQuotes, convertedQuotes, conversionRate };
   }, [quotations]);
 
-  const totalExpensesAmt = useMemo(
-    () => rawExpenses.filter((e: any) => isDateInRange(e.expense_date)).reduce((sum: number, e: any) => sum + (e.amount || 0), 0),
-    [rawExpenses, filters]
-  );
-
   // Helper to compute overdue days adhering to Remaining Due Date logic
   const getOverdueDays = (inv: any): number | null => {
-    const isPaid = inv.payment_status === "paid" || ((Number(inv.client_amount) || 0) <= (Number(inv.paid_amount) || 0));
-    if (isPaid) return null;
-
-    const now = new Date();
-    const todayStr = format(now, "yyyy-MM-dd");
-    const dueDate = inv.more_details?.remaining_due_date || inv.remaining_payment_date || inv.invoice_date || todayStr;
-
-    if (dueDate < todayStr) {
-      const diffTime = now.getTime() - new Date(dueDate).getTime();
-      return Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-    }
-    return null;
+    const { isOverdue, overdueDays } = getInvoiceOverdueInfo(inv);
+    return isOverdue ? overdueDays : null;
   };
 
   // ==========================================
@@ -988,6 +1130,7 @@ export default function ReportsHub() {
       {/* TAB 4: FINANCIAL REPORTS */}
       {currentTab === "financial-reports" && (
         <div className="space-y-4">
+          {/* Top Filter Bar: Date range & Search filter */}
           <FilterBar
             filters={filters}
             onChange={setFilters}
@@ -995,70 +1138,1305 @@ export default function ReportsHub() {
             showStatusFilter={false}
             showServiceFilter={false}
             showEntryTypeFilter={false}
+            searchPlaceholder="Search in accounts, services, categories..."
           />
 
-          <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border">
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Financial Statement Mode
-            </span>
-            <Select
+          {/* 5 Toggle Buttons (Segmented Tabs) - Styled exactly like the top bar, all on ONE line, horizontally scrollable on mobile */}
+          <div className="w-full overflow-x-auto no-scrollbar pb-1">
+            <Tabs
               value={financialSubReport}
-              onValueChange={(val: any) => setFinancialSubReport(val)}
+              onValueChange={(val) => handleFinancialModeChange(val as FinancialSubReport)}
+              className="w-full"
             >
-              <SelectTrigger className="h-8 w-[200px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="profit_report">Profit & Loss Report</SelectItem>
-                <SelectItem value="accounts_summary">Accounts Summary</SelectItem>
-                <SelectItem value="assets_dues">Assets & Dues</SelectItem>
-                <SelectItem value="monthly_income">Monthly Income</SelectItem>
-                <SelectItem value="monthly_expenses">Monthly Expenses</SelectItem>
-              </SelectContent>
-            </Select>
+              <TabsList className="w-full justify-start overflow-x-auto h-11 p-1 bg-muted/60 border flex flex-nowrap shrink-0">
+                <TabsTrigger
+                  value="pnl"
+                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                >
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  1. Profit & Loss Report
+                </TabsTrigger>
+                <TabsTrigger
+                  value="accounts_summary"
+                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                >
+                  <Wallet className="w-4 h-4 text-blue-600" />
+                  2. Accounts Summary
+                </TabsTrigger>
+                <TabsTrigger
+                  value="assets_dues"
+                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                >
+                  <Scale className="w-4 h-4 text-purple-600" />
+                  3. Assets & Dues
+                </TabsTrigger>
+                <TabsTrigger
+                  value="monthly_income"
+                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                >
+                  <Calendar className="w-4 h-4 text-teal-600" />
+                  4. Monthly Income
+                </TabsTrigger>
+                <TabsTrigger
+                  value="monthly_expenses"
+                  className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer whitespace-nowrap data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                >
+                  <FileText className="w-4 h-4 text-red-600" />
+                  5. Monthly Expenses
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
-          <TotalsBar
-            metrics={[
-              { label: "Gross Booking Revenue", value: totalInvoiced, prefix: "PKR", highlight: "neutral" },
-              { label: "Cost of Sales", value: totalCost, prefix: "PKR", highlight: "neutral" },
-              { label: "Operating Expenses", value: totalExpensesAmt, prefix: "PKR", highlight: "red" },
-              { label: "Net Agency Profit", value: totalProfit - totalExpensesAmt, prefix: "PKR", highlight: "teal" },
-            ]}
-          />
+          {/* Top Summary Cards: Gross Booking Revenue, Cost of Sales, Operating Expenses, Net Agency Profit */}
+          {loadingInvoices || loadingExpenses ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-3.5 rounded-xl border bg-card space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-6 w-28" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Card 1: Gross Booking Revenue */}
+              <div
+                onClick={() =>
+                  openDrilldown({
+                    title: "Gross Booking Revenue Breakdown",
+                    subtitle: `All bookings matching selected date range (${filteredInvoices.length} entries)`,
+                    totalAmount: totalInvoiced,
+                    items: filteredInvoices.map((inv: any) => ({
+                      id: inv.id,
+                      date: inv.invoice_date || "—",
+                      reference: inv.invoice_no || "INV",
+                      title: `${inv.service || "Booking"} - ${inv.party?.name || inv.client_name || "Client"}`,
+                      type: inv.service || "Ticket",
+                      amount: Number(inv.client_amount) || 0,
+                      badgeVariant: "emerald",
+                    })),
+                  })
+                }
+                className="bg-card hover:bg-accent/40 cursor-pointer transition-all border border-border/80 rounded-xl p-3.5 shadow-xs group"
+                title="Click to drill down into bookings"
+              >
+                <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Gross Booking Revenue</span>
+                  <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="font-mono text-base sm:text-lg font-bold text-foreground">
+                  PKR {totalInvoiced.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-emerald-600 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
+                  View {filteredInvoices.length} bookings →
+                </span>
+              </div>
 
-          {/* Clean Financial Breakdown Card */}
-          <div className="border rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 pb-2 border-b">
-              Income Statement Summary
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1">
-                <span>Revenue from Tickets & Umrah Services</span>
-                <span className="font-mono font-semibold">PKR {totalInvoiced.toLocaleString()}</span>
+              {/* Card 2: Cost of Sales */}
+              <div
+                onClick={() =>
+                  openDrilldown({
+                    title: "Cost of Sales (Vendor & Supplier Payables)",
+                    subtitle: `Direct costs incurred on bookings in selected date range`,
+                    totalAmount: totalCost,
+                    items: filteredInvoices
+                      .filter((inv: any) => (Number(inv.vendor_payable) || 0) > 0)
+                      .map((inv: any) => ({
+                        id: `cost_${inv.id}`,
+                        date: inv.invoice_date || "—",
+                        reference: inv.invoice_no || "INV",
+                        title: `Cost for ${inv.service || "Booking"} - ${inv.vendor?.name || "Supplier"}`,
+                        type: "Supplier Cost",
+                        amount: Number(inv.vendor_payable) || 0,
+                        badgeVariant: "red",
+                      })),
+                  })
+                }
+                className="bg-card hover:bg-accent/40 cursor-pointer transition-all border border-border/80 rounded-xl p-3.5 shadow-xs group"
+                title="Click to drill down into supplier costs"
+              >
+                <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Cost of Sales</span>
+                  <div className="w-6 h-6 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center">
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="font-mono text-base sm:text-lg font-bold text-foreground">
+                  PKR {totalCost.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-rose-600 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
+                  View supplier costs →
+                </span>
               </div>
-              <div className="flex justify-between py-1 text-slate-500">
-                <span>Less: Direct Supplier / Vendor Costs</span>
-                <span className="font-mono">PKR {totalCost.toLocaleString()}</span>
+
+              {/* Card 3: Operating Expenses */}
+              <div
+                onClick={() =>
+                  openDrilldown({
+                    title: "Operating Expenses Breakdown",
+                    subtitle: `Daily operating expenses recorded in selected date range (${filteredExpenses.length} vouchers)`,
+                    totalAmount: totalExpensesAmt,
+                    items: filteredExpenses.map((exp: any) => ({
+                      id: exp.id,
+                      date: exp.expense_date || "—",
+                      reference: exp.reference_number || `EXP-${exp.id.slice(0, 4)}`,
+                      title: exp.expense_type || exp.notes || "Operating Expense",
+                      type: exp.expense_type || "General",
+                      amount: Number(exp.amount) || 0,
+                      badgeVariant: "red",
+                    })),
+                  })
+                }
+                className="bg-card hover:bg-accent/40 cursor-pointer transition-all border border-border/80 rounded-xl p-3.5 shadow-xs group"
+                title="Click to drill down into expenses"
+              >
+                <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Operating Expenses</span>
+                  <div className="w-6 h-6 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center">
+                    <Receipt className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="font-mono text-base sm:text-lg font-bold text-rose-600 dark:text-rose-400">
+                  PKR {totalExpensesAmt.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-amber-600 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
+                  View {filteredExpenses.length} expense vouchers →
+                </span>
               </div>
-              <div className="flex justify-between py-1 font-bold text-teal-700 dark:text-teal-400 border-t">
-                <span>Gross Profit</span>
-                <span className="font-mono">PKR {totalProfit.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between py-1 text-red-600">
-                <span>Less: Total Daily Operating Expenses</span>
-                <span className="font-mono">PKR {totalExpensesAmt.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between py-2 text-base font-bold text-slate-900 dark:text-slate-100 border-t-2 border-slate-300 dark:border-slate-700">
-                <span>Net Clean Profit</span>
-                <span className="font-mono text-teal-600 dark:text-teal-400">
-                  PKR {(totalProfit - totalExpensesAmt).toLocaleString()}
+
+              {/* Card 4: Net Clean Profit */}
+              <div
+                onClick={() =>
+                  openDrilldown({
+                    title: "Net Agency Profit Statement",
+                    subtitle: `Clean Net Income = Gross Revenue - Supplier Costs - Operating Expenses - Customer Refunds`,
+                    totalAmount: netCleanProfit,
+                    items: [
+                      {
+                        id: "summary_rev",
+                        date: "Period",
+                        reference: "REV",
+                        title: "Gross Booking Revenue",
+                        type: "Revenue (+)",
+                        amount: totalInvoiced,
+                        badgeVariant: "emerald",
+                      },
+                      {
+                        id: "summary_cogs",
+                        date: "Period",
+                        reference: "COGS",
+                        title: "Less: Supplier Cost of Sales",
+                        type: "Direct Cost (-)",
+                        amount: totalCost,
+                        badgeVariant: "red",
+                      },
+                      {
+                        id: "summary_gp",
+                        date: "Period",
+                        reference: "GP",
+                        title: "Gross Profit",
+                        type: "Gross (+)",
+                        amount: totalProfit,
+                        badgeVariant: "emerald",
+                      },
+                      {
+                        id: "summary_exp",
+                        date: "Period",
+                        reference: "EXP",
+                        title: "Less: Total Operating Expenses",
+                        type: "Expense (-)",
+                        amount: totalExpensesAmt,
+                        badgeVariant: "red",
+                      },
+                      {
+                        id: "summary_ref",
+                        date: "Period",
+                        reference: "REF",
+                        title: "Less: Customer Refunds Issued",
+                        type: "Refund (-)",
+                        amount: totalRefundsAmt,
+                        badgeVariant: "red",
+                      },
+                      {
+                        id: "summary_net",
+                        date: "Period",
+                        reference: "NET",
+                        title: "Final Net Agency Profit",
+                        type: "Net Clean",
+                        amount: netCleanProfit,
+                        badgeVariant: netCleanProfit >= 0 ? "emerald" : "red",
+                      },
+                    ],
+                  })
+                }
+                className="bg-card hover:bg-accent/40 cursor-pointer transition-all border border-border/80 rounded-xl p-3.5 shadow-xs group"
+                title="Click to view net profit statement"
+              >
+                <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Net Agency Profit</span>
+                  <div className="w-6 h-6 rounded-md bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div
+                  className={`font-mono text-base sm:text-lg font-bold ${
+                    netCleanProfit >= 0 ? "text-teal-600 dark:text-teal-400" : "text-rose-600"
+                  }`}
+                >
+                  PKR {netCleanProfit.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-teal-600 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
+                  View profit statement →
                 </span>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* VIEW 1: PROFIT & LOSS REPORT */}
+          {financialSubReport === "pnl" && (
+            <div className="space-y-4">
+              {/* Clean Financial Breakdown Card */}
+              <div className="border border-border/70 rounded-2xl p-4 sm:p-5 bg-card shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-border/70">
+                  <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    Income Statement Summary (P&L)
+                  </h3>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Double-Entry Verified
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div
+                    onClick={() =>
+                      openDrilldown({
+                        title: "Revenue from Bookings & Services",
+                        totalAmount: totalInvoiced,
+                        items: filteredInvoices.map((inv: any) => ({
+                          id: inv.id,
+                          date: inv.invoice_date || "—",
+                          reference: inv.invoice_no || "INV",
+                          title: `${inv.service || "Booking"} - ${inv.party?.name || inv.client_name || ""}`,
+                          type: inv.service || "Ticket",
+                          amount: Number(inv.client_amount) || 0,
+                          badgeVariant: "emerald",
+                        })),
+                      })
+                    }
+                    className="flex justify-between py-1.5 px-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  >
+                    <span className="font-medium text-foreground">Revenue from Bookings & Services</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      PKR {totalInvoiced.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() =>
+                      openDrilldown({
+                        title: "Direct Supplier & Vendor Costs",
+                        totalAmount: totalCost,
+                        items: filteredInvoices
+                          .filter((i: any) => (Number(i.vendor_payable) || 0) > 0)
+                          .map((inv: any) => ({
+                            id: `c_${inv.id}`,
+                            date: inv.invoice_date || "—",
+                            reference: inv.invoice_no || "INV",
+                            title: `Payable to ${inv.vendor?.name || "Supplier"}`,
+                            type: inv.service || "Cost",
+                            amount: Number(inv.vendor_payable) || 0,
+                            badgeVariant: "red",
+                          })),
+                      })
+                    }
+                    className="flex justify-between py-1.5 px-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors text-muted-foreground"
+                  >
+                    <span>Less: Direct Supplier / Vendor Costs</span>
+                    <span className="font-mono text-rose-500">
+                      - PKR {totalCost.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between py-2 px-2 font-bold text-teal-700 dark:text-teal-400 border-t border-border/60 bg-teal-50/40 dark:bg-teal-950/20 rounded-lg">
+                    <span>Gross Profit</span>
+                    <span className="font-mono">PKR {totalProfit.toLocaleString()}</span>
+                  </div>
+
+                  <div
+                    onClick={() =>
+                      openDrilldown({
+                        title: "Operating Expenses",
+                        totalAmount: totalExpensesAmt,
+                        items: filteredExpenses.map((exp: any) => ({
+                          id: exp.id,
+                          date: exp.expense_date || "—",
+                          reference: exp.reference_number || `EXP-${exp.id.slice(0, 4)}`,
+                          title: exp.expense_type || exp.notes || "Operating Expense",
+                          type: exp.expense_type || "General",
+                          amount: Number(exp.amount) || 0,
+                          badgeVariant: "red",
+                        })),
+                      })
+                    }
+                    className="flex justify-between py-1.5 px-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors text-rose-600 dark:text-rose-400"
+                  >
+                    <span>Less: Total Operating Expenses</span>
+                    <span className="font-mono">- PKR {totalExpensesAmt.toLocaleString()}</span>
+                  </div>
+
+                  {totalRefundsAmt > 0 && (
+                    <div
+                      onClick={() =>
+                        openDrilldown({
+                          title: "Customer Refunds",
+                          totalAmount: totalRefundsAmt,
+                          items: filteredRefunds.map((r: any) => ({
+                            id: r.id,
+                            date: r.refund_date || "—",
+                            reference: r.refund_no || `RF-${r.id.slice(0, 4)}`,
+                            title: r.reason || "Customer Refund",
+                            type: "Refund",
+                            amount: Number(r.amount) || 0,
+                            badgeVariant: "red",
+                          })),
+                        })
+                      }
+                      className="flex justify-between py-1.5 px-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors text-amber-600 dark:text-amber-400"
+                    >
+                      <span>Less: Customer Refunds Issued</span>
+                      <span className="font-mono">- PKR {totalRefundsAmt.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between py-2.5 px-2 text-sm sm:text-base font-bold text-foreground border-t-2 border-border mt-2">
+                    <span>Net Clean Profit</span>
+                    <span
+                      className={`font-mono ${
+                        netCleanProfit >= 0 ? "text-teal-600 dark:text-teal-400" : "text-rose-600"
+                      }`}
+                    >
+                      PKR {netCleanProfit.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Breakdown Table */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center justify-between">
+                  <span>Revenue & Margin Breakdown by Service</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">Click any row to drill down</span>
+                </h4>
+
+                {filteredInvoices.length === 0 ? (
+                  <EmptyState
+                    type="filtered"
+                    title="No booking invoices in this period"
+                    description="Switch date range to 'All Time' or clear search filters to view records."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-muted/60 text-muted-foreground font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3 rounded-l-lg">Service</th>
+                          <th className="py-2.5 px-3 text-center">Bookings</th>
+                          <th className="py-2.5 px-3 text-right">Gross Revenue</th>
+                          <th className="py-2.5 px-3 text-right">Supplier Cost</th>
+                          <th className="py-2.5 px-3 text-right">Gross Profit</th>
+                          <th className="py-2.5 px-3 rounded-r-lg text-right">Margin %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {Array.from(
+                          filteredInvoices.reduce((map: Map<string, any>, inv: any) => {
+                            const svc = inv.service || "Ticket";
+                            const curr = map.get(svc) || {
+                              service: svc,
+                              count: 0,
+                              revenue: 0,
+                              cost: 0,
+                              profit: 0,
+                              items: [],
+                            };
+                            curr.count += 1;
+                            curr.revenue += Number(inv.client_amount) || 0;
+                            curr.cost += Number(inv.vendor_payable) || 0;
+                            curr.profit +=
+                              Number(inv.profit) ||
+                              (Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0);
+                            curr.items.push(inv);
+                            map.set(svc, curr);
+                            return map;
+                          }, new Map())
+                        ).map(([svc, row]: [string, any]) => {
+                          const margin =
+                            row.revenue > 0 ? Math.round((row.profit / row.revenue) * 100) : 0;
+                          return (
+                            <tr
+                              key={svc}
+                              onClick={() =>
+                                openDrilldown({
+                                  title: `${svc} Bookings Breakdown`,
+                                  subtitle: `${row.count} bookings totaling PKR ${row.revenue.toLocaleString()}`,
+                                  totalAmount: row.revenue,
+                                  items: row.items.map((i: any) => ({
+                                    id: i.id,
+                                    date: i.invoice_date || "—",
+                                    reference: i.invoice_no || "INV",
+                                    title: i.party?.name || i.client_name || "Client",
+                                    type: svc,
+                                    amount: Number(i.client_amount) || 0,
+                                    badgeVariant: "emerald",
+                                  })),
+                                })
+                              }
+                              className="hover:bg-muted/50 cursor-pointer transition-colors"
+                            >
+                              <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-teal-500" />
+                                {svc}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono font-medium">{row.count}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-semibold">
+                                PKR {row.revenue.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                                PKR {row.cost.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-teal-600 dark:text-teal-400">
+                                PKR {row.profit.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold">
+                                {margin}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 2: ACCOUNTS SUMMARY */}
+          {financialSubReport === "accounts_summary" && (
+            <div className="space-y-4">
+              {/* Liquidity Top Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Total Liquid Funds
+                  </span>
+                  <div className="font-mono text-lg font-bold text-foreground mt-1">
+                    PKR{" "}
+                    {accounts
+                      .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Cash + Bank Accounts</span>
+                </div>
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Cash in Hand
+                  </span>
+                  <div className="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                    PKR{" "}
+                    {accounts
+                      .filter((a) => a.type === "cash")
+                      .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Cash Registers</span>
+                </div>
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Bank Accounts
+                  </span>
+                  <div className="font-mono text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">
+                    PKR{" "}
+                    {accounts
+                      .filter((a) => a.type === "bank")
+                      .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Operating Bank Balances</span>
+                </div>
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Accounts Monitored
+                  </span>
+                  <div className="font-mono text-lg font-bold text-foreground mt-1">
+                    {accounts.length}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Active in system</span>
+                </div>
+              </div>
+
+              {/* Accounts Table */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-blue-600" />
+                    Accounts Master Balances & Movement
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Click row to view transactions
+                  </span>
+                </div>
+
+                {accounts.length === 0 ? (
+                  <EmptyState
+                    type="empty"
+                    title="No accounts found"
+                    description="Accounts will automatically populate from your database ledger."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-muted/60 text-muted-foreground font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3 rounded-l-lg">Account Title</th>
+                          <th className="py-2.5 px-3">Type</th>
+                          <th className="py-2.5 px-3 text-right">Opening Bal</th>
+                          <th className="py-2.5 px-3 text-right">Period Debit (IN)</th>
+                          <th className="py-2.5 px-3 text-right">Period Credit (OUT)</th>
+                          <th className="py-2.5 px-3 text-right">Net Movement</th>
+                          <th className="py-2.5 px-3 text-right font-bold">Closing Balance</th>
+                          <th className="py-2.5 px-3 rounded-r-lg text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {accounts
+                          .filter((acc) => {
+                            if (!filters.searchQuery.trim()) return true;
+                            const q = filters.searchQuery.toLowerCase();
+                            return acc.name.toLowerCase().includes(q) || acc.type.toLowerCase().includes(q);
+                          })
+                          .map((acc) => {
+                            const accTx = rawTransactions.filter(
+                              (t: any) => t.account_id === acc.id && isDateInRange(t.date)
+                            );
+                            const debitIn = accTx.reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.debit) || (t.type === "payment_in" ? Number(t.amount) : 0)),
+                              0
+                            );
+                            const creditOut = accTx.reduce(
+                              (s: number, t: any) =>
+                                s +
+                                (Number(t.credit) ||
+                                  (t.type === "payment_out" || t.type === "expense" ? Number(t.amount) : 0)),
+                              0
+                            );
+                            const netMove = debitIn - creditOut;
+                            const opening = Number(acc.opening_balance) || 0;
+                            const closing = Number(acc.current_balance) || 0;
+
+                            return (
+                              <tr
+                                key={acc.id}
+                                onClick={() =>
+                                  openDrilldown({
+                                    title: `${acc.name} (${acc.type.toUpperCase()}) Transactions`,
+                                    subtitle: `Closing Balance: PKR ${closing.toLocaleString()}`,
+                                    totalAmount: closing,
+                                    items: accTx.map((t: any) => ({
+                                      id: t.id,
+                                      date: t.date || "—",
+                                      reference: t.reference_no || `TX-${t.id.slice(0, 4)}`,
+                                      title: t.notes || t.category || "Voucher Transaction",
+                                      type: t.type || "transaction",
+                                      amount: Number(t.debit) || Number(t.credit) || Number(t.amount) || 0,
+                                      badgeVariant: t.type === "payment_in" ? "emerald" : "red",
+                                    })),
+                                  })
+                                }
+                                className="hover:bg-muted/50 cursor-pointer transition-colors"
+                              >
+                                <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-2">
+                                  {acc.type === "bank" ? (
+                                    <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  ) : (
+                                    <Wallet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  )}
+                                  {acc.name}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                      acc.type === "bank"
+                                        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                                        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                    }`}
+                                  >
+                                    {acc.type}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                                  PKR {opening.toLocaleString()}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                                  {debitIn > 0 ? `+PKR ${debitIn.toLocaleString()}` : "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-rose-500 font-semibold">
+                                  {creditOut > 0 ? `-PKR ${creditOut.toLocaleString()}` : "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-medium">
+                                  {netMove !== 0
+                                    ? `${netMove > 0 ? "+" : ""}PKR ${netMove.toLocaleString()}`
+                                    : "0"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                                  PKR {closing.toLocaleString()}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-2 text-[10px] font-semibold text-primary"
+                                  >
+                                    Drill down →
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 3: ASSETS & DUES */}
+          {financialSubReport === "assets_dues" && (
+            <div className="space-y-4">
+              {/* Working Capital Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Cash & Bank (Liquid)
+                  </span>
+                  <div className="font-mono text-lg font-bold text-foreground mt-1">
+                    PKR{" "}
+                    {accounts
+                      .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-medium">Ready Liquidity</span>
+                </div>
+
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Client Receivables (Dues)
+                  </span>
+                  <div className="font-mono text-lg font-bold text-amber-600 dark:text-amber-400 mt-1">
+                    PKR{" "}
+                    {parties
+                      .filter((p) => p.type !== "vendor" && (Number(p.current_balance) || 0) > 0)
+                      .reduce((s, p) => s + (Number(p.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-amber-600 font-medium">Uncollected from clients</span>
+                </div>
+
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Vendor Payables
+                  </span>
+                  <div className="font-mono text-lg font-bold text-rose-600 dark:text-rose-400 mt-1">
+                    PKR{" "}
+                    {parties
+                      .filter((p) => p.type !== "client" && (Number(p.current_balance) || 0) < 0)
+                      .reduce((s, p) => s + Math.abs(Number(p.current_balance) || 0), 0)
+                      .toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-rose-600 font-medium">Owed to suppliers</span>
+                </div>
+
+                <div className="bg-card border rounded-xl p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Net Working Capital
+                  </span>
+                  <div className="font-mono text-lg font-bold text-teal-600 dark:text-teal-400 mt-1">
+                    PKR{" "}
+                    {(
+                      accounts.reduce((s, a) => s + (Number(a.current_balance) || 0), 0) +
+                      parties
+                        .filter((p) => p.type !== "vendor" && (Number(p.current_balance) || 0) > 0)
+                        .reduce((s, p) => s + (Number(p.current_balance) || 0), 0) -
+                      parties
+                        .filter((p) => p.type !== "client" && (Number(p.current_balance) || 0) < 0)
+                        .reduce((s, p) => s + Math.abs(Number(p.current_balance) || 0), 0)
+                    ).toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Assets + Dues - Payables</span>
+                </div>
+              </div>
+
+              {/* Dues Register Table */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-purple-600" />
+                    Outstanding Parties Register (Receivables & Payables)
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Filter by search box
+                  </span>
+                </div>
+
+                {parties.filter((p) => (Number(p.current_balance) || 0) !== 0).length === 0 ? (
+                  <EmptyState
+                    type="empty"
+                    title="No outstanding dues"
+                    description="All client and vendor balances are currently settled."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-muted/60 text-muted-foreground font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3 rounded-l-lg">Party Name</th>
+                          <th className="py-2.5 px-3">Type</th>
+                          <th className="py-2.5 px-3">Contact</th>
+                          <th className="py-2.5 px-3 text-right">Balance Due</th>
+                          <th className="py-2.5 px-3 text-center">Status</th>
+                          <th className="py-2.5 px-3 rounded-r-lg text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {parties
+                          .filter((p) => {
+                            const bal = Number(p.current_balance) || 0;
+                            if (bal === 0) return false;
+                            if (!filters.searchQuery.trim()) return true;
+                            const q = filters.searchQuery.toLowerCase();
+                            return (
+                              p.name.toLowerCase().includes(q) ||
+                              (p.phone || "").toLowerCase().includes(q) ||
+                              (p.code || "").toLowerCase().includes(q)
+                            );
+                          })
+                          .sort((a, b) => Math.abs(b.current_balance) - Math.abs(a.current_balance))
+                          .map((p) => {
+                            const bal = Number(p.current_balance) || 0;
+                            const isClient = p.type !== "vendor" && bal > 0;
+
+                            return (
+                              <tr
+                                key={p.id}
+                                onClick={() =>
+                                  navigate(`/app/reports?tab=account-statement&party=${p.id}`)
+                                }
+                                className="hover:bg-muted/50 cursor-pointer transition-colors"
+                              >
+                                <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-2">
+                                  <span
+                                    className={`w-2 h-2 rounded-full ${
+                                      isClient ? "bg-amber-500" : "bg-rose-500"
+                                    }`}
+                                  />
+                                  {p.name}
+                                  {p.code && (
+                                    <span className="font-mono text-[10px] text-muted-foreground">
+                                      ({p.code})
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                      isClient
+                                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                        : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                                    }`}
+                                  >
+                                    {isClient ? "Client" : "Vendor"}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                                  {p.phone || p.whatsapp || "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold">
+                                  <span
+                                    className={
+                                      isClient
+                                        ? "text-amber-600 dark:text-amber-400"
+                                        : "text-rose-600 dark:text-rose-400"
+                                    }
+                                  >
+                                    PKR {Math.abs(bal).toLocaleString()}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      isClient
+                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                                        : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200"
+                                    }`}
+                                  >
+                                    {isClient ? "Receivable" : "Payable"}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-2 text-[10px] font-semibold text-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/app/reports?tab=account-statement&party=${p.id}`);
+                                    }}
+                                  >
+                                    Statement →
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4: MONTHLY INCOME */}
+          {financialSubReport === "monthly_income" && (
+            <div className="space-y-4">
+              {/* Monthly Income Bar Chart */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-teal-600" />
+                    Month-by-Month Income & Margin Trend
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Filtered by Date Selector
+                  </span>
+                </div>
+
+                {filteredInvoices.length === 0 ? (
+                  <EmptyState
+                    type="filtered"
+                    title="No income recorded for this period"
+                    description="Switch date filter to 'All Time' to view past monthly trends."
+                  />
+                ) : (
+                  <div className="h-72 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={(() => {
+                          const monthMap = new Map<string, any>();
+                          filteredInvoices.forEach((inv: any) => {
+                            const d = inv.invoice_date || "";
+                            if (!d) return;
+                            const mKey = d.slice(0, 7);
+                            let label = mKey;
+                            try {
+                              const [y, m] = mKey.split("-").map(Number);
+                              label = format(new Date(y, m - 1, 1), "MMM yyyy");
+                            } catch (e) {}
+
+                            const curr = monthMap.get(mKey) || {
+                              monthKey: mKey,
+                              month: label,
+                              revenue: 0,
+                              cost: 0,
+                              profit: 0,
+                              count: 0,
+                            };
+                            curr.count += 1;
+                            curr.revenue += Number(inv.client_amount) || 0;
+                            curr.cost += Number(inv.vendor_payable) || 0;
+                            curr.profit +=
+                              Number(inv.profit) ||
+                              (Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0);
+                            monthMap.set(mKey, curr);
+                          });
+                          return Array.from(monthMap.values()).sort((a, b) =>
+                            a.monthKey.localeCompare(b.monthKey)
+                          );
+                        })()}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <YAxis
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          formatter={(val: any) => [`PKR ${Number(val).toLocaleString()}`, ""]}
+                          contentStyle={{
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            backgroundColor: "rgba(255, 255, 255, 0.95)",
+                            borderColor: "#e2e8f0",
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+                        <Bar dataKey="revenue" name="Gross Revenue" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cost" name="Supplier Cost" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="profit" name="Gross Profit" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* Monthly Income Table */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <h4 className="text-xs sm:text-sm font-bold text-foreground">
+                  Monthly Income & Booking Counts Table
+                </h4>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/60 text-muted-foreground font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3 rounded-l-lg">Month</th>
+                        <th className="py-2.5 px-3 text-center">Invoices</th>
+                        <th className="py-2.5 px-3 text-right">Gross Booking Sales</th>
+                        <th className="py-2.5 px-3 text-right">Supplier Costs</th>
+                        <th className="py-2.5 px-3 text-right">Gross Profit</th>
+                        <th className="py-2.5 px-3 rounded-r-lg text-right">Margin %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {(() => {
+                        const monthMap = new Map<string, any>();
+                        filteredInvoices.forEach((inv: any) => {
+                          const d = inv.invoice_date || "";
+                          if (!d) return;
+                          const mKey = d.slice(0, 7);
+                          let label = mKey;
+                          try {
+                            const [y, m] = mKey.split("-").map(Number);
+                            label = format(new Date(y, m - 1, 1), "MMM yyyy");
+                          } catch (e) {}
+
+                          const curr = monthMap.get(mKey) || {
+                            monthKey: mKey,
+                            month: label,
+                            revenue: 0,
+                            cost: 0,
+                            profit: 0,
+                            count: 0,
+                            items: [],
+                          };
+                          curr.count += 1;
+                          curr.revenue += Number(inv.client_amount) || 0;
+                          curr.cost += Number(inv.vendor_payable) || 0;
+                          curr.profit +=
+                            Number(inv.profit) ||
+                            (Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0);
+                          curr.items.push(inv);
+                          monthMap.set(mKey, curr);
+                        });
+
+                        const rows = Array.from(monthMap.values()).sort((a, b) =>
+                          b.monthKey.localeCompare(a.monthKey)
+                        );
+
+                        if (rows.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                                No booking income records matching active filters
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return rows.map((r: any) => {
+                          const margin =
+                            r.revenue > 0 ? Math.round((r.profit / r.revenue) * 100) : 0;
+                          return (
+                            <tr
+                              key={r.monthKey}
+                              onClick={() =>
+                                openDrilldown({
+                                  title: `${r.month} Bookings Drilldown`,
+                                  subtitle: `${r.count} bookings totaling PKR ${r.revenue.toLocaleString()}`,
+                                  totalAmount: r.revenue,
+                                  items: r.items.map((i: any) => ({
+                                    id: i.id,
+                                    date: i.invoice_date || "—",
+                                    reference: i.invoice_no || "INV",
+                                    title: i.party?.name || i.client_name || "Client",
+                                    type: i.service || "Booking",
+                                    amount: Number(i.client_amount) || 0,
+                                    badgeVariant: "emerald",
+                                  })),
+                                })
+                              }
+                              className="hover:bg-muted/50 cursor-pointer transition-colors"
+                            >
+                              <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                                {r.month}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono font-medium">{r.count}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-semibold">
+                                PKR {r.revenue.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                                PKR {r.cost.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-teal-600 dark:text-teal-400">
+                                PKR {r.profit.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold">
+                                {margin}%
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 5: MONTHLY EXPENSES */}
+          {financialSubReport === "monthly_expenses" && (
+            <div className="space-y-4">
+              {/* Monthly Expenses Chart */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-rose-600" />
+                    Operating Expenses by Category & Month
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Filtered by Date Selector
+                  </span>
+                </div>
+
+                {filteredExpenses.length === 0 ? (
+                  <EmptyState
+                    type="filtered"
+                    title="No expenses recorded for this period"
+                    description="Switch date filter to 'All Time' or add operating expenses to view trends."
+                  />
+                ) : (
+                  <div className="h-72 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={(() => {
+                          const catMap = new Map<string, any>();
+                          filteredExpenses.forEach((exp: any) => {
+                            const cat = exp.expense_type || "Operating Expense";
+                            const curr = catMap.get(cat) || {
+                              category: cat,
+                              amount: 0,
+                              count: 0,
+                            };
+                            curr.count += 1;
+                            curr.amount += Number(exp.amount) || 0;
+                            catMap.set(cat, curr);
+                          });
+                          return Array.from(catMap.values()).sort((a, b) => b.amount - a.amount);
+                        })()}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="category" tick={{ fontSize: 10 }} />
+                        <YAxis
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          formatter={(val: any) => [`PKR ${Number(val).toLocaleString()}`, "Amount"]}
+                          contentStyle={{
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            backgroundColor: "rgba(255, 255, 255, 0.95)",
+                            borderColor: "#e2e8f0",
+                          }}
+                        />
+                        <Bar dataKey="amount" name="Expense Amount" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* Monthly Expenses Breakdown Table */}
+              <div className="border border-border/70 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <h4 className="text-xs sm:text-sm font-bold text-foreground">
+                  Expenses by Category Breakdown
+                </h4>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/60 text-muted-foreground font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3 rounded-l-lg">Expense Category</th>
+                        <th className="py-2.5 px-3 text-center">Vouchers Count</th>
+                        <th className="py-2.5 px-3 text-right">Total Spent</th>
+                        <th className="py-2.5 px-3 rounded-r-lg text-right">% of Operating Expenses</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {(() => {
+                        const catMap = new Map<string, any>();
+                        filteredExpenses.forEach((exp: any) => {
+                          const cat = exp.expense_type || "Operating Expense";
+                          const curr = catMap.get(cat) || {
+                            category: cat,
+                            count: 0,
+                            amount: 0,
+                            items: [],
+                          };
+                          curr.count += 1;
+                          curr.amount += Number(exp.amount) || 0;
+                          curr.items.push(exp);
+                          catMap.set(cat, curr);
+                        });
+
+                        const totalAllExp = filteredExpenses.reduce(
+                          (s, e) => s + (Number(e.amount) || 0),
+                          0
+                        );
+                        const rows = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount);
+
+                        if (rows.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                                No expenses matching active filters
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return rows.map((r: any) => {
+                          const pct =
+                            totalAllExp > 0 ? Math.round((r.amount / totalAllExp) * 100) : 0;
+                          return (
+                            <tr
+                              key={r.category}
+                              onClick={() =>
+                                openDrilldown({
+                                  title: `${r.category} Expenses Breakdown`,
+                                  subtitle: `${r.count} expense vouchers totaling PKR ${r.amount.toLocaleString()}`,
+                                  totalAmount: r.amount,
+                                  items: r.items.map((e: any) => ({
+                                    id: e.id,
+                                    date: e.expense_date || "—",
+                                    reference: e.reference_number || `EXP-${e.id.slice(0, 4)}`,
+                                    title: e.notes || e.expense_type || "Expense",
+                                    type: r.category,
+                                    amount: Number(e.amount) || 0,
+                                    badgeVariant: "red",
+                                  })),
+                                })
+                              }
+                              className="hover:bg-muted/50 cursor-pointer transition-colors"
+                            >
+                              <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-1.5">
+                                <Receipt className="w-3.5 h-3.5 text-rose-500" />
+                                {r.category}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono font-medium">{r.count}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                PKR {r.amount.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-semibold">
+                                {pct}%
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Universal Drilldown Dialog */}
+      <Dialog
+        open={drilldownModal.open}
+        onOpenChange={(open) => setDrilldownModal((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="pb-2 border-b border-border/70 shrink-0">
+            <DialogTitle className="text-sm sm:text-base font-bold flex items-center justify-between gap-2">
+              <span className="truncate">{drilldownModal.title}</span>
+              {drilldownModal.totalAmount !== undefined && (
+                <span className="font-mono text-xs sm:text-sm font-bold text-teal-600 dark:text-teal-400 shrink-0">
+                  Total: PKR {drilldownModal.totalAmount.toLocaleString()}
+                </span>
+              )}
+            </DialogTitle>
+            {drilldownModal.subtitle && (
+              <p className="text-xs text-muted-foreground">{drilldownModal.subtitle}</p>
+            )}
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-border/60 py-2">
+            {drilldownModal.items.length === 0 ? (
+              <p className="py-8 text-center text-xs text-muted-foreground">
+                No detailed items found
+              </p>
+            ) : (
+              drilldownModal.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="py-2.5 px-2 flex items-center justify-between gap-3 text-xs hover:bg-muted/40 rounded-lg transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold text-foreground">
+                        {item.reference}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {item.date}
+                      </span>
+                    </div>
+                    <p className="font-medium text-slate-700 dark:text-slate-300 truncate mt-0.5">
+                      {item.title}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`font-mono font-bold block ${
+                        item.badgeVariant === "red"
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-emerald-600 dark:text-emerald-400"
+                      }`}
+                    >
+                      PKR {item.amount.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground capitalize">
+                      {item.type}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

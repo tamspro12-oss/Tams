@@ -154,11 +154,26 @@ function AppSidebar() {
             {agencyLoading ? (
               <Skeleton className="h-4 w-28 my-1" />
             ) : (
-              <span className="block font-bold text-sidebar-foreground text-sm md:text-base truncate tracking-tight">
-                {agency?.name || 'TAMS Pro'}
-              </span>
+              <>
+                <span className="block font-bold text-sidebar-foreground text-sm md:text-base truncate tracking-tight">
+                  {agency?.name || "Your Agency"}
+                </span>
+                {!agency?.name && (
+                  <Link
+                    to="/app/settings"
+                    onClick={handleNavClick}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 dark:text-amber-400 hover:underline block truncate font-medium"
+                  >
+                    Set name in Settings →
+                  </Link>
+                )}
+              </>
             )}
-            <p className="text-[11px] text-sidebar-foreground/50 font-medium hidden md:block tracking-wide uppercase">Agency Manager</p>
+            {agency?.name && (
+              <p className="text-[11px] text-sidebar-foreground/50 font-medium hidden md:block tracking-wide uppercase">
+                Agency Manager
+              </p>
+            )}
           </div>
         </div>
 
@@ -260,7 +275,7 @@ function AppSidebar() {
               <Skeleton className="h-3.5 w-24 my-0.5" />
             ) : (
               <p className="font-semibold text-sidebar-foreground/60 text-xs truncate">
-                {agency?.name || 'TAMS Pro'}
+                {agency?.name || 'Your Agency'}
               </p>
             )}
             <p className="font-medium mt-0.5">Developed by TAMS Pro</p>
@@ -305,7 +320,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {agencyLoading ? (
                   <Skeleton className="h-4 w-28" />
                 ) : (
-                  <span className="font-semibold text-sm text-foreground truncate">{agency?.name || 'TAMS Pro'}</span>
+                  <span className="font-semibold text-sm text-foreground truncate">{agency?.name || 'Your Agency'}</span>
                 )}
               </div>
             </div>

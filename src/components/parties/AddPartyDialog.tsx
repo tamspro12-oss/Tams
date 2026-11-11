@@ -122,6 +122,10 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Party name is required");
       return;

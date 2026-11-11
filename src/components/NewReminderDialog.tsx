@@ -160,6 +160,10 @@ export function NewReminderDialog({
   const vendorParties = useMemo(() => parties.filter((p) => p.type === "vendor" || p.type === "both"), [parties]);
 
   const handleSave = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
     if (!title.trim()) {
       toast.error("Reminder title is required");
       return;
@@ -214,7 +218,7 @@ export function NewReminderDialog({
 
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error(err.message || "Failed to save reminder");
+      toast.error(`Could not save: ${err.message || "Failed to save reminder"}`);
     } finally {
       setIsSubmitting(false);
     }

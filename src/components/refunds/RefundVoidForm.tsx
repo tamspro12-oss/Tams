@@ -241,6 +241,11 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   };
 
   const handleSave = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
+
     if (!invoiceSearch.trim() && !matchedBooking) {
       toast.error("Please specify target invoice, PNR, or ticket number");
       return;
@@ -319,7 +324,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       if (onSuccess) onSuccess();
       // Keep modal open so user can enter next record quickly!
     } catch (err: any) {
-      toast.error(err.message || "Failed to process request");
+      toast.error(`Could not save: ${err.message || "Failed to process request"}`);
     } finally {
       setIsSubmitting(false);
     }

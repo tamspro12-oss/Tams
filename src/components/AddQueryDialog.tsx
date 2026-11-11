@@ -47,6 +47,11 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
       notes: formData.get("notes") as string,
     };
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
+
     try {
       if (editQuery) {
         await updateQuery.mutateAsync({ id: editQuery.id, query: queryData });
@@ -59,7 +64,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
       onOpenChange(false);
     } catch (error: any) {
       const errorMessage = error?.message || (editQuery ? "Failed to update query" : "Failed to add query");
-      toast.error(errorMessage);
+      toast.error(`Could not save: ${errorMessage}`);
     }
   };
 

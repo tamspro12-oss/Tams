@@ -262,6 +262,11 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   // Handle Save
   const handleSave = async (downloadConfirmation = false, downloadInvoice = false) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
+
     if (!partyId && !passengers[0]?.name.trim()) {
       toast.error("Please select a client or enter a passenger name");
       return;
@@ -269,6 +274,11 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
     if (clientAmtNum <= 0) {
       toast.error("Total amount must be greater than zero");
+      return;
+    }
+
+    if (amountPaidNum > clientAmtNum) {
+      toast.error("Could not save: Paid amount cannot exceed total client amount");
       return;
     }
 
@@ -380,7 +390,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error(err.message || "Failed to save booking invoice");
+      toast.error(`Could not save: ${err.message || "Failed to save booking invoice"}`);
     } finally {
       setIsSubmitting(false);
     }

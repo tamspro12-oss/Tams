@@ -338,6 +338,10 @@ export default function QuotationFormPage() {
   };
 
   const handleSave = async (andDownloadPdf: boolean = false) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
     if (!validate()) return;
 
     setIsSubmitting(true);
@@ -372,7 +376,7 @@ export default function QuotationFormPage() {
 
       navigate("/app/leads-quotes?tab=quotations");
     } catch (e: any) {
-      toast.error(e?.message || "Failed to save quotation");
+      toast.error(`Could not save: ${e?.message || "Failed to save quotation"}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -981,62 +985,62 @@ export default function QuotationFormPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom Footer Bar: Sticky footer with Cancel and Save Buttons */}
-        <div
-          className="sticky bottom-0 bg-background/95 backdrop-blur-sm py-2.5 px-3 sm:px-4 border-t border-border/70 flex items-center justify-between gap-3 shrink-0 z-30 shadow-md mt-auto"
+      {/* Bottom Footer Bar: Always visible sticky/fixed footer */}
+      <div
+        className="shrink-0 bg-background/95 backdrop-blur-sm py-2.5 px-3 sm:px-4 border-t border-border/70 flex items-center justify-between gap-3 z-30 shadow-md"
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleClose}
+          className="h-8.5 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleClose}
-            className="h-8.5 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </Button>
+          Cancel
+        </Button>
 
-          <div className="flex items-center gap-2">
-            {isEdit && !convertedBookingId && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleConvertToBooking}
-                className="h-8.5 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-              >
-                <ArrowRightCircle className="w-3.5 h-3.5" />
-                <span>Convert to Booking</span>
-              </Button>
-            )}
-
+        <div className="flex items-center gap-2">
+          {isEdit && !convertedBookingId && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              tabIndex={13}
-              onClick={() => handleSave(true)}
-              disabled={isSubmitting}
-              className="h-8.5 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
-              title="Save and download PDF (Ctrl+Shift+Enter)"
+              onClick={handleConvertToBooking}
+              className="h-8.5 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Save & PDF</span>
+              <ArrowRightCircle className="w-3.5 h-3.5" />
+              <span>Convert to Booking</span>
             </Button>
+          )}
 
-            <Button
-              type="button"
-              size="sm"
-              tabIndex={14}
-              onClick={() => handleSave(false)}
-              disabled={isSubmitting}
-              className="h-8.5 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-              title="Save Quotation (Ctrl+Enter)"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            tabIndex={13}
+            onClick={() => handleSave(true)}
+            disabled={isSubmitting}
+            className="h-8.5 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
+            title="Save and download PDF (Ctrl+Shift+Enter)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Save & PDF</span>
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            tabIndex={14}
+            onClick={() => handleSave(false)}
+            disabled={isSubmitting}
+            className="h-8.5 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+            title="Save Quotation (Ctrl+Enter)"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
+          </Button>
         </div>
       </div>
     </div>

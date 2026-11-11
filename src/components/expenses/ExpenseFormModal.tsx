@@ -190,6 +190,10 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline, not saved");
+      return;
+    }
     const numAmount = parseFloat(amount) || 0;
     if (numAmount <= 0) {
       toast.error("Expense amount must be greater than zero");
@@ -256,7 +260,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       if (onSuccess) onSuccess();
       // Keep modal open so user can enter the next record quickly!
     } catch (err: any) {
-      toast.error(err.message || "Failed to record expense");
+      toast.error(`Could not save: ${err.message || "Failed to record expense"}`);
     } finally {
       setIsSubmitting(false);
     }

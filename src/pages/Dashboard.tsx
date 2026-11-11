@@ -27,6 +27,8 @@ import { useNavigate } from "react-router-dom";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useAgency } from "@/hooks/useAgency";
+import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
 import {
   Popover,
   PopoverContent,
@@ -41,6 +43,7 @@ import { CopyValue } from "@/components/ui/CopyValue";
 export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: agency } = useAgency();
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
 
   // 1. Unified Parties for Client & Vendor Dues (100% parity with Clients & Vendors page)
@@ -123,22 +126,11 @@ export default function Dashboard() {
     return rawInvoices.filter((inv: any) => (inv.invoice_date || "") === todayStr).length;
   }, [rawInvoices]);
 
-  // Overdue Invoices: same Remaining Due Date logic as Reports page
+  // Overdue Invoices: shared Remaining Due Date logic with Reports and Notifications
   const overdueInvoicesCount = useMemo(() => {
-    const todayStr = format(new Date(), "yyyy-MM-dd");
     return rawInvoices.filter((inv: any) => {
-      const isPaid =
-        inv.payment_status === "paid" ||
-        Number(inv.client_amount || 0) <= Number(inv.paid_amount || 0);
-      if (isPaid) return false;
-
-      const dueDate =
-        inv.more_details?.remaining_due_date ||
-        inv.remaining_payment_date ||
-        inv.invoice_date ||
-        todayStr;
-
-      return dueDate < todayStr;
+      const { isOverdue } = getInvoiceOverdueInfo(inv);
+      return isOverdue;
     }).length;
   }, [rawInvoices]);
 
@@ -228,7 +220,7 @@ export default function Dashboard() {
               Dashboard
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">
-              Welcome back! Here's your agency performance & daily operations overview
+              Welcome back to <span className="font-semibold text-slate-800 dark:text-slate-200">{agency?.name || "Your Agency"}</span>! Here's your operations and performance overview
             </p>
           </div>
 

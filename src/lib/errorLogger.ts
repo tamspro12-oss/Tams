@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 // Anonymous error logging system
 interface ErrorLog {
   timestamp: string;
@@ -70,6 +72,29 @@ export class ErrorLogger {
       }
 
       localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(logs));
+
+      // Asynchronous remote audit logging to error_logs table
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        supabase.auth
+          .getUser()
+          .then(({ data: { user } }) => {
+            (supabase as any)
+              .from("error_logs")
+              .insert({
+                user_id: user?.id || null,
+                page: error.url || (typeof window !== "undefined" ? window.location.pathname : ""),
+                error_message: error.message,
+                error_stack: error.stack || null,
+                context: {
+                  userAgent: navigator.userAgent,
+                  timestamp: new Date().toISOString(),
+                },
+              })
+              .then(() => {})
+              .catch(() => {});
+          })
+          .catch(() => {});
+      }
     } catch (e) {
       console.error('Failed to log error:', e);
     }

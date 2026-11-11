@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 export interface FilterState {
-  dateRange: "today" | "this_month" | "custom" | "all";
+  dateRange: "today" | "this_month" | "last_month" | "custom" | "all";
   startDate?: string;
   endDate?: string;
   partyId?: string; // specific client/vendor ID or "all"
@@ -106,6 +106,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <SelectContent>
               <SelectItem value="today">Today</SelectItem>
               <SelectItem value="this_month">This Month</SelectItem>
+              <SelectItem value="last_month">Last Month</SelectItem>
               <SelectItem value="custom">Custom</SelectItem>
               <SelectItem value="all">All Time</SelectItem>
             </SelectContent>

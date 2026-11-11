@@ -142,6 +142,10 @@ export default function QueryFormPage() {
 
   const handleSave = useCallback(
     async (andAddAnother: boolean = false) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        toast.error("You are offline, not saved");
+        return;
+      }
       if (!validate()) return;
 
       setIsSubmitting(true);
@@ -181,7 +185,7 @@ export default function QueryFormPage() {
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to save query";
-        toast.error(msg);
+        toast.error(`Could not save: ${msg}`);
       } finally {
         setIsSubmitting(false);
       }

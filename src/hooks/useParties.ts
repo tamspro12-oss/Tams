@@ -126,7 +126,7 @@ export function useParties() {
       toast.success("Party saved successfully");
     },
     onError: (err: any) => {
-      toast.error(err.message || "Failed to save party");
+      toast.error(`Could not save: ${err.message || "Failed to save party"}`);
     },
   });
 
@@ -146,7 +146,7 @@ export function useParties() {
       toast.success("Party updated successfully");
     },
     onError: (err: any) => {
-      toast.error(err.message || "Failed to update party");
+      toast.error(`Could not save: ${err.message || "Failed to update party"}`);
     },
   });
 
