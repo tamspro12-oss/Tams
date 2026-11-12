@@ -15,6 +15,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useQueryClient } from "@tanstack/react-query";
 import { LockedDateField } from "@/components/ui/LockedDateField";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
+import { SearchableSelect, SearchableSelectItem } from "@/components/ui/SearchableSelect";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -182,6 +183,26 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     () => parties.filter((p) => p.type === "vendor" || p.type === "both"),
     [parties]
   );
+
+  const clientSelectItems: SearchableSelectItem[] = useMemo(() => {
+    return clientsList.map((c) => ({
+      id: c.id,
+      label: c.name,
+      sublabel: [c.code, c.phone].filter(Boolean).join(" • "),
+      badge: c.type === "both" ? "Both" : undefined,
+      searchText: `${c.name} ${c.code || ""} ${c.phone || ""} ${c.email || ""}`,
+    }));
+  }, [clientsList]);
+
+  const vendorSelectItems: SearchableSelectItem[] = useMemo(() => {
+    return vendorsList.map((v) => ({
+      id: v.id,
+      label: v.name,
+      sublabel: [v.code, v.phone].filter(Boolean).join(" • "),
+      badge: v.type === "both" ? "Both" : undefined,
+      searchText: `${v.name} ${v.code || ""} ${v.phone || ""}`,
+    }));
+  }, [vendorsList]);
 
   const handleClientSelect = (id: string) => {
     setPartyId(id);
@@ -476,18 +497,18 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   <Plus className="w-2.5 h-2.5" /> Quick Add
                 </button>
               </div>
-              <Select value={partyId} onValueChange={handleClientSelect}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
-                  <SelectValue placeholder="Select Client" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {clientsList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} {c.code ? `(${c.code})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-0.5">
+                <SearchableSelect
+                  value={partyId}
+                  onChange={handleClientSelect}
+                  items={clientSelectItems}
+                  placeholder="Select Client"
+                  searchPlaceholder="Search clients by name, code, phone..."
+                  emptyText="No clients found"
+                  onQuickAdd={() => setIsAddClientOpen(true)}
+                  quickAddLabel="Add New Client"
+                />
+              </div>
             </div>
 
             {/* 4. Vendor (with + Quick Add) */}
@@ -504,19 +525,20 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   <Plus className="w-2.5 h-2.5" /> Quick Add
                 </button>
               </div>
-              <Select value={vendorId} onValueChange={setVendorId}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
-                  <SelectValue placeholder="Direct / None" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  <SelectItem value="none">Direct / None</SelectItem>
-                  {vendorsList.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-0.5">
+                <SearchableSelect
+                  value={vendorId}
+                  onChange={(val) => setVendorId(val)}
+                  items={vendorSelectItems}
+                  placeholder="Select Vendor"
+                  searchPlaceholder="Search vendors by name, code, phone..."
+                  emptyText="No vendors found"
+                  allowClear
+                  clearLabel="Clear Vendor (None)"
+                  onQuickAdd={() => setIsAddVendorOpen(true)}
+                  quickAddLabel="Add New Vendor"
+                />
+              </div>
             </div>
 
             {/* Service-Specific Top Row Field */}
@@ -1274,6 +1296,28 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           </Button>
         </div>
       </DialogContent>
+
+      {/* Quick Add Client Dialog */}
+      <AddPartyDialog
+        open={isAddClientOpen}
+        onOpenChange={setIsAddClientOpen}
+        initialType="client"
+        lockType
+        onSaved={(newParty) => {
+          handleClientSelect(newParty.id);
+        }}
+      />
+
+      {/* Quick Add Vendor Dialog */}
+      <AddPartyDialog
+        open={isAddVendorOpen}
+        onOpenChange={setIsAddVendorOpen}
+        initialType="vendor"
+        lockType
+        onSaved={(newParty) => {
+          setVendorId(newParty.id);
+        }}
+      />
     </Dialog>
   );
 };

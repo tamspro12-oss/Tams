@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Plus } from "lucide-react";
 import { useAgencyBanks } from "@/hooks/useAgencyBanks";
 import { AddBankDialog } from "@/components/banks/AddBankDialog";
+import { SearchableSelect, SearchableSelectItem } from "@/components/ui/SearchableSelect";
 
 interface AgencyBankSelectProps {
   value: string;
@@ -19,14 +19,29 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
   onChange,
   label = "Bank Account",
   required = true,
-  placeholder = "Select Agency Bank",
+  placeholder = "Select Bank",
   className = "",
 }) => {
-  const { banks, isLoading } = useAgencyBanks();
+  const { banks } = useAgencyBanks();
   const [isAddBankOpen, setIsAddBankOpen] = useState(false);
 
   // Filter only active agency banks
   const activeBanks = (banks || []).filter((b) => b.is_active !== false);
+
+  const bankItems: SearchableSelectItem[] = useMemo(() => {
+    return activeBanks.map((b) => {
+      const sub = b.account_number
+        ? `${b.account_title ? b.account_title + " • " : ""}${b.account_number}${b.branch_name ? " • " + b.branch_name : ""}`
+        : b.account_title || undefined;
+
+      return {
+        id: b.bank_name,
+        label: b.bank_name,
+        sublabel: sub,
+        searchText: `${b.bank_name} ${b.account_title || ""} ${b.account_number || ""} ${b.branch_name || ""}`,
+      };
+    });
+  }, [activeBanks]);
 
   return (
     <div className={`space-y-1 ${className}`}>
@@ -40,40 +55,24 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
           onClick={() => setIsAddBankOpen(true)}
           className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer hover:underline"
         >
-          <Plus className="w-2.5 h-2.5" /> Quick Bank
+          <Plus className="w-2.5 h-2.5" /> Quick Add
         </button>
       </div>
 
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-xs mt-0.5">
-          <SelectValue placeholder={isLoading ? "Loading banks..." : placeholder} />
-        </SelectTrigger>
-        <SelectContent className="max-h-56">
-          {activeBanks.length === 0 ? (
-            <div className="p-3 text-center text-xs text-muted-foreground">
-              <p>No agency bank accounts registered.</p>
-              <button
-                type="button"
-                onClick={() => setIsAddBankOpen(true)}
-                className="mt-1.5 text-xs text-blue-600 font-semibold underline cursor-pointer"
-              >
-                + Register First Bank
-              </button>
-            </div>
-          ) : (
-            activeBanks.map((b) => {
-              const displayLabel = b.account_number
-                ? `${b.bank_name} - ${b.account_title || ""} (${b.account_number})`
-                : b.bank_name;
-              return (
-                <SelectItem key={b.id} value={b.bank_name}>
-                  {displayLabel}
-                </SelectItem>
-              );
-            })
-          )}
-        </SelectContent>
-      </Select>
+      <div className="mt-0.5">
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          items={bankItems}
+          placeholder={placeholder}
+          searchPlaceholder="Search bank by name, title, account #..."
+          emptyText="No banks found"
+          allowClear={!required}
+          clearLabel="Clear Bank (None)"
+          onQuickAdd={() => setIsAddBankOpen(true)}
+          quickAddLabel="Add New Bank"
+        />
+      </div>
 
       <AddBankDialog
         open={isAddBankOpen}
@@ -85,4 +84,3 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
     </div>
   );
 };
-

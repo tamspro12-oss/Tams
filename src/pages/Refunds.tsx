@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { exportRowsToExcel, exportRowsToPDF } from "@/lib/simpleExport";
+import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 
 const emptyForm: RefundInput = {
   client_id: null,
@@ -302,9 +303,27 @@ export default function Refunds() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Bank {form.payment_mode === "bank" && "*"}</Label>
-                <Input value={form.bank_name || ""} onChange={(e) => setForm({ ...form, bank_name: e.target.value || null })} placeholder="Bank name" aria-invalid={!!errors.bank_name} className={errors.bank_name ? "border-destructive" : ""} />
+              <div className="space-y-1">
+                {form.payment_mode === "bank" ? (
+                  <AgencyBankSelect
+                    value={form.bank_name || ""}
+                    onChange={(v) => setForm({ ...form, bank_name: v || null })}
+                    label="Bank"
+                    required={true}
+                  />
+                ) : (
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Bank Name (Optional)
+                    </Label>
+                    <Input
+                      value={form.bank_name || ""}
+                      onChange={(e) => setForm({ ...form, bank_name: e.target.value || null })}
+                      placeholder="e.g. Bank name"
+                      className="h-8 text-xs mt-0.5 rounded-none"
+                    />
+                  </div>
+                )}
                 {errors.bank_name && <p className="text-xs text-destructive">{errors.bank_name}</p>}
               </div>
             </div>

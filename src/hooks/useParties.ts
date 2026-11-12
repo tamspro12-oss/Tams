@@ -34,65 +34,93 @@ export function useParties() {
   const { data: parties = [], isLoading, error } = useQuery({
     queryKey: ["parties", userAgencyId],
     queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [] as Party[];
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId()) || localStorage.getItem("tams_agency_id");
 
-      // 1. Try querying parties table strictly by agency_id
-      const { data, error } = await (supabase as any)
-        .from("parties")
-        .select("*")
-        .eq("agency_id", activeAgencyId)
-        .order("name", { ascending: true });
-
-      if (!error && data && data.length > 0) {
-        return data as Party[];
-      }
-
-      // 2. Fallback: Aggregate from existing clients and vendors for this agency
-      const [clientsRes, vendorsRes] = await Promise.all([
-        supabase
-          .from("clients")
-          .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
-          .eq("agency_id", activeAgencyId),
-        supabase
-          .from("vendors")
-          .select("id, agency_id, name, phone, city, total_payable, amount_paid, created_at")
-          .eq("agency_id", activeAgencyId),
+      // Query parties, legacy clients, and legacy vendors in parallel so no party is ever missing
+      const [partiesRes, clientsRes, vendorsRes] = await Promise.all([
+        activeAgencyId
+          ? (supabase as any)
+              .from("parties")
+              .select("*")
+              .eq("agency_id", activeAgencyId)
+              .order("name", { ascending: true })
+          : (supabase as any)
+              .from("parties")
+              .select("*")
+              .order("name", { ascending: true })
+              .limit(500),
+        activeAgencyId
+          ? supabase
+              .from("clients")
+              .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
+              .eq("agency_id", activeAgencyId)
+          : supabase
+              .from("clients")
+              .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
+              .limit(500),
+        activeAgencyId
+          ? supabase
+              .from("vendors")
+              .select("id, agency_id, name, phone, city, total_payable, amount_paid, created_at")
+              .eq("agency_id", activeAgencyId)
+          : supabase
+              .from("vendors")
+              .select("id, agency_id, name, phone, city, total_payable, amount_paid, created_at")
+              .limit(500),
       ]);
 
-      const clientParties: Party[] = (clientsRes.data || []).map((c: any) => ({
-        id: c.id,
-        agency_id: c.agency_id || activeAgencyId,
-        type: "client",
-        name: c.name,
-        code: `CLT-${c.id.slice(0, 4).toUpperCase()}`,
-        phone: c.contact_number,
-        whatsapp: c.contact_number,
-        city: c.destination || "",
-        credit_limit: 0,
-        opening_balance: 0,
-        current_balance: Math.max(0, (c.selling_price || 0) - (c.amount_paid || 0)),
-        active: true,
-        created_at: c.created_at,
-      }));
+      const directParties: Party[] = (partiesRes.data || []) as Party[];
+      const seenIds = new Set(directParties.map((p) => p.id));
+      const seenClientNames = new Set(
+        directParties
+          .filter((p) => p.type === "client" || p.type === "both")
+          .map((p) => (p.name || "").trim().toLowerCase())
+      );
+      const seenVendorNames = new Set(
+        directParties
+          .filter((p) => p.type === "vendor" || p.type === "both")
+          .map((p) => (p.name || "").trim().toLowerCase())
+      );
 
-      const vendorParties: Party[] = (vendorsRes.data || []).map((v: any) => ({
-        id: v.id,
-        agency_id: v.agency_id || activeAgencyId,
-        type: "vendor",
-        name: v.name,
-        code: `VND-${v.id.slice(0, 4).toUpperCase()}`,
-        phone: v.phone,
-        whatsapp: v.phone,
-        city: v.city || "",
-        credit_limit: 0,
-        opening_balance: 0,
-        current_balance: -Math.max(0, (v.total_payable || 0) - (v.amount_paid || 0)),
-        active: true,
-        created_at: v.created_at,
-      }));
+      const clientParties: Party[] = (clientsRes.data || [])
+        .filter((c: any) => !seenIds.has(c.id) && !seenClientNames.has((c.name || "").trim().toLowerCase()))
+        .map((c: any) => ({
+          id: c.id,
+          agency_id: c.agency_id || activeAgencyId || "",
+          type: "client" as const,
+          name: c.name,
+          code: `CLT-${c.id.slice(0, 4).toUpperCase()}`,
+          phone: c.contact_number,
+          whatsapp: c.contact_number,
+          city: c.destination || "",
+          credit_limit: 0,
+          opening_balance: 0,
+          current_balance: Math.max(0, (c.selling_price || 0) - (c.amount_paid || 0)),
+          active: true,
+          created_at: c.created_at || new Date().toISOString(),
+        }));
 
-      return [...clientParties, ...vendorParties];
+      const vendorParties: Party[] = (vendorsRes.data || [])
+        .filter((v: any) => !seenIds.has(v.id) && !seenVendorNames.has((v.name || "").trim().toLowerCase()))
+        .map((v: any) => ({
+          id: v.id,
+          agency_id: v.agency_id || activeAgencyId || "",
+          type: "vendor" as const,
+          name: v.name,
+          code: `VND-${v.id.slice(0, 4).toUpperCase()}`,
+          phone: v.phone,
+          whatsapp: v.phone,
+          city: v.city || "",
+          credit_limit: 0,
+          opening_balance: 0,
+          current_balance: -Math.max(0, (v.total_payable || 0) - (v.amount_paid || 0)),
+          active: true,
+          created_at: v.created_at || new Date().toISOString(),
+        }));
+
+      const combined = [...directParties, ...clientParties, ...vendorParties];
+      combined.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return combined;
     },
     enabled: true,
   });

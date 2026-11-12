@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Banknote, Building2, Plus, PlusCircle } from "lucide-react";
 import { useAgencyBanks } from "@/hooks/useAgencyBanks";
+import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { toast } from "sonner";
 
 interface PaymentModeSelectProps {
@@ -116,55 +117,16 @@ export function PaymentModeSelect({
 
         {/* Bank selection - only shows when payment mode is 'bank' */}
         {value === "bank" && (
-          <div className="space-y-2 ml-6 pl-4 border-l-2 border-primary/20">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-primary" />
-              Select Bank
-            </Label>
-
-            {userBanks.length === 0 ? (
-              // No banks added yet - show prompt to add
-              <div className="p-4 border border-dashed rounded-lg bg-muted/30 text-center">
-                <Building2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">No bank accounts added yet</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowQuickAdd(true)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Bank
-                </Button>
-              </div>
-            ) : (
-              // Show user's banks with quick add option
-              <Select value={selectedBank} onValueChange={handleBankSelect}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select your bank" />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* User's banks */}
-                  {userBanks.map((bank: string) => (
-                    <SelectItem key={bank} value={bank}>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-blue-600" />
-                        {bank}
-                      </div>
-                    </SelectItem>
-                  ))}
-
-                  {/* Divider and Quick Add option */}
-                  <div className="border-t my-1" />
-                  <SelectItem value="__add_new__" className="text-primary">
-                    <div className="flex items-center gap-2">
-                      <PlusCircle className="w-4 h-4" />
-                      Add New Bank...
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+          <div className="space-y-1 ml-6 pl-4 border-l-2 border-primary/20">
+            <AgencyBankSelect
+              value={selectedBank}
+              onChange={(bank) => {
+                setSelectedBank(bank);
+                onBankNameChange?.(bank);
+              }}
+              label="Select Bank"
+              required={required}
+            />
           </div>
         )}
       </div>

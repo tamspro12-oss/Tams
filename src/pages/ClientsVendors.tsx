@@ -37,12 +37,30 @@ import {
   Mail,
   MapPin,
   Building,
+  Building2,
   Wallet,
   Clock,
+  Edit,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
+import { useAgencyBanks, AgencyBank } from "@/hooks/useAgencyBanks";
+import { AddBankDialog } from "@/components/banks/AddBankDialog";
+import { useAccounts } from "@/hooks/useUnifiedTransactions";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ClientsVendors() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,6 +76,244 @@ export default function ClientsVendors() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">(urlType || "all");
   const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">(urlBalance || "all");
+
+  // Tabs: Parties vs Banks
+  const urlTab = searchParams.get("tab") as "parties" | "banks" | null;
+  const [activeTab, setActiveTab] = useState<"parties" | "banks">(urlTab || "parties");
+
+  // Banks data & state
+  const { banks = [], deleteBank } = useAgencyBanks();
+  const { accounts = [] } = useAccounts();
+  const [bankSearchQuery, setBankSearchQuery] = useState("");
+  const [isAddBankOpen, setIsAddBankOpen] = useState(false);
+  const [bankToEdit, setBankToEdit] = useState<AgencyBank | null>(null);
+  const [bankToDelete, setBankToDelete] = useState<AgencyBank | null>(null);
+  const [isDeletingBank, setIsDeletingBank] = useState(false);
+
+  // Synchronize banks with account balances
+  const banksWithBalance = useMemo(() => {
+    return (banks || []).map((b) => {
+      const matchedAcc = accounts.find(
+        (a) =>
+          a.type === "bank" &&
+          (a.name.toLowerCase() === b.bank_name.toLowerCase() ||
+            (b.account_number && a.name.includes(b.account_number)) ||
+            a.name.toLowerCase().includes(b.bank_name.toLowerCase()))
+      );
+      const balance = matchedAcc ? matchedAcc.current_balance : Number(b.opening_balance) || 0;
+      return {
+        ...b,
+        current_balance: balance,
+      };
+    });
+  }, [banks, accounts]);
+
+  // Filtered banks by search query
+  const filteredBanks = useMemo(() => {
+    const q = bankSearchQuery.trim().toLowerCase();
+    if (!q) return banksWithBalance;
+    return banksWithBalance.filter((b) => {
+      const name = (b.bank_name || "").toLowerCase();
+      const title = (b.account_title || "").toLowerCase();
+      const accNo = (b.account_number || "").toLowerCase();
+      const branch = (b.branch_name || "").toLowerCase();
+      return name.includes(q) || title.includes(q) || accNo.includes(q) || branch.includes(q);
+    });
+  }, [banksWithBalance, bankSearchQuery]);
+
+  const totalBankBalance = useMemo(() => {
+    return banksWithBalance.reduce((sum, b) => sum + (b.current_balance || 0), 0);
+  }, [banksWithBalance]);
+
+  const activeBanksCount = useMemo(() => {
+    return banksWithBalance.filter((b) => b.is_active !== false).length;
+  }, [banksWithBalance]);
+
+  // Delete bank with transaction check
+  const handleDeleteBankConfirm = async () => {
+    if (!bankToDelete) return;
+    setIsDeletingBank(true);
+    try {
+      const bankName = bankToDelete.bank_name;
+      const agencyId = bankToDelete.agency_id;
+
+      // Check transactions across tables
+      const [invoicesRes, expensesRes, b2bRes, clientPmtRes, vendorPmtRes, refundsRes] = await Promise.all([
+        (supabase as any)
+          .from("booking_invoices")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+        (supabase as any)
+          .from("expenses")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+        (supabase as any)
+          .from("b2b_ledger")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+        (supabase as any)
+          .from("client_payment_history")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+        (supabase as any)
+          .from("vendor_payment_history")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+        (supabase as any)
+          .from("refunds")
+          .select("id")
+          .eq("agency_id", agencyId)
+          .eq("bank_name", bankName)
+          .limit(1),
+      ]);
+
+      const hasTransactions =
+        Boolean(invoicesRes.data && invoicesRes.data.length > 0) ||
+        Boolean(expensesRes.data && expensesRes.data.length > 0) ||
+        Boolean(b2bRes.data && b2bRes.data.length > 0) ||
+        Boolean(clientPmtRes.data && clientPmtRes.data.length > 0) ||
+        Boolean(vendorPmtRes.data && vendorPmtRes.data.length > 0) ||
+        Boolean(refundsRes.data && refundsRes.data.length > 0);
+
+      if (hasTransactions) {
+        toast.error("Cannot delete bank account", {
+          description: `Bank "${bankName}" has existing transactions. Deleting it would break historical records.`,
+        });
+        setBankToDelete(null);
+        return;
+      }
+
+      await deleteBank.mutateAsync(bankToDelete.id);
+      setBankToDelete(null);
+    } catch (err: any) {
+      toast.error(`Failed to delete bank: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsDeletingBank(false);
+    }
+  };
+
+  const bankColumns: GridColumn<any>[] = [
+    {
+      key: "bank_name",
+      header: "Bank Name",
+      minWidth: 160,
+      render: (b) => (
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded-none bg-blue-50 dark:bg-blue-950/40 text-blue-600 shrink-0">
+            <Building2 className="w-3.5 h-3.5" />
+          </div>
+          <CopyValue
+            value={b.bank_name}
+            label="bank name"
+            className="font-semibold text-slate-900 dark:text-slate-100 block"
+          />
+        </div>
+      ),
+    },
+    {
+      key: "account_title",
+      header: "Account Title",
+      minWidth: 160,
+      render: (b) => (
+        <span className="text-slate-700 dark:text-slate-200">
+          {b.account_title || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "account_number",
+      header: "Account No",
+      width: 160,
+      render: (b) => (
+        <CopyValue
+          value={b.account_number || "—"}
+          label="account number"
+          className="font-mono text-xs text-slate-800 dark:text-slate-200"
+        />
+      ),
+    },
+    {
+      key: "branch_name",
+      header: "Branch",
+      width: 140,
+      render: (b) => (
+        <span className="text-slate-600 dark:text-slate-300">
+          {b.branch_name || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "current_balance",
+      header: "Current Balance",
+      width: 150,
+      isNumeric: true,
+      align: "right",
+      totalType: "sum",
+      render: (b) => {
+        const bal = b.current_balance || 0;
+        return (
+          <div className="text-right">
+            <span
+              className={`font-mono text-xs font-bold ${
+                bal >= 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              PKR {bal.toLocaleString()}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: 120,
+      align: "center",
+      sortable: false,
+      filterable: false,
+      render: (b) => (
+        <div className="flex items-center justify-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setBankToEdit(b);
+              setIsAddBankOpen(true);
+            }}
+            className="h-7 w-7 p-0 text-slate-600 hover:text-blue-600 cursor-pointer rounded-none"
+            title="Edit bank account"
+          >
+            <Edit className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setBankToDelete(b);
+            }}
+            className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 cursor-pointer rounded-none"
+            title="Delete bank account"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   useEffect(() => {
     if (urlType) setTypeFilter(urlType);
@@ -309,121 +565,250 @@ export default function ClientsVendors() {
 
       {/* Page Header */}
       <PageHeader
-        title="Clients & Vendors"
-        subtitle="Manage all party accounts, balances, credit limits, and histories in one single source of truth."
-        actions={
-          <Button
-            onClick={() => {
-              setPartyToEdit(null);
-              setIsAddOpen(true);
-            }}
-            size="sm"
-            className="bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer text-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add New Party
-          </Button>
+        title={activeTab === "parties" ? "Clients & Vendors" : "Agency Banks"}
+        subtitle={
+          activeTab === "parties"
+            ? "Manage all party accounts, balances, credit limits, and histories in one single source of truth."
+            : "Manage registered agency bank accounts, account numbers, and cash flow positions."
         }
-      />
-
-      {/* Top Totals Bar: Summary cards only (Client Dues, Vendor Dues, Total Parties). Excel and WhatsApp buttons removed */}
-      <TotalsBar
-        metrics={[
-          {
-            label: "Client Dues (Receivable)",
-            value: clientDues,
-            prefix: "PKR",
-            highlight: "red",
-          },
-          {
-            label: "Vendor Dues (Payable)",
-            value: vendorDues,
-            prefix: "PKR",
-            highlight: "emerald",
-          },
-          {
-            label: "Total Parties",
-            value: parties.length,
-            highlight: "neutral",
-          },
-        ]}
-      />
-
-      {/* Filter Row: Search bar, All Types, All Balances (All Cities removed) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onPaste={(e) => {
-              const pasted = e.clipboardData.getData("text");
-              if (pasted) {
-                e.preventDefault();
-                setSearchQuery(cleanPastedSearch(pasted));
-              }
-            }}
-            placeholder="Search party by code, name, phone, email, city, address..."
-            className="pl-8 h-9 text-xs"
-          />
-        </div>
-
-        <Select value={typeFilter} onValueChange={(val: any) => setTypeFilter(val)}>
-          <SelectTrigger className="h-9 w-[120px] text-xs">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="client">Clients</SelectItem>
-            <SelectItem value="vendor">Vendors</SelectItem>
-            <SelectItem value="both">Both</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={balanceFilter} onValueChange={(val: any) => setBalanceFilter(val)}>
-          <SelectTrigger className="h-9 w-[130px] text-xs">
-            <SelectValue placeholder="Balance" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Balances</SelectItem>
-            <SelectItem value="has_dues">With Outstanding</SelectItem>
-            <SelectItem value="zero">Zero Balance</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Main Party List Table: Condensed Single-Screen Viewport with Expandable Details */}
-      <ExcelGrid
-        id="parties_master_grid"
-        data={filteredParties}
-        columns={columns}
-        keyExtractor={(p) => p.id}
-        renderExpandedRow={renderExpandedRow}
-        title="Parties & Accounts Ledger"
-        filename="TAMS_Parties_Master"
-        hideColumnsButton={true}
-        hideCopyButton={true}
-        hideExportButton={true}
-        emptyState={
-          <div className="py-12 text-center space-y-3">
-            <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              No parties yet
-            </p>
+        actions={
+          activeTab === "parties" ? (
             <Button
               onClick={() => {
                 setPartyToEdit(null);
                 setIsAddOpen(true);
               }}
               size="sm"
-              className="bg-[#0B192C] hover:bg-[#1E3E62] text-white text-xs gap-1.5 cursor-pointer"
+              className="bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer text-xs rounded-none"
             >
               <Plus className="w-3.5 h-3.5" />
               Add New Party
             </Button>
-          </div>
+          ) : (
+            <Button
+              onClick={() => {
+                setBankToEdit(null);
+                setIsAddBankOpen(true);
+              }}
+              size="sm"
+              className="bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer text-xs rounded-none"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add New Bank
+            </Button>
+          )
         }
       />
+
+      {/* Top Tabs: Parties & Banks */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(val: any) => setActiveTab(val)}
+        className="w-full"
+      >
+        <TabsList className="mb-3 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-none border border-slate-200 dark:border-slate-700">
+          <TabsTrigger
+            value="parties"
+            className="text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5 rounded-none data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900"
+          >
+            <Users className="w-3.5 h-3.5" /> Parties
+          </TabsTrigger>
+          <TabsTrigger
+            value="banks"
+            className="text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5 rounded-none data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900"
+          >
+            <Building2 className="w-3.5 h-3.5" /> Banks
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="parties" className="mt-0 space-y-4">
+          {/* Top Totals Bar */}
+          <TotalsBar
+            metrics={[
+              {
+                label: "Client Dues (Receivable)",
+                value: clientDues,
+                prefix: "PKR",
+                highlight: "red",
+              },
+              {
+                label: "Vendor Dues (Payable)",
+                value: vendorDues,
+                prefix: "PKR",
+                highlight: "emerald",
+              },
+              {
+                label: "Total Parties",
+                value: parties.length,
+                highlight: "neutral",
+              },
+            ]}
+          />
+
+          {/* Filter Row: Search bar, All Types, All Balances */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setSearchQuery(cleanPastedSearch(pasted));
+                  }
+                }}
+                placeholder="Search party by code, name, phone, email, city, address..."
+                className="pl-8 h-9 text-xs rounded-none"
+              />
+            </div>
+
+            <Select value={typeFilter} onValueChange={(val: any) => setTypeFilter(val)}>
+              <SelectTrigger className="h-9 w-[120px] text-xs rounded-none">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="client">Clients</SelectItem>
+                <SelectItem value="vendor">Vendors</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={balanceFilter} onValueChange={(val: any) => setBalanceFilter(val)}>
+              <SelectTrigger className="h-9 w-[130px] text-xs rounded-none">
+                <SelectValue placeholder="Balance" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Balances</SelectItem>
+                <SelectItem value="has_dues">With Outstanding</SelectItem>
+                <SelectItem value="zero">Zero Balance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Main Party List Table */}
+          <ExcelGrid
+            id="parties_master_grid"
+            data={filteredParties}
+            columns={columns}
+            keyExtractor={(p) => p.id}
+            renderExpandedRow={renderExpandedRow}
+            title="Parties & Accounts Ledger"
+            filename="TAMS_Parties_Master"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
+            emptyState={
+              <div className="py-12 text-center space-y-3">
+                <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  No parties yet
+                </p>
+                <Button
+                  onClick={() => {
+                    setPartyToEdit(null);
+                    setIsAddOpen(true);
+                  }}
+                  size="sm"
+                  className="bg-[#0B192C] hover:bg-[#1E3E62] text-white text-xs gap-1.5 cursor-pointer rounded-none"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add New Party
+                </Button>
+              </div>
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="banks" className="mt-0 space-y-4">
+          {/* Top Totals Bar for Banks */}
+          <TotalsBar
+            metrics={[
+              {
+                label: "Total Bank Balance",
+                value: totalBankBalance,
+                prefix: "PKR",
+                highlight: totalBankBalance >= 0 ? "emerald" : "red",
+              },
+              {
+                label: "Total Registered Banks",
+                value: banksWithBalance.length,
+                highlight: "neutral",
+              },
+              {
+                label: "Active Accounts",
+                value: activeBanksCount,
+                highlight: "emerald",
+              },
+            ]}
+          />
+
+          {/* Filter / Search Row for Banks */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={bankSearchQuery}
+                onChange={(e) => setBankSearchQuery(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted) {
+                    e.preventDefault();
+                    setBankSearchQuery(cleanPastedSearch(pasted));
+                  }
+                }}
+                placeholder="Search banks by name, account title, account number, branch..."
+                className="pl-8 h-9 text-xs rounded-none"
+              />
+            </div>
+            <Button
+              onClick={() => {
+                setBankToEdit(null);
+                setIsAddBankOpen(true);
+              }}
+              size="sm"
+              className="bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer text-xs rounded-none h-9"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add New Bank
+            </Button>
+          </div>
+
+          {/* Main Banks Table */}
+          <ExcelGrid
+            id="banks_master_grid"
+            data={filteredBanks}
+            columns={bankColumns}
+            keyExtractor={(b) => b.id}
+            title="Agency Bank Accounts"
+            filename="TAMS_Agency_Banks"
+            hideColumnsButton={true}
+            hideCopyButton={true}
+            hideExportButton={true}
+            emptyState={
+              <div className="py-12 text-center space-y-3">
+                <Building2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  No bank accounts registered yet
+                </p>
+                <Button
+                  onClick={() => {
+                    setBankToEdit(null);
+                    setIsAddBankOpen(true);
+                  }}
+                  size="sm"
+                  className="bg-[#0B192C] hover:bg-[#1E3E62] text-white text-xs gap-1.5 cursor-pointer rounded-none"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add First Bank
+                </Button>
+              </div>
+            }
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Add / Edit Party Dialog */}
       <AddPartyDialog
@@ -438,6 +823,50 @@ export default function ClientsVendors() {
           setPartyToEdit(null);
         }}
       />
+
+      {/* Add / Edit Bank Dialog */}
+      <AddBankDialog
+        open={isAddBankOpen}
+        onOpenChange={(open) => {
+          setIsAddBankOpen(open);
+          if (!open) setBankToEdit(null);
+        }}
+        bankToEdit={bankToEdit}
+      />
+
+      {/* Delete Bank Confirmation Dialog */}
+      <AlertDialog
+        open={Boolean(bankToDelete)}
+        onOpenChange={(open) => !open && setBankToDelete(null)}
+      >
+        <AlertDialogContent className="rounded-none">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <AlertDialogTitle>Delete Bank Account</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-xs text-slate-600 dark:text-slate-300">
+              Are you sure you want to delete bank account{" "}
+              <strong>"{bankToDelete?.bank_name}"</strong>? If this bank has recorded transactions, deletion will be blocked to preserve financial history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDeletingBank}
+              className="text-xs h-8 rounded-none cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingBank}
+              onClick={handleDeleteBankConfirm}
+              className="text-xs h-8 bg-red-600 hover:bg-red-700 text-white rounded-none cursor-pointer"
+            >
+              {isDeletingBank ? "Checking..." : "Delete Bank"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Party Profile Drawer / Modal */}
       <Sheet open={Boolean(selectedParty)} onOpenChange={(open) => !open && setSelectedParty(null)}>
