@@ -5,8 +5,16 @@ import { ThemeProvider } from "next-themes";
 import { ViewModeProvider } from "./contexts/ViewModeContext";
 import { initPwaInstall } from "./lib/pwaInstall";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initDesignEnhancer } from "./lib/designEnhancer";
 import App from "./App.tsx";
 import "./index.css";
+
+// Initialize Global Design Enhancer (Save buttons, customer search boxes, balance & receivable colors)
+try {
+  initDesignEnhancer();
+} catch (e) {
+  console.warn('[TAMS] Design enhancer initialization error:', e);
+}
 
 // Initialize PWA features safely
 try {

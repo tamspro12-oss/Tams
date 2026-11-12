@@ -125,7 +125,8 @@ export const UniversalPartySelect: React.FC<UniversalPartySelectProps> = ({
             type="button"
             role="combobox"
             aria-expanded={open}
-            className={`w-full h-8 px-2.5 py-1 text-xs border rounded-md bg-background flex items-center justify-between text-left focus:outline-none focus:ring-1 focus:ring-ring transition-colors ${
+            data-customer-box="true"
+            className={`w-full h-8 px-2.5 py-1 text-xs border rounded-none bg-background flex items-center justify-between text-left focus:outline-none focus:ring-1 focus:ring-ring transition-colors customer-search-box ${
               !selectedParty && value !== "none" ? "text-muted-foreground" : "text-foreground font-medium"
             }`}
           >
@@ -171,7 +172,8 @@ export const UniversalPartySelect: React.FC<UniversalPartySelectProps> = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(cleanPastedSearch(e.target.value))}
                 placeholder="Type name, party code, or phone..."
-                className="h-8 pl-8 pr-7 text-xs"
+                data-search-box="true"
+                className="h-8 pl-8 pr-7 text-xs customer-search-box"
               />
               {searchTerm && (
                 <button

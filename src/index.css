@@ -8,7 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 33% 98%;
+    --background: 206 80% 94%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -17,116 +17,247 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 210 100% 15%;
+    --primary: 174 77% 24%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 210 20% 93%;
+    --secondary: 206 40% 90%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 210 24% 95%;
+    --muted: 206 35% 92%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 168 76% 42%;
+    --accent: 174 77% 24%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 65%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     
-    --success: 152 82% 39%;
-    --success-foreground: 0 0% 100%;
+    --success: 142 69% 58%;
+    --success-foreground: 160 84% 15%;
     
-    --warning: 43 96% 56%;
-    --warning-foreground: 0 0% 10%;
+    --warning: 48 96% 53%;
+    --warning-foreground: 48 96% 15%;
 
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 168 76% 42%;
+    --border: 214 20% 85%;
+    --input: 214 20% 85%;
+    --ring: 174 77% 24%;
 
-    --radius: 0.75rem;
+    --radius: 0px;
     
-    --chart-1: 210 100% 15%;
-    --chart-2: 168 76% 42%;
-    --chart-3: 152 82% 39%;
-    --chart-4: 43 96% 56%;
-    --chart-5: 0 72% 65%;
+    --chart-1: 174 77% 24%;
+    --chart-2: 206 80% 45%;
+    --chart-3: 142 69% 45%;
+    --chart-4: 48 96% 53%;
+    --chart-5: 0 72% 51%;
 
     --sidebar-background: 210 100% 12%;
     --sidebar-foreground: 210 20% 92%;
-    --sidebar-primary: 168 76% 42%;
+    --sidebar-primary: 174 77% 35%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 60% 18%;
     --sidebar-accent-foreground: 210 20% 95%;
     --sidebar-border: 210 40% 20%;
-    --sidebar-ring: 168 76% 42%;
+    --sidebar-ring: 174 77% 35%;
   }
 
   .dark {
-    --background: 215 28% 7%;
-    --foreground: 210 20% 95%;
+    --background: 206 80% 94%;
+    --foreground: 222 47% 11%;
 
-    --card: 215 28% 11%;
-    --card-foreground: 210 20% 95%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 215 28% 11%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 168 76% 42%;
+    --primary: 174 77% 24%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 22% 16%;
-    --secondary-foreground: 210 20% 92%;
+    --secondary: 206 40% 90%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 215 22% 14%;
+    --muted: 206 35% 92%;
     --muted-foreground: 215 15% 55%;
 
-    --accent: 168 60% 35%;
+    --accent: 174 77% 24%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 50%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 72% 35%;
-    --success-foreground: 0 0% 100%;
+    --success: 142 69% 58%;
+    --success-foreground: 160 84% 15%;
 
-    --warning: 43 90% 50%;
-    --warning-foreground: 0 0% 10%;
+    --warning: 48 96% 53%;
+    --warning-foreground: 48 96% 15%;
 
-    --border: 215 22% 18%;
-    --input: 215 22% 16%;
-    --ring: 168 76% 42%;
+    --border: 214 20% 85%;
+    --input: 214 20% 85%;
+    --ring: 174 77% 24%;
     
     --sidebar-background: 215 35% 8%;
     --sidebar-foreground: 210 20% 92%;
-    --sidebar-primary: 168 76% 42%;
+    --sidebar-primary: 174 77% 35%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 215 30% 14%;
     --sidebar-accent-foreground: 210 20% 95%;
     --sidebar-border: 215 25% 14%;
-    --sidebar-ring: 168 76% 42%;
+    --sidebar-ring: 174 77% 35%;
+
+    --radius: 0px;
   }
 }
 
 @layer base {
+  /* 1. All corners square globally (border-radius 0) */
+  *, *::before, *::after {
+    border-radius: 0 !important;
+  }
+
   * {
     @apply border-border;
   }
 
+  /* 2. Page background: light blue */
   html,
   body,
-  #root {
+  #root,
+  main,
+  .bg-background,
+  .min-h-screen,
+  [data-page-container] {
     height: 100%;
     margin: 0;
     padding: 0;
     overscroll-behavior: none;
-    background-color: hsl(var(--background));
+    background-color: #e2f1fc !important;
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply text-foreground font-sans antialiased;
+    background-color: #e2f1fc !important;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
+  }
+
+  /* 3. Input boxes: white */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]):not([data-customer-box="true"]):not([data-search-box="true"]),
+  textarea:not([data-customer-box="true"]):not([data-search-box="true"]),
+  select:not([data-customer-box="true"]):not([data-search-box="true"]),
+  .select-trigger,
+  button[role="combobox"]:not([data-customer-box="true"]):not([data-search-box="true"]) {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* 4. Table header: dark navy with white text */
+  table thead,
+  table thead tr,
+  table thead th,
+  th[role="columnheader"],
+  .table-header,
+  thead th,
+  thead tr th,
+  tr.bg-muted\/50 th {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    border-color: #1e293b !important;
+    font-weight: 600 !important;
+  }
+  table thead th *,
+  table thead tr *,
+  thead th * {
+    color: #ffffff !important;
+  }
+
+  /* 5. Save button: dark teal */
+  button[type="submit"]:not(.bg-destructive):not([data-variant="destructive"]),
+  button.btn-save,
+  [data-action="save"],
+  [data-save-button="true"],
+  .save-btn {
+    background-color: #0f766e !important;
+    color: #ffffff !important;
+    border: 1px solid #115e59 !important;
+    font-weight: 600 !important;
+  }
+  button[type="submit"]:not(.bg-destructive):hover,
+  button.btn-save:hover,
+  [data-action="save"]:hover,
+  [data-save-button="true"]:hover {
+    background-color: #115e59 !important;
+    color: #ffffff !important;
+  }
+
+  /* 6. Customer & Search boxes: yellow */
+  input[type="search"],
+  input[placeholder*="Search" i],
+  input[placeholder*="search" i],
+  input[placeholder*="Customer" i],
+  input[placeholder*="Client" i],
+  input[placeholder*="Party" i],
+  input[name*="search" i],
+  input[name*="customer" i],
+  input[name*="client" i],
+  button[data-customer-box="true"],
+  button[data-search-box="true"],
+  [data-customer-box="true"],
+  [data-search-box="true"],
+  [data-customer-search-box="true"],
+  .customer-box,
+  .search-box,
+  .customer-search-box {
+    background-color: #fef08a !important;
+    color: #713f12 !important;
+    border: 1px solid #eab308 !important;
+    font-weight: 500 !important;
+  }
+  input[type="search"]::placeholder,
+  input[placeholder*="Search" i]::placeholder,
+  input[placeholder*="search" i]::placeholder,
+  input[placeholder*="Customer" i]::placeholder,
+  input[placeholder*="Client" i]::placeholder,
+  input[placeholder*="Party" i]::placeholder {
+    color: #854d0e !important;
+    opacity: 0.8 !important;
+  }
+
+  /* 7. Receivable / payable amounts: red with white text */
+  .amount-receivable,
+  .amount-payable,
+  .badge-receivable,
+  .badge-payable,
+  [data-amount-type="receivable"],
+  [data-amount-type="payable"],
+  [data-amount-type="due"],
+  .badge-due,
+  .amount-due {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    display: inline-block !important;
+    border: 1px solid #b91c1c !important;
+  }
+
+  /* 8. Paid / balance: light green */
+  .amount-paid,
+  .amount-balance,
+  .badge-paid,
+  .badge-balance,
+  [data-amount-type="paid"],
+  [data-amount-type="balance"],
+  [data-status="paid"],
+  .badge-settled {
+    background-color: #86efac !important;
+    color: #064e3b !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    display: inline-block !important;
+    border: 1px solid #4ade80 !important;
   }
 
   /* Remove up/down spinner arrows from all number inputs globally */
@@ -138,6 +269,9 @@ All colors MUST be HSL.
 
   input[type="number"] {
     -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
     appearance: textfield;
   }
 }
