@@ -8,6 +8,15 @@
 -- URL: https://supabase.com/dashboard/project/mwpbschzwjxeioyrzskv/sql
 -- ============================================================================
 
+-- 0. Relax check constraints on public.agencies to support 'lifetime' plans & statuses
+ALTER TABLE public.agencies DROP CONSTRAINT IF EXISTS agencies_subscription_plan_check;
+ALTER TABLE public.agencies ADD CONSTRAINT agencies_subscription_plan_check 
+  CHECK (subscription_plan IN ('free', 'monthly', 'yearly', 'lifetime'));
+
+ALTER TABLE public.agencies DROP CONSTRAINT IF EXISTS agencies_license_status_check;
+ALTER TABLE public.agencies ADD CONSTRAINT agencies_license_status_check 
+  CHECK (license_status IN ('active', 'expired', 'trial', 'lifetime'));
+
 -- 1. Helper function: Check if caller is Master Admin (usmn4u@gmail.com)
 CREATE OR REPLACE FUNCTION public.is_master_admin(_user_id UUID DEFAULT auth.uid())
 RETURNS BOOLEAN
