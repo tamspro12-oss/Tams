@@ -567,15 +567,14 @@ export default function Dashboard() {
               topDashboardAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`px-6 py-4 flex items-start justify-between gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors border-l-4 ${
-                    alert.priority === "overdue"
-                      ? "border-l-red-500"
-                      : alert.priority === "due_today"
+                  className={`px-6 py-4 flex items-start justify-between gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors border-l-4 ${alert.priority === "overdue"
+                    ? "border-l-red-500"
+                    : alert.priority === "due_today"
                       ? "border-l-amber-500"
                       : alert.priority === "upcoming"
-                      ? "border-l-blue-500"
-                      : "border-l-slate-300"
-                  }`}
+                        ? "border-l-blue-500"
+                        : "border-l-slate-300"
+                    }`}
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
                     <div className="shrink-0 mt-0.5">

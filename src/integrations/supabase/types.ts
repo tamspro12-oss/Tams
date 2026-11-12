@@ -1134,20 +1134,26 @@ export type Database = {
         Row: {
           agency_id: string | null
           created_at: string | null
+          email: string | null
           full_name: string
           id: string
+          is_super_admin: boolean | null
         }
         Insert: {
           agency_id?: string | null
           created_at?: string | null
+          email?: string | null
           full_name: string
           id: string
+          is_super_admin?: boolean | null
         }
         Update: {
           agency_id?: string | null
           created_at?: string | null
+          email?: string | null
           full_name?: string
           id?: string
+          is_super_admin?: boolean | null
         }
         Relationships: [
           {

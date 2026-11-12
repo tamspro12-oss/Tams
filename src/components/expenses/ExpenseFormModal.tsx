@@ -107,7 +107,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         setAutoExpenseNo(String(data));
         return;
       }
-    } catch {}
+    } catch { }
     const count = (expenses?.length || 0) + 1001;
     setAutoExpenseNo(`EXP-${count}`);
   };

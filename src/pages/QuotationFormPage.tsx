@@ -465,7 +465,7 @@ export default function QuotationFormPage() {
 
       {/* Main Content: Scrollable flex layout with proper bottom padding */}
       <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 flex flex-col gap-3 min-w-0 pb-6">
-        
+
         {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4 with explicit CSS Grid) */}
         <div
           className="bg-card rounded-2xl border border-border/70 shadow-sm p-3 sm:p-3.5 shrink-0 min-w-0"

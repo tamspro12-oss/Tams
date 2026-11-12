@@ -220,6 +220,31 @@ export default function SignupPage() {
               })
               .eq("id", profile.agency_id);
           }
+
+          // Backfill email on profile & record in registered directory
+          try {
+            await supabase
+              .from("profiles")
+              .update({
+                email: email,
+                full_name: agencyName,
+              })
+              .eq("id", activeUser.id);
+          } catch (e) {
+            // Non-blocking if email column isn't migrated yet
+          }
+
+          import("@/lib/userDirectorySync").then(({ recordRegisteredAccount }) => {
+            recordRegisteredAccount({
+              id: activeUser.id,
+              email: email,
+              full_name: agencyName,
+              agency_name: agencyName,
+              agency_id: profile?.agency_id || "",
+              subscription_plan: "free",
+              role: "user",
+            });
+          });
         } catch (syncErr) {
           console.warn("Post-signup profile sync:", syncErr);
         }
