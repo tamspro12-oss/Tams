@@ -5,6 +5,32 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
+-- 0. CLEANUP ANY PREVIOUS OVERLOADED RPCs TO PREVENT 42725 AMBIGUITY
+-- ------------------------------------------------------------------------------
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN (
+              'save_booking_invoice',
+              'save_booking_invoice_atomic',
+              'save_payment_voucher',
+              'save_payment_voucher_atomic',
+              'record_refund',
+              'record_refund_atomic',
+              'record_expense',
+              'record_expense_atomic'
+          )
+    ) LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS public.' || quote_ident(r.proname) || '(' || r.args || ') CASCADE';
+    END LOOP;
+END $$;
+
 -- 1. CURRENT USER AGENCY RESOLVER (STABLE & DEFINER)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.current_user_agency_id()
@@ -470,6 +496,9 @@ CREATE OR REPLACE FUNCTION public.save_booking_invoice(
     p_vendor_id UUID DEFAULT NULL,
     p_client_amount NUMERIC DEFAULT 0,
     p_vendor_payable NUMERIC DEFAULT 0,
+    p_amount_paid NUMERIC DEFAULT 0,
+    p_payment_mode TEXT DEFAULT 'cash',
+    p_account_id UUID DEFAULT NULL,
     p_invoice_date DATE DEFAULT CURRENT_DATE,
     p_pnr TEXT DEFAULT NULL,
     p_ticket_no TEXT DEFAULT NULL,
@@ -496,9 +525,9 @@ BEGIN
         p_vendor_id => p_vendor_id,
         p_client_amount => p_client_amount,
         p_vendor_payable => p_vendor_payable,
-        p_amount_paid => 0,
-        p_payment_mode => 'cash',
-        p_account_id => NULL,
+        p_amount_paid => p_amount_paid,
+        p_payment_mode => p_payment_mode,
+        p_account_id => p_account_id,
         p_invoice_date => p_invoice_date,
         p_pnr => p_pnr,
         p_ticket_no => p_ticket_no,
@@ -515,8 +544,20 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.save_booking_invoice_atomic TO authenticated;
-GRANT EXECUTE ON FUNCTION public.save_booking_invoice TO authenticated;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN ('save_booking_invoice', 'save_booking_invoice_atomic')
+    ) LOOP
+        EXECUTE 'GRANT EXECUTE ON FUNCTION public.' || quote_ident(r.proname) || '(' || r.args || ') TO authenticated, anon';
+    END LOOP;
+END $$;
 
 
 -- ------------------------------------------------------------------------------
@@ -724,8 +765,20 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.save_payment_voucher_atomic TO authenticated;
-GRANT EXECUTE ON FUNCTION public.save_payment_voucher TO authenticated;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN ('save_payment_voucher', 'save_payment_voucher_atomic')
+    ) LOOP
+        EXECUTE 'GRANT EXECUTE ON FUNCTION public.' || quote_ident(r.proname) || '(' || r.args || ') TO authenticated, anon';
+    END LOOP;
+END $$;
 
 
 -- ------------------------------------------------------------------------------
@@ -822,7 +875,20 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.record_refund TO authenticated;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN ('record_refund')
+    ) LOOP
+        EXECUTE 'GRANT EXECUTE ON FUNCTION public.' || quote_ident(r.proname) || '(' || r.args || ') TO authenticated, anon';
+    END LOOP;
+END $$;
 
 -- Record Expense RPC
 CREATE OR REPLACE FUNCTION public.record_expense(
@@ -900,7 +966,20 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.record_expense TO authenticated;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN ('record_expense')
+    ) LOOP
+        EXECUTE 'GRANT EXECUTE ON FUNCTION public.' || quote_ident(r.proname) || '(' || r.args || ') TO authenticated, anon';
+    END LOOP;
+END $$;
 
 
 -- ------------------------------------------------------------------------------
@@ -966,6 +1045,10 @@ BEGIN
   END LOOP;
 END $$;
 
+
+
+-- Guarantee global function execution permissions for authenticated and anon roles
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated, anon;
 -- ============================================================================
 -- TAMS PRO: MASTER ADMIN & REGISTERED USERS DIRECTORY SYNC SCRIPT
 -- Project: mwpbschzwjxeioyrzskv (https://mwpbschzwjxeioyrzskv.supabase.co)
