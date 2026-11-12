@@ -272,9 +272,6 @@ All colors MUST be HSL.
     appearance: textfield;
   }
 }
-    appearance: textfield;
-  }
-}
 
 /* Premium UI Enhancements */
 @layer utilities {
