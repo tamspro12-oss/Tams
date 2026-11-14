@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import { useAllClientPaymentHistoryLocal, useAllVendorPaymentHistoryLocal } from
 import { useCashBankEntries } from "@/hooks/useCashBankEntries";
 import { useAgencyBanks, COMMON_BANKS } from "@/hooks/useAgencyBanks";
 import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransactions";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { useLocation } from "react-router-dom";
 import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
@@ -56,8 +58,30 @@ export default function BankCashManager() {
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showAddBank, setShowAddBank] = useState(false);
   const [entryType, setEntryType] = useState<'cash_in' | 'cash_out' | 'bank_in' | 'bank_out'>('cash_in');
+  const [entryDate, setEntryDate] = useState<string>(getTodayDateString());
   const [entryCategory, setEntryCategory] = useState<string>('');
   const [entryDescription, setEntryDescription] = useState<string>('');
+  const entryFormRef = useRef<HTMLFormElement>(null);
+  const bankFormRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (showAddEntry) setEntryDate(getTodayDateString());
+  }, [showAddEntry]);
+
+  useFormKeyboardNav({
+    containerRef: entryFormRef,
+    enabled: showAddEntry,
+    isDirty: Boolean(entryCategory.trim() || entryDescription.trim()),
+    onSave: () => entryFormRef.current?.requestSubmit(),
+    onCancel: () => setShowAddEntry(false),
+  });
+
+  useFormKeyboardNav({
+    containerRef: bankFormRef,
+    enabled: showAddBank,
+    onSave: () => bankFormRef.current?.requestSubmit(),
+    onCancel: () => setShowAddBank(false),
+  });
 
   // Handle direct navigation to open Add Entry form (e.g. from Dashboard quick action)
   useEffect(() => {
@@ -826,7 +850,7 @@ export default function BankCashManager() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddEntry} className="space-y-4">
+          <form ref={entryFormRef} onSubmit={handleAddEntry} className="space-y-4">
             <div className="space-y-2">
               <Label>Entry Type</Label>
               <Select value={entryType} onValueChange={(v: any) => setEntryType(v)}>
@@ -862,18 +886,15 @@ export default function BankCashManager() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="entry_date">Date *</Label>
-                <Input
-                  id="entry_date"
-                  name="entry_date"
-                  type="date"
-                  defaultValue={format(new Date(), 'yyyy-MM-dd')}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4 items-start">
+              <LockedDateField
+                label="Date"
+                name="entry_date"
+                value={entryDate}
+                onChange={setEntryDate}
+                required
+              />
+              <div className="space-y-1">
                 <Label htmlFor="amount">Amount (₨) *</Label>
                 <Input
                   id="amount"
@@ -881,6 +902,8 @@ export default function BankCashManager() {
                   type="number"
                   step="0.01"
                   placeholder="0.00"
+                  data-required-positive="true"
+                  data-required-message="Amount must be greater than zero"
                   required
                 />
               </div>
@@ -953,7 +976,7 @@ export default function BankCashManager() {
               <Button type="button" variant="outline" onClick={() => setShowAddEntry(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={addEntry.isPending}>
+              <Button type="submit" data-save-button="true" disabled={addEntry.isPending}>
                 {addEntry.isPending ? "Saving..." : "Save Entry"}
               </Button>
             </DialogFooter>
@@ -974,7 +997,7 @@ export default function BankCashManager() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddBank} className="space-y-4">
+          <form ref={bankFormRef} onSubmit={handleAddBank} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="bank_name">Bank Name *</Label>
               <Input
@@ -1031,7 +1054,7 @@ export default function BankCashManager() {
               <Button type="button" variant="outline" onClick={() => setShowAddBank(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={addBank.isPending}>
+              <Button type="submit" data-save-button="true" disabled={addBank.isPending}>
                 {addBank.isPending ? "Saving..." : "Add Bank"}
               </Button>
             </DialogFooter>

@@ -499,41 +499,15 @@ export default function UmrahCalculator() {
     serviceChargesCurrency,
   ]);
 
-  // Real-time calculation effect
+  // Real-time calculation effect (kept purely in React state; Supabase quotations/bookings store saved packages)
   useEffect(() => {
     const res = calculateUmrah();
     setResult(res);
-    try {
-      if (res && res.baseTotal > 0) {
-        localStorage.setItem(
-          "tams_latest_umrah_calc",
-          JSON.stringify({
-            result: res,
-            calculatedAt: new Date().toISOString(),
-          })
-        );
-      }
-    } catch (e) {
-      console.debug("Failed to cache umrah calculation", e);
-    }
   }, [calculateUmrah]);
 
   const handleCalculate = () => {
     const res = calculateUmrah();
     setResult(res);
-    try {
-      if (res) {
-        localStorage.setItem(
-          "tams_latest_umrah_calc",
-          JSON.stringify({
-            result: res,
-            calculatedAt: new Date().toISOString(),
-          })
-        );
-      }
-    } catch (e) {
-      console.debug("Failed to cache umrah calculation", e);
-    }
     toast.success("Package calculated successfully");
   };
 

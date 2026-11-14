@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { invalidateAllFinancialQueries, getKarachiYmd } from "@/lib/accountingEngine";
 import { toast } from "sonner";
 
 export interface AccountItem {
@@ -194,8 +195,7 @@ export function useAccounts() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] });
-      queryClient.invalidateQueries({ queryKey: ["agency_ledger"] });
+      invalidateAllFinancialQueries(queryClient, agencyId);
       toast.success("Account added successfully");
     },
     onError: (err: any) => {
@@ -216,8 +216,7 @@ export function useAccounts() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] });
-      queryClient.invalidateQueries({ queryKey: ["agency_ledger"] });
+      invalidateAllFinancialQueries(queryClient, agencyId);
       toast.success("Account updated");
     },
     onError: (err: any) => {
@@ -363,27 +362,23 @@ export function usePartyStatement(partyId: string | null | undefined, options?: 
 // 4. Hook for Atomic Transactions Mutations
 export function useTransactionMutations() {
   const queryClient = useQueryClient();
+  const { data: agencyId } = useCurrentAgencyId();
 
   const invalidateAllFinance = () => {
-    queryClient.invalidateQueries({ queryKey: ["agency_ledger"] });
-    queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] });
-    queryClient.invalidateQueries({ queryKey: ["party_statement"] });
-    queryClient.invalidateQueries({ queryKey: ["party_balances"] });
-    queryClient.invalidateQueries({ queryKey: ["clients"] });
+    invalidateAllFinancialQueries(queryClient, agencyId);
     queryClient.invalidateQueries({ queryKey: ["b2b_agents"] });
     queryClient.invalidateQueries({ queryKey: ["b2b_bookings"] });
     queryClient.invalidateQueries({ queryKey: ["b2b_ledger"] });
-    queryClient.invalidateQueries({ queryKey: ["vendors"] });
-    queryClient.invalidateQueries({ queryKey: ["expenses"] });
-    queryClient.invalidateQueries({ queryKey: ["refunds"] });
     queryClient.invalidateQueries({ queryKey: ["client_payment_history"] });
     queryClient.invalidateQueries({ queryKey: ["vendor_payment_history"] });
-    queryClient.invalidateQueries({ queryKey: ["cash_bank_entries"] });
   };
 
   // Record Payment (Received or Paid)
   const recordPayment = useMutation({
     mutationFn: async (payload: RecordPaymentPayload) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline — connect to the internet to record payments.");
+      }
       const { data, error } = await (supabase.rpc as any)("record_payment", {
         p_direction: payload.direction,
         p_amount: payload.amount,
@@ -391,7 +386,7 @@ export function useTransactionMutations() {
         p_party_id: payload.partyId || null,
         p_party_type: payload.partyType || null,
         p_booking_id: payload.bookingId || null,
-        p_date: payload.date || new Date().toISOString().split("T")[0],
+        p_date: payload.date || getKarachiYmd(),
         p_method: payload.method || "cash",
         p_reference_no: payload.referenceNo || null,
         p_category: payload.category || null,
@@ -413,11 +408,14 @@ export function useTransactionMutations() {
   // Record Operating Expense
   const recordExpense = useMutation({
     mutationFn: async (payload: RecordExpensePayload) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline — connect to the internet to record expenses.");
+      }
       const { data, error } = await (supabase.rpc as any)("record_expense", {
         p_amount: payload.amount,
         p_account_id: payload.accountId,
         p_category: payload.category,
-        p_date: payload.date || new Date().toISOString().split("T")[0],
+        p_date: payload.date || getKarachiYmd(),
         p_method: payload.method || "cash",
         p_reference_no: payload.referenceNo || null,
         p_notes: payload.notes || null,
@@ -440,13 +438,16 @@ export function useTransactionMutations() {
   // Record Customer Refund
   const recordRefund = useMutation({
     mutationFn: async (payload: RecordRefundPayload) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline — connect to the internet to record refunds.");
+      }
       const { data, error } = await (supabase.rpc as any)("record_refund", {
         p_amount: payload.amount,
         p_account_id: payload.accountId,
         p_party_id: payload.partyId || null,
         p_party_type: payload.partyType || "client",
         p_booking_id: payload.bookingId || null,
-        p_date: payload.date || new Date().toISOString().split("T")[0],
+        p_date: payload.date || getKarachiYmd(),
         p_method: payload.method || "cash",
         p_reference_no: payload.referenceNo || null,
         p_reason: payload.reason || null,
@@ -468,11 +469,14 @@ export function useTransactionMutations() {
   // Record Account-to-Account Transfer
   const recordTransfer = useMutation({
     mutationFn: async (payload: RecordTransferPayload) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline — connect to the internet to record transfers.");
+      }
       const { data, error } = await (supabase.rpc as any)("record_transfer", {
         p_from_account_id: payload.fromAccountId,
         p_to_account_id: payload.toAccountId,
         p_amount: payload.amount,
-        p_date: payload.date || new Date().toISOString().split("T")[0],
+        p_date: payload.date || getKarachiYmd(),
         p_reference_no: payload.referenceNo || null,
         p_notes: payload.notes || null,
       });
@@ -492,6 +496,9 @@ export function useTransactionMutations() {
   // Reverse Transaction (Soft delete / void)
   const reverseTransaction = useMutation({
     mutationFn: async ({ transactionId, reason }: { transactionId: string; reason?: string }) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline — connect to the internet to reverse transactions.");
+      }
       const { data, error } = await (supabase.rpc as any)("reverse_transaction", {
         p_transaction_id: transactionId,
         p_reason: reason || "Voided from interface",

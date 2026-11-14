@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { isMasterAdminEmail, verifyMasterAdminStatus } from '@/lib/adminAuth';
+import { verifySuperAdminStatus } from '@/lib/adminAuth';
 
 export const useIsAdmin = () => {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -11,9 +11,9 @@ export const useIsAdmin = () => {
 
     const checkAdminRole = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user }, error } = await supabase.auth.getUser();
 
-        if (!user || !isMounted) {
+        if (error || !user || !isMounted) {
           if (isMounted) {
             setIsAdmin(false);
             setLoading(false);
@@ -21,22 +21,12 @@ export const useIsAdmin = () => {
           return;
         }
 
-        // Strict Master Admin Email Whitelist check (usmn4u@gmail.com)
-        if (isMasterAdminEmail(user.email)) {
-          if (isMounted) {
-            setIsAdmin(true);
-            setLoading(false);
-          }
-          return;
-        }
-
-        // Database role verification check (is_super_admin / has_role)
-        const isMaster = await verifyMasterAdminStatus(user);
+        const isSuperAdmin = await verifySuperAdminStatus(user.id);
         if (isMounted) {
-          setIsAdmin(isMaster);
+          setIsAdmin(isSuperAdmin);
         }
       } catch (error) {
-        console.error('Error in admin check:', error);
+        console.error('[useIsAdmin] Role verification failed:', error);
         if (isMounted) {
           setIsAdmin(false);
         }
@@ -55,6 +45,7 @@ export const useIsAdmin = () => {
         setIsAdmin(false);
         setLoading(false);
       } else {
+        setLoading(true);
         checkAdminRole();
       }
     });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { useQueries } from "@/hooks/useStorage";
 import { toast } from "sonner";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { querySchema, validateData } from "@/lib/validations/schemas";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddQueryDialogProps {
   open: boolean;
@@ -18,8 +19,17 @@ interface AddQueryDialogProps {
 
 export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQueryDialogProps) {
   const { addQuery, updateQuery } = useQueries();
+  const formRef = useRef<HTMLFormElement>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,7 +84,10 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}>
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -85,6 +98,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
               type="button"
               variant="ghost"
               size="sm"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 p-0"
             >
@@ -92,7 +106,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
             </Button>
           </div>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
+        <form ref={formRef} onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-4" : "space-y-4"}>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -195,10 +209,10 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
             </div>
 
             <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" tabIndex={-1} onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" data-save-button="true" disabled={isSubmitting}>
                 {isSubmitting ? (editQuery ? "Updating..." : "Adding...") : (editQuery ? "Update Query" : "Add Query")}
               </Button>
             </div>

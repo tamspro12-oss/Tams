@@ -52,6 +52,7 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
         </Label>
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => setIsAddBankOpen(true)}
           className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer hover:underline"
         >
@@ -68,6 +69,8 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
           searchPlaceholder="Search bank by name, title, account #..."
           emptyText="No banks found"
           allowClear={!required}
+          required={required}
+          requiredMessage="Please select a bank account"
           clearLabel="Clear Bank (None)"
           onQuickAdd={() => setIsAddBankOpen(true)}
           quickAddLabel="Add New Bank"

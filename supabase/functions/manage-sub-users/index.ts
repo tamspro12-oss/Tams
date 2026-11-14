@@ -53,18 +53,15 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Master Admin Email Whitelist & Super Admin Authorization Check
-    let isSuperAdmin = user.email?.trim().toLowerCase() === 'usmn4u@gmail.com';
-    if (!isSuperAdmin) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('is_super_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (profile?.is_super_admin) {
-        isSuperAdmin = true;
-      }
-    }
+    // Strict RBAC check via public.user_roles table (role = 'super_admin')
+    const { data: roleRow, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .maybeSingle();
+
+    const isSuperAdmin = !roleError && roleRow?.role === 'super_admin';
 
     // Look up the caller's own agency_id server-side. This is the ONLY value
     // we trust for scoping — never accept agency_id from the client body.

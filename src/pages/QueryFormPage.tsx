@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { useQueries } from "@/hooks/useStorage";
 import { cn } from "@/lib/utils";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 type Status = "pending" | "in-progress" | "completed" | "cancelled";
@@ -62,14 +63,10 @@ export default function QueryFormPage() {
   const [errors, setErrors] = useState<{ clientName?: string; queryText?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Field refs for strict keyboard focus order
+  // Field refs for keyboard focus & validation
+  const formContainerRef = useRef<HTMLDivElement>(null);
   const clientNameRef = useRef<HTMLInputElement>(null);
-  const contactNumberRef = useRef<HTMLInputElement>(null);
-  const assignedToRef = useRef<HTMLInputElement>(null);
-  const dueDateRef = useRef<HTMLInputElement>(null);
   const queryTextRef = useRef<HTMLTextAreaElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   // Initial load for editing or prefilling from navigation state
   useEffect(() => {
@@ -98,14 +95,6 @@ export default function QueryFormPage() {
       }
     }
   }, [id, isEdit, queries, navigate, location.state]);
-
-  // Auto-focus primary field on load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      clientNameRef.current?.focus();
-    }, 80);
-    return () => clearTimeout(timer);
-  }, []);
 
   const hasUnsavedChanges = Boolean(
     clientName.trim() || contactNumber.trim() || queryText.trim() || notes.trim()
@@ -194,36 +183,18 @@ export default function QueryFormPage() {
     [clientName, contactNumber, priority, queryText, status, assignedTo, dueDate, notes, isEdit, id, updateQuery, addQuery, navigate]
   );
 
-  // Global Keyboard Shortcuts
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Ctrl/Cmd + Shift + Enter = Save & Add Another
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Enter") {
-        e.preventDefault();
-        handleSave(true);
-        return;
-      }
-
-      // Ctrl/Cmd + Enter = Save Query
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        handleSave(false);
-        return;
-      }
-
-      // Esc = Close / Cancel
-      if (e.key === "Escape") {
-        e.preventDefault();
-        handleClose();
-        return;
-      }
-    },
-    [handleClose, handleSave]
-  );
+  useFormKeyboardNav({
+    containerRef: formContainerRef,
+    isDirty: hasUnsavedChanges,
+    onSave: () => handleSave(false),
+    onSaveAndAddNext: !isEdit ? () => handleSave(true) : undefined,
+    onCancel: () => navigate("/app/leads-quotes?tab=queries"),
+    autoFocusFirst: true,
+  });
 
   return (
     <div
-      onKeyDown={handleKeyDown}
+      ref={formContainerRef}
       className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-4xl mx-auto overflow-hidden bg-background"
     >
       {/* 1. Global Header Bar: ONLY Back arrow + Title on left, and X (close icon) on far right */}
@@ -233,6 +204,7 @@ export default function QueryFormPage() {
             type="button"
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={handleClose}
             className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             title="Go back (Esc)"
@@ -249,6 +221,7 @@ export default function QueryFormPage() {
           type="button"
           variant="ghost"
           size="icon"
+          tabIndex={-1}
           onClick={handleClose}
           aria-label="Cancel and close"
           className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
@@ -290,7 +263,8 @@ export default function QueryFormPage() {
               <Input
                 id="client_name"
                 ref={clientNameRef}
-                tabIndex={1}
+                required
+                data-required-message="Client Name is required"
                 value={clientName}
                 onChange={(e) => {
                   setClientName(e.target.value);
@@ -316,8 +290,6 @@ export default function QueryFormPage() {
                 <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="contact_number"
-                  ref={contactNumberRef}
-                  tabIndex={2}
                   type="tel"
                   inputMode="tel"
                   value={contactNumber}
@@ -337,8 +309,6 @@ export default function QueryFormPage() {
                 <UserCheck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="assigned_to"
-                  ref={assignedToRef}
-                  tabIndex={3}
                   value={assignedTo}
                   onChange={(e) => setAssignedTo(e.target.value)}
                   placeholder="e.g. Desk 1 / Usman"
@@ -357,7 +327,6 @@ export default function QueryFormPage() {
               </Label>
               <Select value={priority} onValueChange={(val: Priority) => setPriority(val)}>
                 <SelectTrigger
-                  tabIndex={4}
                   className="h-8 sm:h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
@@ -384,7 +353,6 @@ export default function QueryFormPage() {
               </Label>
               <Select value={status} onValueChange={(val: Status) => setStatus(val)}>
                 <SelectTrigger
-                  tabIndex={5}
                   className="h-8 sm:h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
@@ -413,8 +381,6 @@ export default function QueryFormPage() {
                 <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="due_date"
-                  ref={dueDateRef}
-                  tabIndex={6}
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -437,7 +403,8 @@ export default function QueryFormPage() {
             <Textarea
               id="query_text"
               ref={queryTextRef}
-              tabIndex={7}
+              required
+              data-required-message="Query Details are required"
               rows={2}
               value={queryText}
               onChange={(e) => {
@@ -461,8 +428,6 @@ export default function QueryFormPage() {
             </Label>
             <Textarea
               id="notes"
-              ref={notesRef}
-              tabIndex={8}
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -490,7 +455,6 @@ export default function QueryFormPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                tabIndex={9}
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting}
                 className="h-8 sm:h-9 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
@@ -502,14 +466,13 @@ export default function QueryFormPage() {
             )}
 
             <Button
-              ref={submitBtnRef}
               type="button"
               size="sm"
-              tabIndex={10}
+              data-save-button="true"
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
               className="h-8 sm:h-9 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-              title="Save Query (Ctrl+Enter)"
+              title="Save Query (Ctrl+S)"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSubmitting ? "Saving..." : isEdit ? "Update Query" : "Save Query"}</span>

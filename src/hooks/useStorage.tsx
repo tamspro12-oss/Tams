@@ -1,12 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cloudStorage } from '@/lib/storage/cloudStorageProvider';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useCurrentAgencyId } from '@/hooks/useCurrentAgencyId';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { addToOfflineQueue, getQueueCount } from '@/lib/offlineQueue';
+import { invalidateAllFinancialQueries } from '@/lib/accountingEngine';
 
 export function useClients() {
   const { toast } = useToast();
@@ -14,11 +12,12 @@ export function useClients() {
   const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: clients = [], isLoading } = useQuery({
-    queryKey: ['clients'],
+    queryKey: ['clients', userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: () => cloudStorage.getClients(),
   });
 
-  // Smart real-time sync for clients - update cache directly instead of refetching
+  // Smart real-time sync for clients
   useRealtimeTable({
     table: 'clients',
     filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
@@ -29,8 +28,7 @@ export function useClients() {
         console.error('SECURITY: Received client data from different agency!', payload.new);
         return;
       }
-      console.log('Client added:', payload.new);
-      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+      queryClient.setQueryData(['clients', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         if (old.some((item) => item.id === payload.new.id)) {
           return old.map((item) => (item.id === payload.new.id ? payload.new : item));
@@ -43,8 +41,7 @@ export function useClients() {
         console.error('SECURITY: Received client update from different agency!', payload.new);
         return;
       }
-      console.log('Client updated:', payload.new);
-      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+      queryClient.setQueryData(['clients', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         return old.map(item => item.id === payload.new.id ? payload.new : item);
       });
@@ -54,8 +51,7 @@ export function useClients() {
         console.error('SECURITY: Received client deletion from different agency!', payload.old);
         return;
       }
-      console.log('Client deleted:', payload.old);
-      queryClient.setQueryData(['clients'], (old: any[] = []) => {
+      queryClient.setQueryData(['clients', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [];
         return old.filter(item => item.id !== payload.old.id);
       });
@@ -66,41 +62,17 @@ export function useClients() {
 
   const addClient = useMutation({
     mutationFn: async (client: any) => {
-      if (!isOnline) {
-        // Queue for offline sync
-        const agencyId = localStorage.getItem('tams_agency_id');
-        addToOfflineQueue({
-          type: 'add',
-          table: 'clients',
-          data: { ...client, agency_id: agencyId }
-        });
-        return { ...client, id: 'pending-' + Date.now(), _pending: true };
+      if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
       }
       return cloudStorage.addClient(client);
     },
-    onMutate: async (newClient) => {
-      await queryClient.cancelQueries({ queryKey: ['clients'] });
-      const previousClients = queryClient.getQueryData(['clients']);
-      
-      queryClient.setQueryData(['clients'], (old: any[] = []) => [
-        { ...newClient, id: 'temp-' + Date.now(), _pending: !isOnline },
-        ...old
-      ]);
-      
-      return { previousClients };
-    },
-    onSuccess: (data, variables) => {
-      if (!isOnline) {
-        toast({ title: 'Client saved offline', description: 'Will sync when online' });
-      } else {
-        toast({ title: 'Client added successfully' });
-      }
+    onSuccess: () => {
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      toast({ title: 'Client added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err, newClient, context: any) => {
-      if (context?.previousClients) {
-        queryClient.setQueryData(['clients'], context.previousClients);
-      }
+    onError: (err) => {
       toast({
         title: 'Error adding client',
         description: err instanceof Error ? err.message : 'Please try again',
@@ -108,33 +80,35 @@ export function useClients() {
       });
     },
     onSettled: () => {
-      if (isOnline) {
-        queryClient.invalidateQueries({ queryKey: ['clients'] });
-      }
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
   });
 
   const updateClient = useMutation({
-    mutationFn: ({ id, client }: { id: string; client: any }) => 
-      cloudStorage.updateClient(id, client),
+    mutationFn: async ({ id, client }: { id: string; client: any }) => {
+      if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
+      }
+      return cloudStorage.updateClient(id, client);
+    },
     onMutate: async ({ id, client }) => {
-      await queryClient.cancelQueries({ queryKey: ['clients'] });
-      const previousClients = queryClient.getQueryData(['clients']);
-      
-      // Optimistically update
-      queryClient.setQueryData(['clients'], (old: any[] = []) =>
+      await queryClient.cancelQueries({ queryKey: ['clients', userAgencyId] });
+      const previousClients = queryClient.getQueryData(['clients', userAgencyId]);
+
+      queryClient.setQueryData(['clients', userAgencyId], (old: any[] = []) =>
         old.map(item => item.id === id ? { ...item, ...client } : item)
       );
-      
+
       return { previousClients };
     },
     onSuccess: () => {
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Client updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err, vars, context: any) => {
+    onError: (err, _vars, context: any) => {
       if (context?.previousClients) {
-        queryClient.setQueryData(['clients'], context.previousClients);
+        queryClient.setQueryData(['clients', userAgencyId], context.previousClients);
       }
       toast({
         title: 'Error updating client',
@@ -148,26 +122,36 @@ export function useClients() {
   });
 
   const deleteClient = useMutation({
-    mutationFn: (id: string) => cloudStorage.deleteClient(id),
+    mutationFn: async (id: string) => {
+      if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to delete.');
+      }
+      return cloudStorage.deleteClient(id);
+    },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['clients'] });
-      const previousClients = queryClient.getQueryData(['clients']);
-      
-      // Optimistically remove
-      queryClient.setQueryData(['clients'], (old: any[] = []) =>
+      await queryClient.cancelQueries({ queryKey: ['clients', userAgencyId] });
+      const previousClients = queryClient.getQueryData(['clients', userAgencyId]);
+
+      queryClient.setQueryData(['clients', userAgencyId], (old: any[] = []) =>
         old.filter(item => item.id !== id)
       );
-      
+
       return { previousClients };
     },
     onSuccess: () => {
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Client deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err, id, context: any) => {
+    onError: (err, _id, context: any) => {
       if (context?.previousClients) {
-        queryClient.setQueryData(['clients'], context.previousClients);
+        queryClient.setQueryData(['clients', userAgencyId], context.previousClients);
       }
+      toast({
+        title: 'Error deleting client',
+        description: err instanceof Error ? err.message : 'Please try again',
+        variant: 'destructive',
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -183,7 +167,8 @@ export function useBookings() {
   const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: bookings = [], isLoading } = useQuery({
-    queryKey: ['bookings'],
+    queryKey: ['bookings', userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: () => cloudStorage.getBookings(),
   });
 
@@ -199,7 +184,6 @@ export function useBookings() {
         console.error('SECURITY: Received booking data from different agency!', data);
         return;
       }
-      console.log('Bookings change detected:', payload.eventType);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -208,46 +192,67 @@ export function useBookings() {
 
   const addBooking = useMutation({
     mutationFn: async (booking: any) => {
-      if (!isOnlineBooking) {
-        const agencyId = localStorage.getItem('tams_agency_id');
-        addToOfflineQueue({
-          type: 'add',
-          table: 'bookings',
-          data: { ...booking, agency_id: agencyId }
-        });
-        return { ...booking, id: 'pending-' + Date.now(), _pending: true };
+      if (!isOnlineBooking || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
       }
       return cloudStorage.addBooking(booking);
     },
     onSuccess: () => {
-      if (!isOnlineBooking) {
-        toast({ title: 'Booking saved offline', description: 'Will sync when online' });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['bookings'] });
-        toast({ title: 'Booking added successfully' });
-      }
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      toast({ title: 'Booking added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to add booking',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateBooking = useMutation({
-    mutationFn: ({ id, booking }: { id: string; booking: any }) => 
-      cloudStorage.updateBooking(id, booking),
+    mutationFn: async ({ id, booking }: { id: string; booking: any }) => {
+      if (!isOnlineBooking || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
+      }
+      return cloudStorage.updateBooking(id, booking);
+    },
     onSuccess: () => {
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast({ title: 'Booking updated successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to update booking',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteBooking = useMutation({
-    mutationFn: (id: string) => cloudStorage.deleteBooking(id),
+    mutationFn: async (id: string) => {
+      if (!isOnlineBooking || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to delete.');
+      }
+      return cloudStorage.deleteBooking(id);
+    },
     onSuccess: () => {
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast({ title: 'Booking deleted successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to delete booking',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -260,7 +265,8 @@ export function useExpenses() {
   const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: expenses = [], isLoading } = useQuery({
-    queryKey: ['expenses'],
+    queryKey: ['expenses', userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: () => cloudStorage.getExpenses(),
   });
 
@@ -275,7 +281,7 @@ export function useExpenses() {
         console.error('SECURITY: Received expense data from different agency!', payload.new);
         return;
       }
-      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+      queryClient.setQueryData(['expenses', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         if (old.some((item) => item.id === payload.new.id)) {
           return old.map((item) => (item.id === payload.new.id ? payload.new : item));
@@ -288,7 +294,7 @@ export function useExpenses() {
         console.error('SECURITY: Received expense update from different agency!', payload.new);
         return;
       }
-      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+      queryClient.setQueryData(['expenses', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         return old.map(item => item.id === payload.new.id ? payload.new : item);
       });
@@ -298,7 +304,7 @@ export function useExpenses() {
         console.error('SECURITY: Received expense deletion from different agency!', payload.old);
         return;
       }
-      queryClient.setQueryData(['expenses'], (old: any[] = []) => {
+      queryClient.setQueryData(['expenses', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [];
         return old.filter(item => item.id !== payload.old.id);
       });
@@ -309,46 +315,64 @@ export function useExpenses() {
 
   const addExpense = useMutation({
     mutationFn: async (expense: any) => {
-      if (!isOnlineExpense) {
-        const agencyId = localStorage.getItem('tams_agency_id');
-        addToOfflineQueue({
-          type: 'add',
-          table: 'expenses',
-          data: { ...expense, agency_id: agencyId }
-        });
-        return { ...expense, id: 'pending-' + Date.now(), _pending: true };
+      if (!isOnlineExpense || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
       }
       return cloudStorage.addExpense(expense);
     },
     onSuccess: () => {
-      if (!isOnlineExpense) {
-        toast({ title: 'Expense saved offline', description: 'Will sync when online' });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['expenses'] });
-        toast({ title: 'Expense added successfully' });
-      }
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      toast({ title: 'Expense added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to add expense',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateExpense = useMutation({
-    mutationFn: ({ id, expense }: { id: string; expense: any }) => 
-      cloudStorage.updateExpense(id, expense),
+    mutationFn: async ({ id, expense }: { id: string; expense: any }) => {
+      if (!isOnlineExpense || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
+      }
+      return cloudStorage.updateExpense(id, expense);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Expense updated successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to update expense',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteExpense = useMutation({
-    mutationFn: (id: string) => cloudStorage.deleteExpense(id),
+    mutationFn: async (id: string) => {
+      if (!isOnlineExpense || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to delete.');
+      }
+      return cloudStorage.deleteExpense(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Expense deleted successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to delete expense',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -361,7 +385,8 @@ export function useVendors() {
   const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: vendors = [], isLoading } = useQuery({
-    queryKey: ['vendors'],
+    queryKey: ['vendors', userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: () => cloudStorage.getVendors(),
   });
 
@@ -376,7 +401,7 @@ export function useVendors() {
         console.error('SECURITY: Received vendor data from different agency!', payload.new);
         return;
       }
-      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+      queryClient.setQueryData(['vendors', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         if (old.some((item) => item.id === payload.new.id)) {
           return old.map((item) => (item.id === payload.new.id ? payload.new : item));
@@ -389,7 +414,7 @@ export function useVendors() {
         console.error('SECURITY: Received vendor update from different agency!', payload.new);
         return;
       }
-      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+      queryClient.setQueryData(['vendors', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [payload.new];
         return old.map(item => item.id === payload.new.id ? payload.new : item);
       });
@@ -399,7 +424,7 @@ export function useVendors() {
         console.error('SECURITY: Received vendor deletion from different agency!', payload.old);
         return;
       }
-      queryClient.setQueryData(['vendors'], (old: any[] = []) => {
+      queryClient.setQueryData(['vendors', userAgencyId], (old: any[] = []) => {
         if (!Array.isArray(old)) return [];
         return old.filter(item => item.id !== payload.old.id);
       });
@@ -410,63 +435,70 @@ export function useVendors() {
 
   const addVendor = useMutation({
     mutationFn: async (vendor: any) => {
-      if (!isOnlineVendor) {
-        const agencyId = localStorage.getItem('tams_agency_id');
-        addToOfflineQueue({
-          type: 'add',
-          table: 'vendors',
-          data: { ...vendor, agency_id: agencyId }
-        });
-        return { ...vendor, id: 'pending-' + Date.now(), _pending: true };
+      if (!isOnlineVendor || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
       }
       return cloudStorage.addVendor(vendor);
     },
     onSuccess: () => {
-      if (!isOnlineVendor) {
-        toast({ title: 'Vendor saved offline', description: 'Will sync when online' });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['vendors'] });
-        toast({ title: 'Vendor added successfully' });
-      }
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      toast({ title: 'Vendor added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: () => {
-      toast({ title: 'Error adding vendor', variant: 'destructive' });
+    onError: (err: any) => {
+      toast({
+        title: 'Error adding vendor',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateVendor = useMutation({
-    mutationFn: ({ id, vendor }: { id: string; vendor: any }) => 
-      cloudStorage.updateVendor(id, vendor),
+    mutationFn: async ({ id, vendor }: { id: string; vendor: any }) => {
+      if (!isOnlineVendor || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
+      }
+      return cloudStorage.updateVendor(id, vendor);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Vendor updated successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Error updating vendor',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteVendor = useMutation({
-    mutationFn: (id: string) => cloudStorage.deleteVendor(id),
+    mutationFn: async (id: string) => {
+      if (!isOnlineVendor || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to delete.');
+      }
+      return cloudStorage.deleteVendor(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast({ title: 'Vendor deleted successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
     onError: (error: Error) => {
-      // Check for foreign key constraint error (vendor has linked bookings/clients)
       if (error.message.includes('foreign key constraint') || error.message.includes('still referenced')) {
-        toast({ 
-          title: 'Cannot Delete Vendor', 
+        toast({
+          title: 'Cannot Delete Vendor',
           description: 'This vendor has linked bookings or clients. Please remove those first before deleting the vendor.',
-          variant: 'destructive'
+          variant: 'destructive',
         });
       } else {
-        toast({ 
-          title: 'Failed to delete vendor', 
+        toast({
+          title: 'Failed to delete vendor',
           description: error.message,
-          variant: 'destructive'
+          variant: 'destructive',
         });
       }
     },
@@ -482,13 +514,14 @@ export function useQueries() {
   const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: queries = [], isLoading } = useQuery({
-    queryKey: ['queries'],
+    queryKey: ['queries', userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       return await cloudStorage.getQueries();
     },
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 
   // Setup realtime listener
@@ -511,61 +544,64 @@ export function useQueries() {
 
   const addQuery = useMutation({
     mutationFn: async (query: any) => {
-      if (!isOnlineQuery) {
-        const agencyId = localStorage.getItem('tams_agency_id');
-        addToOfflineQueue({
-          type: 'add',
-          table: 'queries',
-          data: { ...query, agency_id: agencyId }
-        });
-        return { ...query, id: 'pending-' + Date.now(), _pending: true };
+      if (!isOnlineQuery || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      try {
-        const result = await cloudStorage.addQuery(query);
-        return result;
-      } catch (error) {
-        throw error;
-      }
+      return await cloudStorage.addQuery(query);
     },
     onSuccess: () => {
-      if (!isOnlineQuery) {
-        toast({ title: 'Query saved offline', description: 'Will sync when online' });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['queries'] });
-        toast({ title: 'Query added successfully' });
-      }
+      queryClient.invalidateQueries({ queryKey: ['queries'] });
+      toast({ title: 'Query added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
     onError: (error: any) => {
-      toast({ 
-        title: 'Failed to add query', 
+      toast({
+        title: 'Failed to add query',
         description: error?.message || 'An error occurred',
-        variant: 'destructive' 
+        variant: 'destructive',
       });
     },
   });
 
   const updateQuery = useMutation({
     mutationFn: async ({ id, query }: { id: string; query: any }) => {
+      if (!isOnlineQuery || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to save changes.');
+      }
       return await cloudStorage.updateQuery(id, query);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queries'] });
       toast({ title: 'Query updated successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to update query',
+        description: error?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteQuery = useMutation({
     mutationFn: async (id: string) => {
+      if (!isOnlineQuery || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        throw new Error('You are offline. Connect to the internet to delete.');
+      }
       return await cloudStorage.deleteQuery(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queries'] });
       toast({ title: 'Query deleted successfully' });
-      // Extend session on activity
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to delete query',
+        description: error?.message || 'An error occurred',
+        variant: 'destructive',
+      });
     },
   });
 

@@ -23,11 +23,19 @@ import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useAgency } from "@/hooks/useAgency";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
-import { format, startOfMonth, endOfMonth, subMonths, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
+import {
+  isInvoiceVoidedOrRefunded,
+  computeFinancialMetrics,
+  getKarachiTodayNoon,
+  getKarachiYmd,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
+import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -204,6 +212,49 @@ export default function ReportsHub() {
   const { parties = [], isLoading: loadingParties } = useParties();
   const { accounts = [], isLoading: loadingAccounts } = useAccounts();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
+
+  useRealtimeMultiTable({
+    channelPrefix: "reports-hub-realtime",
+    enabled: !!agency?.id,
+    subscriptions: [
+      {
+        table: "booking_invoices",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "payment_vouchers",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "expenses",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "refunds",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "transactions",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "accounts",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+      {
+        table: "parties",
+        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+      },
+    ],
+  });
 
   // Shared Report Export PDF Dialog State
   const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
@@ -211,36 +262,30 @@ export default function ReportsHub() {
   // 1. Fetch Invoices
   const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
     queryKey: ["report_invoices", agency?.id],
+    enabled: !!agency?.id,
     queryFn: async () => {
-      let query = (supabase as any)
+      if (!agency?.id) return [];
+
+      const { data, error } = await (supabase as any)
         .from("booking_invoices")
         .select("*, party:parties!party_id(name), vendor:parties!vendor_id(name)")
+        .eq("agency_id", agency.id)
         .order("invoice_date", { ascending: false });
-
-      if (agency?.id) {
-        query = query.eq("agency_id", agency.id);
-      }
-
-      const { data, error } = await query;
 
       if (!error && data && data.length > 0) return data;
 
-      // Fallback: clients table
-      let clientQuery = supabase
+      // Fallback: clients table (only when booking_invoices has zero rows)
+      const { data: clientsData } = await supabase
         .from("clients")
         .select("*")
+        .eq("agency_id", agency.id)
         .order("created_at", { ascending: false });
-
-      if (agency?.id) {
-        clientQuery = clientQuery.eq("agency_id", agency.id);
-      }
-
-      const { data: clientsData } = await clientQuery;
 
       return (clientsData || []).map((c: any) => ({
         id: c.id,
         invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || (c.created_at ? c.created_at.slice(0, 10) : ""),
+        invoice_date: c.flight_date || (c.created_at ? getKarachiYmd(c.created_at) : ""),
+        created_at: c.created_at,
         service: c.travel_type || "Ticket",
         client_name: c.name,
         party: { name: c.name },
@@ -249,6 +294,7 @@ export default function ReportsHub() {
         profit: (c.selling_price || 0) - (c.purchasing_price || 0),
         paid_amount: c.amount_paid || 0,
         payment_status: (c.payment_status || "Pending").toLowerCase(),
+        is_void: ["void", "refunded", "cancelled"].includes((c.payment_status || "").toLowerCase()),
         pnr: c.pnr,
         ticket_no: c.passport_number,
         more_details: { remaining_due_date: c.remaining_payment_date },
@@ -257,20 +303,31 @@ export default function ReportsHub() {
     },
   });
 
+  // 1b. Fetch Payment Vouchers for canonical vendor dues calculation
+  const { data: rawVouchers = [] } = useQuery({
+    queryKey: ["report_vouchers", agency?.id],
+    enabled: !!agency?.id,
+    queryFn: async () => {
+      if (!agency?.id) return [];
+      const { data } = await (supabase as any)
+        .from("payment_vouchers")
+        .select("*")
+        .eq("agency_id", agency.id);
+      return data || [];
+    },
+  });
+
   // 2. Fetch Transactions / Vouchers
   const { data: rawTransactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ["report_transactions", agency?.id],
+    enabled: !!agency?.id,
     queryFn: async () => {
-      let q = (supabase as any)
+      if (!agency?.id) return [];
+      const { data } = await (supabase as any)
         .from("transactions")
         .select("*")
+        .eq("agency_id", agency.id)
         .order("date", { ascending: false });
-
-      if (agency?.id) {
-        q = q.eq("agency_id", agency.id);
-      }
-
-      const { data } = await q;
       return data || [];
     },
   });
@@ -278,12 +335,14 @@ export default function ReportsHub() {
   // 3. Fetch Expenses
   const { data: rawExpenses = [], isLoading: loadingExpenses } = useQuery({
     queryKey: ["report_expenses", agency?.id],
+    enabled: !!agency?.id,
     queryFn: async () => {
-      let q = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
-      if (agency?.id) {
-        q = q.eq("agency_id", agency.id);
-      }
-      const { data } = await q;
+      if (!agency?.id) return [];
+      const { data } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("agency_id", agency.id)
+        .order("expense_date", { ascending: false });
       return data || [];
     },
   });
@@ -291,25 +350,44 @@ export default function ReportsHub() {
   // 4. Fetch Refunds
   const { data: rawRefunds = [], isLoading: loadingRefunds } = useQuery({
     queryKey: ["report_refunds", agency?.id],
+    enabled: !!agency?.id,
     queryFn: async () => {
-      let q = supabase.from("refunds").select("*").order("refund_date", { ascending: false });
-      if (agency?.id) {
-        q = q.eq("agency_id", agency.id);
-      }
-      const { data } = await q;
+      if (!agency?.id) return [];
+      const { data } = await supabase
+        .from("refunds")
+        .select("*")
+        .eq("agency_id", agency.id)
+        .order("refund_date", { ascending: false });
       return data || [];
     },
   });
 
-  // Date check helper adhering to shared date filter
+  // Canonical DB financial summary RPC for position reconciliation with Dashboard
+  const { data: financialSummaryRpc } = useQuery({
+    queryKey: ["agency_financial_summary", agency?.id, "reports_position"],
+    enabled: !!agency?.id,
+    queryFn: async () => {
+      if (!agency?.id) return null;
+      const nowAnchor = getKarachiTodayNoon();
+      const { data, error } = await (supabase as any).rpc("get_agency_financial_summary", {
+        p_period_start: format(startOfMonth(nowAnchor), "yyyy-MM-dd"),
+        p_period_end: format(endOfMonth(nowAnchor), "yyyy-MM-dd"),
+      });
+      if (error) return null;
+      return data as Record<string, any> | null;
+    },
+  });
+
+  // Date check helper adhering to Asia/Karachi calendar date
   const isDateInRange = (dateStr?: string) => {
     if (!dateStr) return true;
     if (filters.dateRange === "all") return true;
-    const d = dateStr.slice(0, 10);
-    const now = new Date();
+    const d = getKarachiYmd(dateStr);
+    if (!d) return false;
+    const now = getKarachiTodayNoon();
 
     if (filters.dateRange === "today") {
-      const todayStr = format(now, "yyyy-MM-dd");
+      const todayStr = getKarachiYmd(now);
       return d === todayStr;
     }
     if (filters.dateRange === "this_month") {
@@ -391,31 +469,84 @@ export default function ReportsHub() {
     });
   }, [rawRefunds, filters]);
 
-  // Aggregate Metrics for Top Totals Bar & Financial Statement
-  const totalInvoiced = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.client_amount) || 0), 0),
+  const activeFilteredInvoices = useMemo(
+    () => filteredInvoices.filter((inv: any) => !isInvoiceVoidedOrRefunded(inv)),
     [filteredInvoices]
+  );
+
+  const statusFilter = filters.status as string;
+  const bookingReportInvoices = useMemo(
+    () =>
+      statusFilter === "void" || statusFilter === "refunded"
+        ? filteredInvoices
+        : activeFilteredInvoices,
+    [filteredInvoices, activeFilteredInvoices, statusFilter]
+  );
+
+  // Aggregate Metrics for Top Totals Bar & Financial Statement (voided/refunded bookings excluded)
+  const totalInvoiced = useMemo(
+    () => activeFilteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.client_amount) || 0), 0),
+    [activeFilteredInvoices]
   );
   const totalCost = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.vendor_payable) || 0), 0),
-    [filteredInvoices]
+    () => activeFilteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.vendor_payable) || 0), 0),
+    [activeFilteredInvoices]
   );
   const totalProfit = useMemo(
-    () => filteredInvoices.reduce((sum: number, i: any) => sum + (Number(i.profit) || 0), 0),
-    [filteredInvoices]
+    () =>
+      activeFilteredInvoices.reduce(
+        (sum: number, i: any) =>
+          sum +
+          ((Number(i.client_amount) || 0) - (Number(i.vendor_payable) || 0)),
+        0
+      ),
+    [activeFilteredInvoices]
   );
   const totalExpensesAmt = useMemo(
     () => filteredExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0),
     [filteredExpenses]
   );
   const totalRefundsAmt = useMemo(
-    () => filteredRefunds.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0),
+    () =>
+      filteredRefunds.reduce(
+        (sum: number, r: any) =>
+          sum + (Number(r.client_refund_amount ?? r.refund_amount ?? r.amount) || 0),
+        0
+      ),
     [filteredRefunds]
   );
+  // Canonical Net Profit = Active Selling Price - Active Vendor Cost - Operating Expenses
+  // Voided/refunded bookings are already excluded from activeFilteredInvoices (no double subtraction).
   const netCleanProfit = useMemo(
-    () => totalProfit - totalExpensesAmt - totalRefundsAmt,
-    [totalProfit, totalExpensesAmt, totalRefundsAmt]
+    () => totalProfit - totalExpensesAmt,
+    [totalProfit, totalExpensesAmt]
   );
+
+  const canonicalPosition = useMemo(() => {
+    const fallback = computeFinancialMetrics({
+      invoices: rawInvoices,
+      vouchers: rawVouchers,
+      expenses: rawExpenses,
+      accounts,
+      refunds: rawRefunds,
+      periodStartYmd: getKarachiYmd(),
+      periodEndYmd: getKarachiYmd(),
+    });
+    return {
+      cashAndBank:
+        financialSummaryRpc?.cash_and_bank !== undefined
+          ? Number(financialSummaryRpc.cash_and_bank) || 0
+          : fallback.cashAndBank,
+      clientDues:
+        financialSummaryRpc?.client_dues !== undefined
+          ? Number(financialSummaryRpc.client_dues) || 0
+          : fallback.clientDues,
+      vendorDues:
+        financialSummaryRpc?.vendor_dues !== undefined
+          ? Number(financialSummaryRpc.vendor_dues) || 0
+          : fallback.vendorDues,
+    };
+  }, [rawInvoices, rawVouchers, rawExpenses, accounts, rawRefunds, financialSummaryRpc]);
 
   const { quotations = [] } = useQuotations();
   const quoteStats = useMemo(() => {
@@ -438,16 +569,23 @@ export default function ReportsHub() {
   const rawStatementData = useMemo(() => {
     let entries: any[] = [];
 
-    // Filter invoices by date, party, status, search
+    // Filter invoices by date, party, status, search (exclude voided/refunded unless explicitly filtered)
     const matchingInvoices = rawInvoices.filter((inv: any) => {
       if (!isDateInRange(inv.invoice_date)) return false;
+      if (
+        statusFilter !== "void" &&
+        statusFilter !== "refunded" &&
+        isInvoiceVoidedOrRefunded(inv)
+      ) {
+        return false;
+      }
       if (filters.partyId && filters.partyId !== "all" && inv.party_id !== filters.partyId) {
         return false;
       }
       if (filters.status !== "all" && inv.payment_status !== filters.status) {
         return false;
       }
-      if (onlyUnpaid && inv.payment_status === "paid") {
+      if (onlyUnpaid && (inv.payment_status === "paid" || (Number(inv.client_amount) || 0) - (Number(inv.paid_amount) || 0) <= 0)) {
         return false;
       }
       if (filters.searchQuery.trim()) {
@@ -491,6 +629,7 @@ export default function ReportsHub() {
       // Transactions (Receipts & Payments)
       const txEntries = (rawTransactions || [])
         .filter((t: any) => {
+          if (t.is_void) return false;
           if (!isDateInRange(t.date)) return false;
           if (filters.partyId && filters.partyId !== "all" && t.party_id !== filters.partyId) {
             return false;
@@ -581,7 +720,7 @@ export default function ReportsHub() {
           service: "Ticket",
           entry: "Refund",
           debit: 0,
-          credit: Number(r.refund_amount) || 0,
+          credit: Number(r.client_refund_amount ?? r.refund_amount ?? r.amount) || 0,
           overdue_days: null,
         }));
 
@@ -1177,7 +1316,7 @@ export default function ReportsHub() {
               { label: "Total Invoiced", value: totalInvoiced, prefix: "PKR", highlight: "neutral" },
               { label: "Total Vendor Payable", value: totalCost, prefix: "PKR", highlight: "red" },
               { label: "Net Gross Profit", value: totalProfit, prefix: "PKR", highlight: "teal" },
-              { label: "Bookings", value: filteredInvoices.length, highlight: "neutral" },
+              { label: "Bookings", value: activeFilteredInvoices.length, highlight: "neutral" },
             ]}
           />
 
@@ -1195,7 +1334,7 @@ export default function ReportsHub() {
 
           <ExcelGrid
             id="report_booking_profit"
-            data={filteredInvoices}
+            data={bookingReportInvoices}
             columns={bookingReportColumns}
             keyExtractor={(b) => b.id}
             title="Booking Wise Profit & Service Summary"
@@ -1300,9 +1439,9 @@ export default function ReportsHub() {
                 onClick={() =>
                   openDrilldown({
                     title: "Gross Booking Revenue Breakdown",
-                    subtitle: `All bookings matching selected date range (${filteredInvoices.length} entries)`,
+                    subtitle: `Active bookings matching selected date range (${activeFilteredInvoices.length} entries)`,
                     totalAmount: totalInvoiced,
-                    items: filteredInvoices.map((inv: any) => ({
+                    items: activeFilteredInvoices.map((inv: any) => ({
                       id: inv.id,
                       date: inv.invoice_date || "—",
                       reference: inv.invoice_no || "INV",
@@ -1326,7 +1465,7 @@ export default function ReportsHub() {
                   PKR {totalInvoiced.toLocaleString()}
                 </div>
                 <span className="text-[10px] text-emerald-600 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
-                  View {filteredInvoices.length} bookings →
+                  View {activeFilteredInvoices.length} bookings →
                 </span>
               </div>
 
@@ -1335,9 +1474,9 @@ export default function ReportsHub() {
                 onClick={() =>
                   openDrilldown({
                     title: "Cost of Sales (Vendor & Supplier Payables)",
-                    subtitle: `Direct costs incurred on bookings in selected date range`,
+                    subtitle: `Direct costs incurred on active bookings in selected date range`,
                     totalAmount: totalCost,
-                    items: filteredInvoices
+                    items: activeFilteredInvoices
                       .filter((inv: any) => (Number(inv.vendor_payable) || 0) > 0)
                       .map((inv: any) => ({
                         id: `cost_${inv.id}`,
@@ -1407,14 +1546,14 @@ export default function ReportsHub() {
                 onClick={() =>
                   openDrilldown({
                     title: "Net Agency Profit Statement",
-                    subtitle: `Clean Net Income = Gross Revenue - Supplier Costs - Operating Expenses - Customer Refunds`,
+                    subtitle: `Clean Net Income = Active Revenue - Supplier Costs - Operating Expenses (voided/refunded bookings excluded)`,
                     totalAmount: netCleanProfit,
                     items: [
                       {
                         id: "summary_rev",
                         date: "Period",
                         reference: "REV",
-                        title: "Gross Booking Revenue",
+                        title: "Gross Booking Revenue (Active Bookings)",
                         type: "Revenue (+)",
                         amount: totalInvoiced,
                         badgeVariant: "emerald",
@@ -1444,15 +1583,6 @@ export default function ReportsHub() {
                         title: "Less: Total Operating Expenses",
                         type: "Expense (-)",
                         amount: totalExpensesAmt,
-                        badgeVariant: "red",
-                      },
-                      {
-                        id: "summary_ref",
-                        date: "Period",
-                        reference: "REF",
-                        title: "Less: Customer Refunds Issued",
-                        type: "Refund (-)",
-                        amount: totalRefundsAmt,
                         badgeVariant: "red",
                       },
                       {
@@ -1511,7 +1641,7 @@ export default function ReportsHub() {
                       openDrilldown({
                         title: "Revenue from Bookings & Services",
                         totalAmount: totalInvoiced,
-                        items: filteredInvoices.map((inv: any) => ({
+                        items: activeFilteredInvoices.map((inv: any) => ({
                           id: inv.id,
                           date: inv.invoice_date || "—",
                           reference: inv.invoice_no || "INV",
@@ -1535,7 +1665,7 @@ export default function ReportsHub() {
                       openDrilldown({
                         title: "Direct Supplier & Vendor Costs",
                         totalAmount: totalCost,
-                        items: filteredInvoices
+                        items: activeFilteredInvoices
                           .filter((i: any) => (Number(i.vendor_payable) || 0) > 0)
                           .map((inv: any) => ({
                             id: `c_${inv.id}`,
@@ -1587,23 +1717,23 @@ export default function ReportsHub() {
                     <div
                       onClick={() =>
                         openDrilldown({
-                          title: "Customer Refunds",
+                          title: "Customer Refunds Issued (Voided / Adjusted)",
                           totalAmount: totalRefundsAmt,
                           items: filteredRefunds.map((r: any) => ({
                             id: r.id,
                             date: r.refund_date || "—",
                             reference: r.refund_no || `RF-${r.id.slice(0, 4)}`,
                             title: r.reason || "Customer Refund",
-                            type: "Refund",
-                            amount: Number(r.amount) || 0,
+                            type: "Refund (Excluded)",
+                            amount: Number(r.client_refund_amount ?? r.refund_amount ?? r.amount) || 0,
                             badgeVariant: "red",
                           })),
                         })
                       }
                       className="flex justify-between py-1.5 px-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors text-amber-600 dark:text-amber-400"
                     >
-                      <span>Less: Customer Refunds Issued</span>
-                      <span className="font-mono">- PKR {totalRefundsAmt.toLocaleString()}</span>
+                      <span>Refunds Issued (Info — excluded from active revenue)</span>
+                      <span className="font-mono">PKR {totalRefundsAmt.toLocaleString()}</span>
                     </div>
                   )}
 
@@ -1627,10 +1757,10 @@ export default function ReportsHub() {
                   <span className="text-[11px] text-muted-foreground font-normal">Click any row to drill down</span>
                 </h4>
 
-                {filteredInvoices.length === 0 ? (
+                {activeFilteredInvoices.length === 0 ? (
                   <EmptyState
                     type="filtered"
-                    title="No booking invoices in this period"
+                    title="No active booking invoices in this period"
                     description="Switch date range to 'All Time' or clear search filters to view records."
                   />
                 ) : (
@@ -1648,7 +1778,7 @@ export default function ReportsHub() {
                       </thead>
                       <tbody className="divide-y divide-border/60">
                         {Array.from(
-                          filteredInvoices.reduce((map: Map<string, any>, inv: any) => {
+                          activeFilteredInvoices.reduce((map: Map<string, any>, inv: any) => {
                             const svc = inv.service || "Ticket";
                             const curr = map.get(svc) || {
                               service: svc,
@@ -1662,7 +1792,6 @@ export default function ReportsHub() {
                             curr.revenue += Number(inv.client_amount) || 0;
                             curr.cost += Number(inv.vendor_payable) || 0;
                             curr.profit +=
-                              Number(inv.profit) ||
                               (Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0);
                             curr.items.push(inv);
                             map.set(svc, curr);
@@ -1732,6 +1861,7 @@ export default function ReportsHub() {
                   <div className="font-mono text-lg font-bold text-foreground mt-1">
                     PKR{" "}
                     {accounts
+                      .filter((a) => a.active !== false)
                       .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
                       .toLocaleString()}
                   </div>
@@ -1744,7 +1874,7 @@ export default function ReportsHub() {
                   <div className="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                     PKR{" "}
                     {accounts
-                      .filter((a) => a.type === "cash")
+                      .filter((a) => a.active !== false && a.type === "cash")
                       .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
                       .toLocaleString()}
                   </div>
@@ -1757,7 +1887,7 @@ export default function ReportsHub() {
                   <div className="font-mono text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">
                     PKR{" "}
                     {accounts
-                      .filter((a) => a.type === "bank")
+                      .filter((a) => a.active !== false && a.type === "bank")
                       .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
                       .toLocaleString()}
                   </div>
@@ -1921,10 +2051,7 @@ export default function ReportsHub() {
                     Cash & Bank (Liquid)
                   </span>
                   <div className="font-mono text-lg font-bold text-foreground mt-1">
-                    PKR{" "}
-                    {accounts
-                      .reduce((s, a) => s + (Number(a.current_balance) || 0), 0)
-                      .toLocaleString()}
+                    PKR {canonicalPosition.cashAndBank.toLocaleString()}
                   </div>
                   <span className="text-[10px] text-emerald-600 font-medium">Ready Liquidity</span>
                 </div>
@@ -1934,11 +2061,7 @@ export default function ReportsHub() {
                     Client Receivables (Dues)
                   </span>
                   <div className="font-mono text-lg font-bold text-amber-600 dark:text-amber-400 mt-1">
-                    PKR{" "}
-                    {parties
-                      .filter((p) => p.type !== "vendor" && (Number(p.current_balance) || 0) > 0)
-                      .reduce((s, p) => s + (Number(p.current_balance) || 0), 0)
-                      .toLocaleString()}
+                    PKR {canonicalPosition.clientDues.toLocaleString()}
                   </div>
                   <span className="text-[10px] text-amber-600 font-medium">Uncollected from clients</span>
                 </div>
@@ -1948,11 +2071,7 @@ export default function ReportsHub() {
                     Vendor Payables
                   </span>
                   <div className="font-mono text-lg font-bold text-rose-600 dark:text-rose-400 mt-1">
-                    PKR{" "}
-                    {parties
-                      .filter((p) => p.type !== "client" && (Number(p.current_balance) || 0) < 0)
-                      .reduce((s, p) => s + Math.abs(Number(p.current_balance) || 0), 0)
-                      .toLocaleString()}
+                    PKR {canonicalPosition.vendorDues.toLocaleString()}
                   </div>
                   <span className="text-[10px] text-rose-600 font-medium">Owed to suppliers</span>
                 </div>
@@ -1964,13 +2083,9 @@ export default function ReportsHub() {
                   <div className="font-mono text-lg font-bold text-teal-600 dark:text-teal-400 mt-1">
                     PKR{" "}
                     {(
-                      accounts.reduce((s, a) => s + (Number(a.current_balance) || 0), 0) +
-                      parties
-                        .filter((p) => p.type !== "vendor" && (Number(p.current_balance) || 0) > 0)
-                        .reduce((s, p) => s + (Number(p.current_balance) || 0), 0) -
-                      parties
-                        .filter((p) => p.type !== "client" && (Number(p.current_balance) || 0) < 0)
-                        .reduce((s, p) => s + Math.abs(Number(p.current_balance) || 0), 0)
+                      canonicalPosition.cashAndBank +
+                      canonicalPosition.clientDues -
+                      canonicalPosition.vendorDues
                     ).toLocaleString()}
                   </div>
                   <span className="text-[10px] text-muted-foreground">Assets + Dues - Payables</span>

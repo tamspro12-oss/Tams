@@ -18,6 +18,11 @@ import { RefundVoidForm } from "@/components/refunds/RefundVoidForm";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { DateFilter, DatePresetFilterValue } from "@/components/DateFilter";
 import { isDateWithinPreset } from "@/lib/dateFilterUtils";
+import {
+  isInvoiceVoidedOrRefunded,
+  invalidateAllFinancialQueries,
+  getKarachiYmd,
+} from "@/lib/accountingEngine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
@@ -89,43 +94,37 @@ export default function SalesExpensesHub() {
       {
         table: "booking_invoices",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => {
-          queryClient.invalidateQueries({ queryKey: ["booking_invoices"] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard_invoices"] });
-          queryClient.invalidateQueries({ queryKey: ["report_invoices"] });
-        },
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
       },
       {
         table: "payment_vouchers",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => {
-          queryClient.invalidateQueries({ queryKey: ["payment_vouchers"] });
-          queryClient.invalidateQueries({ queryKey: ["booking_invoices"] });
-          queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        },
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
       },
       {
         table: "expenses",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => {
-          queryClient.invalidateQueries({ queryKey: ["sales_expenses"] });
-          queryClient.invalidateQueries({ queryKey: ["expenses"] });
-        },
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
       },
       {
         table: "refunds",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => {
-          queryClient.invalidateQueries({ queryKey: ["sales_refunds"] });
-          queryClient.invalidateQueries({ queryKey: ["refunds"] });
-        },
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
       },
       {
         table: "parties",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => {
-          queryClient.invalidateQueries({ queryKey: ["parties"] });
-        },
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+      },
+      {
+        table: "accounts",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+      },
+      {
+        table: "transactions",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
       },
     ],
   });
@@ -162,6 +161,7 @@ export default function SalesExpensesHub() {
   // 1. Fetch Invoices (Strictly scoped by agency_id with unambiguous relations)
   const { data: invoices = [], refetch: refetchInvoices } = useQuery({
     queryKey: ["booking_invoices", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) return [];
@@ -194,7 +194,8 @@ export default function SalesExpensesHub() {
       return (clientsData || []).map((c: any) => ({
         id: c.id,
         invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || c.created_at.slice(0, 10),
+        invoice_date: c.flight_date || (c.created_at ? getKarachiYmd(c.created_at) : ""),
+        created_at: c.created_at,
         service: c.travel_type || "Ticket",
         client_name: c.name,
         party: { name: c.name },
@@ -203,6 +204,7 @@ export default function SalesExpensesHub() {
         profit: (c.selling_price || 0) - (c.purchasing_price || 0),
         paid_amount: c.amount_paid || 0,
         payment_status: (c.payment_status || "Pending").toLowerCase(),
+        is_void: ["void", "refunded", "cancelled"].includes((c.payment_status || "").toLowerCase()),
         pnr: c.pnr,
         ticket_no: c.passport_number,
       }));
@@ -212,6 +214,7 @@ export default function SalesExpensesHub() {
   // 2. Fetch Vouchers (Strictly scoped by agency_id)
   const { data: vouchers = [], refetch: refetchVouchers } = useQuery({
     queryKey: ["payment_vouchers", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) return [];
@@ -259,6 +262,7 @@ export default function SalesExpensesHub() {
   // 3. Fetch Expenses (Strictly scoped by agency_id)
   const { data: expenses = [], refetch: refetchExpenses } = useQuery({
     queryKey: ["sales_expenses", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) return [];
@@ -280,17 +284,14 @@ export default function SalesExpensesHub() {
   // 4. Fetch Clients Lookup (for refund party / pnr resolution)
   const { data: clientsData = [] } = useQuery({
     queryKey: ["clients_refund_lookup", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      let query = supabase
+      if (!activeAgencyId) return [];
+      const { data } = await supabase
         .from("clients")
-        .select("id, name, pnr, passport_number");
-
-      if (activeAgencyId) {
-        query = query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data } = await query;
+        .select("id, name, pnr, passport_number")
+        .eq("agency_id", activeAgencyId);
       return data || [];
     },
   });
@@ -306,6 +307,7 @@ export default function SalesExpensesHub() {
   // 5. Fetch Refunds (Strictly scoped by agency_id)
   const { data: refunds = [], refetch: refetchRefunds } = useQuery({
     queryKey: ["sales_refunds", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) return [];
@@ -356,22 +358,31 @@ export default function SalesExpensesHub() {
         const clientAmount = Number(inv.client_amount) || 0;
         const paidAmount = Number(inv.paid_amount) || 0;
         const remainingAmount = Math.max(0, clientAmount - paidAmount);
-        const computedStatus =
-          remainingAmount === 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
+        const voidedOrRefunded = isInvoiceVoidedOrRefunded(inv);
+        const rawStatus = (inv.payment_status || inv.status || "").trim().toLowerCase();
+        const computedStatus = voidedOrRefunded
+          ? rawStatus === "refunded" || rawStatus === "cancelled"
+            ? rawStatus
+            : "void"
+          : remainingAmount === 0
+            ? "paid"
+            : paidAmount > 0
+              ? "partial"
+              : "pending";
 
         return {
           ...inv,
           client_amount: clientAmount,
           paid_amount: paidAmount,
-          remaining_amount: remainingAmount,
+          remaining_amount: voidedOrRefunded ? 0 : remainingAmount,
           payment_status: computedStatus,
         };
       })
       .filter((inv: any) => {
-        // 1. Date Filter (defaults to This Month)
+        // 1. Date Filter (defaults to This Month, Asia/Karachi calendar date)
         if (
           !isDateWithinPreset(
-            inv.invoice_date,
+            inv.invoice_date || inv.created_at,
             invoiceDateFilter.preset,
             invoiceDateFilter.customFrom,
             invoiceDateFilter.customTo
@@ -401,13 +412,23 @@ export default function SalesExpensesHub() {
       });
   }, [invoices, invoiceSearch, invoiceDateFilter]);
 
-  // Dynamic summary cards for Booking Invoices (match search & date filter)
+  // Dynamic summary cards for Booking Invoices (exclude voided/refunded bookings)
   const filteredTotalInvoiced = useMemo(
-    () => filteredInvoices.reduce((sum: number, inv: any) => sum + (inv.client_amount || 0), 0),
+    () =>
+      filteredInvoices
+        .filter((inv: any) => !isInvoiceVoidedOrRefunded(inv))
+        .reduce((sum: number, inv: any) => sum + (inv.client_amount || 0), 0),
     [filteredInvoices]
   );
   const filteredNetProfit = useMemo(
-    () => filteredInvoices.reduce((sum: number, inv: any) => sum + (inv.profit || 0), 0),
+    () =>
+      filteredInvoices
+        .filter((inv: any) => !isInvoiceVoidedOrRefunded(inv))
+        .reduce(
+          (sum: number, inv: any) =>
+            sum + ((Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0)),
+          0
+        ),
     [filteredInvoices]
   );
 
@@ -419,7 +440,7 @@ export default function SalesExpensesHub() {
       // 1. Date Filter (defaults to This Month)
       if (
         !isDateWithinPreset(
-          v.voucher_date,
+          v.voucher_date || v.created_at,
           voucherDateFilter.preset,
           voucherDateFilter.customFrom,
           voucherDateFilter.customTo
@@ -453,15 +474,15 @@ export default function SalesExpensesHub() {
   const filteredTotalReceived = useMemo(
     () =>
       filteredVouchers
-        .filter((v: any) => v.direction === "received")
-        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
+        .filter((v: any) => !v.is_void && v.direction === "received")
+        .reduce((sum: number, v: any) => sum + (Number(v.amount) || 0), 0),
     [filteredVouchers]
   );
   const filteredTotalPaidOut = useMemo(
     () =>
       filteredVouchers
-        .filter((v: any) => v.direction === "paid")
-        .reduce((sum: number, v: any) => sum + (v.amount || 0), 0),
+        .filter((v: any) => !v.is_void && v.direction === "paid")
+        .reduce((sum: number, v: any) => sum + (Number(v.amount) || 0), 0),
     [filteredVouchers]
   );
 
@@ -473,7 +494,7 @@ export default function SalesExpensesHub() {
       // 1. Date filter (defaults to This Month)
       if (
         !isDateWithinPreset(
-          r.refund_date,
+          r.refund_date || r.created_at,
           refundDateFilter.preset,
           refundDateFilter.customFrom,
           refundDateFilter.customTo
@@ -509,7 +530,7 @@ export default function SalesExpensesHub() {
   const filteredTotalRefunds = useMemo(
     () =>
       filteredRefunds.reduce(
-        (sum: number, r: any) => sum + (r.refund_amount || 0),
+        (sum: number, r: any) => sum + (Number(r.client_refund_amount ?? r.refund_amount) || 0),
         0
       ),
     [filteredRefunds]
@@ -523,7 +544,7 @@ export default function SalesExpensesHub() {
       // 1. Date Filter (defaults to This Month)
       if (
         !isDateWithinPreset(
-          e.expense_date,
+          e.expense_date || e.created_at,
           expenseDateFilter.preset,
           expenseDateFilter.customFrom,
           expenseDateFilter.customTo
@@ -565,7 +586,7 @@ export default function SalesExpensesHub() {
   // -------------------------------------------------------------
 
   // 1. Booking Invoices (Single-Screen Viewport Fit):
-  // Invoice # | Date | Service | Client | Total Amount (PKR) | Paid Amount (PKR) | Remaining Amount (PKR) | Status | PDF
+  // Invoice # | Date | Service | Client | PDF | Status | Remaining Amount (PKR) | Paid Amount (PKR) | Total Amount (PKR)
   const invoiceColumns: GridColumn[] = [
     {
       key: "invoice_no",
@@ -605,81 +626,6 @@ export default function SalesExpensesHub() {
           <CopyValue value={cName} label="client name" className="font-semibold text-xs block truncate" />
         );
       },
-    },
-    {
-      key: "client_amount",
-      header: "Total Amount (PKR)",
-      width: 125,
-      isNumeric: true,
-      align: "right",
-      totalType: "sum",
-      render: (inv) => (
-        <CopyValue
-          value={inv.client_amount || 0}
-          isAmount={true}
-          displayValue={
-            <span className="font-mono font-bold text-xs">
-              {(inv.client_amount || 0).toLocaleString()}
-            </span>
-          }
-          label="total amount"
-        />
-      ),
-    },
-    {
-      key: "paid_amount",
-      header: "Paid Amount (PKR)",
-      width: 120,
-      isNumeric: true,
-      align: "right",
-      totalType: "sum",
-      render: (inv) => (
-        <CopyValue
-          value={inv.paid_amount || 0}
-          isAmount={true}
-          displayValue={
-            <span className="font-mono font-medium text-xs text-emerald-600 dark:text-emerald-400">
-              {(inv.paid_amount || 0).toLocaleString()}
-            </span>
-          }
-          label="paid amount"
-        />
-      ),
-    },
-    {
-      key: "remaining_amount",
-      header: "Remaining Amount (PKR)",
-      width: 130,
-      isNumeric: true,
-      align: "right",
-      totalType: "sum",
-      render: (inv) => {
-        const rem = inv.remaining_amount || 0;
-        return (
-          <CopyValue
-            value={rem}
-            isAmount={true}
-            displayValue={
-              <span
-                className={cn(
-                  "font-mono font-bold text-xs",
-                  rem > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
-                )}
-              >
-                {rem.toLocaleString()}
-              </span>
-            }
-            label="remaining amount"
-          />
-        );
-      },
-    },
-    {
-      key: "payment_status",
-      header: "Status",
-      width: 80,
-      align: "center",
-      render: (inv) => <StatusChip status={inv.payment_status} size="sm" />,
     },
     {
       key: "actions",
@@ -729,6 +675,81 @@ export default function SalesExpensesHub() {
             <FileText className="w-3.5 h-3.5" />
           </button>
         </div>
+      ),
+    },
+    {
+      key: "payment_status",
+      header: "Status",
+      width: 80,
+      align: "center",
+      render: (inv) => <StatusChip status={inv.payment_status} size="sm" />,
+    },
+    {
+      key: "remaining_amount",
+      header: "Remaining Amount (PKR)",
+      width: 130,
+      isNumeric: true,
+      align: "right",
+      totalType: "sum",
+      render: (inv) => {
+        const rem = inv.remaining_amount || 0;
+        return (
+          <CopyValue
+            value={rem}
+            isAmount={true}
+            displayValue={
+              <span
+                className={cn(
+                  "font-mono font-bold text-xs",
+                  rem > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                )}
+              >
+                {rem.toLocaleString()}
+              </span>
+            }
+            label="remaining amount"
+          />
+        );
+      },
+    },
+    {
+      key: "paid_amount",
+      header: "Paid Amount (PKR)",
+      width: 120,
+      isNumeric: true,
+      align: "right",
+      totalType: "sum",
+      render: (inv) => (
+        <CopyValue
+          value={inv.paid_amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-medium text-xs text-emerald-600 dark:text-emerald-400">
+              {(inv.paid_amount || 0).toLocaleString()}
+            </span>
+          }
+          label="paid amount"
+        />
+      ),
+    },
+    {
+      key: "client_amount",
+      header: "Total Amount (PKR)",
+      width: 125,
+      isNumeric: true,
+      align: "right",
+      totalType: "sum",
+      render: (inv) => (
+        <CopyValue
+          value={inv.client_amount || 0}
+          isAmount={true}
+          displayValue={
+            <span className="font-mono font-bold text-xs">
+              {(inv.client_amount || 0).toLocaleString()}
+            </span>
+          }
+          label="total amount"
+        />
       ),
     },
   ];

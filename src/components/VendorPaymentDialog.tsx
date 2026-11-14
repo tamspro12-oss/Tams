@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { PaymentHistorySection } from "./PaymentHistorySection";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { PaymentModeSelect } from "./PaymentModeSelect";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface VendorPaymentDialogProps {
   vendor: any;
@@ -24,10 +25,20 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
   const { history, isLoading: historyLoading, addPaymentHistory } = useVendorPaymentHistoryLocal(vendor?.id);
   const { data: agency } = useAgency();
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && Boolean(vendor),
+    isDirty: Boolean(paymentAmount),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const currentPaid = Number(vendor.amount_paid) || 0;
   const totalPayable = vendor.totalPayable || 0;
@@ -168,7 +179,10 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden"
+      >
         <DialogHeader className="shrink-0 pb-2 border-b">
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <Banknote className="w-5 h-5 text-primary" />
@@ -198,7 +212,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-3">
+            <form ref={formRef} onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-3">
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="payment" className="text-xs font-semibold">Payment Amount (₨)</Label>
@@ -212,12 +226,14 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
                       placeholder="e.g., 5000 or -500"
                       className="h-9 text-sm"
                       required
+                      data-required-message="Payment amount is required"
                     />
                     {remaining > 0 && (
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
+                        tabIndex={-1}
                         onClick={handlePayFull}
                         className="shrink-0 h-9 px-4"
                       >
@@ -275,6 +291,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
                   type="button"
                   variant="outline"
                   size="sm"
+                  tabIndex={-1}
                   onClick={() => {
                     onOpenChange(false);
                     setPaymentAmount("");
@@ -288,6 +305,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
                 <Button
                   type="submit"
                   size="sm"
+                  data-save-button="true"
                   disabled={isSubmitting || !paymentAmount || parseFloat(paymentAmount) === 0}
                   className={`min-w-[140px] ${paymentAmount && parseFloat(paymentAmount) < 0 ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >

@@ -1,18 +1,19 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, CheckCircle, ArrowDown, Clock, ShieldCheck, DollarSign } from "lucide-react";
+import { Banknote, CheckCircle, Clock } from "lucide-react";
 import { B2BAgent } from "@/hooks/useB2BAgents";
-import { useB2BBookings, B2BBooking, calculatePaymentStatus } from "@/hooks/useB2BBookings";
+import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
 import { useB2BLedger } from "@/hooks/useB2BLedger";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AgentLumpSumPaymentDialogProps {
   agent: B2BAgent | null;
@@ -27,14 +28,19 @@ export function AgentLumpSumPaymentDialog({
   onOpenChange,
   onSuccess,
 }: AgentLumpSumPaymentDialogProps) {
+  const formRef = useRef<HTMLDivElement>(null);
   const [amount, setAmount] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState<string>("cash");
   const [bankName, setBankName] = useState<string>("");
-  const [entryDate, setEntryDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
+  const [entryDate, setEntryDate] = useState<string>(() => getTodayDateString());
   const [remarks, setRemarks] = useState<string>("Lump sum payment received");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (open) {
+      setEntryDate(getTodayDateString());
+    }
+  }, [open]);
 
   const { bookings, updateBooking } = useB2BBookings(agent?.id);
   const { ledgerEntries, addSplitPayment } = useB2BLedger(agent?.id);
@@ -112,8 +118,8 @@ export function AgentLumpSumPaymentDialog({
     setAmount(totalOutstandingAll.toString());
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const paymentVal = parseFloat(amount) || 0;
 
     if (paymentVal <= 0) {
@@ -186,11 +192,26 @@ export function AgentLumpSumPaymentDialog({
     }
   };
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && Boolean(agent),
+    isDirty: Boolean(amount),
+    onSave: () => {
+      void handleSubmit();
+    },
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
+
   if (!open || !agent) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent
+        ref={formRef}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 overflow-hidden"
+      >
         <DialogHeader className="p-4 border-b bg-muted/40 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -229,6 +250,7 @@ export function AgentLumpSumPaymentDialog({
                 type="button"
                 variant="ghost"
                 size="sm"
+                tabIndex={-1}
                 onClick={handlePayAll}
                 className="h-6 text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold"
               >
@@ -243,13 +265,14 @@ export function AgentLumpSumPaymentDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="h-9 text-base font-bold text-emerald-600"
-              autoFocus
               required
+              data-required-positive="true"
+              data-required-message="Please enter a valid payment amount"
             />
           </div>
 
           {/* Payment Mode, Bank, Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
             <div>
               <Label className="text-xs font-semibold mb-1 block">Payment Mode</Label>
               <Select value={paymentMode} onValueChange={setPaymentMode}>
@@ -265,15 +288,12 @@ export function AgentLumpSumPaymentDialog({
               </Select>
             </div>
 
-            <div>
-              <Label className="text-xs font-semibold mb-1 block">Entry Date</Label>
-              <Input
-                type="date"
-                value={entryDate}
-                onChange={(e) => setEntryDate(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
+            <LockedDateField
+              label="Entry Date"
+              value={entryDate}
+              onChange={setEntryDate}
+              required
+            />
 
             {paymentMode === "bank" ? (
               <div>
@@ -392,6 +412,7 @@ export function AgentLumpSumPaymentDialog({
             type="button"
             variant="outline"
             size="sm"
+            tabIndex={-1}
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
             className="text-xs"
@@ -402,6 +423,7 @@ export function AgentLumpSumPaymentDialog({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             onClick={handleSubmit}
             disabled={isSubmitting || (parseFloat(amount) || 0) <= 0}
             className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"

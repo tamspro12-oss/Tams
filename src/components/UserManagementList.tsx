@@ -12,287 +12,13 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Users, Edit, Trash2, Key, RefreshCw, Loader2, Shield, Calendar, Search, Monitor, Crown, Infinity, Copy, ExternalLink, Database, Check, Code } from 'lucide-react';
 import { format } from 'date-fns';
-import { isMasterAdminEmail } from '@/lib/adminAuth';
-import {
-  RegisteredUserRecord,
-  mergeUsersWithRegistry,
-  updateCachedUserSubscription,
-  recordRegisteredAccount,
-} from '@/lib/userDirectorySync';
+import type { RegisteredUserRecord } from '@/lib/userDirectorySync';
 
-const SUPABASE_SETUP_SQL = `-- ============================================================================
--- TAMS PRO: MASTER ADMIN & REGISTERED USERS DIRECTORY SYNC SCRIPT
--- Project: mwpbschzwjxeioyrzskv (https://mwpbschzwjxeioyrzskv.supabase.co)
--- ============================================================================
-
--- 0. Relax check constraints on public.agencies to support 'lifetime' plans & statuses
-ALTER TABLE public.agencies DROP CONSTRAINT IF EXISTS agencies_subscription_plan_check;
-ALTER TABLE public.agencies ADD CONSTRAINT agencies_subscription_plan_check 
-  CHECK (subscription_plan IN ('free', 'monthly', 'yearly', 'lifetime'));
-
-ALTER TABLE public.agencies DROP CONSTRAINT IF EXISTS agencies_license_status_check;
-ALTER TABLE public.agencies ADD CONSTRAINT agencies_license_status_check 
-  CHECK (license_status IN ('active', 'expired', 'trial', 'lifetime'));
-
--- 1. Helper function: Check if caller is Master Admin (usmn4u@gmail.com)
-CREATE OR REPLACE FUNCTION public.is_master_admin(_user_id UUID DEFAULT auth.uid())
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-  v_jwt_email TEXT;
-  v_db_email TEXT;
-  v_is_super BOOLEAN;
-BEGIN
-  IF current_user = 'postgres' OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role' THEN
-    RETURN true;
-  END IF;
-
-  v_jwt_email := LOWER(COALESCE(auth.jwt()->>'email', ''));
-  IF v_jwt_email = 'usmn4u@gmail.com' THEN
-    RETURN true;
-  END IF;
-
-  IF _user_id IS NULL THEN
-    _user_id := auth.uid();
-  END IF;
-
-  IF _user_id IS NULL THEN
-    RETURN false;
-  END IF;
-
-  SELECT LOWER(email) INTO v_db_email
-  FROM auth.users
-  WHERE id = _user_id;
-
-  IF v_db_email = 'usmn4u@gmail.com' THEN
-    RETURN true;
-  END IF;
-
-  SELECT is_super_admin INTO v_is_super
-  FROM public.profiles
-  WHERE id = _user_id;
-
-  RETURN COALESCE(v_is_super, false);
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.is_master_admin(UUID) TO authenticated, anon;
-
--- 2. Add email and is_super_admin columns to profiles if missing
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT false;
-
--- 3. Backfill profiles.email from auth.users
-UPDATE public.profiles p
-SET email = u.email
-FROM auth.users u
-WHERE p.id = u.id AND (p.email IS NULL OR p.email = '');
-
--- 4. Master Admin usmn4u@gmail.com permanent Lifetime Access setup
-DO $$
-DECLARE
-  v_admin_user_id UUID;
-  v_admin_agency_id UUID;
-BEGIN
-  SELECT id INTO v_admin_user_id
-  FROM auth.users
-  WHERE LOWER(email) = 'usmn4u@gmail.com'
-  LIMIT 1;
-
-  IF v_admin_user_id IS NOT NULL THEN
-    SELECT agency_id INTO v_admin_agency_id
-    FROM public.profiles
-    WHERE id = v_admin_user_id;
-
-    IF v_admin_agency_id IS NULL THEN
-      INSERT INTO public.agencies (
-        name, license_key, subscription_plan,
-        license_expiry, license_status, license_active
-      )
-      VALUES (
-        'Master Admin HQ',
-        'LIFETIME-MASTER-KEY',
-        'lifetime',
-        '2099-12-31 23:59:59+00'::TIMESTAMPTZ,
-        'active',
-        true
-      )
-      RETURNING id INTO v_admin_agency_id;
-
-      INSERT INTO public.profiles (id, agency_id, full_name, email, is_super_admin)
-      VALUES (v_admin_user_id, v_admin_agency_id, 'Master Administrator', 'usmn4u@gmail.com', true)
-      ON CONFLICT (id) DO UPDATE
-      SET agency_id = v_admin_agency_id,
-          email = 'usmn4u@gmail.com',
-          is_super_admin = true;
-    ELSE
-      UPDATE public.agencies
-      SET subscription_plan = 'lifetime',
-          license_status = 'active',
-          license_active = true,
-          license_expiry = '2099-12-31 23:59:59+00'::TIMESTAMPTZ
-      WHERE id = v_admin_agency_id;
-
-      UPDATE public.profiles
-      SET is_super_admin = true,
-          email = 'usmn4u@gmail.com'
-      WHERE id = v_admin_user_id;
-    END IF;
-
-    INSERT INTO public.user_roles (user_id, role)
-    VALUES (v_admin_user_id, 'admin'::public.app_role)
-    ON CONFLICT (user_id, role) DO NOTHING;
-  END IF;
-END $$;
-
--- 5. RLS policies allowing Master Admin to view and update all profiles and agencies
-DROP POLICY IF EXISTS "Master admin can view all profiles" ON public.profiles;
-CREATE POLICY "Master admin can view all profiles"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (public.is_master_admin(auth.uid()));
-
-DROP POLICY IF EXISTS "Master admin can update all profiles" ON public.profiles;
-CREATE POLICY "Master admin can update all profiles"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (public.is_master_admin(auth.uid()))
-WITH CHECK (public.is_master_admin(auth.uid()));
-
-DROP POLICY IF EXISTS "Master admin can view all agencies" ON public.agencies;
-CREATE POLICY "Master admin can view all agencies"
-ON public.agencies
-FOR SELECT
-TO authenticated
-USING (public.is_master_admin(auth.uid()));
-
-DROP POLICY IF EXISTS "Master admin can update all agencies" ON public.agencies;
-CREATE POLICY "Master admin can update all agencies"
-ON public.agencies
-FOR UPDATE
-TO authenticated
-USING (public.is_master_admin(auth.uid()))
-WITH CHECK (public.is_master_admin(auth.uid()));
-
--- 6. RPC to return all registered users dynamically
-CREATE OR REPLACE FUNCTION public.admin_get_registered_users()
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_jwt_email TEXT := LOWER(COALESCE(auth.jwt()->>'email', ''));
-  v_result JSONB;
-BEGIN
-  IF current_user != 'postgres' 
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') != 'service_role'
-     AND v_jwt_email != 'usmn4u@gmail.com' 
-     AND NOT public.is_master_admin(v_caller_id) THEN
-    RAISE EXCEPTION '403 Forbidden: Master Admin privilege required';
-  END IF;
-
-  SELECT jsonb_agg(
-    jsonb_build_object(
-      'id', u.id,
-      'email', COALESCE(u.email, 'No Email'),
-      'full_name', COALESCE(NULLIF(p.full_name, ''), NULLIF(u.raw_user_meta_data->>'full_name', ''), split_part(u.email, '@', 1)),
-      'role', CASE 
-        WHEN LOWER(u.email) = 'usmn4u@gmail.com' OR p.is_super_admin = true THEN 'admin'
-        WHEN r.role IS NOT NULL THEN r.role::text
-        ELSE 'user'
-      END,
-      'agency_id', COALESCE(p.agency_id::text, a.id::text, ''),
-      'agency_name', COALESCE(a.name, u.raw_user_meta_data->>'agency_name', 'Primary Agency'),
-      'subscription_plan', CASE 
-        WHEN LOWER(u.email) = 'usmn4u@gmail.com' THEN 'lifetime'
-        ELSE COALESCE(a.subscription_plan, u.raw_user_meta_data->>'subscription_plan', 'free')
-      END,
-      'license_expiry', CASE 
-        WHEN LOWER(u.email) = 'usmn4u@gmail.com' THEN '2099-12-31T23:59:59.000Z'
-        WHEN a.license_expiry IS NOT NULL THEN a.license_expiry::text
-        ELSE (u.created_at + INTERVAL '14 days')::text
-      END,
-      'license_status', CASE 
-        WHEN LOWER(u.email) = 'usmn4u@gmail.com' THEN 'active'
-        WHEN a.license_status IS NOT NULL THEN a.license_status
-        ELSE 'active'
-      END,
-      'created_at', u.created_at::text,
-      'email_confirmed_at', u.email_confirmed_at::text,
-      'last_sign_in_at', u.last_sign_in_at::text,
-      'active_sessions', 1
-    ) ORDER BY u.created_at DESC
-  )
-  INTO v_result
-  FROM auth.users u
-  LEFT JOIN public.profiles p ON p.id = u.id
-  LEFT JOIN public.agencies a ON a.id = p.agency_id
-  LEFT JOIN (
-    SELECT DISTINCT ON (user_id) user_id, role
-    FROM public.user_roles
-    ORDER BY user_id, role ASC
-  ) r ON r.user_id = u.id;
-
-  RETURN COALESCE(v_result, '[]'::jsonb);
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.admin_get_registered_users() TO authenticated, anon;
-
--- 7. RPC to update agency subscription
-CREATE OR REPLACE FUNCTION public.admin_set_agency_subscription(
-  p_agency_id UUID,
-  p_plan TEXT,
-  p_duration_days INT DEFAULT 30
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_new_expiry TIMESTAMPTZ;
-  v_plan_clean TEXT := LOWER(TRIM(p_plan));
-BEGIN
-  IF current_user != 'postgres' 
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') != 'service_role'
-     AND LOWER(COALESCE(auth.jwt()->>'email', '')) != 'usmn4u@gmail.com' 
-     AND NOT public.is_master_admin(v_caller_id) THEN
-    RAISE EXCEPTION '403 Forbidden: Master Admin privilege required';
-  END IF;
-
-  IF v_plan_clean = 'lifetime' THEN
-    v_new_expiry := '2099-12-31 23:59:59+00'::TIMESTAMPTZ;
-  ELSE
-    v_new_expiry := NOW() + (COALESCE(p_duration_days, 30) || ' days')::INTERVAL;
-  END IF;
-
-  UPDATE public.agencies
-  SET subscription_plan = v_plan_clean,
-      license_status = 'active',
-      license_active = true,
-      license_expiry = v_new_expiry
-  WHERE id = p_agency_id;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'agency_id', p_agency_id,
-    'plan', v_plan_clean,
-    'license_expiry', v_new_expiry
-  );
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.admin_set_agency_subscription(UUID, TEXT, INT) TO authenticated, anon;`;
+const SUPABASE_SETUP_SQL = `-- Run project migrations in Supabase SQL Editor / CLI in order:
+-- 1. supabase/migrations/20261114_00_add_super_admin_enum.sql
+-- 2. supabase/migrations/20261114_01_rbac_and_strict_agency_isolation.sql
+-- 3. supabase/migrations/20261114_02_accounting_unification_rpcs_and_realtime.sql
+-- Verify your super_admin role exists in public.user_roles for admin access.`;
 
 export const UserManagementList = () => {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
@@ -330,13 +56,12 @@ export const UserManagementList = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // 1. Direct high-speed RPC (Guaranteed DB-level execution, bypasses Edge Function dependencies)
+      // 1. Direct high-speed RPC (Guaranteed DB-level execution, requires super_admin)
       try {
         const { data: rpcUsers, error: rpcError } = await (supabase as any).rpc('admin_get_registered_users');
         if (!rpcError && Array.isArray(rpcUsers) && rpcUsers.length > 0) {
           setIsDbSyncActive(true);
-          const merged = mergeUsersWithRegistry(rpcUsers);
-          setUsers(merged);
+          setUsers(rpcUsers);
           setLoading(false);
           return;
         }
@@ -346,15 +71,14 @@ export const UserManagementList = () => {
 
       setIsDbSyncActive(false);
 
-      // 2. Edge Function invocation fallback
+      // 2. Edge Function invocation fallback (strictly checks super_admin server-side)
       try {
         const { data: edgeData, error: edgeError } = await supabase.functions.invoke('manage-users', {
           body: { action: 'list' }
         });
 
         if (!edgeError && edgeData?.users && Array.isArray(edgeData.users) && edgeData.users.length > 0) {
-          const merged = mergeUsersWithRegistry(edgeData.users);
-          setUsers(merged);
+          setUsers(edgeData.users);
           setLoading(false);
           return;
         }
@@ -362,7 +86,7 @@ export const UserManagementList = () => {
         console.warn('manage-users edge function fallback:', edgeEx);
       }
 
-      // 3. Direct PostgreSQL profiles + agencies query fallback
+      // 3. Direct PostgreSQL profiles + agencies query fallback (RLS-protected)
       let rawProfiles: any[] = [];
       try {
         const { data: profs, error: profError } = await supabase
@@ -386,7 +110,6 @@ export const UserManagementList = () => {
         if (!profError && Array.isArray(profs) && profs.length > 0) {
           rawProfiles = profs;
         } else {
-          // Fallback if email column doesn't exist yet in profiles table
           const { data: fallbackProfs } = await supabase
             .from('profiles')
             .select(`
@@ -412,30 +135,26 @@ export const UserManagementList = () => {
 
       const convertedUsers: RegisteredUserRecord[] = rawProfiles.map((p: any) => {
         const agency = Array.isArray(p.agencies) ? p.agencies[0] : p.agencies;
-        const isMaster = isMasterAdminEmail(p.email) || p.full_name?.toLowerCase().includes('usman');
-
         return {
           id: p.id,
-          email: p.email || (isMaster ? 'usmn4u@gmail.com' : 'user@agency.com'),
-          full_name: p.full_name || (isMaster ? 'Muhammad Usman (Master Admin)' : 'Agency Administrator'),
-          role: isMaster ? 'admin' : 'user',
-          agency_name: isMaster ? 'Master Admin HQ' : (agency?.name || 'Primary Agency'),
-          subscription_plan: isMaster ? 'lifetime' : (agency?.subscription_plan || 'free'),
-          license_expiry: isMaster ? '2099-12-31T23:59:59.000Z' : agency?.license_expiry,
-          license_status: isMaster ? 'active' : (agency?.license_status || 'active'),
+          email: p.email || '',
+          full_name: p.full_name || 'Agency User',
+          role: 'staff',
+          agency_name: agency?.name || 'Primary Agency',
+          subscription_plan: agency?.subscription_plan || 'free',
+          license_expiry: agency?.license_expiry || null,
+          license_status: agency?.license_status || 'active',
           created_at: p.created_at || new Date().toISOString(),
           agency_id: p.agency_id || '',
-          active_sessions: 1,
+          active_sessions: 0,
         };
       });
 
-      // Merge with persistent registry (guarantees tamspro12@gmail.com and usmn4u@gmail.com are always displayed)
-      const merged = mergeUsersWithRegistry(convertedUsers);
-      setUsers(merged);
+      setUsers(convertedUsers);
     } catch (error: any) {
       console.error('Error fetching registered users:', error);
-      const merged = mergeUsersWithRegistry([]);
-      setUsers(merged);
+      toast.error(error?.message || 'Failed to load user directory from database');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -449,34 +168,26 @@ export const UserManagementList = () => {
 
     setProcessing(true);
     try {
-      // 1. Update local registry immediately
-      recordRegisteredAccount({
-        id: editUser.id,
-        email: editForm.email,
-        full_name: editForm.full_name,
-        agency_name: editUser.agency_name,
-        agency_id: editUser.agency_id,
-        subscription_plan: editUser.subscription_plan,
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action: 'update',
+          userId: editUser.id,
+          data: {
+            full_name: editForm.full_name,
+            email: editForm.email
+          }
+        }
       });
 
-      // 2. Try Edge Function if available
-      try {
-        await supabase.functions.invoke('manage-users', {
-          body: {
-            action: 'update',
-            userId: editUser.id,
-            data: {
-              full_name: editForm.full_name,
-              email: editForm.email
-            }
-          }
-        });
-      } catch (e) {
-        // Fallback to direct profiles table update
-        await supabase
+      if (error || data?.error) {
+        const { error: profileError } = await supabase
           .from('profiles')
           .update({ full_name: editForm.full_name, email: editForm.email })
           .eq('id', editUser.id);
+
+        if (profileError) {
+          throw new Error(data?.error || error?.message || profileError.message);
+        }
       }
 
       toast.success('User updated successfully');
@@ -507,26 +218,23 @@ export const UserManagementList = () => {
 
     setProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('manage-users', {
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
         body: {
-          action: 'reset-password',
           userId: resetPasswordUser.id,
-          data: { password: passwordForm.password }
-        }
+          newPassword: passwordForm.password,
+        },
       });
 
       if (error || data?.error) {
-        // Fallback: trigger password reset email from Supabase Auth
-        await supabase.auth.resetPasswordForEmail(resetPasswordUser.email);
-        toast.success(`Password reset link dispatched to ${resetPasswordUser.email}`);
-      } else {
-        toast.success('Password updated successfully');
+        throw new Error(data?.error || error?.message || 'Failed to reset user password');
       }
 
+      toast.success('Password reset successfully. All active sessions for this user have been terminated.');
       setResetPasswordUser(null);
       setPasswordForm({ password: '', confirmPassword: '' });
+      fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to reset password');
+      toast.error(error?.message || 'Failed to reset password');
     } finally {
       setProcessing(false);
     }
@@ -544,19 +252,18 @@ export const UserManagementList = () => {
         }
       });
 
-      if (error && !data?.success) {
-        console.warn('manage-users delete fallback');
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Failed to delete user');
       }
 
-      // Remove from local registry
-      const local = users.filter((u) => u.id !== deleteUser.id && u.email !== deleteUser.email);
+      const local = users.filter((u) => u.id !== deleteUser.id);
       setUsers(local);
 
       toast.success('User deleted successfully');
       setDeleteUser(null);
       fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete user');
+      toast.error(error?.message || 'Failed to delete user');
     } finally {
       setProcessing(false);
     }
@@ -576,11 +283,10 @@ export const UserManagementList = () => {
 
       const days = planDays[subscriptionForm.plan.toLowerCase()] || 30;
 
-      // 1. Immediately update local registry cache
-      updateCachedUserSubscription(editSubscriptionUser.email, subscriptionForm.plan, days);
-
-      // 2. Try direct RPC
       let updated = false;
+      let lastErrorMessage = '';
+
+      // 1. Primary DB RPC
       try {
         const { data: rpcData, error: rpcError } = await (supabase as any).rpc('admin_set_agency_subscription', {
           p_agency_id: editSubscriptionUser.agency_id,
@@ -589,62 +295,47 @@ export const UserManagementList = () => {
         });
         if (!rpcError && rpcData?.success) {
           updated = true;
+        } else if (rpcError) {
+          lastErrorMessage = rpcError.message;
         }
-      } catch (e) {
-        console.warn('RPC subscription update fallback:', e);
+      } catch (e: any) {
+        lastErrorMessage = e?.message || 'RPC subscription update failed';
       }
 
-      // 3. Try direct agencies table update
-      if (!updated && editSubscriptionUser.agency_id) {
-        try {
-          const newExpiry = subscriptionForm.plan === 'lifetime'
-            ? '2099-12-31T23:59:59.000Z'
-            : new Date(Date.now() + days * 86400000).toISOString();
-
-          await supabase
-            .from('agencies')
-            .update({
-              subscription_plan: subscriptionForm.plan,
-              license_status: 'active',
-              license_active: true,
-              license_expiry: newExpiry,
-            })
-            .eq('id', editSubscriptionUser.agency_id);
-          updated = true;
-        } catch (e) {
-          console.warn('Agencies table update fallback:', e);
-        }
-      }
-
-      // 4. Try Edge Function if needed
+      // 2. Fallback to Edge Function (super_admin verified server-side)
       if (!updated) {
-        try {
-          await supabase.functions.invoke('manage-users', {
-            body: {
-              action: 'update-subscription',
-              data: {
-                agencyId: editSubscriptionUser.agency_id,
-                plan: subscriptionForm.plan
-              }
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('manage-users', {
+          body: {
+            action: 'update-subscription',
+            data: {
+              agencyId: editSubscriptionUser.agency_id,
+              plan: subscriptionForm.plan
             }
-          });
-        } catch (e) {
-          // Ignored since local cache is already updated
+          }
+        });
+        if (!fnError && !fnData?.error) {
+          updated = true;
+        } else {
+          lastErrorMessage = fnData?.error || fnError?.message || lastErrorMessage;
         }
+      }
+
+      if (!updated) {
+        throw new Error(lastErrorMessage || 'Failed to update subscription in database');
       }
 
       toast.success(`Subscription plan updated to "${subscriptionForm.plan}" successfully`);
       setEditSubscriptionUser(null);
       fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update subscription');
+      toast.error(error?.message || 'Failed to update subscription');
     } finally {
       setProcessing(false);
     }
   };
 
-  const getLicenseStatusBadge = (status: string | null, expiry: string | null, email?: string) => {
-    if (isMasterAdminEmail(email) || status === 'lifetime') {
+  const getLicenseStatusBadge = (status: string | null, expiry: string | null, role?: string) => {
+    if (role === 'super_admin' || status === 'lifetime') {
       return (
         <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-none shadow-xs font-semibold gap-1">
           <Infinity className="w-3 h-3" />
@@ -671,7 +362,7 @@ export const UserManagementList = () => {
   // Filter and search users
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      const isMaster = isMasterAdminEmail(user.email);
+      const isMaster = user.role === 'super_admin';
 
       // Search filter
       const searchLower = searchQuery.toLowerCase();
@@ -778,7 +469,7 @@ export const UserManagementList = () => {
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                  Showing all active accounts (<strong className="text-foreground">tamspro12@gmail.com</strong>, <strong className="text-foreground">usmn4u@gmail.com</strong>). To enable automatic instant query of all new self-service registrations directly from Supabase <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px]">auth.users</code>, run the one-click SQL script in your Supabase SQL editor.
+                  The direct <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px]">admin_get_registered_users</code> RPC is not active yet. Apply the latest database security migrations in your Supabase SQL editor to query all registered accounts securely from <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px]">auth.users</code>.
                 </p>
               </div>
             </div>
@@ -890,7 +581,7 @@ export const UserManagementList = () => {
               </TableHeader>
                 <TableBody>
                   {filteredUsers.map((user) => {
-                    const isMaster = isMasterAdminEmail(user.email);
+                    const isMaster = user.role === 'super_admin';
                     return (
                     <TableRow key={user.id} className={isMaster ? "bg-amber-500/5 hover:bg-amber-500/10 transition-colors font-medium" : ""}>
                       <TableCell className="font-medium">
@@ -929,7 +620,7 @@ export const UserManagementList = () => {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{getLicenseStatusBadge(user.license_status, user.license_expiry, user.email)}</TableCell>
+                      <TableCell>{getLicenseStatusBadge(user.license_status, user.license_expiry, user.role)}</TableCell>
                       <TableCell className="text-sm">
                         {isMaster ? (
                           <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

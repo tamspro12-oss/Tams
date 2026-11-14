@@ -233,18 +233,6 @@ export default function SignupPage() {
           } catch (e) {
             // Non-blocking if email column isn't migrated yet
           }
-
-          import("@/lib/userDirectorySync").then(({ recordRegisteredAccount }) => {
-            recordRegisteredAccount({
-              id: activeUser.id,
-              email: email,
-              full_name: agencyName,
-              agency_name: agencyName,
-              agency_id: profile?.agency_id || "",
-              subscription_plan: "free",
-              role: "user",
-            });
-          });
         } catch (syncErr) {
           console.warn("Post-signup profile sync:", syncErr);
         }

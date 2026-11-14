@@ -10,9 +10,8 @@ interface AdminRouteProps {
 }
 
 /**
- * Route protection wrapper restricting access strictly to Master Admin (usmn4u@gmail.com).
- * If any other user attempts to access, redirects immediately to /app/dashboard
- * with an unauthorized access warning toast.
+ * Route protection wrapper restricting /admin and /app/admin routes strictly
+ * to authenticated users holding `super_admin` in `public.user_roles`.
  */
 export const AdminRoute = ({ children }: AdminRouteProps) => {
   const { user, loading: authLoading } = useAuth();
@@ -22,7 +21,7 @@ export const AdminRoute = ({ children }: AdminRouteProps) => {
 
   useEffect(() => {
     if (!isLoading && user && !isAdmin) {
-      toast.error("Unauthorized: Full administrator privileges are restricted exclusively to usmn4u@gmail.com", {
+      toast.error("Unauthorized: Administrator access requires super_admin privileges", {
         id: "unauthorized-admin-access",
         duration: 4000,
       });
@@ -50,4 +49,3 @@ export const AdminRoute = ({ children }: AdminRouteProps) => {
 
   return <>{children}</>;
 };
-

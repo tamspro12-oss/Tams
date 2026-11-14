@@ -41,25 +41,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Master Admin Email Whitelist & Super Admin Authorization Check
-    const isMasterAdminEmail = user.email?.trim().toLowerCase() === 'usmn4u@gmail.com';
-    let isSuperAdmin = isMasterAdminEmail;
+    // Strict RBAC check via public.user_roles table (role = 'super_admin')
+    const { data: roleRow, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .maybeSingle();
+
+    const isSuperAdmin = !roleError && roleRow?.role === 'super_admin';
 
     if (!isSuperAdmin) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('is_super_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (profile?.is_super_admin) {
-        isSuperAdmin = true;
-      }
-    }
-
-    if (!isSuperAdmin) {
-      console.error(`Forbidden: Unauthorized user ${user.email} attempted admin manage-users.`);
+      console.error(`Forbidden: Unauthorized user ${user.id} attempted admin manage-users.`);
       return new Response(
-        JSON.stringify({ error: '403 Forbidden: Full administrator privileges are restricted exclusively to usmn4u@gmail.com' }),
+        JSON.stringify({ error: '403 Forbidden: super_admin role required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -109,23 +104,31 @@ Deno.serve(async (req) => {
         .from('user_roles')
         .select('user_id, role');
 
-      const roleMap = new Map((roles || []).map(r => [r.user_id, r.role]));
+      const roleMap = new Map<string, string>();
+      const rolePriority: Record<string, number> = { super_admin: 1, admin: 2, staff: 3 };
+      for (const r of roles || []) {
+        const current = roleMap.get(r.user_id);
+        if (!current || (rolePriority[r.role] ?? 99) < (rolePriority[current] ?? 99)) {
+          roleMap.set(r.user_id, r.role);
+        }
+      }
 
       const enrichedProfiles = authUsers.users.map(u => {
         const prof = profileMap.get(u.id);
         const agency = prof?.agency_id ? agencyMap.get(prof.agency_id) : null;
-        const isMaster = u.email?.toLowerCase() === 'usmn4u@gmail.com' || prof?.is_super_admin === true;
+        const userRole = roleMap.get(u.id) || 'staff';
+        const isSuper = userRole === 'super_admin';
 
         return {
           id: u.id,
           email: u.email || 'N/A',
           full_name: prof?.full_name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
-          role: isMaster ? 'admin' : (roleMap.get(u.id) || 'user'),
+          role: userRole,
           agency_id: prof?.agency_id || null,
-          agency_name: isMaster ? 'Master Admin HQ' : (agency?.name || 'Primary Agency'),
-          subscription_plan: isMaster ? 'lifetime' : (agency?.subscription_plan || 'free'),
-          license_expiry: isMaster ? '2099-12-31T23:59:59.000Z' : agency?.license_expiry,
-          license_status: isMaster ? 'active' : (agency?.license_status || 'active'),
+          agency_name: agency?.name || (isSuper ? 'Master Admin HQ' : 'Primary Agency'),
+          subscription_plan: agency?.subscription_plan || (isSuper ? 'lifetime' : 'free'),
+          license_expiry: agency?.license_expiry || (isSuper ? '2099-12-31T23:59:59.000Z' : null),
+          license_status: agency?.license_status || 'active',
           created_at: u.created_at,
           email_confirmed_at: u.email_confirmed_at,
           active_sessions: 1
@@ -194,8 +197,13 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
+      const { error: revokeErr } = await supabaseAdmin.rpc('admin_revoke_user_sessions', {
+        p_user_id: userId
+      });
+      if (revokeErr) throw revokeErr;
+
       return new Response(
-        JSON.stringify({ success: true, message: 'Password reset successfully' }),
+        JSON.stringify({ success: true, message: 'Password reset and all active sessions revoked' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

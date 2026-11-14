@@ -15,7 +15,6 @@ import {
   Phone,
   Mail,
   Briefcase,
-  Calendar,
   Banknote,
   FileText,
   Scale,
@@ -27,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { useEnterToNext } from "@/hooks/useEnterToNext";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 
 export interface AddVendorDialogProps {
   editVendor?: any;
@@ -54,6 +54,7 @@ export function AddVendorDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // References
+  const dialogRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const vendorNameRef = useRef<HTMLInputElement>(null);
   const serviceTypeRef = useRef<HTMLInputElement>(null);
@@ -90,7 +91,7 @@ export function AddVendorDialog({
       setContactNumber(editVendor.contact_number || "");
       setEmail(editVendor.email || "");
       setServiceType(editVendor.service_type || "");
-      setBookingDate(editVendor.booking_date || "");
+      setBookingDate(getTodayDateString());
       setPaymentAmount(editVendor.payment_amount?.toString() || "");
       setAmountPaid(editVendor.amount_paid?.toString() || "0");
       setNotes(editVendor.notes || "");
@@ -107,7 +108,7 @@ export function AddVendorDialog({
       setContactNumber("");
       setEmail("");
       setServiceType("Airlines / Ticketing");
-      setBookingDate(new Date().toISOString().split("T")[0]);
+      setBookingDate(getTodayDateString());
       setPaymentAmount("");
       setAmountPaid("0");
       setOpeningBalanceAmount("");
@@ -220,10 +221,11 @@ export function AddVendorDialog({
     }
   };
 
-  // Keyboard navigation hook
+  // Keyboard navigation hook (covers both form inputs and pinned footer Save button)
   useEnterToNext({
-    containerRef: formRef,
+    containerRef: dialogRef,
     enabled: isOpen,
+    isDirty: Boolean(name.trim() || contactPerson.trim() || paymentAmount),
     onSave: () => handleSaveInternal(false),
     onSaveAndAddNext: () => handleSaveInternal(true),
     onCancel: () => setIsOpen(false),
@@ -245,6 +247,8 @@ export function AddVendorDialog({
       )}
 
       <DialogContent
+        ref={dialogRef}
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col bg-background"
         aria-describedby="add-vendor-description"
       >
@@ -272,7 +276,6 @@ export function AddVendorDialog({
                 if (f.vendor_name) setName(f.vendor_name);
                 if (f.passenger_name) setContactPerson(f.passenger_name);
                 if (f.amount) setPaymentAmount(String(f.amount));
-                if (f.date) setBookingDate(f.date);
                 const noteBits = [
                   f.invoice_number && `Invoice: ${f.invoice_number}`,
                   f.pnr && `PNR: ${f.pnr}`,
@@ -289,6 +292,7 @@ export function AddVendorDialog({
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               data-cancel-button="true"
               className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
               onClick={() => setIsOpen(false)}
@@ -409,23 +413,13 @@ export function AddVendorDialog({
                 />
               </div>
 
-              {/* Booking / Ledger Date */}
-              <div>
-                <Label
-                  htmlFor="booking_date"
-                  className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-1 block flex items-center gap-1"
-                >
-                  <Calendar className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                  Entry Date
-                </Label>
-                <Input
-                  id="booking_date"
-                  type="date"
-                  value={bookingDate}
-                  onChange={(e) => setBookingDate(e.target.value)}
-                  className="h-8 text-xs focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-500"
-                />
-              </div>
+              {/* Booking / Ledger Date (Locked System Date) */}
+              <LockedDateField
+                id="booking_date"
+                label="Entry Date"
+                value={bookingDate}
+                onChange={setBookingDate}
+              />
             </div>
           </div>
 
@@ -555,6 +549,7 @@ export function AddVendorDialog({
             type="button"
             variant="outline"
             size="sm"
+            tabIndex={-1}
             data-cancel-button="true"
             onClick={() => setIsOpen(false)}
             disabled={isSubmitting}

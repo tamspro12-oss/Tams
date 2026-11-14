@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Banknote, Plus, Minus } from "lucide-react";
 import { PaymentHistorySection } from "./PaymentHistorySection";
 import { PaymentModeSelect } from "./PaymentModeSelect";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface ClientPaymentDialogProps {
   client: any;
@@ -19,10 +20,20 @@ interface ClientPaymentDialogProps {
 export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymentDialogProps) {
   const { updateClient } = useClients();
   const { history, isLoading: historyLoading, addPaymentHistory } = useClientPaymentHistoryLocal(client?.id);
+  const formRef = useRef<HTMLFormElement>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && Boolean(client),
+    isDirty: Boolean(paymentAmount),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   // Handle null client
   if (!client) {
@@ -111,7 +122,10 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden"
+      >
         <DialogHeader className="shrink-0 pb-2 border-b">
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <Banknote className="w-5 h-5 text-primary" />
@@ -141,7 +155,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-3">
+            <form ref={formRef} onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-3">
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="payment" className="text-xs font-semibold">Adjustment Amount (₨)</Label>
@@ -155,12 +169,14 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
                       placeholder="+ to add, - to reduce"
                       className="h-9 text-sm"
                       required
+                      data-required-message="Payment amount is required"
                     />
                     {remaining > 0 && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
+                        tabIndex={-1}
                         onClick={handlePayFull}
                         className="shrink-0 h-9"
                       >
@@ -199,6 +215,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
                   type="button"
                   variant="outline"
                   size="sm"
+                  tabIndex={-1}
                   onClick={() => {
                     onOpenChange(false);
                     setPaymentAmount("");
@@ -208,7 +225,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={isSubmitting || !paymentAmount}>
+                <Button type="submit" size="sm" data-save-button="true" disabled={isSubmitting || !paymentAmount}>
                   {isSubmitting ? "Updating..." : "Update Payment"}
                 </Button>
               </div>

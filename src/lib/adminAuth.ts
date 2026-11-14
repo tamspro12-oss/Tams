@@ -1,57 +1,47 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Master Admin Email Whitelist
- * Only this account possesses platform-level administrator privileges,
- * user management, system settings, and administrative controls.
+ * Verifies whether the specified (or currently logged-in) user holds the
+ * `super_admin` role in `public.user_roles` via server-verified database checks.
+ * Never trusts localStorage, client flags, or hardcoded email whitelists.
  */
-export const MASTER_ADMIN_EMAIL = "usmn4u@gmail.com";
+export async function verifySuperAdminStatus(userId?: string | null): Promise<boolean> {
+  try {
+    let targetUserId = userId ?? null;
+    if (!targetUserId) {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) return false;
+      targetUserId = user.id;
+    }
 
-/**
- * Synchronous client-side check whether an email matches the Master Admin.
- */
-export function isMasterAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return email.trim().toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+    const { data: roleRow, error: roleError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", targetUserId)
+      .eq("role", "super_admin" as any)
+      .maybeSingle();
+
+    if (!roleError && roleRow?.role === ("super_admin" as any)) {
+      return true;
+    }
+
+    const { data: hasRoleResult, error: rpcError } = await (supabase as any).rpc("has_role", {
+      _user_id: targetUserId,
+      _role: "super_admin",
+    });
+
+    return !rpcError && hasRoleResult === true;
+  } catch (err) {
+    console.error("[adminAuth] Error verifying super_admin role:", err);
+    return false;
+  }
 }
 
 /**
- * Asynchronously checks if a user is the Master Admin via:
- * 1. Email whitelisting (usmn4u@gmail.com)
- * 2. Database super admin flag / RPC is_master_admin check
+ * Backwards-compatible alias delegating strictly to database `super_admin` verification.
  */
-export async function verifyMasterAdminStatus(user?: { id?: string; email?: string | null } | null): Promise<boolean> {
-  if (!user) return false;
-
-  // Direct email whitelisting check
-  if (isMasterAdminEmail(user.email)) {
-    return true;
-  }
-
-  // Database fallback check for super-admin role
-  if (user.id) {
-    try {
-      const { data, error } = await (supabase as any).rpc("is_master_admin", {
-        _user_id: user.id,
-      });
-      if (!error && typeof data === "boolean") {
-        return data;
-      }
-
-      // Fallback check against profiles table
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_super_admin")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if ((profile as any)?.is_super_admin === true) {
-        return true;
-      }
-    } catch (err) {
-      console.warn("[adminAuth] Verification check error:", err);
-    }
-  }
-
-  return false;
+export async function verifyMasterAdminStatus(
+  user?: { id?: string | null } | null
+): Promise<boolean> {
+  return verifySuperAdminStatus(user?.id);
 }

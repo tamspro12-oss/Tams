@@ -10,6 +10,7 @@ import { bookingSchema, validateData } from "@/lib/validations/schemas";
 import { toast } from "sonner";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { BulkScanAutofillButton } from "@/components/ai/BulkScanAutofillButton";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 
 interface AddBookingDialogProps {
@@ -23,6 +24,14 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
   const formRef = useRef<HTMLFormElement>(null);
   const { clients } = useClients();
   const { addBooking, updateBooking } = useBookings();
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const applyScan = (f: Record<string, any>) => {
     const form = formRef.current;
@@ -90,7 +99,10 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-4 sm:p-6 overflow-hidden"
+      >
         <DialogHeader className="shrink-0 pb-2 border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -220,10 +232,10 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
           </div>
 
           <div className="shrink-0 flex gap-2 justify-end pt-3 border-t">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
+            <Button type="button" variant="outline" size="sm" tabIndex={-1} onClick={() => onOpenChange(false)} className="text-xs">
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={addBooking.isPending || updateBooking.isPending || !selectedClientId} className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white">
+            <Button type="submit" size="sm" data-save-button="true" disabled={addBooking.isPending || updateBooking.isPending || !selectedClientId} className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white">
               {addBooking.isPending || updateBooking.isPending ? (editBooking ? "Updating..." : "Adding...") : (editBooking ? "Update Booking" : "Add Booking")}
             </Button>
           </div>

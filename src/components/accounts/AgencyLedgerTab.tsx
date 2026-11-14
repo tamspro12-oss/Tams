@@ -30,6 +30,7 @@ import { useClients, useVendors } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { getKarachiTodayNoon, getKarachiYmd } from "@/lib/karachiTime";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -70,11 +71,11 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   const { data: agency } = useAgency();
   const { reverseTransaction } = useTransactionMutations();
 
-  // Date range calculation
+  // Date range calculation (Asia/Karachi timezone)
   const dateRange = useMemo(() => {
-    const now = new Date();
+    const now = getKarachiTodayNoon();
     if (dateFilterPreset === "today") {
-      const todayStr = format(now, "yyyy-MM-dd");
+      const todayStr = getKarachiYmd(now);
       return { start: todayStr, end: todayStr };
     }
     if (dateFilterPreset === "this_month") {

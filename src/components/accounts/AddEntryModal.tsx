@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { ArrowDownLeft, ArrowUpRight, Receipt, ArrowRightLeft, User, Building2, 
 import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -44,9 +46,10 @@ export function AddEntryModal({
   defaultPartyId,
   defaultPartyType,
 }: AddEntryModalProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [mode, setMode] = useState<"received" | "paid" | "expense" | "transfer">(defaultMode);
   const [amount, setAmount] = useState<string>("");
-  const [date, setDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [date, setDate] = useState<string>(getTodayDateString());
   const [accountId, setAccountId] = useState<string>("");
   const [toAccountId, setToAccountId] = useState<string>("");
   const [partyType, setPartyType] = useState<"client" | "agent" | "vendor">(defaultPartyType || "client");
@@ -74,8 +77,9 @@ export function AddEntryModal({
     }
   }, [accounts, accountId, toAccountId, bankAccounts]);
 
-  // Reset or preset party
+  // Reset or preset party & locked date
   React.useEffect(() => {
+    if (open) setDate(getTodayDateString());
     if (defaultPartyId) setSelectedPartyId(defaultPartyId);
     if (defaultPartyType) setPartyType(defaultPartyType);
     if (defaultMode) setMode(defaultMode);
@@ -108,8 +112,8 @@ export function AddEntryModal({
     }
   }, [partyType, clients, agents, vendors]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       toast.error("Please enter a valid amount greater than 0");
@@ -189,6 +193,16 @@ export function AddEntryModal({
     }
   };
 
+  const isDirty = Boolean(amount.trim() || referenceNo.trim() || notes.trim() || selectedPartyId);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty,
+    onSave: () => handleSubmit(),
+    onCancel: () => onOpenChange(false),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 overflow-hidden bg-background border rounded-xl shadow-2xl">
@@ -240,7 +254,7 @@ export function AddEntryModal({
         </div>
 
         {/* 2. Flexible Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Column 1: Amount, Date & Account Selection */}
             <div className="flex flex-col gap-3 min-h-0">
@@ -261,25 +275,22 @@ export function AddEntryModal({
                       step="any"
                       min="1"
                       required
+                      data-required-positive="true"
+                      data-required-message="Please enter a valid amount greater than 0"
                       placeholder="0.00"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       className="pl-7 font-mono font-bold text-base h-10"
-                      autoFocus
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-foreground">Date *</Label>
-                  <Input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="h-9 text-xs"
-                  />
-                </div>
+                <LockedDateField
+                  label="Date"
+                  value={date}
+                  onChange={setDate}
+                  required
+                />
 
                 {/* Account Selection */}
                 {mode === "transfer" ? (
@@ -504,6 +515,7 @@ export function AddEntryModal({
             <Button
               type="submit"
               size="sm"
+              data-save-button="true"
               disabled={isSubmitting}
               className={cn(
                 "min-w-28 font-semibold text-xs cursor-pointer",

@@ -18,12 +18,17 @@ export function OfflineIndicator() {
     <div className="flex items-center gap-2">
       {/* Offline Banner */}
       {!isOnline && (
-        <div className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium",
-          "bg-warning/10 text-warning border border-warning/20"
-        )}>
-          <WifiOff className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Offline</span>
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold",
+            "bg-destructive/15 text-destructive border border-destructive/30"
+          )}
+        >
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">Offline — Saving disabled until reconnected</span>
+          <span className="sm:hidden">Offline</span>
         </div>
       )}
 

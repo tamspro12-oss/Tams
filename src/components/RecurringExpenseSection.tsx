@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,7 @@ import { useExpenses } from "@/hooks/useStorage";
 import { format, addMonths, addQuarters, addYears, isBefore, startOfMonth, endOfMonth, parseISO, isWithinInterval } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { PaymentModeSelect } from "./PaymentModeSelect";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface RecurringExpense {
   id: string;
@@ -294,9 +295,18 @@ interface RecurringExpenseDialogProps {
 function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringExpenseDialogProps) {
   const { addExpense, updateExpense } = useExpenses();
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMode, setPaymentMode] = useState(editExpense?.payment_mode || "cash");
   const [bankName, setBankName] = useState(editExpense?.bank_name || "");
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -342,7 +352,10 @@ function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringEx
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RefreshCcw className="w-5 h-5" />
@@ -353,7 +366,7 @@ function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringEx
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="expenseType">Expense Type *</Label>
@@ -427,11 +440,12 @@ function RecurringExpenseDialog({ open, onOpenChange, editExpense }: RecurringEx
             <Button
               type="button"
               variant="outline"
+              tabIndex={-1}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" data-save-button="true" disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : (editExpense ? "Update" : "Create Recurring")}
             </Button>
           </div>

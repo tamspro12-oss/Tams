@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Party, useParties } from "@/hooks/useParties";
 import { supabase } from "@/integrations/supabase/client";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Lock, Info, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +42,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
   onSaved,
 }) => {
   const { addParty, updateParty, isSaving } = useParties();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const isTypeLocked = lockType || (initialType !== undefined && lockType);
 
@@ -115,13 +117,14 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
     }
 
     fetchCodePreview();
+
     return () => {
       isCancelled = true;
     };
   }, [open, type, partyToEdit]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       toast.error("You are offline, not saved");
       return;
@@ -179,6 +182,23 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
     }
   };
 
+  const isDirty = Boolean(
+    name.trim() !== (partyToEdit?.name || "") ||
+      phone.trim() !== (partyToEdit?.phone || "") ||
+      email.trim() !== (partyToEdit?.email || "") ||
+      city.trim() !== (partyToEdit?.city || "") ||
+      address.trim() !== (partyToEdit?.address || "") ||
+      notes.trim() !== (partyToEdit?.notes || "")
+  );
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty,
+    onSave: () => handleSubmit(),
+    onCancel: () => onOpenChange(false),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-3xl p-0 gap-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
@@ -202,7 +222,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
         </div>
 
         {/* ONE COMPACT FORM: Flat tight 4-column grid, compact inputs, fits on one screen with NO scrolling */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3">
           {/* LINE 1: Type | Name * | Phone | Email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             <div>
@@ -229,12 +249,12 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
                 Name <span className="text-red-500">*</span>
               </Label>
               <Input
-                autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Al-Madina Travels or Ali Khan"
                 className="h-8 text-xs mt-1"
                 required
+                data-required-message="Party name is required"
               />
             </div>
 
@@ -276,6 +296,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
                     <TooltipTrigger asChild>
                       <button
                         type="button"
+                        tabIndex={-1}
                         className="inline-flex text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                         title="Positive = party owes you. Negative = you owe party."
                       >
@@ -363,6 +384,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
             <Button
               type="submit"
               size="sm"
+              data-save-button="true"
               disabled={isSaving}
               className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px]"
             >

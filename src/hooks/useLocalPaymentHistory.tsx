@@ -1,19 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cloudStorage } from '@/lib/storage/cloudStorageProvider';
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
 
-// Client Payment History for Local Storage
+// Client Payment History (Supabase cloud storage, agency-scoped)
 export function useClientPaymentHistoryLocal(clientId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: history = [], isLoading } = useQuery({
-    queryKey: ["clientPaymentHistory", clientId],
+    queryKey: ["clientPaymentHistory", userAgencyId, clientId],
     queryFn: async () => {
       if (!clientId) return [];
       return await cloudStorage.getClientPaymentHistory(clientId);
     },
-    enabled: !!clientId,
+    enabled: !!userAgencyId && !!clientId,
   });
 
   const addPaymentHistory = useMutation({
@@ -27,20 +30,20 @@ export function useClientPaymentHistoryLocal(clientId?: string) {
       payment_mode?: string;
       bank_name?: string | null;
     }) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline. Connect to the internet to save.");
+      }
       await cloudStorage.addClientPaymentHistory(payment);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clientPaymentHistory"] });
-      queryClient.invalidateQueries({ queryKey: ["all-client-payment-history"] });
-      // Extend session on activity
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
-      // Auto-backup after payment
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },
-    onError: () => {
+    onError: (err: any) => {
       toast({
         title: "Error",
-        description: "Failed to record payment history",
+        description: err?.message || "Failed to record payment history",
         variant: "destructive",
       });
     },
@@ -53,18 +56,19 @@ export function useClientPaymentHistoryLocal(clientId?: string) {
   };
 }
 
-// Vendor Payment History for Local Storage
+// Vendor Payment History (Supabase cloud storage, agency-scoped)
 export function useVendorPaymentHistoryLocal(vendorId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   const { data: history = [], isLoading } = useQuery({
-    queryKey: ["vendorPaymentHistory", vendorId],
+    queryKey: ["vendorPaymentHistory", userAgencyId, vendorId],
     queryFn: async () => {
       if (!vendorId) return [];
       return await cloudStorage.getVendorPaymentHistory(vendorId);
     },
-    enabled: !!vendorId,
+    enabled: !!userAgencyId && !!vendorId,
   });
 
   const addPaymentHistory = useMutation({
@@ -78,20 +82,20 @@ export function useVendorPaymentHistoryLocal(vendorId?: string) {
       payment_mode?: string;
       bank_name?: string | null;
     }) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline. Connect to the internet to save.");
+      }
       await cloudStorage.addVendorPaymentHistory(payment);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vendorPaymentHistory"] });
-      queryClient.invalidateQueries({ queryKey: ["all-vendor-payment-history"] });
-      // Extend session on activity
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
-      // Auto-backup after payment
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },
-    onError: () => {
+    onError: (err: any) => {
       toast({
         title: "Error",
-        description: "Failed to record payment history",
+        description: err?.message || "Failed to record payment history",
         variant: "destructive",
       });
     },
@@ -104,10 +108,11 @@ export function useVendorPaymentHistoryLocal(vendorId?: string) {
   };
 }
 
-// All Client Payment History for Local Storage
+// All Client Payment History (Supabase cloud storage, agency-scoped)
 export function useAllClientPaymentHistoryLocal(clientIds: string[]) {
+  const { data: userAgencyId } = useCurrentAgencyId();
   const query = useQuery({
-    queryKey: ["all-client-payment-history", clientIds],
+    queryKey: ["all-client-payment-history", userAgencyId, clientIds],
     queryFn: async () => {
       if (!clientIds.length) return [];
 
@@ -117,21 +122,21 @@ export function useAllClientPaymentHistoryLocal(clientIds: string[]) {
         allPayments.push(...payments);
       }
 
-      // Sort by date descending
-      return allPayments.sort((a, b) => 
+      return allPayments.sort((a, b) =>
         new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
       );
     },
-    enabled: clientIds.length > 0,
+    enabled: !!userAgencyId && clientIds.length > 0,
   });
 
   return query;
 }
 
-// All Vendor Payment History for Local Storage
+// All Vendor Payment History (Supabase cloud storage, agency-scoped)
 export function useAllVendorPaymentHistoryLocal(vendorIds: string[]) {
+  const { data: userAgencyId } = useCurrentAgencyId();
   const query = useQuery({
-    queryKey: ["all-vendor-payment-history", vendorIds],
+    queryKey: ["all-vendor-payment-history", userAgencyId, vendorIds],
     queryFn: async () => {
       if (!vendorIds.length) return [];
 
@@ -141,12 +146,11 @@ export function useAllVendorPaymentHistoryLocal(vendorIds: string[]) {
         allPayments.push(...payments);
       }
 
-      // Sort by date descending
-      return allPayments.sort((a, b) => 
+      return allPayments.sort((a, b) =>
         new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
       );
     },
-    enabled: vendorIds.length > 0,
+    enabled: !!userAgencyId && vendorIds.length > 0,
   });
 
   return query;

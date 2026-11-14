@@ -6,6 +6,12 @@ import { useParties, type Party } from "@/hooks/useParties";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import { format, isToday, isTomorrow, addDays, parseISO } from "date-fns";
 import { toast } from "sonner";
+import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
+import {
+  getKarachiTodayNoon,
+  getKarachiYmd,
+  isInvoiceVoidedOrRefunded,
+} from "@/lib/accountingEngine";
 
 export interface PortalAlertItem {
   id: string;
@@ -89,62 +95,69 @@ const STORAGE_DONE_KEY = "tams_alert_done_ids";
 const STORAGE_READ_KEY = "tams_alert_read_ids";
 const STORAGE_SNOOZE_KEY = "tams_alert_snooze_map";
 
+const scopedAlertKey = (base: string, agencyId?: string | null) =>
+  agencyId ? `${base}_${agencyId}` : base;
+
 export function useUnifiedAlerts() {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
   const { parties = [] } = useParties();
   const { accounts = [], cashAccount } = useAccounts();
 
-  // 1. Preferences State
-  const [preferences, setPreferences] = useState<AlertPreferences>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_PREFS_KEY);
-      return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : DEFAULT_PREFERENCES;
-    } catch {
-      return DEFAULT_PREFERENCES;
+  // 1. UI Preferences State (strictly scoped by agencyId)
+  const [preferences, setPreferences] = useState<AlertPreferences>(DEFAULT_PREFERENCES);
+  const [doneIds, setDoneIds] = useState<Set<string>>(() => new Set());
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+  const [snoozeMap, setSnoozeMap] = useState<Record<string, string>>(() => ({}));
+
+  useEffect(() => {
+    if (!agencyId) {
+      setPreferences(DEFAULT_PREFERENCES);
+      setDoneIds(new Set());
+      setReadIds(new Set());
+      setSnoozeMap({});
+      return;
     }
-  });
+    try {
+      const savedPrefs = localStorage.getItem(scopedAlertKey(STORAGE_PREFS_KEY, agencyId));
+      setPreferences(savedPrefs ? { ...DEFAULT_PREFERENCES, ...JSON.parse(savedPrefs) } : DEFAULT_PREFERENCES);
+    } catch {
+      setPreferences(DEFAULT_PREFERENCES);
+    }
+    try {
+      const savedDone = localStorage.getItem(scopedAlertKey(STORAGE_DONE_KEY, agencyId));
+      setDoneIds(savedDone ? new Set(JSON.parse(savedDone)) : new Set());
+    } catch {
+      setDoneIds(new Set());
+    }
+    try {
+      const savedRead = localStorage.getItem(scopedAlertKey(STORAGE_READ_KEY, agencyId));
+      setReadIds(savedRead ? new Set(JSON.parse(savedRead)) : new Set());
+    } catch {
+      setReadIds(new Set());
+    }
+    try {
+      const savedSnooze = localStorage.getItem(scopedAlertKey(STORAGE_SNOOZE_KEY, agencyId));
+      setSnoozeMap(savedSnooze ? JSON.parse(savedSnooze) : {});
+    } catch {
+      setSnoozeMap({});
+    }
+  }, [agencyId]);
 
   const savePreferences = useCallback((newPrefs: Partial<AlertPreferences>) => {
     setPreferences((prev) => {
       const updated = { ...prev, ...newPrefs };
-      try {
-        localStorage.setItem(STORAGE_PREFS_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Could not save preferences to localStorage:", e);
+      if (agencyId) {
+        try {
+          localStorage.setItem(scopedAlertKey(STORAGE_PREFS_KEY, agencyId), JSON.stringify(updated));
+        } catch (e) {
+          console.warn("Could not save preferences to localStorage:", e);
+        }
       }
       return updated;
     });
     toast.success("Preferences saved successfully");
-  }, []);
-
-  // 2. Alert States (Done, Read, Snoozed)
-  const [doneIds, setDoneIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_DONE_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_READ_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const [snoozeMap, setSnoozeMap] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_SNOOZE_KEY);
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  }, [agencyId]);
 
   // 3. Query Invoices
   const { data: bookingInvoices = [] } = useQuery({
@@ -263,21 +276,21 @@ export function useUnifiedAlerts() {
     staleTime: 30 * 1000,
   });
 
-  // 9. GENERATE DYNAMIC ALERTS
+  // 9. GENERATE DYNAMIC ALERTS (100% aligned with Dashboard & Overdue Single Source of Truth)
   const generatedAlerts = useMemo<PortalAlertItem[]>(() => {
     const list: PortalAlertItem[] = [];
-    const now = new Date();
-    const todayStr = format(now, "yyyy-MM-dd");
-    const nowTimeStr = format(now, "HH:mm");
+    const now = getKarachiTodayNoon();
+    const todayStr = getKarachiYmd(now);
+    const nowTimeStr = format(new Date(), "HH:mm");
     const departureWindowDate = format(addDays(now, preferences.daysBeforeDeparture || 7), "yyyy-MM-dd");
     const dueWindowDate = format(addDays(now, preferences.daysBeforeDueDate || 3), "yyyy-MM-dd");
 
     // A. CLIENT PAYMENT & OVERDUE INVOICES
-    // Primary source: booking_invoices
+    // Primary source: booking_invoices (legacy clients checked ONLY if booking_invoices is empty)
     const processedInvoiceNos = new Set<string>();
 
     bookingInvoices.forEach((inv: any) => {
-      if (inv.is_void) return;
+      if (isInvoiceVoidedOrRefunded(inv)) return;
       const clientAmt = Number(inv.client_amount) || 0;
       const paidAmt = Number(inv.paid_amount) || 0;
       const remaining = Math.max(0, clientAmt - paidAmt);
@@ -285,8 +298,7 @@ export function useUnifiedAlerts() {
 
       processedInvoiceNos.add(inv.invoice_no);
 
-      const dueDate = inv.more_details?.remaining_due_date || inv.invoice_date || todayStr;
-      const isOverdue = dueDate < todayStr;
+      const { isOverdue, dueDate } = getInvoiceOverdueInfo(inv, now);
       const isDueToday = dueDate === todayStr;
       const isDueSoon = dueDate > todayStr && dueDate <= dueWindowDate;
 
@@ -366,56 +378,54 @@ export function useUnifiedAlerts() {
       }
     });
 
-    // Fallback: clients table bookings not in booking_invoices
-    clientsData.forEach((c: any) => {
-      const invNo = `INV-${c.id.slice(0, 4).toUpperCase()}`;
-      if (processedInvoiceNos.has(invNo)) return;
+    // Fallback: legacy clients table ONLY when booking_invoices has zero rows for this agency
+    if (bookingInvoices.length === 0) {
+      clientsData.forEach((c: any) => {
+        if (isInvoiceVoidedOrRefunded(c)) return;
+        const total = Number(c.selling_price) || 0;
+        const paid = Number(c.amount_paid) || 0;
+        const remaining = Math.max(0, total - paid);
+        if (remaining <= 0 || c.payment_status?.toLowerCase() === "paid") return;
 
-      const total = Number(c.selling_price) || 0;
-      const paid = Number(c.amount_paid) || 0;
-      const remaining = Math.max(0, total - paid);
-      if (remaining <= 0 || c.payment_status?.toLowerCase() === "paid") return;
+        const { isOverdue, dueDate } = getInvoiceOverdueInfo(c, now);
+        const id = `client-due-${c.id}`;
 
-      const dueDate = c.remaining_payment_date || c.flight_date || (c.created_at ? c.created_at.slice(0, 10) : todayStr);
-      const isOverdue = dueDate < todayStr;
-      const isDueToday = dueDate === todayStr;
-      const id = `client-due-${c.id}`;
-
-      if (isOverdue && preferences.invoiceOverdue) {
-        list.push({
-          id,
-          title: `Overdue Balance: ${c.name}`,
-          description: `Outstanding balance of PKR ${remaining.toLocaleString()} is overdue (Due: ${dueDate}).`,
-          type: "accounts",
-          priority: "overdue",
-          dueDate,
-          sourceId: c.id,
-          sourceType: "invoice",
-          clientName: c.name,
-          pnr: c.pnr,
-          ticketNo: c.passport_number,
-          amount: remaining,
-          isRead: readIds.has(id),
-          isDone: doneIds.has(id),
-          snoozedUntil: snoozeMap[id] || null,
-          createdAt: c.created_at || dueDate,
-          mainAction: {
-            label: "Receive Payment",
-            modalType: "payment_voucher",
-            modalProps: {
-              partyName: c.name,
-              amount: remaining,
-              direction: "in",
+        if (isOverdue && preferences.invoiceOverdue) {
+          list.push({
+            id,
+            title: `Overdue Balance: ${c.name}`,
+            description: `Outstanding balance of PKR ${remaining.toLocaleString()} is overdue (Due: ${dueDate}).`,
+            type: "accounts",
+            priority: "overdue",
+            dueDate,
+            sourceId: c.id,
+            sourceType: "invoice",
+            clientName: c.name,
+            pnr: c.pnr,
+            ticketNo: c.passport_number,
+            amount: remaining,
+            isRead: readIds.has(id),
+            isDone: doneIds.has(id),
+            snoozedUntil: snoozeMap[id] || null,
+            createdAt: c.created_at || dueDate,
+            mainAction: {
+              label: "Receive Payment",
+              modalType: "payment_voucher",
+              modalProps: {
+                partyName: c.name,
+                amount: remaining,
+                direction: "in",
+              },
             },
-          },
-        });
-      }
-    });
+          });
+        }
+      });
+    }
 
-    // B. VENDOR PAYABLES DUE
+    // B. VENDOR PAYABLES DUE (only supplier/both parties with genuine payable balance < 0)
     if (preferences.vendorPayableDue) {
       parties
-        .filter((p) => p.current_balance < 0)
+        .filter((p) => p.type !== "client" && p.current_balance < 0)
         .forEach((v) => {
           const payableAmt = Math.abs(v.current_balance);
           const id = `vendor-pay-${v.id}`;
@@ -772,41 +782,47 @@ export function useUnifiedAlerts() {
     setReadIds((prev) => {
       const next = new Set(prev);
       next.add(id);
-      try {
-        localStorage.setItem(STORAGE_READ_KEY, JSON.stringify(Array.from(next)));
-      } catch (e) {
-        console.warn("Could not save read alert ID:", e);
+      if (agencyId) {
+        try {
+          localStorage.setItem(scopedAlertKey(STORAGE_READ_KEY, agencyId), JSON.stringify(Array.from(next)));
+        } catch (e) {
+          console.warn("Could not save read alert ID:", e);
+        }
       }
       return next;
     });
-  }, []);
+  }, [agencyId]);
 
   const markAllAsRead = useCallback(() => {
     const allIds = generatedAlerts.map((a) => a.id);
     setReadIds(new Set(allIds));
-    try {
-      localStorage.setItem(STORAGE_READ_KEY, JSON.stringify(allIds));
-    } catch (e) {
-      console.warn("Could not save all read alert IDs:", e);
+    if (agencyId) {
+      try {
+        localStorage.setItem(scopedAlertKey(STORAGE_READ_KEY, agencyId), JSON.stringify(allIds));
+      } catch (e) {
+        console.warn("Could not save all read alert IDs:", e);
+      }
     }
     toast.success("All notifications marked as read");
-  }, [generatedAlerts]);
+  }, [generatedAlerts, agencyId]);
 
   const markAsDone = useCallback((id: string) => {
     setDoneIds((prev) => {
       const next = new Set(prev);
       next.add(id);
-      try {
-        localStorage.setItem(STORAGE_DONE_KEY, JSON.stringify(Array.from(next)));
-      } catch (e) {
-        console.warn("Could not save done alert ID:", e);
+      if (agencyId) {
+        try {
+          localStorage.setItem(scopedAlertKey(STORAGE_DONE_KEY, agencyId), JSON.stringify(Array.from(next)));
+        } catch (e) {
+          console.warn("Could not save done alert ID:", e);
+        }
       }
       return next;
     });
     // Also mark read
     markAsRead(id);
     toast.success("Alert marked as completed");
-  }, [markAsRead]);
+  }, [markAsRead, agencyId]);
 
   const snoozeAlert = useCallback((id: string, duration: "1h" | "tonight" | "tomorrow" | "custom", customIso?: string) => {
     const now = new Date();
@@ -830,16 +846,18 @@ export function useUnifiedAlerts() {
 
     setSnoozeMap((prev) => {
       const next = { ...prev, [id]: untilIso };
-      try {
-        localStorage.setItem(STORAGE_SNOOZE_KEY, JSON.stringify(next));
-      } catch (e) {
-        console.warn("Could not save snooze map:", e);
+      if (agencyId) {
+        try {
+          localStorage.setItem(scopedAlertKey(STORAGE_SNOOZE_KEY, agencyId), JSON.stringify(next));
+        } catch (e) {
+          console.warn("Could not save snooze map:", e);
+        }
       }
       return next;
     });
 
     toast.info("Alert snoozed");
-  }, []);
+  }, [agencyId]);
 
   const dismissAlert = useCallback((id: string) => {
     markAsDone(id);

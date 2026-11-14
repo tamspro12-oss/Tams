@@ -110,15 +110,50 @@ export function ExcelGrid<T = any>({
 
   // 1. Column Visibility and Order State (persisted in localStorage)
   const storageKey = `tams_grid_cols_${id}`;
+  const defaultColSignature = useMemo(() => columns.map((c) => c.key).join("|"), [columns]);
+
   const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    if (hideColumnsButton) {
+      return columns.map((c) => c.key);
+    }
     try {
+      const savedSig = localStorage.getItem(`${storageKey}_sig`);
       const saved = localStorage.getItem(`${storageKey}_order`);
-      if (saved) return JSON.parse(saved);
+      if (saved && savedSig === columns.map((c) => c.key).join("|")) {
+        return JSON.parse(saved);
+      }
+      localStorage.setItem(`${storageKey}_sig`, columns.map((c) => c.key).join("|"));
+      localStorage.removeItem(`${storageKey}_order`);
     } catch {}
     return columns.map((c) => c.key);
   });
 
+  useEffect(() => {
+    const codeOrder = columns.map((c) => c.key);
+    if (hideColumnsButton) {
+      setColumnOrder((prev) =>
+        prev.join("|") === defaultColSignature ? prev : codeOrder
+      );
+      return;
+    }
+    try {
+      const savedSig = localStorage.getItem(`${storageKey}_sig`);
+      if (savedSig !== defaultColSignature) {
+        localStorage.setItem(`${storageKey}_sig`, defaultColSignature);
+        localStorage.removeItem(`${storageKey}_order`);
+        setColumnOrder(codeOrder);
+      }
+    } catch {}
+  }, [hideColumnsButton, storageKey, defaultColSignature, columns]);
+
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    if (hideColumnsButton) {
+      const initial: Record<string, boolean> = {};
+      columns.forEach((c) => {
+        initial[c.key] = c.defaultVisible !== false;
+      });
+      return initial;
+    }
     try {
       const saved = localStorage.getItem(`${storageKey}_vis`);
       if (saved) return JSON.parse(saved);

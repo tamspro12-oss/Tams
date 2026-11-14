@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { FormSectionNav } from "@/components/FormSectionNav";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddQueryDialogProps {
   open: boolean;
@@ -26,10 +27,19 @@ const SECTIONS = [
 ];
 
 export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialogProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const { addQuery, updateQuery } = useQueries();
 
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -70,7 +80,9 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
@@ -91,6 +103,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 shrink-0"
               title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -110,6 +123,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
         )}
 
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className={cn(
             "flex-1 overflow-y-auto form-scroll-container",
@@ -342,6 +356,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
             <Button
               type="button"
               variant="outline"
+              tabIndex={-1}
               onClick={() => onOpenChange(false)}
               className="px-6"
             >
@@ -349,6 +364,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
             </Button>
             <Button
               type="submit"
+              data-save-button="true"
               disabled={addQuery.isPending || updateQuery.isPending}
               className="px-6 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25"
             >

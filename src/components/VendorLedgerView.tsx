@@ -22,6 +22,7 @@ import {
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useClients } from "@/hooks/useStorage";
+import { isInvoiceVoidedOrRefunded, getKarachiTodayNoon } from "@/lib/accountingEngine";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -55,8 +56,10 @@ export function VendorLedgerView({ vendorId, vendorName }: VendorLedgerViewProps
   const ledgerEntries = useMemo((): LedgerEntry[] => {
     const entries: LedgerEntry[] = [];
     
-    // Get vendor's client bookings as debits (what we owe)
-    const vendorClients = clients.filter(c => c.vendor_id === vendorId);
+    // Get vendor's active (non-void/non-refunded) client bookings as debits (what we owe)
+    const vendorClients = clients.filter(
+      (c) => c.vendor_id === vendorId && !isInvoiceVoidedOrRefunded(c)
+    );
     vendorClients.forEach(client => {
       const purchasingPrice = Number(client.purchasing_price) || 0;
       if (purchasingPrice > 0) {
@@ -100,13 +103,13 @@ export function VendorLedgerView({ vendorId, vendorName }: VendorLedgerViewProps
     return entries;
   }, [clients, history, vendorId]);
 
-  // Filter entries by date
+  // Filter entries by date (Asia/Karachi)
   const filteredEntries = useMemo(() => {
     if (dateFilter === 'all') return ledgerEntries;
 
-    const now = new Date();
+    const now = getKarachiTodayNoon();
     let fromDate: Date;
-    let toDate = now;
+    let toDate = endOfMonth(now);
 
     switch (dateFilter) {
       case 'this_month':
@@ -119,6 +122,7 @@ export function VendorLedgerView({ vendorId, vendorName }: VendorLedgerViewProps
         break;
       case 'last_3_months':
         fromDate = startOfMonth(subMonths(now, 2));
+        toDate = endOfMonth(now);
         break;
       default:
         return ledgerEntries;

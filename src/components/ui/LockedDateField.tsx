@@ -2,9 +2,14 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { getKarachiYmd } from "@/lib/karachiTime";
+
+export function getTodayDateString(): string {
+  return getKarachiYmd();
+}
 
 interface LockedDateFieldProps {
+  id?: string;
   label?: string;
   name?: string;
   value?: string;
@@ -15,6 +20,7 @@ interface LockedDateFieldProps {
 }
 
 export const LockedDateField: React.FC<LockedDateFieldProps> = ({
+  id,
   label = "Transaction Date",
   name,
   value,
@@ -23,18 +29,18 @@ export const LockedDateField: React.FC<LockedDateFieldProps> = ({
   className = "",
   helperText = "Locked to current system date for audit integrity",
 }) => {
-  // Always default to current system date YYYY-MM-DD
-  const todayStr = React.useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  const currentDate = value || todayStr;
+  // Always lock to current system date YYYY-MM-DD
+  const todayStr = getTodayDateString();
+  const currentDate = todayStr;
 
   React.useEffect(() => {
-    if (!value && onChange) {
+    if (onChange && value !== todayStr) {
       onChange(todayStr);
     }
   }, [value, onChange, todayStr]);
 
   return (
-    <div className={`space-y-1 ${className}`}>
+    <div className={`space-y-1 ${className}`} data-locked-date="true">
       <div className="flex items-center justify-between">
         <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
           <Calendar className="w-3 h-3 text-slate-400" />
@@ -48,13 +54,16 @@ export const LockedDateField: React.FC<LockedDateFieldProps> = ({
 
       <div className="relative">
         <Input
+          id={id}
           type="date"
           value={currentDate}
           readOnly
           disabled
+          tabIndex={-1}
+          data-locked-date="true"
           aria-readonly="true"
           title={helperText}
-          className="h-8 text-xs font-mono bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-not-allowed select-none pr-7 opacity-90"
+          className="h-8 text-xs font-mono bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-not-allowed select-none pr-7 opacity-90 focus-visible:ring-0"
         />
         {name && <input type="hidden" name={name} value={currentDate} />}
         <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { ResendVerificationDialog } from "@/components/auth/ResendVerificationDi
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 const loginSchema = z.object({
   email: z
@@ -27,8 +28,18 @@ const loginSchema = z.object({
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const statusNotice =
+    (location.state as { message?: string } | null)?.message ||
+    (searchParams.get("reason") === "password-changed"
+      ? "Password changed. Please login again."
+      : searchParams.get("reason") === "session-invalidated"
+        ? "Your session expired or was revoked. Please login again."
+        : null);
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -82,6 +93,7 @@ export default function LoginPage() {
 
     const { email, password } = result.data;
     setLastTypedPassword(password);
+    clearAllAgencyDataCache();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -217,6 +229,12 @@ export default function LoginPage() {
       seoPath="/login"
     >
       <form onSubmit={handleLogin} className="space-y-4">
+        {statusNotice && (
+          <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 flex items-center gap-2 text-xs text-emerald-900 dark:text-emerald-200 font-medium">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{statusNotice}</span>
+          </div>
+        )}
         {/* Email Address */}
         <div className="space-y-1.5">
           <Label htmlFor="login-email" className="text-[13px] font-medium text-foreground">

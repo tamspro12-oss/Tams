@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useAccounts } from "@/hooks/useUnifiedTransactions";
+import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import {
+  resolveAccountIdForPayment,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,11 +41,13 @@ interface MatchedBooking {
   id: string;
   invoiceNo?: string;
   clientName: string;
+  partyId?: string;
   pnr?: string;
   ticketNo?: string;
   totalAmount: number;
   paidAmount: number;
   service?: string;
+  sourceTable?: "booking_invoices" | "invoices" | "clients";
 }
 
 export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
@@ -48,10 +57,14 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const { data: currentAgencyId } = useCurrentAgencyId();
+  const { accounts = [] } = useAccounts();
+
+  const formRef = useRef<HTMLDivElement>(null);
+  const lastSearchedRef = useRef<string>("");
 
   // Line 1: Date | Type | Original Invoice / PNR / Ticket No * | Party
   const [refundDate, setRefundDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => getTodayDateString()
   );
   const [actionType, setActionType] = useState<"refund" | "void">("refund");
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -96,22 +109,26 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   useEffect(() => {
     if (open) {
+      setRefundDate(getTodayDateString());
       fetchNextNumber();
     }
   }, [open, actionType, fetchNextNumber]);
 
-  // Fetch recent refunds for compact sheet below form
+  // Fetch recent refunds for compact sheet below form (strictly agency-scoped)
   const { data: recentRefunds = [], refetch: refetchRecentRefunds } = useQuery({
-    queryKey: ["recent_sales_refunds"],
+    queryKey: ["recent_sales_refunds", currentAgencyId],
     queryFn: async () => {
+      const activeAgencyId = currentAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
       const { data } = await (supabase as any)
         .from("refunds")
         .select("*")
+        .eq("agency_id", activeAgencyId)
         .order("refund_date", { ascending: false })
         .limit(5);
       return data || [];
     },
-    enabled: open,
+    enabled: open && !!currentAgencyId,
   });
 
   const recordPrefix = actionType === "void" ? "VOID" : "REF";
@@ -127,10 +144,49 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
     setIsSearching(true);
     try {
-      // 1. Try finding in invoices table
+      const activeAgencyId = currentAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) {
+        toast.error("Unable to verify your active agency");
+        return;
+      }
+
+      // 1. Search canonical booking_invoices table first
+      const { data: biData } = await (supabase as any)
+        .from("booking_invoices")
+        .select("id, invoice_no, party_id, pnr, ticket_no, client_amount, paid_amount, service, is_void, party:parties!party_id(name)")
+        .eq("agency_id", activeAgencyId)
+        .or(`invoice_no.ilike.%${query}%,pnr.ilike.%${query}%,ticket_no.ilike.%${query}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (biData) {
+        if (biData.is_void) {
+          toast.warning(`Invoice ${biData.invoice_no} is already voided`);
+        }
+        const match: MatchedBooking = {
+          id: biData.id,
+          invoiceNo: biData.invoice_no,
+          clientName: biData.party?.name || "Customer",
+          partyId: biData.party_id || undefined,
+          pnr: biData.pnr || undefined,
+          ticketNo: biData.ticket_no || undefined,
+          totalAmount: Number(biData.client_amount) || 0,
+          paidAmount: Number(biData.paid_amount) || 0,
+          service: biData.service || "Booking",
+          sourceTable: "booking_invoices",
+        };
+        setMatchedBooking(match);
+        setPartyName(match.clientName);
+        setClientRefundAmount(String(match.paidAmount || match.totalAmount));
+        toast.success(`Matched invoice: ${match.invoiceNo} (${match.clientName})`);
+        return;
+      }
+
+      // 2. Fallback: legacy invoices table
       const { data: invData } = await (supabase as any)
         .from("invoices")
         .select("id, invoice_number, amount, amount_paid, balance_due, client_id, item_description")
+        .eq("agency_id", activeAgencyId)
         .ilike("invoice_number", `%${query}%`)
         .limit(1)
         .maybeSingle();
@@ -141,6 +197,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           const { data: client } = await (supabase as any)
             .from("clients")
             .select("name, pnr, passport_number")
+            .eq("agency_id", activeAgencyId)
             .eq("id", invData.client_id)
             .maybeSingle();
           if (client?.name) name = client.name;
@@ -153,6 +210,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           totalAmount: Number(invData.amount) || 0,
           paidAmount: Number(invData.amount_paid) || 0,
           service: invData.item_description || "Booking",
+          sourceTable: "invoices",
         };
 
         setMatchedBooking(match);
@@ -162,10 +220,11 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         return;
       }
 
-      // 2. Try finding in clients / bookings table
+      // 3. Fallback: legacy clients / bookings table
       const { data: bookingData } = await (supabase as any)
         .from("clients")
         .select("id, name, pnr, selling_price, amount_paid, travel_type, passport_number")
+        .eq("agency_id", activeAgencyId)
         .or(`pnr.ilike.%${query}%,name.ilike.%${query}%,passport_number.ilike.%${query}%`)
         .limit(1)
         .maybeSingle();
@@ -179,6 +238,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           totalAmount: Number(bookingData.selling_price) || 0,
           paidAmount: Number(bookingData.amount_paid) || 0,
           service: bookingData.travel_type || "Air Ticket",
+          sourceTable: "clients",
         };
 
         setMatchedBooking(match);
@@ -232,11 +292,14 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
     try {
       let activeAgencyId = currentAgencyId;
       if (!activeAgencyId) {
-        const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
         activeAgencyId = await getAuthenticatedAgencyId();
+      }
+      if (!activeAgencyId) {
+        throw new Error("Unable to identify active agency account.");
       }
 
       const deductions = parseFloat(deductionsAmount) || 0;
+      const vendorRefAmt = parseFloat(vendorRefundAmount) || 0;
       const combinedNotes = [
         notes,
         paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
@@ -248,53 +311,43 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         .filter(Boolean)
         .join(" | ");
 
-      // Call atomic refund RPC
-      const { error: rpcError } = await (supabase as any).rpc("record_refund", {
-        p_amount: clientAmt > 0 ? clientAmt : (actionType === "void" ? 0 : 1),
-        p_account_id: null,
-        p_party_id: null,
-        p_booking_id: matchedBooking?.id || null,
+      const resolvedAccountId =
+        clientAmt > 0
+          ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
+          : null;
+
+      // Call atomic refund RPC (single transaction updating refund, invoice, ledger & cash/bank)
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("record_refund", {
+        p_amount: clientAmt,
+        p_account_id: resolvedAccountId,
+        p_party_id: matchedBooking?.partyId || null,
+        p_party_type: "client",
+        p_booking_id:
+          matchedBooking?.sourceTable === "booking_invoices" ? matchedBooking.id : null,
         p_date: refundDate,
         p_method: paymentMode,
         p_reference_no: recordNo,
         p_reason: reason,
-        p_agency_id: activeAgencyId || null,
-        p_notes: combinedNotes || undefined,
+        p_notes: combinedNotes || null,
+        p_action_type: actionType,
+        p_vendor_refund_amount: vendorRefAmt,
+        p_deductions: deductions,
+        p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+        p_party_name: partyName || null,
+        p_invoice_search: invoiceSearch || null,
+        p_void_invoice: actionType === "void",
       });
 
       if (rpcError) {
-        // Fallback: direct insert to refunds table
-        const { error: directError } = await (supabase as any).from("refunds").insert({
-          agency_id: activeAgencyId,
-          refund_no: recordNo,
-          refund_date: refundDate,
-          refund_type: actionType,
-          client_refund_amount: clientAmt,
-          vendor_refund_amount: parseFloat(vendorRefundAmount) || 0,
-          deductions: deductions,
-          payment_mode: paymentMode,
-          bank_name: paymentMode === "bank" ? selectedBank : null,
-          reason,
-          notes: combinedNotes || null,
-          party_name: partyName || null,
-          invoice_search: invoiceSearch || null,
-        });
-
-        if (directError) {
-          throw new Error(`Failed to save refund: ${directError.message}`);
-        }
+        throw new Error(rpcError.message || "Failed to record refund/void");
+      }
+      if (rpcData && rpcData.success === false) {
+        throw new Error(rpcData.error || "Failed to record refund/void");
       }
 
       toast.success(`${actionType === "void" ? "Void recorded" : "Refund recorded"} successfully`);
 
-      // Invalidate queries so the live sheet immediately shows newly saved record
-      queryClient.invalidateQueries({ queryKey: ["refunds"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_refunds"] });
-      queryClient.invalidateQueries({ queryKey: ["recent_sales_refunds"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["reports"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
       refetchRecentRefunds();
 
       // Clear input fields (keep Date, Mode, Type)
@@ -319,6 +372,46 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
     }
   };
 
+  const isDirty = useMemo(() => {
+    return Boolean(
+      invoiceSearch.trim() ||
+        matchedBooking ||
+        partyName.trim() ||
+        (parseFloat(clientRefundAmount) || 0) > 0 ||
+        (parseFloat(vendorRefundAmount) || 0) > 0 ||
+        (parseFloat(deductionsAmount) || 0) > 0 ||
+        reason.trim() ||
+        notes.trim()
+    );
+  }, [
+    invoiceSearch,
+    matchedBooking,
+    partyName,
+    clientRefundAmount,
+    vendorRefundAmount,
+    deductionsAmount,
+    reason,
+    notes,
+  ]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty,
+    onSave: handleSave,
+    onCancel: () => onOpenChange(false),
+    onBeforeAdvance: (el) => {
+      if (el.dataset.enterSearch === "true") {
+        const q = invoiceSearch.trim();
+        if (q && q !== lastSearchedRef.current) {
+          lastSearchedRef.current = q;
+          executeSearchInvoice(q);
+          return false;
+        }
+      }
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
@@ -331,7 +424,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             </DialogTitle>
 
             {/* Read-Only Refund # badge */}
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
               <Lock className="w-3 h-3 text-slate-400" />
               <span>{actionType === "void" ? "Void #:" : "Refund #:"}</span>
               <span className={actionType === "void" ? "text-red-600 dark:text-red-400" : "text-purple-600 dark:text-purple-400"}>
@@ -344,10 +437,11 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           </div>
         </div>
 
-        {/* BODY: ONE FLAT COMPACT FORM, NO SCROLLING */}
+        {/* BODY + FOOTER wrapped for keyboard navigation */}
+        <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
           {/* LINE 1: Date | Type | Original Invoice / PNR / Ticket No * | Party */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-start">
             {/* Date (Locked to System Date) */}
             <div className="lg:col-span-2">
               <LockedDateField
@@ -359,12 +453,12 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             </div>
 
             {/* Type: DROPDOWN styled like Service Type */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Type <span className="text-red-500">*</span>
               </Label>
               <Select value={actionType} onValueChange={(val: any) => setActionType(val)}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -375,29 +469,30 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             </div>
 
             {/* Original Invoice / PNR / Ticket No * (Search button inside input + auto-trim on paste) */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-5 space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Original Invoice / PNR / Ticket No <span className="text-red-500">*</span>
               </Label>
-              <div className="relative mt-0.5">
+              <div className="relative">
                 <Input
                   value={invoiceSearch}
-                  onChange={(e) => setInvoiceSearch(e.target.value)}
+                  onChange={(e) => {
+                    lastSearchedRef.current = "";
+                    setInvoiceSearch(e.target.value);
+                  }}
                   onPaste={(e) => {
                     const pasted = e.clipboardData.getData("text");
                     if (pasted) {
                       e.preventDefault();
                       const cleaned = cleanPastedSearch(pasted);
+                      lastSearchedRef.current = cleaned.trim();
                       setInvoiceSearch(cleaned);
                       setTimeout(() => executeSearchInvoice(cleaned), 0);
                     }
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      executeSearchInvoice();
-                    }
-                  }}
+                  data-enter-search="true"
+                  required
+                  data-required-message="Please specify target invoice, PNR, or ticket number"
                   placeholder="e.g. INV-1004, PNR, Ticket #"
                   className="h-8 text-xs font-mono uppercase pr-20"
                 />
@@ -405,7 +500,11 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => executeSearchInvoice()}
+                    tabIndex={-1}
+                    onClick={() => {
+                      lastSearchedRef.current = invoiceSearch.trim();
+                      executeSearchInvoice();
+                    }}
                     disabled={isSearching}
                     className="h-6 text-[10px] px-2 bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
                   >
@@ -417,15 +516,16 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             </div>
 
             {/* Party (auto-filled, read-only) */}
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-3 space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Party Name
               </Label>
               <Input
                 value={partyName || (matchedBooking ? matchedBooking.clientName : "")}
                 readOnly
+                tabIndex={-1}
                 placeholder="Auto-filled on search"
-                className="h-8 text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 mt-0.5 cursor-not-allowed font-medium"
+                className="h-8 text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-not-allowed font-medium"
               />
             </div>
           </div>
@@ -472,6 +572,8 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
                 placeholder="0"
                 className="h-8 text-xs font-mono font-bold text-right mt-0.5"
                 required={actionType === "refund"}
+                data-required-positive={actionType === "refund" ? "true" : undefined}
+                data-required-message="Client refund amount must be greater than zero"
               />
             </div>
 
@@ -677,6 +779,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             disabled={isSubmitting}
             onClick={handleSave}
             className={`h-8 text-xs text-white cursor-pointer min-w-[120px] ${
@@ -691,6 +794,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
               ? "Record Void"
               : "Record Refund"}
           </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

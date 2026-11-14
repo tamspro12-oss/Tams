@@ -45,25 +45,20 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Master Admin Email Whitelist & Super Admin Authorization Check
-    const isMasterAdminEmail = user.email?.trim().toLowerCase() === 'usmn4u@gmail.com';
-    let isSuperAdmin = isMasterAdminEmail;
+    // Strict RBAC check via public.user_roles table (role = 'super_admin')
+    const { data: roleRow, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .maybeSingle();
+
+    const isSuperAdmin = !roleError && roleRow?.role === 'super_admin';
 
     if (!isSuperAdmin) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('is_super_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (profile?.is_super_admin) {
-        isSuperAdmin = true;
-      }
-    }
-
-    if (!isSuperAdmin) {
-      console.error(`Forbidden: Non-admin ${user.email} attempted to modify subscription`);
+      console.error(`Forbidden: Non-admin ${user.id} attempted to modify subscription`);
       return new Response(
-        JSON.stringify({ error: '403 Forbidden: Administrator privileges are restricted exclusively to usmn4u@gmail.com' }),
+        JSON.stringify({ error: '403 Forbidden: super_admin role required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

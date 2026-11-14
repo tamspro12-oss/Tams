@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,11 @@ import {
 import { usePartyStatement, useAccounts, useTransactionMutations, PartyStatementRow } from "@/hooks/useUnifiedTransactions";
 import { useAgency } from "@/hooks/useAgency";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { getKarachiYmd, getKarachiTodayNoon } from "@/lib/karachiTime";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -56,15 +59,23 @@ export function PartyLedgerAndStatement({
   const [includeReversed, setIncludeReversed] = useState<boolean>(false);
 
   // Payment Form State
+  const paymentFormRef = useRef<HTMLFormElement>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>(
     outstandingBalance > 0 ? outstandingBalance.toString() : ""
   );
-  const [paymentDate, setPaymentDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [paymentDate, setPaymentDate] = useState<string>(() => getTodayDateString());
   const [paymentAccountId, setPaymentAccountId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [paymentRef, setPaymentRef] = useState<string>(pnr ? `PAY-${pnr}` : "");
   const [paymentNotes, setPaymentNotes] = useState<string>("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState<boolean>(false);
+
+  useFormKeyboardNav({
+    containerRef: paymentFormRef,
+    enabled: subTab === "payment",
+    onSave: () => paymentFormRef.current?.requestSubmit(),
+    autoFocusFirst: true,
+  });
 
   const { accounts, cashAccount } = useAccounts();
   const { data: agency } = useAgency();
@@ -79,7 +90,7 @@ export function PartyLedgerAndStatement({
 
   // Compute date range
   const dateRange = useMemo(() => {
-    const now = new Date();
+    const now = getKarachiTodayNoon();
     if (dateFilterPreset === "this_month") {
       return {
         start: format(startOfMonth(now), "yyyy-MM-dd"),
@@ -125,6 +136,10 @@ export function PartyLedgerAndStatement({
   // Handle Payment Submit
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline — connect to the internet to record payments.");
+      return;
+    }
     const num = parseFloat(paymentAmount);
     if (!num || num <= 0) {
       toast.error("Please enter a valid payment amount");
@@ -485,8 +500,8 @@ export function PartyLedgerAndStatement({
             </p>
           </CardHeader>
           <CardContent className="p-4">
-            <form onSubmit={handlePaymentSubmit} className="space-y-4 max-w-lg">
-              <div className="grid grid-cols-2 gap-3">
+            <form ref={paymentFormRef} onSubmit={handlePaymentSubmit} className="space-y-4 max-w-lg">
+              <div className="grid grid-cols-2 gap-3 items-start">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Amount (PKR) *</Label>
                   <div className="relative">
@@ -496,25 +511,22 @@ export function PartyLedgerAndStatement({
                       step="any"
                       min="1"
                       required
+                      data-required-positive="true"
+                      data-required-message="Amount must be greater than 0"
                       placeholder="0.00"
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       className="pl-7 font-mono font-bold text-base h-10"
-                      autoFocus
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Payment Date *</Label>
-                  <Input
-                    type="date"
-                    required
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    className="h-10 text-xs"
-                  />
-                </div>
+                <LockedDateField
+                  label="Payment Date"
+                  value={paymentDate}
+                  onChange={setPaymentDate}
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -577,6 +589,7 @@ export function PartyLedgerAndStatement({
                   type="button"
                   variant="outline"
                   size="sm"
+                  tabIndex={-1}
                   onClick={() => setSubTab("ledger")}
                   disabled={isSubmittingPayment}
                 >
@@ -585,6 +598,7 @@ export function PartyLedgerAndStatement({
                 <Button
                   type="submit"
                   size="sm"
+                  data-save-button="true"
                   disabled={isSubmittingPayment}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                 >

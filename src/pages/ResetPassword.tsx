@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Plane, Lock, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { sessionManager } from "@/lib/sessionManager";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -57,8 +59,26 @@ export default function ResetPassword() {
     if (error) {
       toast({ title: "Failed to reset password", description: error.message, variant: "destructive" });
     } else {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          await (supabase as any).rpc("admin_revoke_user_sessions", { p_user_id: user.id });
+        }
+      } catch {
+        // ignore if RPC fails
+      }
+      await supabase.auth.signOut({ scope: "global" });
+      sessionManager.endSession();
+      clearAllAgencyDataCache();
       setSuccess(true);
-      await supabase.auth.signOut({ scope: "local" });
+      toast({
+        title: "Password changed. Please login again.",
+        description: "All sessions have been terminated for security.",
+      });
+      navigate("/login?reason=password-changed", {
+        replace: true,
+        state: { message: "Password changed. Please login again." },
+      });
     }
 
     setLoading(false);

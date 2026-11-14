@@ -1,13 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export function useCurrentAgencyId() {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ["current-agency-id"],
+    queryKey: ["current-agency-id", user?.id ?? "anonymous"],
     queryFn: async () => {
-      const agencyId = await getAuthenticatedAgencyId();
-      return agencyId;
+      if (!user) return null;
+      return await getAuthenticatedAgencyId();
     },
-    staleTime: 5 * 60 * 1000,
+    enabled: !!user?.id,
+    staleTime: 60 * 1000,
   });
 }

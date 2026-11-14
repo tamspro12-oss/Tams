@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useClients } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
 import type { Voucher, VoucherType, VoucherStatus, VoucherPassenger } from "@/types/voucher";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface CreateVoucherDialogProps {
   open: boolean;
@@ -31,6 +32,8 @@ export function CreateVoucherDialog({
 }: CreateVoucherDialogProps) {
   const { clients = [] } = useClients();
   const { agents = [] } = useB2BAgents();
+  const formRef = useRef<HTMLFormElement>(null);
+  const paxNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const [voucherType, setVoucherType] = useState<VoucherType>("Umrah");
   const [status, setStatus] = useState<VoucherStatus>("Issued");
@@ -247,7 +250,20 @@ export function CreateVoucherDialog({
   };
 
   const addPassenger = () => {
-    setPassengers([...passengers, { name: "", passport: "", type: "Adult", ticket_number: "" }]);
+    setPassengers((prev) => {
+      const nextIdx = prev.length;
+      const next = [...prev, { name: "", passport: "", type: "Adult" as const, ticket_number: "" }];
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          const input = paxNameRefs.current[nextIdx];
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }, 20);
+      });
+      return next;
+    });
   };
 
   const updatePassenger = (index: number, field: keyof VoucherPassenger, value: string) => {
@@ -370,9 +386,20 @@ export function CreateVoucherDialog({
     }
   };
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty: Boolean(passengerName.trim() || packageName.trim() || hotelName.trim() || remarks.trim()),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6"
@@ -395,6 +422,7 @@ export function CreateVoucherDialog({
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 shrink-0"
               title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -404,7 +432,7 @@ export function CreateVoucherDialog({
           </div>
         </DialogHeader>
 
-        <form id="voucher-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 pt-2">
+        <form id="voucher-form" ref={formRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 pt-2">
           {/* Voucher Type Tabs */}
           {!voucherToEdit && (
             <div className="space-y-1.5">
@@ -513,6 +541,7 @@ export function CreateVoucherDialog({
                   placeholder="e.g. Muhammad Usman"
                   className="h-9 text-xs"
                   required
+                  data-required-message="Lead Passenger Name is required"
                 />
               </div>
 
@@ -547,6 +576,7 @@ export function CreateVoucherDialog({
                   type="button"
                   variant="outline"
                   size="sm"
+                  data-add-passenger-btn="true"
                   onClick={addPassenger}
                   className="h-7 text-xs gap-1"
                 >
@@ -558,6 +588,9 @@ export function CreateVoucherDialog({
               {passengers.map((p, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <Input
+                    ref={(el) => {
+                      paxNameRefs.current[idx] = el;
+                    }}
                     placeholder="Full Name"
                     value={p.name}
                     onChange={(e) => updatePassenger(idx, "name", e.target.value)}
@@ -586,6 +619,7 @@ export function CreateVoucherDialog({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    tabIndex={-1}
                     onClick={() => removePassenger(idx)}
                     className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
                   >
@@ -990,12 +1024,13 @@ export function CreateVoucherDialog({
             <Button
               type="button"
               variant="outline"
+              tabIndex={-1}
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="font-semibold gap-2">
+            <Button type="submit" data-save-button="true" disabled={isSubmitting} className="font-semibold gap-2">
               {isSubmitting ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

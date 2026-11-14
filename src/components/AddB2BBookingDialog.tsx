@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { BulkScanAutofillButton } from "@/components/ai/BulkScanAutofillButton";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddB2BBookingDialogProps {
   open: boolean;
@@ -114,6 +115,14 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
   const { data: agency } = useAgency();
   const quickVendorFormRef = useRef<HTMLFormElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !showQuickVendorAdd && !vendorSearchOpen,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
 
   const applyScan = (f: Record<string, any>) => {
     const form = formRef.current;
@@ -418,7 +427,9 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
@@ -444,6 +455,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 shrink-0"
               title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -1657,11 +1669,12 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
 
           {/* Actions */}
           <div className="flex gap-3 justify-end pt-4 mt-4 border-t border-border/50 sticky bottom-0 bg-background pb-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="px-6">
+            <Button type="button" variant="outline" tabIndex={-1} onClick={() => onOpenChange(false)} className="px-6">
               Cancel
             </Button>
             <Button
               type="submit"
+              data-save-button="true"
               disabled={loading}
               className="px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
             >

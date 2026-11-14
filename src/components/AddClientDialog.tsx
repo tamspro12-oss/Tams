@@ -25,6 +25,8 @@ import { FormSectionNav } from "@/components/FormSectionNav";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { Switch } from "@/components/ui/switch";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 const SECTIONS = [
   { id: 'contact-info', label: 'Contact Information', color: 'blue' },
@@ -99,7 +101,23 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
       setOpeningBalanceType("receivable");
     }
   }, [existingClientBalance]);
+  const clientFormRef = useRef<HTMLFormElement | null>(null);
   const quickVendorFormRef = useRef<HTMLFormElement | null>(null);
+
+  useFormKeyboardNav({
+    containerRef: clientFormRef,
+    enabled: open && !showQuickVendorAdd && !showQuickVendorEdit && !showVoucherModal && !vendorSearchOpen,
+    onSave: () => clientFormRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
+
+  useFormKeyboardNav({
+    containerRef: quickVendorFormRef,
+    enabled: open && showQuickVendorAdd,
+    onCancel: () => setShowQuickVendorAdd(false),
+    autoFocusFirst: true,
+  });
 
   // Scroll animation hook
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
@@ -629,7 +647,9 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
@@ -652,6 +672,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
                   type="button"
                   variant="outline"
                   size="sm"
+                  tabIndex={-1}
                   onClick={() => setShowVoucherModal(true)}
                   className="h-8 text-xs gap-1.5 font-medium border-primary/40 text-primary hover:bg-primary/5"
                   title="Generate Voucher for this booking"
@@ -664,6 +685,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
                 type="button"
                 variant="ghost"
                 size="icon"
+                tabIndex={-1}
                 onClick={() => setIsFullScreen(!isFullScreen)}
                 className="h-8 w-8 shrink-0"
                 title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -683,7 +705,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
           />
         )}
 
-        <form onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
+        <form ref={clientFormRef} onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
           <div ref={containerRef} className={isFullScreen ? "max-w-6xl mx-auto space-y-6" : "space-y-4"}>
             <div className="flex justify-end">
               <ScanAutofillButton
@@ -1585,10 +1607,12 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
                             <Label htmlFor="vendor_email" className="text-sm">Email</Label>
                             <Input id="vendor_email" name="vendor_email" type="email" placeholder="email@example.com" className="enterprise-input" />
                           </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="vendor_booking_date" className="text-sm">Booking Date</Label>
-                            <Input id="vendor_booking_date" name="vendor_booking_date" type="date" className="enterprise-input" />
-                          </div>
+                          <LockedDateField
+                            id="vendor_booking_date"
+                            name="vendor_booking_date"
+                            label="Entry Date"
+                            value={getTodayDateString()}
+                          />
                           <div className="space-y-1.5">
                             <Label htmlFor="vendor_payment_amount" className="text-sm">Total Amount (₨)</Label>
                             <Input id="vendor_payment_amount" name="vendor_payment_amount" type="number" step="0.01" placeholder="0" className="enterprise-input" />
@@ -1732,11 +1756,12 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
           </div>
 
           <div className="flex gap-3 justify-end pt-4 mt-4 border-t border-border/50 sticky bottom-0 bg-background pb-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="px-6">
+            <Button type="button" variant="outline" tabIndex={-1} onClick={() => onOpenChange(false)} className="px-6">
               Cancel
             </Button>
             <Button
               type="submit"
+              data-save-button="true"
               disabled={loading || addClient.isPending || updateClient.isPending}
               className="px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
             >

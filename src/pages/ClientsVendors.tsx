@@ -355,14 +355,14 @@ export default function ClientsVendors() {
   // Aggregate Metrics: Client Dues (receivables) & Vendor Dues (payables)
   const clientDues = useMemo(() => {
     return parties
-      .filter((p) => p.current_balance > 0)
-      .reduce((sum, p) => sum + p.current_balance, 0);
+      .filter((p) => p.type !== "vendor" && (Number(p.current_balance) || 0) > 0)
+      .reduce((sum, p) => sum + (Number(p.current_balance) || 0), 0);
   }, [parties]);
 
   const vendorDues = useMemo(() => {
     return parties
-      .filter((p) => p.current_balance < 0)
-      .reduce((sum, p) => sum + Math.abs(p.current_balance), 0);
+      .filter((p) => p.type !== "client" && (Number(p.current_balance) || 0) < 0)
+      .reduce((sum, p) => sum + Math.abs(Number(p.current_balance) || 0), 0);
   }, [parties]);
 
   // Condensed Grid Columns for Single-Screen Viewport Fit

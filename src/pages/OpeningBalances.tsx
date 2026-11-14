@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import { useAgency } from "@/hooks/useAgency";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { exportRowsToExcel, exportRowsToPDF } from "@/lib/simpleExport";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 const emptyForm: OpeningBalanceInput = {
   party_type: "client",
@@ -32,8 +34,17 @@ const emptyForm: OpeningBalanceInput = {
 
 export default function OpeningBalances() {
   const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState<OpeningBalance | null>(null);
-  const [form, setForm] = useState<OpeningBalanceInput>(emptyForm);
+  const [form, setForm] = useState<OpeningBalanceInput>(() => ({ ...emptyForm, as_of_date: getTodayDateString() }));
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty: Boolean(form.party_id || form.amount > 0 || form.notes?.trim()),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => setOpen(false),
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -93,13 +104,13 @@ export default function OpeningBalances() {
 
   const duplicates = reconciliation.filter(r => r.count > 1);
 
-  const openNew = () => { setEditing(null); setForm(emptyForm); setErrors({}); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ ...emptyForm, as_of_date: getTodayDateString() }); setErrors({}); setOpen(true); };
   const openEdit = (b: OpeningBalance) => {
     setEditing(b);
     setErrors({});
     setForm({
       party_type: b.party_type, party_id: b.party_id, balance_type: b.balance_type,
-      amount: Number(b.amount), as_of_date: b.as_of_date, notes: b.notes,
+      amount: Number(b.amount), as_of_date: getTodayDateString(), notes: b.notes,
     });
     setOpen(true);
   };
@@ -333,7 +344,7 @@ export default function OpeningBalances() {
             <DialogTitle>{editing ? "Edit Opening Balance" : "Opening Balance"}</DialogTitle>
             <DialogDescription>One opening balance per party. Re-saving the same party updates the existing record.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-3">
+          <form ref={formRef} onSubmit={submit} className="space-y-3">
             <div className="space-y-2">
               <Label>Party Type</Label>
               <Select
@@ -378,17 +389,18 @@ export default function OpeningBalances() {
                 {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>As of date</Label>
-              <Input type="date" value={form.as_of_date} onChange={(e) => setForm({ ...form, as_of_date: e.target.value })} />
-            </div>
+            <LockedDateField
+              label="As of date"
+              value={form.as_of_date}
+              onChange={(d) => setForm((prev) => ({ ...prev, as_of_date: d }))}
+            />
             <div className="space-y-2">
               <Label>Notes</Label>
               <Textarea rows={2} value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={!form.party_id || upsertBalance.isPending || updateBalance.isPending}>
+              <Button type="submit" data-save-button="true" disabled={!form.party_id || upsertBalance.isPending || updateBalance.isPending}>
                 {editing ? "Update" : "Save"}
               </Button>
             </div>

@@ -11,7 +11,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (!loading && !isAdmin) {
-      toast.error("Unauthorized: Full administrator privileges are restricted exclusively to usmn4u@gmail.com", {
+      toast.error("Unauthorized: Administrator access requires super_admin privileges", {
         id: "unauthorized-admin-page",
       });
       navigate("/app/dashboard", { replace: true });
@@ -32,7 +32,6 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -47,17 +46,15 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Admin Notice */}
       <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
         <div className="flex items-center gap-2">
           <UserCircle2 className="h-5 w-5 text-primary" />
           <p className="text-sm font-medium text-primary">
-            Admin Access: You can create new user accounts and manage subscriptions
+            Super Admin Access: You can create user accounts, reset passwords, and manage subscriptions
           </p>
         </div>
       </div>
 
-      {/* Admin User Management Component */}
       <AdminUserManagement />
     </div>
   );

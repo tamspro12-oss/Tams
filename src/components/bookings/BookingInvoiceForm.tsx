@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,13 @@ import { generateBookingConfirmationPdf, generateBookingInvoicePdf, BookingPdfDa
 import { useAgency } from "@/hooks/useAgency";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useQueryClient } from "@tanstack/react-query";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { useAccounts } from "@/hooks/useUnifiedTransactions";
+import {
+  resolveAccountIdForPayment,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
 import { SearchableSelect, SearchableSelectItem } from "@/components/ui/SearchableSelect";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
@@ -64,13 +70,18 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 }) => {
   const { parties } = useParties();
   const { data: agency } = useAgency();
+  const { data: currentAgencyId } = useCurrentAgencyId();
+  const { accounts = [] } = useAccounts();
+  const queryClient = useQueryClient();
 
   // Read-only auto invoice number
   const [autoInvoiceNo, setAutoInvoiceNo] = useState<string>("INV-1001");
+  const formRef = useRef<HTMLDivElement>(null);
+  const paxNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   // Top Row: Date, Service Type, Client, Vendor
   const [invoiceDate, setInvoiceDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => getTodayDateString()
   );
   const [service, setService] = useState<ServiceType>("Ticket");
   const [partyId, setPartyId] = useState<string>("");
@@ -89,7 +100,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [tripType, setTripType] = useState<TripType>("One Way");
   const [origin, setOrigin] = useState("KHI");
   const [destination, setDestination] = useState("DXB");
-  const [flightDate, setFlightDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [flightDate, setFlightDate] = useState(() => getTodayDateString());
   const [flightTime, setFlightTime] = useState("");
   const [airline, setAirline] = useState("");
   const [pnr, setPnr] = useState("");
@@ -105,7 +116,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [umrahDepartureCity, setUmrahDepartureCity] = useState("Karachi");
   const [umrahArrivalCity, setUmrahArrivalCity] = useState("Jeddah");
   const [umrahAirline, setUmrahAirline] = useState("Saudia");
-  const [umrahFlightDate, setUmrahFlightDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [umrahFlightDate, setUmrahFlightDate] = useState(() => getTodayDateString());
   const [umrahFlightTime, setUmrahFlightTime] = useState("");
   const [umrahReturnDate, setUmrahReturnDate] = useState("");
   const [umrahReturnTime, setUmrahReturnTime] = useState("");
@@ -125,7 +136,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   const [hotelName, setHotelName] = useState("");
   const [hotelCity, setHotelCity] = useState("");
-  const [hotelCheckIn, setHotelCheckIn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [hotelCheckIn, setHotelCheckIn] = useState(() => getTodayDateString());
   const [hotelCheckOut, setHotelCheckOut] = useState("");
   const [hotelRoomType, setHotelRoomType] = useState("Standard Double");
 
@@ -170,6 +181,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     }
 
     if (open) {
+      setInvoiceDate(getTodayDateString());
       fetchNextInvoiceNo();
     }
   }, [open, agency?.agency_code]);
@@ -222,10 +234,23 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   // Passenger Handlers
   const handleAddPassenger = () => {
-    setPassengers((prev) => [
-      ...prev,
-      { name: "", passport: "", type: "Adult", gender: "Male", dob: "", nationality: "Pakistani" },
-    ]);
+    setPassengers((prev) => {
+      const nextIdx = prev.length;
+      const next = [
+        ...prev,
+        { name: "", passport: "", type: "Adult" as const, gender: "Male" as const, dob: "", nationality: "Pakistani" },
+      ];
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          const input = paxNameRefs.current[nextIdx];
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }, 20);
+      });
+      return next;
+    });
   };
 
   const handleRemovePassenger = (index: number) => {
@@ -309,10 +334,20 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       return;
     }
 
+    if (amountPaidNum > 0 && paymentMode === "bank" && !selectedBank) {
+      toast.error("Please select an agency bank account for bank payment");
+      return;
+    }
+
     setIsSubmitting(true);
     const invoiceNo = autoInvoiceNo || `INV-${Date.now().toString().slice(-6)}`;
 
     try {
+      const resolvedAccountId =
+        amountPaidNum > 0
+          ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
+          : null;
+
       // Build composite notes summarizing service details
       const serviceDetailsSummary = [
         service === "Ticket"
@@ -336,7 +371,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         .filter(Boolean)
         .join("\n");
 
-      // 1. Save Booking Invoice Record
+      // Single atomic RPC saves booking invoice, ledger entries, initial payment voucher & account transaction together
       const { data, error } = await (supabase as any).rpc("save_booking_invoice", {
         p_invoice_no: invoiceNo,
         p_service: service,
@@ -344,65 +379,36 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
         p_client_amount: clientAmtNum,
         p_vendor_payable: vendorPayNum,
+        p_amount_paid: amountPaidNum,
+        p_payment_mode: paymentMode,
+        p_account_id: resolvedAccountId,
         p_invoice_date: invoiceDate,
+        p_due_date: remainingAmountNum > 0 ? remainingDueDate || invoiceDate : invoiceDate,
         p_pnr: pnr || null,
         p_ticket_no: ticketNo || null,
         p_passport_no: passengers[0]?.passport || null,
         p_passengers: passengers,
         p_currency: "PKR",
+        p_more_details: {
+          remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
+          selected_bank: paymentMode === "bank" ? selectedBank || null : null,
+          client_name: selectedParty?.name || passengers[0]?.name || null,
+          trip_type: service === "Ticket" ? tripType : null,
+          origin: service === "Ticket" ? origin : null,
+          destination: service === "Ticket" ? destination : null,
+          airline: service === "Ticket" ? airline : null,
+        },
         p_notes: serviceDetailsSummary || null,
       });
 
       if (error) {
-        // Fallback: save to clients and invoices table
-        const { data: newClient } = await (supabase as any)
-          .from("clients")
-          .insert({
-            name: selectedParty?.name || passengers[0]?.name,
-            contact_number: contactNumber || selectedParty?.phone,
-            travel_type: service === "Ticket" ? "Ticket" : service === "Umrah" ? "Umrah" : "Other",
-            selling_price: clientAmtNum,
-            purchasing_price: vendorPayNum,
-            amount_paid: amountPaidNum,
-            payment_status: remainingAmountNum <= 0 ? "Paid" : amountPaidNum > 0 ? "Partial" : "Pending",
-            pnr: pnr || null,
-            passport_number: passengers[0]?.passport || null,
-            flight_date: flightDate || invoiceDate,
-          })
-          .select("id")
-          .maybeSingle();
-
-        if (newClient?.id) {
-          await (supabase as any).from("invoices").insert({
-            invoice_number: invoiceNo,
-            client_id: newClient.id,
-            invoice_date: invoiceDate,
-            amount: clientAmtNum,
-            amount_paid: amountPaidNum,
-            balance_due: remainingAmountNum,
-            item_description: serviceDetailsSummary || service,
-          });
-        }
+        throw new Error(error.message || "Database rejected booking invoice save");
+      }
+      if (data && data.success === false) {
+        throw new Error(data.error || "Failed to save booking invoice");
       }
 
-      // 2. Automatically create linked payment entry if client paid any amount at booking
-      if (amountPaidNum > 0) {
-        try {
-          await (supabase as any).rpc("record_payment", {
-            p_direction: "in",
-            p_amount: amountPaidNum,
-            p_account_id: null,
-            p_party_id: partyId || null,
-            p_party_type: "client",
-            p_date: invoiceDate,
-            p_method: paymentMode,
-            p_reference_no: `INV-PMT-${invoiceNo}`,
-            p_notes: `Initial payment at booking for ${invoiceNo}`,
-          });
-        } catch (pmtErr) {
-          console.warn("Could not post automatic payment entry via RPC:", pmtErr);
-        }
-      }
+      await invalidateAllFinancialQueries(queryClient, currentAgencyId || agency?.id);
 
       const assignedInvoiceNo = data?.invoice_no || invoiceNo;
       toast.success("Booking Invoice created successfully");
@@ -423,9 +429,35 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     }
   };
 
+  const isDirty = useMemo(() => {
+    return Boolean(
+      partyId ||
+        vendorId ||
+        pnr.trim() ||
+        ticketNo.trim() ||
+        airline.trim() ||
+        notes.trim() ||
+        clientAmtNum > 0 ||
+        vendorPayNum > 0 ||
+        amountPaidNum > 0 ||
+        passengers.some((p) => p.name.trim() || (p.passport && p.passport.trim()))
+    );
+  }, [partyId, vendorId, pnr, ticketNo, airline, notes, clientAmtNum, vendorPayNum, amountPaidNum, passengers]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !isAddClientOpen && !isAddVendorOpen,
+    isDirty,
+    onSave: () => handleSave(false, false),
+    onCancel: () => onOpenChange(false),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-6xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-6xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl"
+      >
         {/* HEADER: Title, Auto Invoice # badge, Close (X is standard from DialogContent) */}
         <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
@@ -435,7 +467,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
             <Lock className="w-3 h-3 text-slate-400" />
             <span>Invoice #:</span>
             <CopyValue value={autoInvoiceNo} label="invoice number" className="text-blue-600 dark:text-blue-400" />
@@ -445,31 +477,26 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           </div>
         </div>
 
-        {/* BODY: One flat form, tight grid, fits on one screen with light scroll if needed */}
+        {/* BODY + FOOTER wrapped in ref for keyboard navigation */}
+        <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
-          {/* TOP ROW: Date, Service Type, Client, Vendor, + Trip Type / Ziyarat inline */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 items-end">
-            {/* 1. Date (FIRST, default today, editable) */}
-            <div>
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Date <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="h-8 text-xs mt-0.5"
-                required
-              />
-            </div>
+          {/* TOP ROW: Date (Locked), Service Type, Client, Vendor, + Trip Type / Ziyarat inline */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 items-start">
+            {/* 1. Locked Transaction Date */}
+            <LockedDateField
+              label="Date"
+              value={invoiceDate}
+              onChange={setInvoiceDate}
+              required
+            />
 
             {/* 2. Service Type */}
-            <div>
+            <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Service Type <span className="text-red-500">*</span>
               </Label>
               <Select value={service} onValueChange={(val: any) => setService(val)}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -484,20 +511,21 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             </div>
 
             {/* 3. Client (with + Quick Add) */}
-            <div>
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Client <span className="text-red-500">*</span>
                 </Label>
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setIsAddClientOpen(true)}
                   className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer"
                 >
                   <Plus className="w-2.5 h-2.5" /> Quick Add
                 </button>
               </div>
-              <div className="mt-0.5">
+              <div>
                 <SearchableSelect
                   value={partyId}
                   onChange={handleClientSelect}
@@ -505,6 +533,8 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   placeholder="Select Client"
                   searchPlaceholder="Search clients by name, code, phone..."
                   emptyText="No clients found"
+                  required={!passengers[0]?.name.trim()}
+                  requiredMessage="Please select a Client or enter a Passenger Name"
                   onQuickAdd={() => setIsAddClientOpen(true)}
                   quickAddLabel="Add New Client"
                 />
@@ -512,20 +542,21 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             </div>
 
             {/* 4. Vendor (with + Quick Add) */}
-            <div>
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Vendor
                 </Label>
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setIsAddVendorOpen(true)}
                   className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer"
                 >
                   <Plus className="w-2.5 h-2.5" /> Quick Add
                 </button>
               </div>
-              <div className="mt-0.5">
+              <div>
                 <SearchableSelect
                   value={vendorId}
                   onChange={(val) => setVendorId(val)}
@@ -1068,25 +1099,23 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                 Passengers ({passengers.length})
               </span>
-              <button
-                type="button"
-                onClick={handleAddPassenger}
-                className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer"
-              >
-                <Plus className="w-2.5 h-2.5" /> Add Passenger
-              </button>
             </div>
 
             <div className="space-y-1">
               {passengers.map((pax, idx) => (
-                <div key={idx} className="flex items-center gap-1.5">
+                <div key={idx} className="flex items-center gap-1.5" data-pax-row={idx}>
                   <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-center">
                     #{idx + 1}
                   </span>
                   <Input
+                    ref={(el) => {
+                      paxNameRefs.current[idx] = el;
+                    }}
                     value={pax.name}
                     onChange={(e) => handlePassengerChange(idx, "name", e.target.value)}
                     placeholder="Passenger Name"
+                    data-required={!partyId && idx === 0 ? "true" : undefined}
+                    data-required-message="Please select a Client or enter Passenger Name"
                     className="h-7 text-xs flex-1"
                   />
                   <Input
@@ -1124,11 +1153,13 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                     type="date"
                     value={pax.dob || ""}
                     onChange={(e) => handlePassengerChange(idx, "dob", e.target.value)}
+                    data-pax-last-field="true"
                     className="h-7 text-xs w-32"
                   />
                   {passengers.length > 1 && (
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => handleRemovePassenger(idx)}
                       className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
                     >
@@ -1137,6 +1168,20 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   )}
                 </div>
               ))}
+            </div>
+
+            <div className="pt-0.5 flex items-center justify-between">
+              <button
+                type="button"
+                data-add-passenger-btn="true"
+                onClick={handleAddPassenger}
+                className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 px-1.5 py-0.5 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" /> Add Passenger
+              </button>
+              <span className="text-[10px] text-muted-foreground">
+                Press Enter on Add Passenger for new row · Tab for amounts
+              </span>
             </div>
           </div>
 
@@ -1169,6 +1214,8 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   placeholder="0"
                   className="h-8 text-xs font-mono font-bold text-right mt-0.5"
                   required
+                  data-required-positive="true"
+                  data-required-message="Total amount must be greater than zero"
                 />
               </div>
 
@@ -1194,6 +1241,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 <Input
                   type="text"
                   readOnly
+                  tabIndex={-1}
                   value={`PKR ${remainingAmountNum.toLocaleString()}`}
                   className="h-8 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 text-right mt-0.5 cursor-not-allowed"
                 />
@@ -1280,6 +1328,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             type="button"
             variant="outline"
             size="sm"
+            tabIndex={-1}
             onClick={() => onOpenChange(false)}
             className="h-8 text-xs cursor-pointer"
           >
@@ -1288,12 +1337,14 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             disabled={isSubmitting}
             onClick={() => handleSave(false, false)}
-            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px]"
+            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px] focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
           >
             {isSubmitting ? "Saving..." : "Save"}
           </Button>
+        </div>
         </div>
       </DialogContent>
 

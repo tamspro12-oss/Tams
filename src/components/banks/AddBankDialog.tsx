@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { toast } from "sonner";
 import { AgencyBank } from "@/hooks/useAgencyBanks";
+import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
 
 interface AddBankDialogProps {
   open: boolean;
@@ -26,6 +28,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [bankName, setBankName] = useState("");
   const [accountTitle, setAccountTitle] = useState("");
@@ -52,8 +55,13 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
     }
   }, [open, bankToEdit]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline — bank account not saved");
+      return;
+    }
 
     const trimmedBankName = bankName.trim();
     if (!trimmedBankName) {
@@ -66,7 +74,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
       return;
     }
 
-    const activeAgencyId = agencyId || (await getAuthenticatedAgencyId()) || localStorage.getItem("tams_agency_id");
+    const activeAgencyId = agencyId || (await getAuthenticatedAgencyId());
     if (!activeAgencyId) {
       toast.error("Unable to identify agency. Please reload and try again.");
       return;
@@ -94,30 +102,27 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
 
         if (updateErr) throw updateErr;
 
-        // Try syncing name in accounts table if matched
-        try {
-          const oldFullAccountName = bankToEdit.account_number
-            ? `${bankToEdit.bank_name} (${bankToEdit.account_number})`
-            : bankToEdit.bank_name;
-          const newFullAccountName = accountNumber.trim()
-            ? `${trimmedBankName} (${accountNumber.trim()})`
-            : trimmedBankName;
+        const oldFullAccountName = bankToEdit.account_number
+          ? `${bankToEdit.bank_name} (${bankToEdit.account_number})`
+          : bankToEdit.bank_name;
+        const newFullAccountName = accountNumber.trim()
+          ? `${trimmedBankName} (${accountNumber.trim()})`
+          : trimmedBankName;
 
-          await (supabase as any)
-            .from("accounts")
-            .update({
-              name: newFullAccountName,
-              opening_balance: balanceNum,
-            })
-            .eq("agency_id", activeAgencyId)
-            .eq("name", oldFullAccountName);
-        } catch {
-          // ignore account sync error
+        const { error: accSyncErr } = await (supabase as any)
+          .from("accounts")
+          .update({
+            name: newFullAccountName,
+            opening_balance: balanceNum,
+          })
+          .eq("agency_id", activeAgencyId)
+          .eq("name", oldFullAccountName);
+
+        if (accSyncErr) {
+          throw new Error(`Bank saved but ledger account sync failed: ${accSyncErr.message}`);
         }
 
-        queryClient.invalidateQueries({ queryKey: ["agency_banks"] });
-        queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] });
+        await invalidateAllFinancialQueries(queryClient, activeAgencyId);
 
         toast.success(`Bank account ${trimmedBankName} updated successfully`);
         onSaved?.(trimmedBankName, updatedBank);
@@ -146,26 +151,24 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
           return;
         }
 
-        // Safely sync into accounts table
-        try {
-          const fullAccountName = accountNumber.trim()
-            ? `${trimmedBankName} (${accountNumber.trim()})`
-            : trimmedBankName;
+        const fullAccountName = accountNumber.trim()
+          ? `${trimmedBankName} (${accountNumber.trim()})`
+          : trimmedBankName;
 
-          await (supabase as any).from("accounts").insert({
-            agency_id: activeAgencyId,
-            name: fullAccountName,
-            type: "bank",
-            opening_balance: balanceNum,
-            active: true,
-          });
-        } catch (accErr) {
-          console.warn("Could not sync account table record:", accErr);
+        const { error: accErr } = await (supabase as any).from("accounts").insert({
+          agency_id: activeAgencyId,
+          name: fullAccountName,
+          type: "bank",
+          opening_balance: balanceNum,
+          active: true,
+        });
+
+        if (accErr) {
+          await (supabase as any).from("agency_banks").delete().eq("id", newBank.id);
+          throw new Error(`Could not create linked bank ledger account: ${accErr.message}`);
         }
 
-        queryClient.invalidateQueries({ queryKey: ["agency_banks"] });
-        queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] });
+        await invalidateAllFinancialQueries(queryClient, activeAgencyId);
 
         toast.success(`Bank account ${trimmedBankName} added successfully`);
         onSaved?.(trimmedBankName, newBank);
@@ -178,6 +181,22 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  const isDirty = Boolean(
+    bankName.trim() !== (bankToEdit?.bank_name || "") ||
+      accountTitle.trim() !== (bankToEdit?.account_title || "") ||
+      accountNumber.trim() !== (bankToEdit?.account_number || "") ||
+      branchName.trim() !== (bankToEdit?.branch_name || "") ||
+      openingBalance !== String(bankToEdit?.opening_balance || 0)
+  );
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty,
+    onSave: () => handleSave(),
+    onCancel: () => onOpenChange(false),
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,7 +212,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="space-y-3 pt-2">
+        <form ref={formRef} onSubmit={handleSave} className="space-y-3 pt-2">
           <div>
             <Label className="text-xs font-semibold">
               Bank Name <span className="text-red-500">*</span>
@@ -204,7 +223,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
               placeholder="e.g. Meezan Bank / HBL / UBL"
               className="h-8 text-xs mt-1 rounded-none"
               required
-              autoFocus
+              data-required-message="Bank name is required"
             />
           </div>
 
@@ -218,6 +237,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
               placeholder="e.g. Usman Travels & Tours"
               className="h-8 text-xs mt-1 rounded-none"
               required
+              data-required-message="Account title is required"
             />
           </div>
 
@@ -265,6 +285,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
             <Button
               type="submit"
               size="sm"
+              data-save-button="true"
               disabled={isSubmitting}
               className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white rounded-none cursor-pointer"
             >

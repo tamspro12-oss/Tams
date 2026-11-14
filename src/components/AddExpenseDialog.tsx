@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useExpenses } from "@/hooks/useStorage";
-import { Receipt, Calendar, DollarSign, FileText, Maximize2, Minimize2 } from "lucide-react";
+import { Receipt, DollarSign, FileText, Maximize2, Minimize2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { FormSectionNav } from "@/components/FormSectionNav";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddExpenseDialogProps {
   open: boolean;
@@ -24,19 +25,34 @@ const SECTIONS = [
 ];
 
 export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpenseDialogProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [paymentMode, setPaymentMode] = useState(editExpense?.payment_mode || "cash");
   const [bankName, setBankName] = useState(editExpense?.bank_name || "");
+  const [expenseDate, setExpenseDate] = useState(() => getTodayDateString());
   const { addExpense, updateExpense } = useExpenses();
   
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
 
-  // Reset payment mode when dialog opens with edit data
-  useState(() => {
+  // Sync payment mode & locked date when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    setExpenseDate(getTodayDateString());
     if (editExpense) {
       setPaymentMode(editExpense.payment_mode || "cash");
       setBankName(editExpense.bank_name || "");
+    } else {
+      setPaymentMode("cash");
+      setBankName("");
     }
+  }, [open, editExpense]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
   });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -72,7 +88,9 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen 
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
@@ -93,6 +111,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 shrink-0"
               title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -112,6 +131,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
         )}
         
         <form 
+          ref={formRef}
           onSubmit={handleSubmit} 
           className={cn(
             "flex-1 overflow-y-auto form-scroll-container",
@@ -147,7 +167,8 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
                   <LockedDateField
                     label="Date"
                     name="expenseDate"
-                    value={editExpense?.expense_date}
+                    value={expenseDate}
+                    onChange={setExpenseDate}
                     required
                   />
                   <div className="space-y-2">
@@ -161,6 +182,8 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
                       type="number" 
                       step="0.01" 
                       required 
+                      data-required-positive="true"
+                      data-required-message="Amount must be greater than 0"
                       defaultValue={editExpense?.amount || ''} 
                       placeholder="0.00"
                       className="enterprise-input"
@@ -214,6 +237,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
             <Button 
               type="button" 
               variant="outline" 
+              tabIndex={-1}
               onClick={() => onOpenChange(false)}
               className="px-6"
             >
@@ -221,6 +245,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
             </Button>
             <Button 
               type="submit" 
+              data-save-button="true"
               disabled={addExpense.isPending || updateExpense.isPending}
               className="px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25"
             >

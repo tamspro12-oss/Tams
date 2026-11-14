@@ -7,6 +7,8 @@ import { Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { sessionManager } from "@/lib/sessionManager";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 export function ChangePasswordSection() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -95,21 +97,29 @@ export function ChangePasswordSection() {
         throw updateError;
       }
 
-      // Sign out all sessions after password change for security
+      // Sign out ALL sessions globally across ALL devices and purge cached state
+      try {
+        await (supabase as any).rpc("admin_revoke_user_sessions", { p_user_id: user.id });
+      } catch {
+        // Fallback if RPC not yet deployed; signOut({ scope: 'global' }) still runs
+      }
       await supabase.auth.signOut({ scope: 'global' });
+      sessionManager.endSession();
+      clearAllAgencyDataCache();
 
       toast({
-        title: "Password changed successfully",
-        description: "You have been logged out of all sessions. Please log in again.",
+        title: "Password changed. Please login again.",
+        description: "All active sessions across all devices have been signed out.",
       });
 
-      // Clear form
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
 
-      // Redirect to login
-      navigate("/auth");
+      navigate("/login?reason=password-changed", {
+        replace: true,
+        state: { message: "Password changed. Please login again." },
+      });
     } catch (error: any) {
       console.error("Password change error:", error);
       toast({

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
 
 export interface Party {
   id: string;
@@ -33,40 +34,26 @@ export function useParties() {
 
   const { data: parties = [], isLoading, error } = useQuery({
     queryKey: ["parties", userAgencyId],
+    enabled: !!userAgencyId,
     queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId()) || localStorage.getItem("tams_agency_id");
+      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+      if (!activeAgencyId) return [];
 
-      // Query parties, legacy clients, and legacy vendors in parallel so no party is ever missing
+      // Query parties, legacy clients, and legacy vendors in parallel strictly scoped to activeAgencyId
       const [partiesRes, clientsRes, vendorsRes] = await Promise.all([
-        activeAgencyId
-          ? (supabase as any)
-              .from("parties")
-              .select("*")
-              .eq("agency_id", activeAgencyId)
-              .order("name", { ascending: true })
-          : (supabase as any)
-              .from("parties")
-              .select("*")
-              .order("name", { ascending: true })
-              .limit(500),
-        activeAgencyId
-          ? supabase
-              .from("clients")
-              .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
-              .eq("agency_id", activeAgencyId)
-          : supabase
-              .from("clients")
-              .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
-              .limit(500),
-        activeAgencyId
-          ? supabase
-              .from("vendors")
-              .select("id, agency_id, name, phone, city, total_payable, amount_paid, created_at")
-              .eq("agency_id", activeAgencyId)
-          : supabase
-              .from("vendors")
-              .select("id, agency_id, name, phone, city, total_payable, amount_paid, created_at")
-              .limit(500),
+        (supabase as any)
+          .from("parties")
+          .select("*")
+          .eq("agency_id", activeAgencyId)
+          .order("name", { ascending: true }),
+        supabase
+          .from("clients")
+          .select("id, agency_id, name, contact_number, destination, payment_status, selling_price, amount_paid, created_at")
+          .eq("agency_id", activeAgencyId),
+        supabase
+          .from("vendors")
+          .select("id, agency_id, name, phone, city, payment_amount, amount_paid, created_at")
+          .eq("agency_id", activeAgencyId),
       ]);
 
       const directParties: Party[] = (partiesRes.data || []) as Party[];
@@ -86,7 +73,7 @@ export function useParties() {
         .filter((c: any) => !seenIds.has(c.id) && !seenClientNames.has((c.name || "").trim().toLowerCase()))
         .map((c: any) => ({
           id: c.id,
-          agency_id: c.agency_id || activeAgencyId || "",
+          agency_id: c.agency_id || activeAgencyId,
           type: "client" as const,
           name: c.name,
           code: `CLT-${c.id.slice(0, 4).toUpperCase()}`,
@@ -104,7 +91,7 @@ export function useParties() {
         .filter((v: any) => !seenIds.has(v.id) && !seenVendorNames.has((v.name || "").trim().toLowerCase()))
         .map((v: any) => ({
           id: v.id,
-          agency_id: v.agency_id || activeAgencyId || "",
+          agency_id: v.agency_id || activeAgencyId,
           type: "vendor" as const,
           name: v.name,
           code: `VND-${v.id.slice(0, 4).toUpperCase()}`,
@@ -113,7 +100,7 @@ export function useParties() {
           city: v.city || "",
           credit_limit: 0,
           opening_balance: 0,
-          current_balance: -Math.max(0, (v.total_payable || 0) - (v.amount_paid || 0)),
+          current_balance: -Math.max(0, (Number(v.payment_amount) || 0) - (Number(v.amount_paid) || 0)),
           active: true,
           created_at: v.created_at || new Date().toISOString(),
         }));
@@ -122,7 +109,6 @@ export function useParties() {
       combined.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       return combined;
     },
-    enabled: true,
   });
 
   // Realtime subscription for parties table
@@ -136,14 +122,15 @@ export function useParties() {
       if ("agency_id" in data && data.agency_id !== userAgencyId) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["parties"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["vendors"] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
     },
   });
 
   const addPartyMutation = useMutation({
     mutationFn: async (party: Partial<Party>) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline. Connect to the internet to save.");
+      }
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) {
         throw new Error("Unable to save party: No active agency account found");
@@ -161,42 +148,12 @@ export function useParties() {
         .single();
 
       if (error) {
-        // Fallback: insert into clients or vendors with explicit agency_id
-        if (party.type === "client") {
-          const { data: cData, error: cErr } = await supabase
-            .from("clients")
-            .insert({
-              name: party.name!,
-              contact_number: party.phone,
-              destination: party.city,
-              notes: party.notes,
-              agency_id: activeAgencyId,
-            } as any)
-            .select()
-            .single();
-          if (cErr) throw new Error(`Failed to save client: ${cErr.message}`);
-          return cData;
-        } else {
-          const { data: vData, error: vErr } = await supabase
-            .from("vendors")
-            .insert({
-              name: party.name!,
-              phone: party.phone,
-              city: party.city,
-              agency_id: activeAgencyId,
-            } as any)
-            .select()
-            .single();
-          if (vErr) throw new Error(`Failed to save vendor: ${vErr.message}`);
-          return vData;
-        }
+        throw new Error(`Failed to save party: ${error.message}`);
       }
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["parties"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["vendors"] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast.success("Party saved successfully");
     },
     onError: (err: any) => {
@@ -206,24 +163,25 @@ export function useParties() {
 
   const updatePartyMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Party> }) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("You are offline. Connect to the internet to save.");
+      }
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      const query = (supabase as any)
+      if (!activeAgencyId) {
+        throw new Error("Unable to identify active agency.");
+      }
+      const { data, error } = await (supabase as any)
         .from("parties")
         .update(updates)
-        .eq("id", id);
-
-      if (activeAgencyId) {
-        query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data, error } = await query.select().single();
+        .eq("id", id)
+        .eq("agency_id", activeAgencyId)
+        .select()
+        .single();
       if (error) throw new Error(`Failed to update party: ${error.message}`);
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["parties"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["vendors"] });
+      invalidateAllFinancialQueries(queryClient, userAgencyId);
       toast.success("Party updated successfully");
     },
     onError: (err: any) => {

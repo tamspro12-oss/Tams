@@ -6,27 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Mail } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
-import { isMasterAdminEmail } from "@/lib/adminAuth";
+import { verifySuperAdminStatus } from "@/lib/adminAuth";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 export default function SubscriptionExpired() {
   const navigate = useNavigate();
   const { data: subscription, isLoading } = useSubscription();
 
   useEffect(() => {
-    const checkMasterAdmin = async () => {
+    const checkSuperAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (isMasterAdminEmail(user?.email)) {
+      if (user && await verifySuperAdminStatus(user.id)) {
         navigate("/app/dashboard", { replace: true });
         return;
       }
       await supabase.auth.signOut({ scope: 'local' });
+      clearAllAgencyDataCache();
     };
-    checkMasterAdmin();
+    checkSuperAdmin();
   }, [navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: 'local' });
-    navigate("/auth");
+    clearAllAgencyDataCache();
+    navigate("/login");
   };
 
   if (isLoading) {

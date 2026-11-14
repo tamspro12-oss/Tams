@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   Popover,
   PopoverContent,
@@ -25,11 +25,25 @@ interface SearchableSelectProps {
   searchPlaceholder?: string;
   emptyText?: string;
   allowClear?: boolean;
+  alwaysShowClear?: boolean;
+  clearValue?: string;
   clearLabel?: string;
   className?: string;
+  popoverClassName?: string;
   disabled?: boolean;
+  isLoading?: boolean;
+  required?: boolean;
+  requiredMessage?: string;
   onQuickAdd?: () => void;
   quickAddLabel?: string;
+  searchSubheader?: React.ReactNode | ((closePopover: () => void) => React.ReactNode);
+  renderSelected?: (selectedItem: SearchableSelectItem | null, value: string) => React.ReactNode;
+  renderItem?: (
+    item: SearchableSelectItem,
+    state: { isSelected: boolean; isHighlighted: boolean }
+  ) => React.ReactNode;
+  emptyContent?: (search: string, closePopover: () => void) => React.ReactNode;
+  triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, unknown>;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -40,25 +54,30 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   searchPlaceholder = "Search...",
   emptyText = "No results found",
   allowClear = false,
+  alwaysShowClear = false,
+  clearValue = "",
   clearLabel = "Clear selection",
   className = "",
+  popoverClassName = "",
   disabled = false,
+  isLoading = false,
+  required = false,
+  requiredMessage,
   onQuickAdd,
   quickAddLabel = "Quick Add",
+  searchSubheader,
+  renderSelected,
+  renderItem,
+  emptyContent,
+  triggerProps,
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-    } else {
-      setSearch("");
-    }
-  }, [open]);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const pendingSeedSearchRef = useRef<string | null>(null);
 
   const selectedItem = useMemo(() => {
     if (!value || value === "none") return null;
@@ -77,34 +96,207 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     });
   }, [items, search]);
 
-  const handleSelect = (id: string) => {
-    onChange(id);
+  const showClearRow = allowClear && (alwaysShowClear || Boolean(value && value !== clearValue));
+
+  const selectableOptions = useMemo(() => {
+    const list: Array<{ type: "clear" | "item"; id: string; item?: SearchableSelectItem }> = [];
+    if (showClearRow) {
+      list.push({ type: "clear", id: clearValue });
+    }
+    for (const item of filteredItems) {
+      list.push({ type: "item", id: item.id, item });
+    }
+    return list;
+  }, [showClearRow, clearValue, filteredItems]);
+
+  const selectableOptionsRef = useRef(selectableOptions);
+  selectableOptionsRef.current = selectableOptions;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useEffect(() => {
+    if (open) {
+      const initialSearch = pendingSeedSearchRef.current;
+      if (initialSearch !== null) {
+        pendingSeedSearchRef.current = null;
+        setSearch(initialSearch);
+        setHighlightedIndex(0);
+      } else {
+        const currentIdx = selectableOptionsRef.current.findIndex(
+          (opt) => opt.type === "item" && opt.id === valueRef.current
+        );
+        setHighlightedIndex(currentIdx >= 0 ? currentIdx : 0);
+      }
+
+      const timer = window.setTimeout(() => {
+        const input = inputRef.current;
+        if (input) {
+          input.focus();
+          const len = input.value.length;
+          try {
+            input.setSelectionRange(len, len);
+          } catch {
+            // ignore
+          }
+        }
+      }, 20);
+      return () => window.clearTimeout(timer);
+    } else {
+      setSearch("");
+    }
+  }, [open]);
+
+  // Reset highlight to top match only when search term actually changes
+  const prevSearchRef = useRef(search);
+  useEffect(() => {
+    if (prevSearchRef.current !== search) {
+      prevSearchRef.current = search;
+      if (open) {
+        setHighlightedIndex(0);
+      }
+    }
+  }, [search, open]);
+
+  // Keep highlighted option visible inside scrollable list
+  useEffect(() => {
+    if (!open) return;
+    const activeBtn = optionRefs.current[highlightedIndex];
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex, open]);
+
+  const commitSelection = useCallback(
+    (selectedId: string, advanceFocus: boolean) => {
+      if (triggerRef.current && selectedId && selectedId !== clearValue) {
+        triggerRef.current.removeAttribute("data-field-error");
+        triggerRef.current.removeAttribute("aria-invalid");
+      }
+      onChange(selectedId);
+      setOpen(false);
+      window.requestAnimationFrame(() => {
+        const trigger = triggerRef.current;
+        if (!trigger) return;
+        trigger.focus();
+        if (advanceFocus) {
+          trigger.dispatchEvent(
+            new CustomEvent("tams:field-advance", {
+              bubbles: true,
+              detail: { sourceEl: trigger },
+            })
+          );
+        }
+      });
+    },
+    [onChange, clearValue]
+  );
+
+  const handleCloseOnly = useCallback(() => {
     setOpen(false);
+    window.requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
+  }, []);
+
+  const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    triggerProps?.onKeyDown?.(e);
+    if (e.defaultPrevented || disabled) return;
+
+    // Shift+Enter should navigate backward via useFormKeyboardNav
+    if (e.key === "Enter" && e.shiftKey) {
+      return;
+    }
+
+    if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(true);
+      return;
+    }
+
+    // Printable letter while closed: open popover and immediately filter
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      pendingSeedSearchRef.current = e.key;
+      setOpen(true);
+    }
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange("");
-    setOpen(false);
+  const handlePopoverKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      handleCloseOnly();
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (selectableOptions.length > 0) {
+        setHighlightedIndex((prev) =>
+          prev < selectableOptions.length - 1 ? prev + 1 : selectableOptions.length - 1
+        );
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (selectableOptions.length > 0) {
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      }
+      return;
+    }
+
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      const activeEl = document.activeElement as HTMLElement | null;
+      // Allow clicking inline Quick Add action buttons inside popover without hijacking
+      if (activeEl && activeEl.dataset.quickAddBtn === "true") {
+        return;
+      }
+
+      if (selectableOptions.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const safeIdx = Math.min(Math.max(highlightedIndex, 0), selectableOptions.length - 1);
+        const chosen = selectableOptions[safeIdx];
+        if (chosen) {
+          commitSelection(chosen.id, true);
+        }
+      }
+    }
   };
+
+  const isEmpty = !selectedItem && (!value || value === "" || (clearValue && value === clearValue));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           disabled={disabled}
           role="combobox"
           aria-expanded={open}
+          aria-required={required || undefined}
+          data-required={required ? "true" : undefined}
+          data-required-message={requiredMessage}
+          data-empty={isEmpty ? "true" : "false"}
+          {...triggerProps}
+          onKeyDown={handleTriggerKeyDown}
           className={cn(
-            "w-full h-8 px-2.5 py-1 text-xs border rounded-none bg-background flex items-center justify-between text-left focus:outline-none focus:ring-1 focus:ring-ring transition-colors",
-            !selectedItem ? "text-muted-foreground" : "text-foreground font-medium",
+            "w-full h-8 px-2.5 py-1 text-xs border rounded-none bg-background flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-teal-500/60 focus:border-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 data-[field-error=true]:border-red-500 data-[field-error=true]:ring-2 data-[field-error=true]:ring-red-500/40 transition-colors",
+            isEmpty ? "text-muted-foreground" : "text-foreground font-medium",
             disabled && "opacity-50 cursor-not-allowed",
-            className
+            className,
+            triggerProps?.className
           )}
         >
           <span className="truncate flex items-center gap-1.5 flex-1">
-            {selectedItem ? (
+            {renderSelected ? (
+              renderSelected(selectedItem, value)
+            ) : selectedItem ? (
               <>
                 <span className="font-semibold text-slate-800 dark:text-slate-100 truncate">
                   {selectedItem.label}
@@ -121,7 +313,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 )}
               </>
             ) : (
-              <span>{placeholder}</span>
+              <span>{isLoading ? "Loading..." : placeholder}</span>
             )}
           </span>
           <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1.5" />
@@ -129,7 +321,17 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-[300px] sm:w-[360px] p-0 rounded-none bg-background border shadow-md"
+        data-searchable-select-content="true"
+        onKeyDown={handlePopoverKeyDown}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleCloseOnly();
+        }}
+        className={cn(
+          "w-[300px] sm:w-[360px] p-0 rounded-none bg-background border shadow-md",
+          popoverClassName
+        )}
         align="start"
       >
         {/* Search Input Bar */}
@@ -147,69 +349,118 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch("")}
+                tabIndex={-1}
+                onClick={() => {
+                  setSearch("");
+                  inputRef.current?.focus();
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="w-3 h-3" />
               </button>
             )}
           </div>
+          {typeof searchSubheader === "function" ? searchSubheader(() => setOpen(false)) : searchSubheader}
         </div>
 
         {/* Items List */}
-        <div className="max-h-60 overflow-y-auto p-1 divide-y divide-slate-100 dark:divide-slate-800">
-          {allowClear && value && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="w-full text-left px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-between cursor-pointer transition-colors"
-            >
-              <span className="italic">{clearLabel}</span>
-              <X className="w-3 h-3 text-rose-500" />
-            </button>
-          )}
-
+        <div
+          role="listbox"
+          className="max-h-60 overflow-y-auto p-1 divide-y divide-slate-100 dark:divide-slate-800"
+        >
           {filteredItems.length === 0 ? (
-            <div className="p-3 text-center text-xs text-muted-foreground space-y-1.5">
-              <p>{emptyText}</p>
-              {onQuickAdd && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onQuickAdd();
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> {quickAddLabel}
-                </button>
-              )}
-            </div>
+            emptyContent ? (
+              emptyContent(search, () => setOpen(false))
+            ) : (
+              <div className="p-3 text-center text-xs text-muted-foreground space-y-1.5">
+                <p>{emptyText}</p>
+                {onQuickAdd && (
+                  <button
+                    type="button"
+                    data-quick-add-btn="true"
+                    onClick={() => {
+                      setOpen(false);
+                      onQuickAdd();
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> {quickAddLabel}
+                  </button>
+                )}
+              </div>
+            )
           ) : (
-            filteredItems.map((item) => {
+            selectableOptions.map((opt, idx) => {
+              const isHighlighted = idx === highlightedIndex;
+
+              if (opt.type === "clear") {
+                const isClearSelected = value === clearValue;
+                return (
+                  <button
+                    key="__clear_option__"
+                    ref={(el) => {
+                      optionRefs.current[idx] = el;
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={isClearSelected}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                    onClick={() => commitSelection(clearValue, false)}
+                    className={cn(
+                      "w-full text-left px-2.5 py-1.5 text-xs text-rose-600 flex items-center justify-between cursor-pointer transition-colors",
+                      isHighlighted
+                        ? "bg-teal-50 dark:bg-teal-950/60 ring-1 ring-inset ring-teal-500/40"
+                        : "hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    )}
+                  >
+                    <span className="italic">{clearLabel}</span>
+                    {isClearSelected ? (
+                      <Check className="w-3 h-3 text-teal-600" />
+                    ) : (
+                      <X className="w-3 h-3 text-rose-500" />
+                    )}
+                  </button>
+                );
+              }
+
+              const item = opt.item!;
               const isSelected = item.id === value;
               return (
                 <button
                   key={item.id}
+                  ref={(el) => {
+                    optionRefs.current[idx] = el;
+                  }}
                   type="button"
-                  onClick={() => handleSelect(item.id)}
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  onClick={() => commitSelection(item.id, false)}
                   className={cn(
                     "w-full text-left px-2.5 py-1.5 text-xs flex items-center justify-between cursor-pointer transition-colors",
-                    isSelected
+                    isHighlighted
+                      ? "bg-teal-50 dark:bg-teal-950/60 text-teal-950 dark:text-teal-50 ring-1 ring-inset ring-teal-500/40"
+                      : isSelected
                       ? "bg-slate-100 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100"
                       : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200"
                   )}
                 >
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="truncate">{item.label}</span>
-                    {item.sublabel && (
-                      <span className="text-[10px] text-muted-foreground truncate">
-                        {item.sublabel}
-                      </span>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  {renderItem ? (
+                    renderItem(item, { isSelected, isHighlighted })
+                  ) : (
+                    <>
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="truncate">{item.label}</span>
+                        {item.sublabel && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {item.sublabel}
+                          </span>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                      )}
+                    </>
                   )}
                 </button>
               );
@@ -220,4 +471,3 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     </Popover>
   );
 };
-

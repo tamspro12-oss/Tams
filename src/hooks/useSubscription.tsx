@@ -1,21 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
-import { isMasterAdminEmail } from "@/lib/adminAuth";
+import { verifySuperAdminStatus } from "@/lib/adminAuth";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 export function useSubscription() {
-  return useQuery({
-    queryKey: ["subscription"],
-    queryFn: async () => {
-      // Check if logged in user is Master Admin (usmn4u@gmail.com)
-      const { data: { user } } = await supabase.auth.getUser();
-      const isMaster = isMasterAdminEmail(user?.email);
+  const { data: cachedAgencyId } = useCurrentAgencyId();
 
-      const agencyId = await getAuthenticatedAgencyId();
-      
-      // Master Admin always has unconditional Lifetime Access
-      if (isMaster) {
-        let agencyName = "Master Admin HQ";
+  return useQuery({
+    queryKey: ["subscription", cachedAgencyId ?? "anonymous"],
+    queryFn: async () => {
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) return null;
+
+      const isSuperAdmin = await verifySuperAdminStatus(user.id);
+      const agencyId = cachedAgencyId || (await getAuthenticatedAgencyId());
+
+      if (isSuperAdmin) {
+        let agencyName = "Super Admin HQ";
         if (agencyId) {
           const { data: agency } = await supabase
             .from("agencies")
@@ -63,9 +65,9 @@ export function useSubscription() {
         isActive: agency.license_active,
         status: agency.license_status,
         agencyName: agency.name,
-        isLifetime: false,
+        isLifetime: agency.subscription_plan === "lifetime",
       };
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
 }

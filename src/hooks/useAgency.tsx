@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 // NOTE: email_password and license_key are intentionally NOT selected here.
 // They are no longer readable by app users directly (column-level revoke).
@@ -26,16 +27,18 @@ const AGENCY_COLUMNS = [
 ].join(", ");
 
 export function useAgency() {
+  const { data: agencyId } = useCurrentAgencyId();
+
   return useQuery({
-    queryKey: ["agency"],
+    queryKey: ["agency", agencyId ?? "anonymous"],
     queryFn: async () => {
-      const agencyId = await getAuthenticatedAgencyId();
-      if (!agencyId) return null;
+      const resolvedAgencyId = agencyId || (await getAuthenticatedAgencyId());
+      if (!resolvedAgencyId) return null;
 
       const { data, error } = await supabase
         .from("agencies")
         .select(AGENCY_COLUMNS)
-        .eq("id", agencyId)
+        .eq("id", resolvedAgencyId)
         .maybeSingle();
 
       if (error || !data) return null;
@@ -50,6 +53,7 @@ export function useAgency() {
 
       return { ...(data as any), smtp_configured: smtpConfigured } as any;
     },
-    staleTime: 5 * 60 * 1000,
+    enabled: !!agencyId,
+    staleTime: 60 * 1000,
   });
 }

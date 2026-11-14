@@ -484,7 +484,7 @@ export function MasterAddBookingModal({
       } else if (isCtrlOrCmd && e.shiftKey && e.key === "Enter") {
         e.preventDefault();
         handleSave(true); // Save and Add Next
-      } else if (isCtrlOrCmd && e.key === "Enter") {
+      } else if ((isCtrlOrCmd && e.key === "Enter") || (isCtrlOrCmd && e.key.toLowerCase() === "s")) {
         e.preventDefault();
         handleSave(false); // Save Booking
       } else if (e.key === "Escape") {

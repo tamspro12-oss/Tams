@@ -68,16 +68,6 @@ export default function Auth() {
       import("@/lib/sessionManager").then(({ sessionManager }) => {
         sessionManager.startSession(data.user.id);
       });
-      if (data.user.email) {
-        import("@/lib/userDirectorySync").then(({ recordRegisteredAccount }) => {
-          recordRegisteredAccount({
-            id: data.user.id,
-            email: data.user.email!,
-            full_name: data.user.user_metadata?.full_name || data.user.email!.split("@")[0],
-            agency_name: data.user.user_metadata?.agency_name || "Primary Agency",
-          });
-        });
-      }
       preloadEssentialData(queryClient);
 
       toast({

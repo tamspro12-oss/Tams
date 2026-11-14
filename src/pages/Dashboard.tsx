@@ -26,9 +26,14 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useAgency } from "@/hooks/useAgency";
-import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
+import {
+  computeFinancialMetrics,
+  getKarachiTodayNoon,
+  getKarachiYmd,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
 import {
   Popover,
   PopoverContent,
@@ -44,109 +49,165 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: agency } = useAgency();
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [selectedMonth, setSelectedMonth] = useState<Date>(() => getKarachiTodayNoon());
 
-  // 1. Unified Parties for Client & Vendor Dues (100% parity with Clients & Vendors page)
-  const { parties = [], isLoading: loadingParties } = useParties();
+  const monthStartYmd = useMemo(
+    () => format(startOfMonth(selectedMonth), "yyyy-MM-dd"),
+    [selectedMonth]
+  );
+  const monthEndYmd = useMemo(
+    () => format(endOfMonth(selectedMonth), "yyyy-MM-dd"),
+    [selectedMonth]
+  );
 
-  const totalClientsPending = useMemo(() => {
-    return parties
-      .filter((p) => p.current_balance > 0)
-      .reduce((sum, p) => sum + p.current_balance, 0);
-  }, [parties]);
-
-  const vendorPayables = useMemo(() => {
-    return parties
-      .filter((p) => p.current_balance < 0)
-      .reduce((sum, p) => sum + Math.abs(p.current_balance), 0);
-  }, [parties]);
-
-  // 2. Accounts for Cash & Bank Position (100% parity with Payment Vouchers / Accounts)
+  // 1. Unified Parties & Accounts (strictly scoped by agency_id)
+  const { isLoading: loadingParties } = useParties();
   const { accounts = [], isLoading: loadingAccounts } = useAccounts();
 
-  const cashAndBankTotal = useMemo(() => {
-    return accounts.reduce(
-      (sum, acc) => sum + (Number(acc.current_balance) || 0),
-      0
-    );
-  }, [accounts]);
+  // 2. Canonical Single-Source-of-Truth DB Financial Summary RPC
+  const { data: rpcSummary } = useQuery({
+    queryKey: ["agency_financial_summary", agency?.id, monthStartYmd, monthEndYmd],
+    queryFn: async () => {
+      if (!agency?.id) return null;
+      const { data, error } = await (supabase as any).rpc("get_agency_financial_summary", {
+        p_start_date: monthStartYmd,
+        p_end_date: monthEndYmd,
+        p_agency_id: agency.id,
+      });
+      if (error || !data) return null;
+      return data as {
+        cash_and_bank?: number;
+        client_dues?: number;
+        vendor_dues?: number;
+        period_profit?: number;
+        todays_bookings?: number;
+        overdue_count?: number;
+      };
+    },
+    enabled: !!agency?.id,
+  });
 
-  // 3. Booking Invoices for Profit, Today's Bookings & Overdue Invoices
+  // 3. Canonical Underlying Tables (used when DB RPC unavailable + for fallback verification)
   const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
     queryKey: ["dashboard_invoices", agency?.id],
     queryFn: async () => {
-      let query = (supabase as any)
+      if (!agency?.id) return [];
+      const { data, error } = await (supabase as any)
         .from("booking_invoices")
         .select("*, party:parties!party_id(name)")
+        .eq("agency_id", agency.id)
         .order("invoice_date", { ascending: false });
 
-      if (agency?.id) {
-        query = query.eq("agency_id", agency.id);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data && data.length > 0) return data;
-
-      // Fallback: clients table
-      let clientQuery = supabase
-        .from("clients")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (agency?.id) {
-        clientQuery = clientQuery.eq("agency_id", agency.id);
-      }
-
-      const { data: clientsData } = await clientQuery;
-
-      return (clientsData || []).map((c: any) => ({
-        id: c.id,
-        invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || (c.created_at ? c.created_at.slice(0, 10) : ""),
-        client_amount: c.selling_price || 0,
-        vendor_payable: c.purchasing_price || 0,
-        profit: (c.selling_price || 0) - (c.purchasing_price || 0),
-        paid_amount: c.amount_paid || 0,
-        payment_status: (c.payment_status || "Pending").toLowerCase(),
-        remaining_payment_date: c.remaining_payment_date,
-        more_details: { remaining_due_date: c.remaining_payment_date },
-      }));
+      if (error) throw error;
+      return data || [];
     },
+    enabled: !!agency?.id,
   });
 
-  // Profit this month: strictly filters by invoice_date matching selectedMonth
-  const profitThisMonth = useMemo(() => {
-    const monthPrefix = format(selectedMonth, "yyyy-MM");
-    return rawInvoices
-      .filter((inv: any) => {
-        const d = inv.invoice_date || "";
-        return d.startsWith(monthPrefix);
-      })
-      .reduce((sum: number, inv: any) => {
-        const profit =
-          inv.profit !== undefined && inv.profit !== null
-            ? Number(inv.profit)
-            : (Number(inv.client_amount) || 0) - (Number(inv.vendor_payable) || 0);
-        return sum + (profit || 0);
-      }, 0);
-  }, [rawInvoices, selectedMonth]);
+  const { data: rawVouchers = [] } = useQuery({
+    queryKey: ["payment_vouchers", agency?.id],
+    queryFn: async () => {
+      if (!agency?.id) return [];
+      const { data, error } = await (supabase as any)
+        .from("payment_vouchers")
+        .select("id, party_id, direction, amount, is_void")
+        .eq("agency_id", agency.id);
+      if (error) return [];
+      return data || [];
+    },
+    enabled: !!agency?.id,
+  });
 
-  // Today's Bookings: invoices dated today
-  const todayBookingsCount = useMemo(() => {
-    const todayStr = format(new Date(), "yyyy-MM-dd");
-    return rawInvoices.filter((inv: any) => (inv.invoice_date || "") === todayStr).length;
-  }, [rawInvoices]);
+  const { data: rawExpenses = [] } = useQuery({
+    queryKey: ["expenses", agency?.id],
+    queryFn: async () => {
+      if (!agency?.id) return [];
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, amount, expense_date, created_at")
+        .eq("agency_id", agency.id);
+      if (error) return [];
+      return data || [];
+    },
+    enabled: !!agency?.id,
+  });
 
-  // Overdue Invoices: shared Remaining Due Date logic with Reports and Notifications
-  const overdueInvoicesCount = useMemo(() => {
-    return rawInvoices.filter((inv: any) => {
-      const { isOverdue } = getInvoiceOverdueInfo(inv);
-      return isOverdue;
-    }).length;
-  }, [rawInvoices]);
+  const { data: rawRefunds = [] } = useQuery({
+    queryKey: ["refunds", agency?.id],
+    queryFn: async () => {
+      if (!agency?.id) return [];
+      const { data, error } = await supabase
+        .from("refunds")
+        .select("id, booking_id, vendor_refund_amount, client_refund_amount, refund_amount")
+        .eq("agency_id", agency.id);
+      if (error) return [];
+      return data || [];
+    },
+    enabled: !!agency?.id,
+  });
 
-  // 4. Unified Alerts for Notification Center
+  const { data: legacyClients = [] } = useQuery({
+    queryKey: ["clients", agency?.id, "dashboard-legacy"],
+    queryFn: async () => {
+      if (!agency?.id || rawInvoices.length > 0) return [];
+      const { data } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("agency_id", agency.id)
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!agency?.id && rawInvoices.length === 0,
+  });
+
+  const { data: legacyVendors = [] } = useQuery({
+    queryKey: ["vendors", agency?.id, "dashboard-legacy"],
+    queryFn: async () => {
+      if (!agency?.id || rawInvoices.length > 0) return [];
+      const { data } = await supabase
+        .from("vendors")
+        .select("id, payment_amount, amount_paid")
+        .eq("agency_id", agency.id);
+      return data || [];
+    },
+    enabled: !!agency?.id && rawInvoices.length === 0,
+  });
+
+  const localSummary = useMemo(
+    () =>
+      computeFinancialMetrics({
+        invoices: rawInvoices,
+        vouchers: rawVouchers,
+        expenses: rawExpenses,
+        accounts,
+        refunds: rawRefunds,
+        clients: legacyClients,
+        vendors: legacyVendors,
+        periodStartYmd: monthStartYmd,
+        periodEndYmd: monthEndYmd,
+        todayYmd: getKarachiYmd(),
+      }),
+    [
+      rawInvoices,
+      rawVouchers,
+      rawExpenses,
+      accounts,
+      rawRefunds,
+      legacyClients,
+      legacyVendors,
+      monthStartYmd,
+      monthEndYmd,
+    ]
+  );
+
+  const cashAndBankTotal = rpcSummary?.cash_and_bank ?? localSummary.cashAndBank;
+  const totalClientsPending = rpcSummary?.client_dues ?? localSummary.clientDues;
+  const vendorPayables = rpcSummary?.vendor_dues ?? localSummary.vendorDues;
+  const profitThisMonth = rpcSummary?.period_profit ?? localSummary.periodProfit;
+  const todayBookingsCount = rpcSummary?.todays_bookings ?? localSummary.todaysBookings;
+  const overdueInvoicesCount = rpcSummary?.overdue_count ?? localSummary.overdueCount;
+
+  // 4. Unified Alerts for Notification Center (shared single source of truth)
   const {
     activeAlerts,
     unreadCount,
@@ -162,12 +223,7 @@ export default function Dashboard() {
 
   // Pull-to-refresh
   const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["parties"] }),
-      queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard_invoices"] }),
-      queryClient.invalidateQueries({ queryKey: ["unified_portal_alerts"] }),
-    ]);
+    await invalidateAllFinancialQueries(queryClient, agency?.id);
     toast.success("Dashboard refreshed");
   };
 
@@ -175,16 +231,18 @@ export default function Dashboard() {
     onRefresh: handleRefresh,
   });
 
-  // Real-time multi-table sync
+  // Real-time multi-table sync strictly filtered by agency_id
+  const agencyRealtimeFilter = agency?.id ? `agency_id=eq.${agency.id}` : undefined;
   useRealtimeMultiTable({
     channelPrefix: "dashboard-live-sync",
-    enabled: true,
+    enabled: !!agency?.id,
     subscriptions: [
-      { table: "booking_invoices", callback: () => queryClient.invalidateQueries({ queryKey: ["dashboard_invoices"] }) },
-      { table: "parties", callback: () => queryClient.invalidateQueries({ queryKey: ["parties"] }) },
-      { table: "accounts", callback: () => queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] }) },
-      { table: "payment_vouchers", callback: () => queryClient.invalidateQueries({ queryKey: ["dashboard_invoices"] }) },
-      { table: "expenses", callback: () => queryClient.invalidateQueries({ queryKey: ["accounts_with_balances"] }) },
+      { table: "booking_invoices", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "parties", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "accounts", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "payment_vouchers", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "expenses", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "refunds", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
     ],
   });
 

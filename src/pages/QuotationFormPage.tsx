@@ -32,8 +32,9 @@ import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { cn } from "@/lib/utils";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
@@ -74,7 +75,7 @@ export default function QuotationFormPage() {
 
   // Form State
   const [quotationNumber, setQuotationNumber] = useState("");
-  const [quotationDate, setQuotationDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [quotationDate, setQuotationDate] = useState(() => getTodayDateString());
   const [validUntil, setValidUntil] = useState(() => format(addDays(new Date(), 14), "yyyy-MM-dd"));
   const [serviceType, setServiceType] = useState<ServiceType>("client_booking");
   const [status, setStatus] = useState<Status>("draft");
@@ -113,15 +114,12 @@ export default function QuotationFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Field Refs for keyboard-first navigation
+  const formContainerRef = useRef<HTMLDivElement>(null);
   const quotationNumberRef = useRef<HTMLInputElement>(null);
-  const quotationDateRef = useRef<HTMLInputElement>(null);
   const validUntilRef = useRef<HTMLInputElement>(null);
   const clientNameRef = useRef<HTMLInputElement>(null);
-  const clientEmailRef = useRef<HTMLInputElement>(null);
-  const clientPhoneRef = useRef<HTMLInputElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
   const firstItemDescRef = useRef<HTMLInputElement>(null);
-  const lastItemUnitPriceRef = useRef<HTMLInputElement>(null);
+  const itemDescRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Prefill or load existing quotation
   useEffect(() => {
@@ -129,7 +127,7 @@ export default function QuotationFormPage() {
       const q = quotations.find((x) => x.id === id);
       if (q) {
         setQuotationNumber(q.quotation_number || "");
-        setQuotationDate(q.quotation_date || format(new Date(), "yyyy-MM-dd"));
+        setQuotationDate(getTodayDateString());
         setValidUntil(q.valid_until || "");
         setServiceType(q.service_type || "client_booking");
         setStatus(q.status || "draft");
@@ -173,14 +171,6 @@ export default function QuotationFormPage() {
     }
   }, [id, isEdit, quotations, navigate, location.state]);
 
-  // Autofocus Quotation Number on open
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      quotationNumberRef.current?.focus();
-    }, 80);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Recalculate totals
   const subtotal = useMemo(() => {
     return items.reduce((acc, it) => acc + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
@@ -203,7 +193,17 @@ export default function QuotationFormPage() {
   };
 
   const addItem = (focusNew: boolean = false) => {
-    setItems((prev) => [...prev, { description: "", qty: 1, unit_price: 0, amount: 0 }]);
+    setItems((prev) => {
+      const nextIndex = prev.length;
+      if (focusNew) {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            itemDescRefs.current[nextIndex]?.focus();
+          }, 15);
+        });
+      }
+      return [...prev, { description: "", qty: 1, unit_price: 0, amount: 0 }];
+    });
   };
 
   const removeItem = (index: number) => {
@@ -402,33 +402,18 @@ export default function QuotationFormPage() {
     });
   };
 
-  // Global Keyboard Shortcuts
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl/Cmd + Shift + Enter = Save & PDF
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Enter") {
-      e.preventDefault();
-      handleSave(true);
-      return;
-    }
-
-    // Ctrl/Cmd + Enter = Save
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSave(false);
-      return;
-    }
-
-    // Esc = Close
-    if (e.key === "Escape") {
-      e.preventDefault();
-      handleClose();
-      return;
-    }
-  };
+  useFormKeyboardNav({
+    containerRef: formContainerRef,
+    isDirty: Boolean(hasUnsavedChanges && !convertedBookingId),
+    onSave: () => handleSave(false),
+    onSaveAndAddNext: () => handleSave(true),
+    onCancel: () => navigate("/app/leads-quotes?tab=quotations"),
+    autoFocusFirst: true,
+  });
 
   return (
     <div
-      onKeyDown={handleKeyDown}
+      ref={formContainerRef}
       className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-7xl mx-auto overflow-hidden bg-background"
     >
       {/* 1. Global Header Bar: ONLY Back arrow + Title on left, and X (close icon) on far right */}
@@ -438,6 +423,7 @@ export default function QuotationFormPage() {
             type="button"
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={handleClose}
             className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             title="Go back (Esc)"
@@ -454,6 +440,7 @@ export default function QuotationFormPage() {
           type="button"
           variant="ghost"
           size="icon"
+          tabIndex={-1}
           onClick={handleClose}
           aria-label="Cancel and close"
           className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
@@ -493,7 +480,8 @@ export default function QuotationFormPage() {
                 <Input
                   id="quote_num"
                   ref={quotationNumberRef}
-                  tabIndex={1}
+                  required
+                  data-required-message="Quotation # is required"
                   value={quotationNumber}
                   onChange={(e) => {
                     setQuotationNumber(e.target.value);
@@ -513,9 +501,10 @@ export default function QuotationFormPage() {
                   Last used:{" "}
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => {
                       setQuotationNumber(mostRecentQuotationNumber);
-                      quotationDateRef.current?.focus();
+                      validUntilRef.current?.focus();
                     }}
                     className="underline hover:text-foreground font-mono focus-visible:ring-1 focus-visible:ring-primary"
                   >
@@ -544,7 +533,7 @@ export default function QuotationFormPage() {
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    tabIndex={4}
+                    tabIndex={-1}
                     onClick={() => applyValidUntilChip(7)}
                     className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
@@ -552,7 +541,7 @@ export default function QuotationFormPage() {
                   </button>
                   <button
                     type="button"
-                    tabIndex={5}
+                    tabIndex={-1}
                     onClick={() => applyValidUntilChip(14)}
                     className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
@@ -560,7 +549,7 @@ export default function QuotationFormPage() {
                   </button>
                   <button
                     type="button"
-                    tabIndex={6}
+                    tabIndex={-1}
                     onClick={() => applyValidUntilChip(30)}
                     className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   >
@@ -573,7 +562,6 @@ export default function QuotationFormPage() {
                 <Input
                   id="valid_until"
                   ref={validUntilRef}
-                  tabIndex={3}
                   type="date"
                   value={validUntil}
                   onChange={(e) => setValidUntil(e.target.value)}
@@ -599,7 +587,6 @@ export default function QuotationFormPage() {
               </Label>
               <Select value={serviceType} onValueChange={(v: ServiceType) => setServiceType(v)}>
                 <SelectTrigger
-                  tabIndex={7}
                   className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
@@ -624,7 +611,6 @@ export default function QuotationFormPage() {
               </Label>
               <Select value={status} onValueChange={(v: Status) => setStatus(v)}>
                 <SelectTrigger
-                  tabIndex={8}
                   className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
@@ -665,7 +651,8 @@ export default function QuotationFormPage() {
                 <Input
                   id="client_name"
                   ref={clientNameRef}
-                  tabIndex={9}
+                  required
+                  data-required-message="Client Name is required"
                   value={clientName}
                   onChange={(e) => {
                     setClientName(e.target.value);
@@ -714,8 +701,6 @@ export default function QuotationFormPage() {
                 <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="client_email"
-                  ref={clientEmailRef}
-                  tabIndex={10}
                   type="email"
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
@@ -744,8 +729,6 @@ export default function QuotationFormPage() {
                 <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="client_phone"
-                  ref={clientPhoneRef}
-                  tabIndex={11}
                   type="tel"
                   inputMode="tel"
                   value={clientPhone}
@@ -765,8 +748,6 @@ export default function QuotationFormPage() {
                 <FileText className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   id="quote_title"
-                  ref={titleRef}
-                  tabIndex={12}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. 14-Day Umrah Package / Executive Flight"
@@ -799,6 +780,7 @@ export default function QuotationFormPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                tabIndex={-1}
                 onClick={() => addItem(true)}
                 className="h-6 px-2 text-xs gap-1 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
               >
@@ -826,7 +808,14 @@ export default function QuotationFormPage() {
                   >
                     <div className="col-span-12 sm:col-span-6">
                       <Input
-                        ref={idx === 0 ? firstItemDescRef : undefined}
+                        ref={(el) => {
+                          itemDescRefs.current[idx] = el;
+                          if (idx === 0) {
+                            (firstItemDescRef as React.MutableRefObject<HTMLInputElement | null>).current = el;
+                          }
+                        }}
+                        required={idx === 0 && items.length === 1}
+                        data-required-message="Add at least one item with a description"
                         placeholder="Item or service description..."
                         value={it.description}
                         onChange={(e) => updateItem(idx, { description: e.target.value })}
@@ -846,7 +835,6 @@ export default function QuotationFormPage() {
                     </div>
                     <div className="col-span-4 sm:col-span-2">
                       <Input
-                        ref={isLast ? lastItemUnitPriceRef : undefined}
                         type="number"
                         min="0"
                         step="0.01"
@@ -871,6 +859,7 @@ export default function QuotationFormPage() {
                         type="button"
                         variant="ghost"
                         size="icon"
+                        tabIndex={-1}
                         disabled={items.length <= 1}
                         onClick={() => removeItem(idx)}
                         className="h-6 w-6 text-muted-foreground hover:text-destructive rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
@@ -987,6 +976,7 @@ export default function QuotationFormPage() {
           type="button"
           variant="ghost"
           size="sm"
+          tabIndex={-1}
           onClick={handleClose}
           className="h-8.5 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
@@ -999,6 +989,7 @@ export default function QuotationFormPage() {
               type="button"
               variant="outline"
               size="sm"
+              tabIndex={-1}
               onClick={handleConvertToBooking}
               className="h-8.5 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             >
@@ -1011,7 +1002,6 @@ export default function QuotationFormPage() {
             type="button"
             variant="outline"
             size="sm"
-            tabIndex={13}
             onClick={() => handleSave(true)}
             disabled={isSubmitting}
             className="h-8.5 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
@@ -1024,11 +1014,11 @@ export default function QuotationFormPage() {
           <Button
             type="button"
             size="sm"
-            tabIndex={14}
+            data-save-button="true"
             onClick={() => handleSave(false)}
             disabled={isSubmitting}
             className="h-8.5 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Save Quotation (Ctrl+Enter)"
+            title="Save Quotation (Ctrl+S)"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>

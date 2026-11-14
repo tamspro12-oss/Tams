@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { exportRowsToExcel, exportRowsToPDF } from "@/lib/simpleExport";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 const emptyForm: RefundInput = {
   client_id: null,
@@ -36,8 +38,17 @@ const emptyForm: RefundInput = {
 
 export default function Refunds() {
   const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState<Refund | null>(null);
-  const [form, setForm] = useState<RefundInput>(emptyForm);
+  const [form, setForm] = useState<RefundInput>(() => ({ ...emptyForm, refund_date: getTodayDateString() }));
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty: Boolean(form.refund_amount > 0 || form.reason?.trim() || form.notes?.trim()),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => setOpen(false),
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -87,12 +98,17 @@ export default function Refunds() {
 
   const totalRefunds = filtered.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
 
-  const openNew = () => { setEditing(null); setForm(emptyForm); setErrors({}); setOpen(true); };
+  const openNew = () => {
+    setEditing(null);
+    setForm({ ...emptyForm, refund_date: getTodayDateString() });
+    setErrors({});
+    setOpen(true);
+  };
   const openEdit = (r: Refund) => {
     setEditing(r);
     setErrors({});
     setForm({
-      client_id: r.client_id, booking_id: r.booking_id, refund_date: r.refund_date,
+      client_id: r.client_id, booking_id: r.booking_id, refund_date: getTodayDateString(),
       refund_amount: Number(r.refund_amount), payment_mode: r.payment_mode || "cash",
       bank_name: r.bank_name, reason: r.reason, notes: r.notes,
     });
@@ -257,7 +273,7 @@ export default function Refunds() {
             <DialogTitle>{editing ? "Edit Refund" : "Record Refund"}</DialogTitle>
             <DialogDescription>Refunds reduce client receivables and total revenue.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-3">
+          <form ref={formRef} onSubmit={submit} className="space-y-3">
             <div className="space-y-2">
               <Label>Client</Label>
               <Select value={form.client_id || "none"} onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? null : v, booking_id: null })}>
@@ -280,14 +296,16 @@ export default function Refunds() {
                 </Select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Date *</Label>
-                <Input type="date" value={form.refund_date} onChange={(e) => setForm({ ...form, refund_date: e.target.value })} required />
-              </div>
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3 items-start">
+              <LockedDateField
+                label="Date"
+                value={form.refund_date}
+                onChange={(d) => setForm((prev) => ({ ...prev, refund_date: d }))}
+                required
+              />
+              <div className="space-y-1">
                 <Label>Amount (PKR) *</Label>
-                <Input type="number" step="0.01" min="0.01" value={form.refund_amount || ""} onChange={(e) => setForm({ ...form, refund_amount: Number(e.target.value) })} aria-invalid={!!errors.refund_amount} className={errors.refund_amount ? "border-destructive" : ""} required />
+                <Input type="number" step="0.01" min="0.01" value={form.refund_amount || ""} onChange={(e) => setForm({ ...form, refund_amount: Number(e.target.value) })} aria-invalid={!!errors.refund_amount} className={errors.refund_amount ? "border-destructive" : ""} data-required-positive="true" data-required-message="Amount must be greater than 0" required />
                 {errors.refund_amount && <p className="text-xs text-destructive">{errors.refund_amount}</p>}
               </div>
             </div>
@@ -337,7 +355,7 @@ export default function Refunds() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={addRefund.isPending || updateRefund.isPending}>
+              <Button type="submit" data-save-button="true" disabled={addRefund.isPending || updateRefund.isPending}>
                 {editing ? "Update Refund" : "Save Refund"}
               </Button>
             </div>

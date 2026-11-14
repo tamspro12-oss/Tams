@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddB2BLedgerDialogProps {
   open: boolean;
@@ -33,10 +35,11 @@ interface BookingAllocation {
 }
 
 export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, preselectedBookingId }: AddB2BLedgerDialogProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
   const [entryType, setEntryType] = useState<string>("credit");
   const [amount, setAmount] = useState("");
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState(() => getTodayDateString());
   const [remarks, setRemarks] = useState("");
   const [linkedBookingId, setLinkedBookingId] = useState<string>("none");
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -136,7 +139,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       setPaymentMode('single'); // Edit mode always single
       setEntryType(editEntry.entry_type);
       setAmount(editEntry.amount.toString());
-      setEntryDate(editEntry.entry_date);
+      setEntryDate(getTodayDateString());
 
       // Try to extract linked booking from remarks
       const linkedPnr = parseLinkedBookingFromRemarks(editEntry.remarks);
@@ -159,7 +162,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       setPaymentMode('single');
       setEntryType("credit");
       setAmount("");
-      setEntryDate(new Date().toISOString().split('T')[0]);
+      setEntryDate(getTodayDateString());
       setRemarks("");
       setLinkedBookingId(preselectedBookingId);
     } else {
@@ -167,7 +170,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       setPaymentMode('single');
       setEntryType("credit");
       setAmount("");
-      setEntryDate(new Date().toISOString().split('T')[0]);
+      setEntryDate(getTodayDateString());
       setRemarks("");
       setLinkedBookingId("none");
       setAllocations([]);
@@ -327,9 +330,20 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
     }
   }, [amount, paymentMode, splitSummary, hasOverAllocation, paymentExceedsOutstanding]);
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty: Boolean(amount || remarks.trim()),
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
         "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
         isFullScreen
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
@@ -355,6 +369,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
               type="button"
               variant="ghost"
               size="icon"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 shrink-0"
               title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
@@ -364,7 +379,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
+        <form ref={formRef} onSubmit={handleSubmit} className={cn("flex-1 overflow-y-auto form-scroll-container", isFullScreen ? "p-6 lg:p-8" : "p-2")}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-6" : "space-y-4"}>
 
             {/* Transaction Details */}
@@ -406,6 +421,8 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                     step="0.01"
                     min="0"
                     required
+                    data-required-positive="true"
+                    data-required-message="Amount must be greater than 0"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
@@ -420,18 +437,14 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                     </p>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="entry_date" className="text-sm font-medium">Entry Date *</Label>
-                  <Input
-                    id="entry_date"
-                    name="entry_date"
-                    type="date"
-                    required
-                    value={entryDate}
-                    onChange={(e) => setEntryDate(e.target.value)}
-                    className="enterprise-input"
-                  />
-                </div>
+                <LockedDateField
+                  id="entry_date"
+                  name="entry_date"
+                  label="Entry Date"
+                  value={entryDate}
+                  onChange={setEntryDate}
+                  required
+                />
 
                 {/* Payment Mode (Cash/Bank) - Only for credits */}
                 {entryType === 'credit' && (
@@ -788,6 +801,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
             <Button
               type="button"
               variant="outline"
+              tabIndex={-1}
               onClick={() => onOpenChange(false)}
               className="min-w-[100px]"
             >
@@ -795,6 +809,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
             </Button>
             <Button
               type="submit"
+              data-save-button="true"
               disabled={loading || !canSubmit}
               className={cn(
                 "min-w-[140px] gap-2",

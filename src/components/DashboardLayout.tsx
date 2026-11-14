@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { sessionManager } from "@/lib/sessionManager";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ function AppSidebar() {
     try {
       sessionManager.endSession();
       await supabase.auth.signOut({ scope: 'local' });
+      clearAllAgencyDataCache();
       toast.success("Logged out successfully");
       navigate("/login");
     } catch (error) {

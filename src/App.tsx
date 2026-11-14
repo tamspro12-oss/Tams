@@ -58,16 +58,16 @@ const PwaOnboardModal = lazy(() =>
   import("@/components/PwaOnboardModal").then((m) => ({ default: m.PwaOnboardModal }))
 );
 
-import { registerGlobalQueryClient } from "@/lib/cacheManager";
+import { registerGlobalQueryClient, clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
+      staleTime: 60 * 1000,
       gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      retry: 0,
-      refetchOnReconnect: false,
+      refetchOnWindowFocus: true,
+      retry: 1,
+      refetchOnReconnect: true,
     },
     mutations: {
       retry: 0,
@@ -98,6 +98,7 @@ const App = () => {
     sessionManager.setOnTimeout(async () => {
       await supabase.auth.signOut({ scope: 'local' });
       sessionManager.endSession();
+      clearAllAgencyDataCache();
       window.location.href = '/login';
     });
 
@@ -158,6 +159,9 @@ const App = () => {
                   <Route path="/app/clients-vendors" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Clients & Vendors"><ClientsVendors /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/reports" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Reports"><ReportsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/admin" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
+                  <Route path="/app/admin/*" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
+                  <Route path="/admin" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
+                  <Route path="/admin/*" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
                   <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Bookings"><BookingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />

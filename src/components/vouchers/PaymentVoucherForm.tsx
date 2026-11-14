@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,13 @@ import { Badge } from "@/components/ui/badge";
 import { useParties, Party } from "@/hooks/useParties";
 import { useAgency } from "@/hooks/useAgency";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { useAccounts } from "@/hooks/useUnifiedTransactions";
+import {
+  resolveAccountIdForPayment,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +51,7 @@ interface MatchedInvoice {
   paidAmount: number;
   remainingAmount: number;
   pnr?: string;
+  sourceTable?: "booking_invoices" | "invoices";
 }
 
 export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
@@ -56,10 +63,14 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   const { parties } = useParties();
   const { data: agency } = useAgency();
   const { data: currentAgencyId } = useCurrentAgencyId();
+  const { accounts = [] } = useAccounts();
+
+  const formRef = useRef<HTMLDivElement>(null);
+  const lastSearchedQueryRef = useRef<string>("");
 
   // Line 1: Voucher Date | Payment Mode | Direction | Amount (PKR) * | Cheque / Reference No
   const [voucherDate, setVoucherDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => getTodayDateString()
   );
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
   const [direction, setDirection] = useState<"received" | "paid">("received");
@@ -105,6 +116,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   useEffect(() => {
     if (open) {
+      setVoucherDate(getTodayDateString());
       fetchNextNumber();
     }
   }, [open, direction, fetchNextNumber]);
@@ -113,32 +125,24 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   const { data: recentVouchers = [], refetch: refetchRecentVouchers } = useQuery({
     queryKey: ["recent_payment_vouchers", currentAgencyId],
     queryFn: async () => {
-      let query = (supabase as any)
+      if (!currentAgencyId) return [];
+      const { data } = await (supabase as any)
         .from("payment_vouchers")
         .select("*, party:parties!party_id(name)")
+        .eq("agency_id", currentAgencyId)
         .order("voucher_date", { ascending: false })
         .limit(5);
 
-      if (currentAgencyId) {
-        query = query.eq("agency_id", currentAgencyId);
-      }
-
-      const { data } = await query;
       if (data && data.length > 0) return data;
 
       // Fallback: read from transactions table
-      let txQuery = (supabase as any)
+      const { data: txData } = await (supabase as any)
         .from("transactions")
         .select("*")
+        .eq("agency_id", currentAgencyId)
         .in("type", ["payment_in", "payment_out"])
         .order("date", { ascending: false })
         .limit(5);
-
-      if (currentAgencyId) {
-        txQuery = txQuery.eq("agency_id", currentAgencyId);
-      }
-
-      const { data: txData } = await txQuery;
 
       return (txData || []).map((t: any) => ({
         id: t.id,
@@ -150,7 +154,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         party: { name: t.notes || "Party" },
       }));
     },
-    enabled: open,
+    enabled: open && !!currentAgencyId,
   });
 
   const voucherPrefix = direction === "received" ? "CRV" : "CPV";
@@ -201,6 +205,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           paidAmount: paid,
           remainingAmount: remaining,
           pnr: bData.pnr || undefined,
+          sourceTable: "booking_invoices",
         };
 
         setMatchedInvoice(match);
@@ -245,6 +250,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           totalAmount: total,
           paidAmount: paid,
           remainingAmount: remaining,
+          sourceTable: "invoices",
         };
 
         setMatchedInvoice(match);
@@ -295,78 +301,48 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
         activeAgencyId = await getAuthenticatedAgencyId();
       }
+      if (!activeAgencyId) {
+        throw new Error("Unable to identify active agency account.");
+      }
+
+      const resolvedAccountId = isAdjustment
+        ? null
+        : resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
 
       const { data: rpcData, error: rpcError } = await (supabase as any).rpc("save_payment_voucher", {
         p_direction: direction,
         p_amount: numericAmount,
         p_payment_mode: paymentMode,
-        p_account_id: null,
+        p_account_id: resolvedAccountId,
         p_party_id: partyId || null,
         p_voucher_no: voucherNo,
         p_voucher_date: voucherDate,
         p_reference_no: referenceNo || null,
         p_is_adjustment: isAdjustment,
         p_adjustment_reason: adjustmentReason || null,
-        p_agency_id: activeAgencyId || null,
+        p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+        p_invoice_id: matchedInvoice?.sourceTable === "booking_invoices" ? matchedInvoice.id : null,
         p_notes: [
           paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
           notes,
-        ].filter(Boolean).join(" — ") || null,
+        ]
+          .filter(Boolean)
+          .join(" — ") || null,
       });
 
       if (rpcError) {
-        // Fallback: direct insert into payment_vouchers table with agency_id
-        const { error: directError } = await (supabase as any)
-          .from("payment_vouchers")
-          .insert({
-            agency_id: activeAgencyId,
-            voucher_no: voucherNo,
-            voucher_date: voucherDate,
-            direction,
-            payment_mode: paymentMode,
-            bank_name: paymentMode === "bank" ? selectedBank : null,
-            amount: numericAmount,
-            party_id: partyId || null,
-            reference_no: referenceNo || null,
-            is_adjustment: isAdjustment,
-            adjustment_reason: adjustmentReason || null,
-            notes: notes || null,
-          });
-
-        if (directError) {
-          throw new Error(`Failed to save payment voucher: ${directError.message}`);
-        }
-
-        // Also post double-entry payment
-        try {
-          await (supabase as any).rpc("record_payment", {
-            p_direction: direction === "received" ? "in" : "out",
-            p_amount: numericAmount,
-            p_account_id: null,
-            p_party_id: partyId || null,
-            p_party_type: direction === "received" ? "client" : "vendor",
-            p_date: voucherDate,
-            p_method: paymentMode,
-            p_reference_no: referenceNo || voucherNo,
-            p_notes: notes || null,
-          });
-        } catch (pe) {
-          console.warn("record_payment error:", pe);
-        }
+        throw new Error(rpcError.message || "Failed to save payment voucher");
+      }
+      if (rpcData && rpcData.success === false) {
+        throw new Error(rpcData.error || "Failed to record payment voucher");
       }
 
-      toast.success(`${direction === "received" ? "Receipt (CRV)" : "Payment (CPV)"} ${voucherNo} recorded successfully`);
+      const assignedNo = rpcData?.voucher_no || voucherNo;
+      toast.success(
+        `${direction === "received" ? "Receipt (CRV)" : "Payment (CPV)"} ${assignedNo} recorded successfully`
+      );
 
-      // Invalidate queries so lists, KPIs, reports, and ledgers immediately refresh
-      queryClient.invalidateQueries({ queryKey: ["payment_vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["recent_payment_vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["booking_invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_expenses_invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["parties"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
       refetchRecentVouchers();
 
       // Clear input fields
@@ -390,6 +366,37 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     }
   };
 
+  const isDirty = useMemo(() => {
+    return Boolean(
+      numericAmount > 0 ||
+        referenceNo.trim() ||
+        searchQuery.trim() ||
+        matchedInvoice ||
+        partyId ||
+        notes.trim() ||
+        isAdjustment ||
+        adjustmentReason.trim()
+    );
+  }, [numericAmount, referenceNo, searchQuery, matchedInvoice, partyId, notes, isAdjustment, adjustmentReason]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    isDirty,
+    onSave: handleSave,
+    onCancel: () => onOpenChange(false),
+    onBeforeAdvance: (el) => {
+      if (el.dataset.enterSearch === "true") {
+        const q = searchQuery.trim();
+        if (q && q !== lastSearchedQueryRef.current) {
+          lastSearchedQueryRef.current = q;
+          executeSearchInvoice(q);
+          return false;
+        }
+      }
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
@@ -402,7 +409,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
             <Lock className="w-3 h-3 text-slate-400" />
             <span>Voucher #:</span>
             <CopyValue value={autoVoucherNo} label="voucher number" className="text-teal-600 dark:text-teal-400" />
@@ -420,10 +427,11 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           </Badge>
         </div>
 
-        {/* BODY: ONE FLAT COMPACT FORM, NO SCROLLING */}
+        {/* BODY + FOOTER wrapped for unified keyboard nav */}
+        <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
           {/* LINE 1: Voucher Date | Direction | Payment Mode | (Bank if bank) | Amount (PKR) * | Cheque / Reference No */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
             {/* 1. Voucher Date (Locked System Date) */}
             <div className="lg:col-span-2">
               <LockedDateField
@@ -435,12 +443,12 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             </div>
 
             {/* 2. Direction */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Direction <span className="text-red-500">*</span>
               </Label>
               <Select value={direction} onValueChange={(val: any) => setDirection(val)}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -451,12 +459,12 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             </div>
 
             {/* 3. Payment Mode */}
-            <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Payment Mode <span className="text-red-500">*</span>
               </Label>
               <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                <SelectTrigger className="h-8 text-xs mt-0.5">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -479,7 +487,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             )}
 
             {/* 5. Amount (PKR) * */}
-            <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Amount (PKR) <span className="text-red-500">*</span>
               </Label>
@@ -490,13 +498,15 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
-                className="h-8 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 mt-0.5"
+                className="h-8 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
                 required
+                data-required-positive="true"
+                data-required-message="Amount must be greater than zero"
               />
             </div>
 
             {/* 6. Cheque / Reference No */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Cheque / Reference No
               </Label>
@@ -504,7 +514,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                 value={referenceNo}
                 onChange={(e) => setReferenceNo(e.target.value)}
                 placeholder="Chq #, Trx ID..."
-                className="h-8 text-xs mt-0.5"
+                className="h-8 text-xs"
               />
             </div>
           </div>
@@ -519,22 +529,21 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
               <div className="relative mt-0.5">
                 <Input
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    lastSearchedQueryRef.current = "";
+                    setSearchQuery(e.target.value);
+                  }}
                   onPaste={(e) => {
                     const pasted = e.clipboardData.getData("text");
                     if (pasted) {
                       e.preventDefault();
                       const cleaned = cleanPastedSearch(pasted);
+                      lastSearchedQueryRef.current = cleaned.trim();
                       setSearchQuery(cleaned);
                       setTimeout(() => executeSearchInvoice(cleaned), 0);
                     }
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      executeSearchInvoice();
-                    }
-                  }}
+                  data-enter-search="true"
                   placeholder="Invoice #, Ticket # or PNR..."
                   className="h-8 text-xs font-mono pr-20 uppercase"
                 />
@@ -542,7 +551,11 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => executeSearchInvoice()}
+                    tabIndex={-1}
+                    onClick={() => {
+                      lastSearchedQueryRef.current = searchQuery.trim();
+                      executeSearchInvoice();
+                    }}
                     disabled={isSearching}
                     className="h-6 text-[10px] px-2 bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
                   >
@@ -689,12 +702,14 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             disabled={isSubmitting}
             onClick={handleSave}
             className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[110px]"
           >
             {isSubmitting ? "Saving..." : "Save Voucher"}
           </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

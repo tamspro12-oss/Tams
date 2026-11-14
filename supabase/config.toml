@@ -6,5 +6,20 @@ verify_jwt = false
 [functions.drive-operations]
 verify_jwt = true
 
+[functions.admin-reset-password]
+verify_jwt = true
+
+[functions.manage-users]
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.manage-subscription]
+verify_jwt = true
+
+[functions.manage-sub-users]
+verify_jwt = true
+
 [functions.app-version]
 verify_jwt = false

@@ -44,6 +44,7 @@ export function AddB2BAgentDialog({
   const { balances, upsertBalance } = useOpeningBalances();
 
   // Form references
+  const dialogRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const agentNameRef = useRef<HTMLInputElement>(null);
 
@@ -182,10 +183,11 @@ export function AddB2BAgentDialog({
     }
   };
 
-  // Keyboard navigation hook
+  // Keyboard navigation hook (covers both form inputs and pinned footer Save button)
   useEnterToNext({
-    containerRef: formRef,
+    containerRef: dialogRef,
     enabled: open,
+    isDirty: Boolean(agentName.trim() || businessName.trim() || phone.trim()),
     onSave: () => handleSaveInternal(false),
     onSaveAndAddNext: () => handleSaveInternal(true),
     onCancel: () => onOpenChange(false),
@@ -194,6 +196,8 @@ export function AddB2BAgentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={dialogRef}
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden rounded-xl border border-border shadow-2xl flex flex-col bg-background"
         aria-describedby="add-b2b-agent-description"
       >
@@ -217,6 +221,7 @@ export function AddB2BAgentDialog({
             type="button"
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             data-cancel-button="true"
             className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={() => onOpenChange(false)}
@@ -481,6 +486,7 @@ export function AddB2BAgentDialog({
             type="button"
             variant="outline"
             size="sm"
+            tabIndex={-1}
             data-cancel-button="true"
             onClick={() => onOpenChange(false)}
             disabled={loading}

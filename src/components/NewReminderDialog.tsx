@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { format } from "date-fns";
-import { X, Lock, Plus, Bell, Check, Trash2 } from "lucide-react";
+import { Lock, Bell } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -18,6 +17,8 @@ import { useParties, type Party } from "@/hooks/useParties";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
 import { CopyValue } from "@/components/ui/CopyValue";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { cn } from "@/lib/utils";
 
 export interface NewReminderDialogProps {
@@ -48,7 +49,8 @@ export function NewReminderDialog({
   const { parties = [] } = useParties();
 
   // Form Fields
-  const [remDate, setRemDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const formRef = useRef<HTMLDivElement>(null);
+  const [remDate, setRemDate] = useState(() => getTodayDateString());
   const [remTime, setRemTime] = useState("09:00");
   const [remType, setRemType] = useState<string>("Call Client");
   const [priority, setPriority] = useState<"low" | "normal" | "high">("normal");
@@ -224,9 +226,22 @@ export function NewReminderDialog({
     }
   };
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !isAddPartyOpen,
+    isDirty: Boolean(title.trim() || remarks.trim() || linkTo !== "none"),
+    onSave: handleSave,
+    onCancel: () => onOpenChange(false),
+    autoFocusFirst: true,
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-4xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+      <DialogContent
+        ref={formRef}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[96vw] max-w-4xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl"
+      >
         {/* Header: title, auto Reminder No badge (read-only), close (X) */}
         <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
@@ -324,6 +339,7 @@ export function NewReminderDialog({
                 onChange={(e) => setTitle(e.target.value)}
                 className="h-8 text-xs mt-0.5"
                 required
+                data-required-message="Reminder title is required"
               />
             </div>
 
@@ -421,6 +437,7 @@ export function NewReminderDialog({
                     type="button"
                     variant="outline"
                     size="sm"
+                    tabIndex={-1}
                     onClick={() => {
                       setAddPartyType("client");
                       setIsAddPartyOpen(true);
@@ -436,6 +453,7 @@ export function NewReminderDialog({
                     type="button"
                     variant="outline"
                     size="sm"
+                    tabIndex={-1}
                     onClick={() => {
                       setAddPartyType("vendor");
                       setIsAddPartyOpen(true);
@@ -552,6 +570,7 @@ export function NewReminderDialog({
             type="button"
             variant="ghost"
             size="sm"
+            tabIndex={-1}
             onClick={() => onOpenChange(false)}
             className="h-8 text-xs font-semibold"
           >
@@ -560,6 +579,7 @@ export function NewReminderDialog({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             onClick={handleSave}
             disabled={isSubmitting}
             className="h-8 text-xs font-bold px-5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs"

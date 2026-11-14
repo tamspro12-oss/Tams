@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useExpenses } from "@/hooks/useStorage";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { LockedDateField } from "@/components/ui/LockedDateField";
+import { useAccounts } from "@/hooks/useUnifiedTransactions";
+import {
+  resolveAccountIdForPayment,
+  invalidateAllFinancialQueries,
+} from "@/lib/accountingEngine";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,13 +61,17 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   const queryClient = useQueryClient();
   const { data: currentAgencyId } = useCurrentAgencyId();
   const { expenses = [] } = useExpenses();
+  const { accounts = [] } = useAccounts();
+
+  const formRef = useRef<HTMLFormElement>(null);
+  const catFormRef = useRef<HTMLDivElement>(null);
 
   // Top toggle: Normal vs Recurring
   const [expenseMode, setExpenseMode] = useState<"normal" | "recurring">("normal");
 
   // Form Fields
   const [expenseDate, setExpenseDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => getTodayDateString()
   );
   const [category, setCategory] = useState<string>("Rent");
   const [customCategories, setCustomCategories] = useState<string[]>([]);
@@ -74,7 +84,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   // Recurring-specific fields
   const [frequency, setFrequency] = useState<"Daily" | "Weekly" | "Monthly" | "Yearly">("Monthly");
   const [startDate, setStartDate] = useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => getTodayDateString()
   );
   const [endDate, setEndDate] = useState<string>("");
   const [nextDueDate, setNextDueDate] = useState<string>("");
@@ -114,6 +124,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
   useEffect(() => {
     if (open) {
+      setExpenseDate(getTodayDateString());
       fetchNextExpenseNumber();
     }
   }, [open, expenses.length]);
@@ -146,8 +157,8 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
     toast.success(`Category "${trimmed}" added`);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       toast.error("You are offline, not saved");
       return;
@@ -170,6 +181,9 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
         activeAgencyId = await getAuthenticatedAgencyId();
       }
+      if (!activeAgencyId) {
+        throw new Error("Unable to identify active agency account.");
+      }
 
       if (expenseMode === "recurring") {
         const recurringPayload: any = {
@@ -191,50 +205,33 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         if (error) throw error;
         toast.success(`Recurring expense (${frequency}) registered successfully`);
       } else {
-        const { error: rpcError } = await (supabase as any).rpc("record_expense", {
+        const resolvedAccountId = resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
+        const { data: rpcData, error: rpcError } = await (supabase as any).rpc("record_expense", {
           p_amount: numAmount,
-          p_account_id: null,
+          p_account_id: resolvedAccountId,
           p_category: category,
           p_date: expenseDate,
           p_method: paymentMode,
           p_reference_no: referenceNo || null,
-          p_agency_id: activeAgencyId || null,
           p_notes: [
             paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
             notes,
           ]
             .filter(Boolean)
             .join(" — ") || null,
+          p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
         });
 
         if (rpcError) {
-          // Direct insert fallback to expenses table with agency_id
-          const { error: directError } = await (supabase as any).from("expenses").insert({
-            agency_id: activeAgencyId,
-            expense_type: category,
-            amount: numAmount,
-            payment_mode: paymentMode,
-            bank_name: paymentMode === "bank" ? selectedBank : null,
-            expense_date: expenseDate,
-            reference_number: referenceNo || null,
-            notes: notes || null,
-            is_paid: true,
-          });
-
-          if (directError) {
-            throw new Error(`Failed to save expense: ${directError.message}`);
-          }
+          throw new Error(rpcError.message || "Failed to save expense");
+        }
+        if (rpcData && rpcData.success === false) {
+          throw new Error(rpcData.error || "Failed to save expense");
         }
         toast.success("Expense recorded successfully");
       }
 
-      // Invalidate queries so the live sheet immediately shows the newly saved expense
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["reports"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
 
       // Clear form inputs (keep Date, Mode and Type)
       setAmount("");
@@ -252,6 +249,31 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  const isDirty = useMemo(() => {
+    return Boolean(
+      (parseFloat(amount) || 0) > 0 ||
+        referenceNo.trim() ||
+        notes.trim() ||
+        endDate
+    );
+  }, [amount, referenceNo, notes, endDate]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !isAddCategoryOpen,
+    isDirty,
+    onSave: () => handleSave(),
+    onCancel: () => onOpenChange(false),
+  });
+
+  useFormKeyboardNav({
+    containerRef: catFormRef,
+    enabled: isAddCategoryOpen,
+    isDirty: Boolean(newCatInput.trim()),
+    onSave: handleAddCategory,
+    onCancel: () => setIsAddCategoryOpen(false),
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -308,10 +330,10 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         </div>
 
         {/* ONE COMPACT FORM: Fits on one screen with NO scrolling */}
-        <form onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+        <form ref={formRef} onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
           <div className="px-5 py-3 space-y-2.5">
             {/* LINE 1: Expense Date | Category * | Amount (PKR) * | Paid From | (Bank if Bank Account) | Bill / Receipt / Ref No */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-end">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
               {/* Expense Date: Standardized Locked System Date */}
               <div className="lg:col-span-2">
                 <LockedDateField
@@ -323,13 +345,14 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
               </div>
 
               {/* Category * with + Quick Add Category link */}
-              <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+              <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
                 <div className="flex items-center justify-between">
                   <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Category <span className="text-red-500">*</span>
                   </Label>
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => setIsAddCategoryOpen(true)}
                     className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-0.5 cursor-pointer"
                   >
@@ -337,7 +360,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   </button>
                 </div>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="max-h-56">
@@ -351,7 +374,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
               </div>
 
               {/* Amount (PKR) * */}
-              <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-2"}>
+              <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-2 space-y-1"}>
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Amount (PKR) <span className="text-red-500">*</span>
                 </Label>
@@ -360,18 +383,20 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0"
-                  className="h-8 text-xs font-mono font-bold text-right mt-0.5"
+                  className="h-8 text-xs font-mono font-bold text-right"
                   required
+                  data-required-positive="true"
+                  data-required-message="Expense amount must be greater than zero"
                 />
               </div>
 
               {/* Paid From: dropdown (Cash in Hand / Bank Account) */}
-              <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-2"}>
+              <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-2 space-y-1"}>
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Paid From <span className="text-red-500">*</span>
                 </Label>
                 <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                  <SelectTrigger className="h-8 text-xs mt-0.5">
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -394,7 +419,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
               )}
 
               {/* Bill / Receipt / Ref No */}
-              <div className={paymentMode === "bank" ? "lg:col-span-2" : "lg:col-span-3"}>
+              <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Bill / Receipt / Ref No
                 </Label>
@@ -402,7 +427,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   value={referenceNo}
                   onChange={(e) => setReferenceNo(e.target.value)}
                   placeholder="e.g. REC-1024"
-                  className="h-8 text-xs font-mono mt-0.5"
+                  className="h-8 text-xs font-mono"
                 />
               </div>
             </div>
@@ -586,6 +611,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
             <Button
               type="submit"
               size="sm"
+              data-save-button="true"
               disabled={isSubmitting}
               className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[110px]"
             >
@@ -596,42 +622,40 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
         {/* Quick Add Category Inline Dialog */}
         <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-          <DialogContent className="sm:max-w-md p-4 space-y-3">
-            <DialogTitle className="text-sm font-bold">Add New Expense Category</DialogTitle>
-            <div className="space-y-1">
-              <Label className="text-xs">Category Name</Label>
-              <Input
-                autoFocus
-                value={newCatInput}
-                onChange={(e) => setNewCatInput(e.target.value)}
-                placeholder="e.g. Courier & Delivery, Renovation, Marketing"
-                className="h-8 text-xs"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddCategory();
-                  }
-                }}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAddCategoryOpen(false)}
-                className="h-7 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleAddCategory}
-                className="h-7 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
-              >
-                Add Category
-              </Button>
+          <DialogContent className="sm:max-w-md p-4">
+            <div ref={catFormRef} className="space-y-3">
+              <DialogTitle className="text-sm font-bold">Add New Expense Category</DialogTitle>
+              <div className="space-y-1">
+                <Label className="text-xs">Category Name</Label>
+                <Input
+                  value={newCatInput}
+                  onChange={(e) => setNewCatInput(e.target.value)}
+                  placeholder="e.g. Courier & Delivery, Renovation, Marketing"
+                  className="h-8 text-xs"
+                  required
+                  data-required-message="Please enter a category name"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddCategoryOpen(false)}
+                  className="h-7 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  data-save-button="true"
+                  onClick={handleAddCategory}
+                  className="h-7 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
+                >
+                  Add Category
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

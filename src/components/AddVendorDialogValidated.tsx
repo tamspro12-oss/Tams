@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import { useAgency } from "@/hooks/useAgency";
 import { Plus, Maximize2, Minimize2, Save, Building2 } from "lucide-react";
 import { vendorSchema, validateData } from "@/lib/validations/schemas";
 import { toast } from "sonner";
+import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 
 interface AddVendorDialogValidatedProps {
   editVendor?: any;
@@ -23,7 +25,7 @@ const getInitialFormData = (vendor?: any) => ({
   contact_person: vendor?.contact_person || "",
   contact_number: vendor?.contact_number || "",
   email: vendor?.email || "",
-  booking_date: vendor?.booking_date || "",
+  booking_date: getTodayDateString(),
   payment_amount: vendor?.payment_amount?.toString() || "",
   amount_paid: vendor?.amount_paid?.toString() || "0",
   payment_status: vendor?.payment_status || "Pending",
@@ -33,6 +35,7 @@ const getInitialFormData = (vendor?: any) => ({
 
 export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: AddVendorDialogValidatedProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const { addVendor, updateVendor } = useVendors();
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
   const { data: agency } = useAgency();
@@ -57,6 +60,14 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
       setFormData(getInitialFormData());
     }
   }, [isOpen, editVendor]);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: isOpen,
+    onSave: () => formRef.current?.requestSubmit(),
+    onCancel: () => setIsOpen(false),
+    autoFocusFirst: true,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,7 +157,10 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}>
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={isFullScreen ? "max-w-full h-screen m-0 rounded-none overflow-y-auto" : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -159,6 +173,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
               type="button"
               variant="ghost"
               size="sm"
+              tabIndex={-1}
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="h-8 w-8 p-0"
             >
@@ -166,7 +181,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
             </Button>
           </div>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
+        <form ref={formRef} onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-4" : "space-y-4"}>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
@@ -217,15 +232,12 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
                 maxLength={100}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="booking_date">Booking Date</Label>
-              <Input
-                id="booking_date"
-                type="date"
-                value={formData.booking_date}
-                onChange={(e) => setFormData({ ...formData, booking_date: e.target.value })}
-              />
-            </div>
+            <LockedDateField
+              id="booking_date"
+              label="Entry Date"
+              value={formData.booking_date}
+              onChange={(val) => setFormData((prev) => ({ ...prev, booking_date: val }))}
+            />
             <div className="space-y-2">
               <Label htmlFor="payment_amount">Payment Amount (₨)</Label>
               <Input
@@ -275,10 +287,10 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
+            <Button type="button" variant="outline" tabIndex={-1} onClick={() => setIsOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="gap-2">
+            <Button type="submit" data-save-button="true" disabled={isSubmitting} className="gap-2">
               <Save className="w-4 h-4" />
               {isSubmitting ? (editVendor ? "Updating..." : "Adding...") : (editVendor ? "Update Vendor" : "Add Vendor")}
             </Button>

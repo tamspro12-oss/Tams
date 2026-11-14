@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 
 const PAGE_SIZE = 50;
@@ -21,15 +22,15 @@ export function usePaginatedClients(page: number = 0, filters?: {
   endDate?: string;
 }): PaginatedClientsResult {
   const queryClient = useQueryClient();
+  const { data: currentAgencyId } = useCurrentAgencyId();
   const [totalCount, setTotalCount] = useState(0);
 
   const { data: clients = [], isLoading, error } = useQuery({
-    queryKey: ["clients-paginated", page, filters],
+    queryKey: ["clients-paginated", currentAgencyId, page, filters],
+    enabled: !!currentAgencyId,
     queryFn: async () => {
-      // Always use Supabase cloud storage
-        // Cloud pagination with Supabase
-        const agencyId = await getAuthenticatedAgencyId();
-        if (!agencyId) throw new Error('Agency not found');
+      const agencyId = currentAgencyId || (await getAuthenticatedAgencyId());
+      if (!agencyId) return [];
 
         let query = supabase
           .from('clients')
@@ -60,9 +61,11 @@ export function usePaginatedClients(page: number = 0, filters?: {
     },
   });
 
-  // Real-time subscription
+  // Real-time subscription scoped by agency_id
   useRealtimeTable({
     table: 'clients',
+    filter: currentAgencyId ? `agency_id=eq.${currentAgencyId}` : undefined,
+    enabled: !!currentAgencyId,
     channelPrefix: 'paginated-clients',
     onChange: () => {
       queryClient.invalidateQueries({ queryKey: ["clients-paginated"] });
