@@ -113,6 +113,52 @@ AS $$
   SELECT public.current_user_agency_id();
 $$;
 
+-- Safe privilege detector inside SECURITY DEFINER functions (never relies on
+-- current_user, because current_user inside SECURITY DEFINER is always owner 'postgres')
+CREATE OR REPLACE FUNCTION public.is_privileged_db_context()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_guc_role TEXT := LOWER(COALESCE(NULLIF(current_setting('role', true), ''), 'none'));
+  v_raw_claims TEXT := NULLIF(current_setting('request.jwt.claims', true), '');
+  v_claims_role TEXT := '';
+  v_jwt_role TEXT := LOWER(COALESCE(NULLIF(current_setting('request.jwt.claim.role', true), ''), ''));
+  v_session_user TEXT := LOWER(COALESCE(session_user, ''));
+BEGIN
+  IF v_jwt_role = '' AND v_raw_claims IS NOT NULL THEN
+    BEGIN
+      v_claims_role := LOWER(COALESCE((v_raw_claims::jsonb ->> 'role'), ''));
+    EXCEPTION WHEN OTHERS THEN
+      v_claims_role := '';
+    END;
+    v_jwt_role := v_claims_role;
+  END IF;
+
+  IF v_guc_role IN ('anon', 'authenticated') OR v_jwt_role IN ('anon', 'authenticated') THEN
+    RETURN false;
+  END IF;
+
+  IF v_jwt_role = 'service_role' OR v_guc_role = 'service_role' THEN
+    RETURN true;
+  END IF;
+
+  IF auth.uid() IS NOT NULL THEN
+    RETURN false;
+  END IF;
+
+  IF v_session_user IN ('postgres', 'supabase_admin', 'supabase_auth_admin', 'cli_login_postgres')
+     AND v_guc_role IN ('none', 'postgres', 'supabase_admin', 'supabase_auth_admin', 'cli_login_postgres') THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
 -- Guard public.user_roles against ANY non-super_admin write even via SECURITY DEFINER bugs
 CREATE OR REPLACE FUNCTION public.protect_user_roles_mutations()
 RETURNS TRIGGER
@@ -121,8 +167,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF current_user IN ('postgres', 'supabase_admin')
-     OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+  IF public.is_privileged_db_context()
      OR public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     IF TG_OP = 'DELETE' THEN
       RETURN OLD;
@@ -148,8 +193,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF current_user IN ('postgres', 'supabase_admin')
-     OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+  IF public.is_privileged_db_context()
      OR public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RETURN NEW;
   END IF;
@@ -183,8 +227,7 @@ DECLARE
   v_new JSONB := to_jsonb(NEW);
   v_old JSONB := to_jsonb(OLD);
 BEGIN
-  IF current_user IN ('postgres', 'supabase_admin')
-     OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+  IF public.is_privileged_db_context()
      OR public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RETURN NEW;
   END IF;
@@ -258,8 +301,7 @@ BEGIN
     RAISE EXCEPTION 'Target user_id is required';
   END IF;
 
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND v_caller_id IS DISTINCT FROM p_user_id
      AND NOT public.has_role(v_caller_id, 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Not authorized to revoke sessions for this user';
@@ -311,8 +353,7 @@ DECLARE
   v_caller_id UUID := auth.uid();
   v_has_session_col BOOLEAN := false;
 BEGIN
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND v_caller_id IS DISTINCT FROM p_user_id
      AND NOT public.has_role(v_caller_id, 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Not authorized to delete sessions for this user';
@@ -354,8 +395,7 @@ AS $$
 DECLARE
   v_caller_id UUID := auth.uid();
 BEGIN
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND v_caller_id IS DISTINCT FROM p_user_id
      AND NOT public.has_role(v_caller_id, 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Not authorized to inspect sessions for this user';
@@ -392,8 +432,7 @@ BEGIN
     SET search_path = public, auth
     AS $fn$
     BEGIN
-      IF current_user NOT IN ('postgres', 'supabase_admin')
-         AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+      IF NOT public.is_privileged_db_context()
          AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
         RAISE EXCEPTION '403 Forbidden: super_admin role required';
       END IF;
@@ -418,8 +457,7 @@ DECLARE
   v_caller_id UUID := auth.uid();
   v_result JSONB;
 BEGIN
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND NOT public.has_role(v_caller_id, 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: super_admin role required';
   END IF;
@@ -472,8 +510,7 @@ DECLARE
   v_new_expiry TIMESTAMPTZ;
   v_plan_clean TEXT := LOWER(TRIM(p_plan));
 BEGIN
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND NOT public.has_role(v_caller_id, 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: super_admin role required';
   END IF;
@@ -508,8 +545,7 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 BEGIN
-  IF current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+  IF NOT public.is_privileged_db_context()
      AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: super_admin role required';
   END IF;
@@ -536,15 +572,17 @@ DECLARE
   v_caller_email TEXT;
   v_target_user RECORD;
 BEGIN
-  IF v_caller_id IS NULL AND current_user NOT IN ('postgres', 'supabase_admin') THEN
+  IF v_caller_id IS NULL AND NOT public.is_privileged_db_context() THEN
     RETURN jsonb_build_object('success', false, 'message', 'Authentication required');
   END IF;
 
-  SELECT email INTO v_caller_email FROM auth.users WHERE id = v_caller_id;
+  IF NOT public.is_privileged_db_context() THEN
+    SELECT email INTO v_caller_email FROM auth.users WHERE id = v_caller_id;
 
-  IF NOT public.has_role(v_caller_id, 'super_admin'::public.app_role)
-     AND LOWER(COALESCE(v_caller_email, '')) <> LOWER(TRIM(COALESCE(p_email, ''))) THEN
-    RAISE EXCEPTION '403 Forbidden: Cannot verify another user account';
+    IF NOT public.has_role(v_caller_id, 'super_admin'::public.app_role)
+       AND LOWER(COALESCE(v_caller_email, '')) <> LOWER(TRIM(COALESCE(p_email, ''))) THEN
+      RAISE EXCEPTION '403 Forbidden: Cannot verify another user account';
+    END IF;
   END IF;
 
   SELECT id, email, email_confirmed_at INTO v_target_user
@@ -571,6 +609,12 @@ $$;
 -- 3. PREVENT CROSS-AGENCY LEAKS IN HELPER / SEQUENCE / BALANCE RPCs
 -- ------------------------------------------------------------------------------
 
+ALTER TABLE public.agency_counters
+  ADD COLUMN IF NOT EXISTS last_value BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS current_val BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS prefix TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
 CREATE OR REPLACE FUNCTION public.next_formatted_number(
   p_agency_id UUID,
   p_counter_type TEXT
@@ -587,8 +631,7 @@ DECLARE
 BEGIN
   IF p_agency_id IS NOT NULL
      AND p_agency_id IS DISTINCT FROM v_caller_agency
-     AND current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+     AND NOT public.is_privileged_db_context()
      AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Cross-agency sequence access denied';
   END IF;
@@ -598,10 +641,11 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized: Active agency context required';
   END IF;
 
-  INSERT INTO public.agency_counters (agency_id, counter_type, current_val, updated_at)
-  VALUES (v_effective_agency, p_counter_type, 1001, now())
+  INSERT INTO public.agency_counters (agency_id, counter_type, last_value, current_val, updated_at)
+  VALUES (v_effective_agency, p_counter_type, 1001, 1001, now())
   ON CONFLICT (agency_id, counter_type) DO UPDATE
-    SET current_val = public.agency_counters.current_val + 1,
+    SET last_value = GREATEST(COALESCE(public.agency_counters.last_value, 0), COALESCE(public.agency_counters.current_val, 0)) + 1,
+        current_val = GREATEST(COALESCE(public.agency_counters.last_value, 0), COALESCE(public.agency_counters.current_val, 0)) + 1,
         updated_at = now()
   RETURNING current_val INTO v_next_val;
 
@@ -639,8 +683,7 @@ DECLARE
 BEGIN
   IF p_agency_id IS NOT NULL
      AND p_agency_id IS DISTINCT FROM v_caller_agency
-     AND current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+     AND NOT public.is_privileged_db_context()
      AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Cross-agency balance access denied';
   END IF;
@@ -684,8 +727,7 @@ AS $$
 DECLARE
   v_user_agency_id UUID;
 BEGIN
-  IF current_user IN ('postgres', 'supabase_admin')
-     OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role' THEN
+  IF public.is_privileged_db_context() THEN
     IF NEW.agency_id IS NULL THEN
       NEW.agency_id := public.current_user_agency_id();
     END IF;

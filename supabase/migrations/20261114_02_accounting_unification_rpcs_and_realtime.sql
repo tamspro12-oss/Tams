@@ -62,6 +62,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_agency_party
 CREATE INDEX IF NOT EXISTS idx_transactions_legacy
   ON public.transactions (agency_id, legacy_source, legacy_id);
 
+-- Explicit top-level RLS enables so Supabase Studio static checks detect them immediately
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+
 -- Enforce Task 3 strict 4-verb RLS + agency_id immutability trigger on accounts & transactions
 -- (Guarantees protection even if 20261114_01 ran before public.transactions existed)
 DO $$
@@ -163,14 +167,39 @@ ALTER TABLE public.central_journal_entries
   ADD CONSTRAINT central_journal_entries_account_type_check
   CHECK (account_type IN ('cash_bank', 'receivable', 'payable', 'income', 'revenue', 'expense', 'equity', 'liability'));
 
+CREATE TABLE IF NOT EXISTS public.agency_counters (
+  agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+  counter_type TEXT NOT NULL,
+  last_value BIGINT NOT NULL DEFAULT 0,
+  current_val BIGINT NOT NULL DEFAULT 0,
+  prefix TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (agency_id, counter_type)
+);
+
+ALTER TABLE public.agency_counters ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.agency_counters
+  ADD COLUMN IF NOT EXISTS last_value BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS current_val BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS prefix TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+UPDATE public.agency_counters
+SET
+  last_value = GREATEST(COALESCE(last_value, 0), COALESCE(current_val, 0)),
+  current_val = GREATEST(COALESCE(last_value, 0), COALESCE(current_val, 0))
+WHERE COALESCE(last_value, 0) IS DISTINCT FROM COALESCE(current_val, 0);
+
 ALTER TABLE public.agency_counters
   DROP CONSTRAINT IF EXISTS agency_counters_counter_type_check;
 ALTER TABLE public.agency_counters
   ADD CONSTRAINT agency_counters_counter_type_check
   CHECK (counter_type IN (
-    'invoice', 'client', 'vendor', 'voucher', 'voucher_crv', 'voucher_cpv',
-    'receipt', 'payment', 'refund', 'expense', 'quotation', 'query', 'reminder'
-  ));
+    'invoice', 'client', 'vendor', 'party_client', 'party_vendor',
+    'voucher', 'voucher_crv', 'voucher_cpv', 'receipt', 'payment',
+    'refund', 'void', 'transfer', 'expense', 'quotation', 'query', 'reminder'
+  )) NOT VALID;
 
 
 -- ------------------------------------------------------------------------------
@@ -190,6 +219,12 @@ BEGIN
     WHERE n.nspname = 'public'
       AND p.prokind = 'f'
       AND p.proname IN (
+        'safe_parse_date',
+        'account_balances',
+        'format_agency_number',
+        'next_number',
+        'next_formatted_number',
+        'preview_next_number',
         'assert_agency_scope',
         'get_or_create_default_cash_account',
         'resolve_agency_account',
@@ -218,6 +253,102 @@ BEGIN
   END LOOP;
 END $$;
 
+CREATE OR REPLACE FUNCTION public.is_privileged_db_context()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_guc_role TEXT := LOWER(COALESCE(NULLIF(current_setting('role', true), ''), 'none'));
+  v_raw_claims TEXT := NULLIF(current_setting('request.jwt.claims', true), '');
+  v_claims_role TEXT := '';
+  v_jwt_role TEXT := LOWER(COALESCE(NULLIF(current_setting('request.jwt.claim.role', true), ''), ''));
+  v_session_user TEXT := LOWER(COALESCE(session_user, ''));
+BEGIN
+  IF v_jwt_role = '' AND v_raw_claims IS NOT NULL THEN
+    BEGIN
+      v_claims_role := LOWER(COALESCE((v_raw_claims::jsonb ->> 'role'), ''));
+    EXCEPTION WHEN OTHERS THEN
+      v_claims_role := '';
+    END;
+    v_jwt_role := v_claims_role;
+  END IF;
+
+  IF v_guc_role IN ('anon', 'authenticated') OR v_jwt_role IN ('anon', 'authenticated') THEN
+    RETURN false;
+  END IF;
+
+  IF v_jwt_role = 'service_role' OR v_guc_role = 'service_role' THEN
+    RETURN true;
+  END IF;
+
+  IF auth.uid() IS NOT NULL THEN
+    RETURN false;
+  END IF;
+
+  IF v_session_user IN ('postgres', 'supabase_admin', 'supabase_auth_admin', 'cli_login_postgres')
+     AND v_guc_role IN ('none', 'postgres', 'supabase_admin', 'supabase_auth_admin', 'cli_login_postgres') THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.enforce_agency_isolation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_agency_id UUID;
+BEGIN
+  IF public.is_privileged_db_context() THEN
+    IF NEW.agency_id IS NULL THEN
+      NEW.agency_id := public.current_user_agency_id();
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  v_user_agency_id := public.current_user_agency_id();
+
+  IF public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
+    IF NEW.agency_id IS NULL THEN
+      NEW.agency_id := v_user_agency_id;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF v_user_agency_id IS NULL THEN
+    RAISE EXCEPTION '403 Forbidden: Authenticated user has no assigned agency';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.agency_id IS NULL THEN
+      NEW.agency_id := v_user_agency_id;
+    ELSIF NEW.agency_id IS DISTINCT FROM v_user_agency_id THEN
+      RAISE EXCEPTION '403 Forbidden: Cannot insert row for another agency';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.agency_id IS DISTINCT FROM v_user_agency_id THEN
+      RAISE EXCEPTION '403 Forbidden: Cannot update row belonging to another agency';
+    END IF;
+    IF NEW.agency_id IS DISTINCT FROM OLD.agency_id THEN
+      RAISE EXCEPTION '403 Forbidden: Cannot change row agency_id';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.assert_agency_scope(p_agency_id UUID DEFAULT NULL)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -231,8 +362,7 @@ DECLARE
 BEGIN
   IF p_agency_id IS NOT NULL
      AND p_agency_id IS DISTINCT FROM v_caller_agency
-     AND current_user NOT IN ('postgres', 'supabase_admin')
-     AND COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+     AND NOT public.is_privileged_db_context()
      AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
     RAISE EXCEPTION '403 Forbidden: Cross-agency access denied';
   END IF;
@@ -424,8 +554,291 @@ $$;
 
 
 -- ------------------------------------------------------------------------------
--- 3. HARDEN party_balances & DROP AMBIGUOUS OVERLOADS
+-- 3. SELF-HEAL account_balances & safe_parse_date + HARDEN party_balances
 -- ------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.safe_parse_date(p_val TEXT)
+RETURNS DATE
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public
+AS $$
+DECLARE
+  v_clean TEXT := NULLIF(TRIM(COALESCE(p_val, '')), '');
+BEGIN
+  IF v_clean IS NULL THEN
+    RETURN NULL;
+  END IF;
+  IF v_clean ~ '^\d{4}-\d{2}-\d{2}$' THEN
+    RETURN v_clean::DATE;
+  END IF;
+  IF v_clean ~ '^\d{4}-\d{2}-\d{2}[T ]' THEN
+    RETURN LEFT(v_clean, 10)::DATE;
+  END IF;
+  RETURN v_clean::DATE;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.account_balances(p_agency_id UUID DEFAULT NULL)
+RETURNS TABLE (
+  account_id UUID,
+  account_name TEXT,
+  account_type TEXT,
+  opening_balance NUMERIC,
+  total_in NUMERIC,
+  total_out NUMERIC,
+  current_balance NUMERIC,
+  active BOOLEAN
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_agency UUID := public.current_user_agency_id();
+  v_target_agency UUID;
+BEGIN
+  IF p_agency_id IS NOT NULL
+     AND p_agency_id IS DISTINCT FROM v_caller_agency
+     AND NOT public.is_privileged_db_context()
+     AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
+    RAISE EXCEPTION '403 Forbidden: Cross-agency balance access denied';
+  END IF;
+
+  v_target_agency := COALESCE(p_agency_id, v_caller_agency);
+  IF v_target_agency IS NULL THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    a.id AS account_id,
+    a.name AS account_name,
+    a.type AS account_type,
+    a.opening_balance,
+    COALESCE(SUM(t.debit) FILTER (WHERE t.reversed_of IS NULL), 0)::NUMERIC AS total_in,
+    COALESCE(SUM(t.credit) FILTER (WHERE t.reversed_of IS NULL), 0)::NUMERIC AS total_out,
+    (a.opening_balance + COALESCE(SUM(t.debit - t.credit) FILTER (WHERE t.reversed_of IS NULL), 0))::NUMERIC AS current_balance,
+    a.active
+  FROM public.accounts a
+  LEFT JOIN public.transactions t
+    ON t.account_id = a.id
+   AND t.agency_id = v_target_agency
+  WHERE a.agency_id = v_target_agency
+  GROUP BY a.id, a.name, a.type, a.opening_balance, a.active
+  ORDER BY a.type DESC, a.name ASC;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.initialize_agency_counters()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.agency_counters (agency_id, counter_type, last_value, current_val, prefix, updated_at)
+  VALUES
+    (NEW.id, 'invoice', 0, 0, 'INV-', now()),
+    (NEW.id, 'client', 0, 0, 'C-', now()),
+    (NEW.id, 'vendor', 0, 0, 'V-', now()),
+    (NEW.id, 'voucher', 0, 0, 'PV-', now()),
+    (NEW.id, 'refund', 0, 0, 'RF-', now())
+  ON CONFLICT (agency_id, counter_type) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.format_agency_number(
+  p_agency_id UUID,
+  p_counter_type TEXT,
+  p_val BIGINT
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_agency UUID := public.current_user_agency_id();
+  v_agency_code TEXT;
+  v_digits INT;
+  v_num BIGINT := COALESCE(p_val, 1);
+BEGIN
+  IF p_agency_id IS NOT NULL
+     AND p_agency_id IS DISTINCT FROM v_caller_agency
+     AND NOT public.is_privileged_db_context()
+     AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
+    RAISE EXCEPTION '403 Forbidden: Cross-agency sequence format denied';
+  END IF;
+
+  SELECT agency_code INTO v_agency_code
+  FROM public.agencies
+  WHERE id = COALESCE(p_agency_id, v_caller_agency);
+
+  IF v_agency_code IS NULL OR TRIM(v_agency_code) = '' THEN
+    v_agency_code := 'A00001';
+  END IF;
+
+  IF p_counter_type = 'invoice' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'INV-' || v_agency_code || '-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type IN ('client', 'party_client') THEN
+    v_digits := GREATEST(6, LENGTH(v_num::TEXT));
+    RETURN 'C-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type IN ('vendor', 'party_vendor') THEN
+    v_digits := GREATEST(6, LENGTH(v_num::TEXT));
+    RETURN 'V-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'voucher' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'PV-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'voucher_crv' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'CRV-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'voucher_cpv' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'CPV-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'receipt' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'RCP-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'payment' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'PAY-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'refund' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'RF-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'expense' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'EXP-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'quotation' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'QT-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'query' THEN
+    v_digits := GREATEST(6, LENGTH(v_num::TEXT));
+    RETURN 'QRY-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'reminder' THEN
+    v_digits := GREATEST(6, LENGTH(v_num::TEXT));
+    RETURN 'REM-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'void' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'VOID-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSIF p_counter_type = 'transfer' THEN
+    v_digits := GREATEST(8, LENGTH(v_num::TEXT));
+    RETURN 'TRF-' || LPAD(v_num::TEXT, v_digits, '0');
+  ELSE
+    v_digits := GREATEST(6, LENGTH(v_num::TEXT));
+    RETURN UPPER(p_counter_type) || '-' || LPAD(v_num::TEXT, v_digits, '0');
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.next_number(
+  p_agency_id UUID,
+  p_counter_type TEXT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_agency UUID := public.current_user_agency_id();
+  v_effective_agency UUID;
+  v_next_val BIGINT;
+  v_pfx TEXT;
+BEGIN
+  IF p_agency_id IS NOT NULL
+     AND p_agency_id IS DISTINCT FROM v_caller_agency
+     AND NOT public.is_privileged_db_context()
+     AND NOT public.has_role(auth.uid(), 'super_admin'::public.app_role) THEN
+    RAISE EXCEPTION '403 Forbidden: Cross-agency sequence access denied';
+  END IF;
+
+  v_effective_agency := COALESCE(p_agency_id, v_caller_agency);
+  IF v_effective_agency IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized: Active agency context required';
+  END IF;
+
+  v_pfx := CASE p_counter_type
+    WHEN 'invoice' THEN 'INV-'
+    WHEN 'client' THEN 'C-'
+    WHEN 'party_client' THEN 'C-'
+    WHEN 'vendor' THEN 'V-'
+    WHEN 'party_vendor' THEN 'V-'
+    WHEN 'voucher' THEN 'PV-'
+    WHEN 'voucher_crv' THEN 'CRV-'
+    WHEN 'voucher_cpv' THEN 'CPV-'
+    WHEN 'receipt' THEN 'RCP-'
+    WHEN 'payment' THEN 'PAY-'
+    WHEN 'refund' THEN 'RF-'
+    WHEN 'expense' THEN 'EXP-'
+    WHEN 'quotation' THEN 'QT-'
+    WHEN 'query' THEN 'QRY-'
+    WHEN 'reminder' THEN 'REM-'
+    WHEN 'void' THEN 'VOID-'
+    WHEN 'transfer' THEN 'TRF-'
+    ELSE UPPER(LEFT(COALESCE(p_counter_type, 'NUM'), 4)) || '-'
+  END;
+
+  INSERT INTO public.agency_counters (agency_id, counter_type, last_value, current_val, prefix, updated_at)
+  VALUES (v_effective_agency, p_counter_type, 1, 1, v_pfx, now())
+  ON CONFLICT (agency_id, counter_type) DO UPDATE
+    SET last_value = GREATEST(COALESCE(public.agency_counters.last_value, 0), COALESCE(public.agency_counters.current_val, 0)) + 1,
+        current_val = GREATEST(COALESCE(public.agency_counters.last_value, 0), COALESCE(public.agency_counters.current_val, 0)) + 1,
+        prefix = CASE WHEN NULLIF(public.agency_counters.prefix, '') IS NULL THEN v_pfx ELSE public.agency_counters.prefix END,
+        updated_at = now()
+  RETURNING current_val INTO v_next_val;
+
+  RETURN v_next_val;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.next_formatted_number(
+  p_agency_id UUID,
+  p_counter_type TEXT
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_effective_agency UUID := COALESCE(p_agency_id, public.current_user_agency_id());
+  v_next_val BIGINT;
+BEGIN
+  v_next_val := public.next_number(v_effective_agency, p_counter_type);
+  RETURN public.format_agency_number(v_effective_agency, p_counter_type, v_next_val);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.preview_next_number(p_counter_type TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_agency_id UUID := public.current_user_agency_id();
+  v_last BIGINT := 0;
+BEGIN
+  IF v_agency_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT GREATEST(COALESCE(last_value, 0), COALESCE(current_val, 0))
+  INTO v_last
+  FROM public.agency_counters
+  WHERE agency_id = v_agency_id AND counter_type = p_counter_type;
+
+  RETURN public.format_agency_number(v_agency_id, p_counter_type, COALESCE(v_last, 0) + 1);
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.party_balances(
   p_party_type TEXT DEFAULT NULL,
@@ -1840,7 +2253,12 @@ BEGIN
       AND COALESCE(bi.is_void, false) = false
       AND COALESCE(bi.payment_status, 'unpaid') IN ('unpaid', 'partial', 'pending')
       AND (COALESCE(client_amount, 0) - COALESCE(paid_amount, 0)) > 0
-      AND COALESCE(bi.due_date, NULLIF(bi.more_details->>'remaining_due_date', '')::DATE, NULLIF(bi.more_details->>'due_date', '')::DATE, bi.invoice_date) < v_today;
+      AND COALESCE(
+        bi.due_date,
+        public.safe_parse_date(bi.more_details->>'remaining_due_date'),
+        public.safe_parse_date(bi.more_details->>'due_date'),
+        bi.invoice_date
+      ) < v_today;
 
   ELSE
     SELECT COALESCE(SUM(GREATEST(0, COALESCE(selling_price, 0) - COALESCE(amount_paid, 0))), 0)
@@ -1949,8 +2367,18 @@ BEGIN
         COALESCE(p.name, bi.passengers->0->>'name', 'Client') AS party_name,
         p.phone AS phone,
         GREATEST(0, COALESCE(bi.client_amount, 0) - COALESCE(bi.paid_amount, 0)) AS balance_due,
-        COALESCE(bi.due_date, NULLIF(bi.more_details->>'remaining_due_date', '')::DATE, NULLIF(bi.more_details->>'due_date', '')::DATE, bi.invoice_date) AS effective_due_date,
-        (v_today - COALESCE(bi.due_date, NULLIF(bi.more_details->>'remaining_due_date', '')::DATE, NULLIF(bi.more_details->>'due_date', '')::DATE, bi.invoice_date))::INT AS days_overdue,
+        COALESCE(
+          bi.due_date,
+          public.safe_parse_date(bi.more_details->>'remaining_due_date'),
+          public.safe_parse_date(bi.more_details->>'due_date'),
+          bi.invoice_date
+        ) AS effective_due_date,
+        (v_today - COALESCE(
+          bi.due_date,
+          public.safe_parse_date(bi.more_details->>'remaining_due_date'),
+          public.safe_parse_date(bi.more_details->>'due_date'),
+          bi.invoice_date
+        ))::INT AS days_overdue,
         'booking_invoices'::TEXT AS source
       FROM public.booking_invoices bi
       LEFT JOIN public.parties p ON p.id = bi.party_id
@@ -1958,7 +2386,12 @@ BEGIN
         AND COALESCE(bi.is_void, false) = false
         AND COALESCE(bi.payment_status, 'unpaid') IN ('unpaid', 'partial', 'pending')
         AND (COALESCE(bi.client_amount, 0) - COALESCE(bi.paid_amount, 0)) > 0
-        AND COALESCE(bi.due_date, NULLIF(bi.more_details->>'remaining_due_date', '')::DATE, NULLIF(bi.more_details->>'due_date', '')::DATE, bi.invoice_date) < v_today
+        AND COALESCE(
+          bi.due_date,
+          public.safe_parse_date(bi.more_details->>'remaining_due_date'),
+          public.safe_parse_date(bi.more_details->>'due_date'),
+          bi.invoice_date
+        ) < v_today
     ) item;
   ELSE
     SELECT COALESCE(jsonb_agg(item ORDER BY days_overdue DESC, balance_due DESC), '[]'::jsonb)

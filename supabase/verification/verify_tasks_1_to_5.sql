@@ -46,6 +46,14 @@ WHERE n.nspname = 'public'
   AND p.proname IN (
     'has_role',
     'is_super_admin',
+    'is_privileged_db_context',
+    'enforce_agency_isolation',
+    'account_balances',
+    'format_agency_number',
+    'next_number',
+    'next_formatted_number',
+    'preview_next_number',
+    'get_user_active_sessions',
     'admin_revoke_user_sessions',
     'delete_all_user_sessions',
     'verify_agency_account_fallback',
@@ -210,6 +218,7 @@ BEGIN
     RAISE EXCEPTION 'ISOLATION FAIL: Agent A inserted row with Agency B agency_id!';
   EXCEPTION
     WHEN insufficient_privilege OR raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
       NULL; -- expected block!
   END;
 
@@ -218,6 +227,7 @@ BEGIN
     RAISE EXCEPTION 'ISOLATION FAIL: Agent A inserted transaction with Agency B agency_id!';
   EXCEPTION
     WHEN insufficient_privilege OR raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
       NULL; -- expected block!
   END;
 
@@ -227,7 +237,36 @@ BEGIN
     RAISE EXCEPTION 'ISOLATION FAIL: get_agency_financial_summary allowed Agency B query!';
   EXCEPTION
     WHEN raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
       NULL; -- expected block!
+  END;
+
+  -- Verify Agent A cannot self-escalate profile, insert super_admin role, or call admin RPCs
+  BEGIN
+    UPDATE public.profiles SET is_super_admin = true WHERE id = v_user_a;
+    RAISE EXCEPTION 'ISOLATION FAIL: Agent A escalated profiles.is_super_admin!';
+  EXCEPTION
+    WHEN insufficient_privilege OR raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
+      NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.user_roles (user_id, role) VALUES (v_user_a, 'super_admin'::public.app_role);
+    RAISE EXCEPTION 'ISOLATION FAIL: Agent A inserted super_admin into user_roles!';
+  EXCEPTION
+    WHEN insufficient_privilege OR raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
+      NULL;
+  END;
+
+  BEGIN
+    PERFORM public.admin_get_registered_users();
+    RAISE EXCEPTION 'ISOLATION FAIL: Agent A called admin_get_registered_users!';
+  EXCEPTION
+    WHEN insufficient_privilege OR raise_exception THEN
+      IF SQLERRM LIKE 'ISOLATION FAIL%' THEN RAISE; END IF;
+      NULL;
   END;
 
   -- Task 4 active calculation test as Agent A
