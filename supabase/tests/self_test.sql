@@ -3,23 +3,27 @@
 -- File: supabase/tests/self_test.sql
 --
 -- HOW IT WORKS:
---   - Runs inside BEGIN ... ROLLBACK so ZERO test rows ever remain in the DB.
+--   - Runs inside an atomic PL/pgSQL subtransaction (P0999 rollback) so ZERO test
+--     rows ever remain in the DB and no temp table is needed across statements.
 --   - Simulates real authenticated / anon sessions via JWT claims + SET LOCAL ROLE.
---   - Returns a single clean table: seq | test_name | PASS_or_FAIL | detail
+--   - Returns a single clean table: seq | test_name | pass_or_fail | detail
 --   - Every row MUST show 'PASS' before releasing frontend changes.
 -- ==============================================================================
 
-BEGIN;
-
-CREATE TEMP TABLE _self_test_results (
-  seq INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  test_name TEXT NOT NULL,
-  pass_or_fail TEXT NOT NULL,
-  detail TEXT
-) ON COMMIT DROP;
-
-DO $$
+CREATE OR REPLACE FUNCTION pg_temp._tams_run_self_test()
+RETURNS TABLE(
+  out_seq INT,
+  out_test_name TEXT,
+  out_pass_or_fail TEXT,
+  out_detail TEXT
+)
+LANGUAGE plpgsql
+AS $self_test$
 DECLARE
+  v_results JSONB := '[]'::jsonb;
+  v_seq INT := 0;
+  v_payload TEXT;
+  v_rec RECORD;
   -- Test actors
   v_user_a UUID := gen_random_uuid();
   v_user_b UUID := gen_random_uuid();
@@ -69,6 +73,7 @@ DECLARE
   v_write_fails TEXT := '';
   v_tmp_summary JSONB;
 BEGIN
+  BEGIN
   -- --------------------------------------------------------------------------
   -- CHECK 10 (PRE-CHECK): Pre-existing users & auto-confirm trigger state
   -- --------------------------------------------------------------------------
@@ -87,13 +92,21 @@ BEGIN
   ) INTO v_bool;
 
   IF v_cnt = 0 AND NOT v_bool THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('10a. Existing users confirmed & auto-confirm trigger removed', 'PASS',
-            'Unconfirmed existing users = 0; trg_auto_confirm_agency_signup absent');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '10a. Existing users confirmed & auto-confirm trigger removed',
+      'pass_or_fail', 'PASS',
+      'detail', 'Unconfirmed existing users = 0; trg_auto_confirm_agency_signup absent'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('10a. Existing users confirmed & auto-confirm trigger removed', 'FAIL',
-            format('Unconfirmed=%s, auto_confirm_trigger_present=%s', v_cnt, v_bool));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '10a. Existing users confirmed & auto-confirm trigger removed',
+      'pass_or_fail', 'FAIL',
+      'detail', format('Unconfirmed=%s, auto_confirm_trigger_present=%s', v_cnt, v_bool)
+    ));
   END IF;
 
   -- Test inserting a brand-new unconfirmed user leaves email_confirmed_at NULL
@@ -110,13 +123,21 @@ BEGIN
   WHERE id = v_unconfirmed_user;
 
   IF COALESCE(v_bool, false) THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('10b. New signup stays unconfirmed until email link clicked', 'PASS',
-            'email_confirmed_at stayed NULL on insert');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '10b. New signup stays unconfirmed until email link clicked',
+      'pass_or_fail', 'PASS',
+      'detail', 'email_confirmed_at stayed NULL on insert'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('10b. New signup stays unconfirmed until email link clicked', 'FAIL',
-            'email_confirmed_at was unexpectedly auto-populated');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '10b. New signup stays unconfirmed until email link clicked',
+      'pass_or_fail', 'FAIL',
+      'detail', 'email_confirmed_at was unexpectedly auto-populated'
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -199,13 +220,21 @@ BEGIN
   -- --------------------------------------------------------------------------
   SELECT subscription_plan INTO v_txt1 FROM public.agencies WHERE id = v_agency_a;
   IF v_txt1 = 'free' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('09a. Signup ignores paid plan metadata & starts free trial', 'PASS',
-            'Agency A subscription_plan = free despite yearly metadata');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '09a. Signup ignores paid plan metadata & starts free trial',
+      'pass_or_fail', 'PASS',
+      'detail', 'Agency A subscription_plan = free despite yearly metadata'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('09a. Signup ignores paid plan metadata & starts free trial', 'FAIL',
-            format('Expected free, got %s', COALESCE(v_txt1, 'NULL')));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '09a. Signup ignores paid plan metadata & starts free trial',
+      'pass_or_fail', 'FAIL',
+      'detail', format('Expected free, got %s', COALESCE(v_txt1, 'NULL'))
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -235,13 +264,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_txt1 ~ '-0001$' AND v_txt2 ~ '-0002$' AND v_txt1 <> v_txt2 AND v_txt3 ~ '-0001$' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('07. Numbering sequential, unique, each new agency starts at 1', 'PASS',
-            format('A: %s -> %s ; B: %s', v_txt1, v_txt2, v_txt3));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '07. Numbering sequential, unique, each new agency starts at 1',
+      'pass_or_fail', 'PASS',
+      'detail', format('A: %s -> %s ; B: %s', v_txt1, v_txt2, v_txt3)
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('07. Numbering sequential, unique, each new agency starts at 1', 'FAIL',
-            format('Unexpected sequence: A1=%s, A2=%s, B1=%s', v_txt1, v_txt2, v_txt3));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '07. Numbering sequential, unique, each new agency starts at 1',
+      'pass_or_fail', 'FAIL',
+      'detail', format('Unexpected sequence: A1=%s, A2=%s, B1=%s', v_txt1, v_txt2, v_txt3)
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -354,13 +391,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_cnt = 0 AND v_cnt2 = 2 AND v_net = 0 THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('05. Cash/bank entry delete atomically reverses transaction', 'PASS',
-            'Entry deleted; original + reversal tx net = 0');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '05. Cash/bank entry delete atomically reverses transaction',
+      'pass_or_fail', 'PASS',
+      'detail', 'Entry deleted; original + reversal tx net = 0'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('05. Cash/bank entry delete atomically reverses transaction', 'FAIL',
-            format('entry_remaining=%s, tx_rows=%s, net=%s', v_cnt, v_cnt2, v_net));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '05. Cash/bank entry delete atomically reverses transaction',
+      'pass_or_fail', 'FAIL',
+      'detail', format('entry_remaining=%s, tx_rows=%s, net=%s', v_cnt, v_cnt2, v_net)
+    ));
   END IF;
 
   -- Keep one active cash entry on Agency A for Cross-Agency isolation testing
@@ -433,13 +478,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_net = 8500 AND v_cnt = 0 AND v_cnt2 = 0 THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('06a. Opening balance update & delete synced with ledger', 'PASS',
-            'Update synced tx=8500; delete removed OB and netted tx=0');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '06a. Opening balance update & delete synced with ledger',
+      'pass_or_fail', 'PASS',
+      'detail', 'Update synced tx=8500; delete removed OB and netted tx=0'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('06a. Opening balance update & delete synced with ledger', 'FAIL',
-            format('after_update_tx=%s, ob_left=%s, net_after_del=%s', v_net, v_cnt, v_cnt2));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '06a. Opening balance update & delete synced with ledger',
+      'pass_or_fail', 'FAIL',
+      'detail', format('after_update_tx=%s, ob_left=%s, net_after_del=%s', v_net, v_cnt, v_cnt2)
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -496,13 +549,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_net = 40000 AND v_cnt = 0 AND v_cnt2 = 0 THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('06b. Agency bank upsert & delete synced with accounts', 'PASS',
-            'Update synced accounts.opening_balance=40000; delete removed bank & unused account');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '06b. Agency bank upsert & delete synced with accounts',
+      'pass_or_fail', 'PASS',
+      'detail', 'Update synced accounts.opening_balance=40000; delete removed bank & unused account'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('06b. Agency bank upsert & delete synced with accounts', 'FAIL',
-            format('acc_bal_after_upd=%s, bank_left=%s, acc_left=%s', v_net, v_cnt, v_cnt2));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '06b. Agency bank upsert & delete synced with accounts',
+      'pass_or_fail', 'FAIL',
+      'detail', format('acc_bal_after_upd=%s, bank_left=%s, acc_left=%s', v_net, v_cnt, v_cnt2)
+    ));
   END IF;
 
   -- Pick a live transaction id in Agency A for permission / isolation tests
@@ -604,23 +665,39 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_isolated_fails = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('01a. Cross-agency SELECT isolation across all 16 tables', 'PASS',
-            'Agency B saw 0 Agency A rows across all tested tables');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '01a. Cross-agency SELECT isolation across all 16 tables',
+      'pass_or_fail', 'PASS',
+      'detail', 'Agency B saw 0 Agency A rows across all tested tables'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('01a. Cross-agency SELECT isolation across all 16 tables', 'FAIL',
-            'Leaked tables: ' || v_isolated_fails);
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '01a. Cross-agency SELECT isolation across all 16 tables',
+      'pass_or_fail', 'FAIL',
+      'detail', 'Leaked tables: ' || v_isolated_fails
+    ));
   END IF;
 
   IF v_write_fails = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('01b. Cross-agency UPDATE/DELETE/INSERT & RPC blocked', 'PASS',
-            'All cross-agency write and RPC attempts blocked');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '01b. Cross-agency UPDATE/DELETE/INSERT & RPC blocked',
+      'pass_or_fail', 'PASS',
+      'detail', 'All cross-agency write and RPC attempts blocked'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('01b. Cross-agency UPDATE/DELETE/INSERT & RPC blocked', 'FAIL',
-            'Allowed writes: ' || v_write_fails);
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '01b. Cross-agency UPDATE/DELETE/INSERT & RPC blocked',
+      'pass_or_fail', 'FAIL',
+      'detail', 'Allowed writes: ' || v_write_fails
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -656,13 +733,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('02. Limited sub-user blocked on agencies, transfer & reverse', 'PASS',
-            'UPDATE agencies affected 0 rows; record_transfer & reverse_transaction denied');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '02. Limited sub-user blocked on agencies, transfer & reverse',
+      'pass_or_fail', 'PASS',
+      'detail', 'UPDATE agencies affected 0 rows; record_transfer & reverse_transaction denied'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('02. Limited sub-user blocked on agencies, transfer & reverse', 'FAIL',
-            'Unexpected permissions: ' || v_err);
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '02. Limited sub-user blocked on agencies, transfer & reverse',
+      'pass_or_fail', 'FAIL',
+      'detail', 'Unexpected permissions: ' || v_err
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -698,13 +783,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('03. Deactivated sub-user loses all access', 'PASS',
-            'current_user_agency_id() = NULL; 0 rows readable; financial RPC blocked');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '03. Deactivated sub-user loses all access',
+      'pass_or_fail', 'PASS',
+      'detail', 'current_user_agency_id() = NULL; 0 rows readable; financial RPC blocked'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('03. Deactivated sub-user loses all access', 'FAIL',
-            'Bypass details: ' || v_err);
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '03. Deactivated sub-user loses all access',
+      'pass_or_fail', 'FAIL',
+      'detail', 'Bypass details: ' || v_err
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -783,13 +876,21 @@ BEGIN
   UPDATE public.agencies SET license_expiry = NOW() + INTERVAL '14 days' WHERE id = v_agency_a;
 
   IF v_err = '' AND v_cnt >= 1 AND v_tmp_summary IS NOT NULL AND v_bool THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('04. Expired license blocks writes only; reads/grace/NULL allowed', 'PASS',
-            'All 5 write RPCs blocked at -10d; reads & summary worked; -2d grace & NULL ok');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '04. Expired license blocks writes only; reads/grace/NULL allowed',
+      'pass_or_fail', 'PASS',
+      'detail', 'All 5 write RPCs blocked at -10d; reads & summary worked; -2d grace & NULL ok'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('04. Expired license blocks writes only; reads/grace/NULL allowed', 'FAIL',
-            format('err=%s, readable_inv=%s, grace_and_null_ok=%s', v_err, v_cnt, v_bool));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '04. Expired license blocks writes only; reads/grace/NULL allowed',
+      'pass_or_fail', 'FAIL',
+      'detail', format('err=%s, readable_inv=%s, grace_and_null_ok=%s', v_err, v_cnt, v_bool)
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -816,13 +917,21 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF NOT v_bool AND v_err = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('08. anon cannot execute verify_agency_account_fallback', 'PASS',
-            'EXECUTE privilege revoked from anon and call denied');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '08. anon cannot execute verify_agency_account_fallback',
+      'pass_or_fail', 'PASS',
+      'detail', 'EXECUTE privilege revoked from anon and call denied'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('08. anon cannot execute verify_agency_account_fallback', 'FAIL',
-            format('has_priv=%s, call_err=%s', v_bool, v_err));
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '08. anon cannot execute verify_agency_account_fallback',
+      'pass_or_fail', 'FAIL',
+      'detail', format('has_priv=%s, call_err=%s', v_bool, v_err)
+    ));
   END IF;
 
   -- --------------------------------------------------------------------------
@@ -876,31 +985,56 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('09b. Privilege escalation & billing column tampering blocked', 'PASS',
-            'profiles.agency_id/is_super_admin, user_roles & agencies billing protected; safe name update ok');
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '09b. Privilege escalation & billing column tampering blocked',
+      'pass_or_fail', 'PASS',
+      'detail', 'profiles.agency_id/is_super_admin, user_roles & agencies billing protected; safe name update ok'
+    ));
   ELSE
-    INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
-    VALUES ('09b. Privilege escalation & billing column tampering blocked', 'FAIL',
-            'Bypass details: ' || v_err);
+    v_seq := v_seq + 1;
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'seq', v_seq,
+      'test_name', '09b. Privilege escalation & billing column tampering blocked',
+      'pass_or_fail', 'FAIL',
+      'detail', 'Bypass details: ' || v_err
+    ));
   END IF;
-END $$;
+    RAISE EXCEPTION USING ERRCODE = 'P0999', MESSAGE = v_results::text;
+  EXCEPTION
+    WHEN SQLSTATE 'P0999' THEN
+      GET STACKED DIAGNOSTICS v_payload = MESSAGE_TEXT;
+      v_results := v_payload::jsonb;
+  END;
 
-DO $$
-DECLARE
-  v_rec RECORD;
-BEGIN
   FOR v_rec IN
-    SELECT seq, test_name, pass_or_fail, detail
-    FROM _self_test_results
-    ORDER BY seq
+    SELECT
+      (elem->>'seq')::INT AS seq_no,
+      elem->>'test_name' AS tname,
+      elem->>'pass_or_fail' AS status,
+      elem->>'detail' AS msg
+    FROM jsonb_array_elements(v_results) AS elem
+    ORDER BY (elem->>'seq')::INT
   LOOP
-    RAISE NOTICE '[%] % => % (%)', v_rec.seq, v_rec.test_name, v_rec.pass_or_fail, COALESCE(v_rec.detail, '');
+    RAISE NOTICE '[%] % => % (%)', v_rec.seq_no, v_rec.tname, v_rec.status, COALESCE(v_rec.msg, '');
   END LOOP;
-END $$;
 
-SELECT seq, test_name, pass_or_fail, detail
-FROM _self_test_results
-ORDER BY seq;
+  RETURN QUERY
+  SELECT
+    (elem->>'seq')::INT,
+    elem->>'test_name',
+    elem->>'pass_or_fail',
+    elem->>'detail'
+  FROM jsonb_array_elements(v_results) AS elem
+  ORDER BY (elem->>'seq')::INT;
+END;
+$self_test$;
 
-ROLLBACK;
+SELECT
+  out_seq AS seq,
+  out_test_name AS test_name,
+  out_pass_or_fail AS pass_or_fail,
+  out_detail AS detail
+FROM pg_temp._tams_run_self_test()
+ORDER BY out_seq;
