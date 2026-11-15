@@ -2,6 +2,15 @@
 const BACKUP_KEY = 'travelpro_last_backup';
 const BACKUP_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+export interface BackupExtraData {
+  bookingInvoices?: any[];
+  paymentVouchers?: any[];
+  parties?: any[];
+  transactions?: any[];
+  accounts?: any[];
+  queries?: any[];
+}
+
 export class BackupManager {
   private static instance: BackupManager;
 
@@ -37,29 +46,53 @@ export class BackupManager {
     }
   }
 
-  async createBackup(clients: any[], bookings: any[], expenses: any[], vendors: any[]) {
+  async createBackup(
+    clients: any[],
+    bookings: any[],
+    expenses: any[],
+    vendors: any[],
+    extra?: BackupExtraData
+  ) {
     const backup = {
-      version: '3.1.0',
+      version: '3.2.0',
       timestamp: new Date().toISOString(),
       data: {
         clients: clients || [],
         bookings: bookings || [],
         expenses: expenses || [],
-        vendors: vendors || []
+        vendors: vendors || [],
+        booking_invoices: extra?.bookingInvoices || [],
+        payment_vouchers: extra?.paymentVouchers || [],
+        parties: extra?.parties || [],
+        transactions: extra?.transactions || [],
+        accounts: extra?.accounts || [],
+        queries: extra?.queries || [],
       },
       metadata: {
         clientCount: clients?.length || 0,
         bookingCount: bookings?.length || 0,
         expenseCount: expenses?.length || 0,
         vendorCount: vendors?.length || 0,
+        invoiceCount: extra?.bookingInvoices?.length || 0,
+        voucherCount: extra?.paymentVouchers?.length || 0,
+        partyCount: extra?.parties?.length || 0,
+        transactionCount: extra?.transactions?.length || 0,
+        accountCount: extra?.accounts?.length || 0,
+        queryCount: extra?.queries?.length || 0,
       }
     };
 
     return backup;
   }
 
-  async exportBackup(clients: any[], bookings: any[], expenses: any[], vendors: any[]) {
-    const backup = await this.createBackup(clients, bookings, expenses, vendors);
+  async exportBackup(
+    clients: any[],
+    bookings: any[],
+    expenses: any[],
+    vendors: any[],
+    extra?: BackupExtraData
+  ) {
+    const backup = await this.createBackup(clients, bookings, expenses, vendors, extra);
     const json = JSON.stringify(backup, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

@@ -4,6 +4,7 @@ import { FileDown, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
+import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import {
   Tooltip,
   TooltipContent,
@@ -25,9 +26,9 @@ export function BookingDownloadButton({ client, vendor }: BookingDownloadButtonP
     
     setIsGenerating(true);
     try {
-      // Load invoice template for agency branding
-      const templateData = localStorage.getItem("invoice_template");
-      if (!templateData) {
+      // Load invoice template for agency branding (DB first, localStorage fallback)
+      const templateResult = await loadAgencyTemplate<Record<string, any>>("invoice_template");
+      if (!templateResult.data) {
         toast({
           title: "Template not configured",
           description: "Please set up your invoice template in Settings to include agency branding",
@@ -37,7 +38,7 @@ export function BookingDownloadButton({ client, vendor }: BookingDownloadButtonP
         return;
       }
 
-      const template = JSON.parse(templateData);
+      const template = templateResult.data;
 
       toast({
         title: "Generating booking confirmation...",

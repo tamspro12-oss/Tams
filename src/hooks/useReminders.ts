@@ -14,19 +14,19 @@ export function useReminders() {
   const { clients = [] } = useClients();
 
   // 1. Fetch DB Reminders
-  const { data: reminders = [], isLoading: loadingReminders, refetch } = useQuery({
+  const { data: reminders = [], isLoading: loadingReminders, isError, error, refetch } = useQuery({
     queryKey: ["reminders", agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from("reminders" as any)
         .select("*")
         .eq("agency_id", agencyId)
         .order("remind_date", { ascending: true });
 
-      if (error) {
-        console.warn("Reminders query fallback:", error);
-        return [];
+      if (queryError) {
+        console.error("Failed to fetch reminders:", queryError);
+        throw queryError;
       }
       return ((data || []) as unknown) as Reminder[];
     },
@@ -246,6 +246,8 @@ export function useReminders() {
     dailyPrompts,
     pendingRemindersCount: Number(pendingRemindersCount) || 0,
     loadingReminders,
+    isError,
+    error,
     refetch,
     addReminder,
     updateReminder,

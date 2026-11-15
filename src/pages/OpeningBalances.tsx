@@ -55,7 +55,7 @@ export default function OpeningBalances() {
     preset: "this_month",
   });
 
-  const { balances, isLoading, isFetching, refetch, upsertBalance, updateBalance, deleteBalance } = useOpeningBalances();
+  const { balances, isLoading, isError, isFetching, refetch, upsertBalance, updateBalance, deleteBalance } = useOpeningBalances();
   const { clients } = useClients();
   const { vendors } = useVendors();
   const { agents = [] } = useB2BAgents() as any;
@@ -191,6 +191,19 @@ export default function OpeningBalances() {
           <Button onClick={openNew} className="h-9 gap-2"><Plus className="h-4 w-4" /> Add Balance</Button>
         </div>
       </div>
+
+      {isError && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm font-medium text-destructive">
+              Could not load opening balances. Please try again.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Tap to retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>

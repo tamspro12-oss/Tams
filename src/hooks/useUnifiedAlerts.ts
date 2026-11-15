@@ -260,16 +260,24 @@ export function useUnifiedAlerts() {
   });
 
   // 8. Query Reminders table
-  const { data: customReminders = [] } = useQuery({
+  const {
+    data: customReminders = [],
+    isError: remindersError,
+    refetch: refetchReminders,
+  } = useQuery({
     queryKey: ["alert_custom_reminders", agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("reminders" as any)
         .select("*")
         .eq("agency_id", agencyId)
         .eq("is_completed", false)
         .order("remind_date", { ascending: true });
+      if (error) {
+        console.error("Failed to fetch custom reminders:", error);
+        throw error;
+      }
       return data || [];
     },
     enabled: !!agencyId,
@@ -875,5 +883,7 @@ export function useUnifiedAlerts() {
     markAsDone,
     snoozeAlert,
     dismissAlert,
+    remindersError,
+    refetchReminders,
   };
 }

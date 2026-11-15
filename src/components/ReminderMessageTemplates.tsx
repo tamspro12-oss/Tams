@@ -9,6 +9,7 @@ import { MessageSquare, Save, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
+import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
 
 export function ReminderMessageTemplates() {
   const { toast } = useToast();
@@ -24,8 +25,8 @@ export function ReminderMessageTemplates() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    loadTemplates();
-  }, []);
+    void loadTemplates();
+  }, [agency?.id]);
 
   // Auto-populate from signup/account profile if empty
   useEffect(() => {
@@ -65,17 +66,27 @@ Best regards,
 ${name}`;
   };
 
-  const loadTemplates = () => {
+  const loadTemplates = async () => {
     try {
-      const templates = localStorage.getItem("reminder_templates");
-      if (templates) {
-        const data = JSON.parse(templates);
+      const result = await loadAgencyTemplate<Record<string, any>>(
+        "reminder_templates",
+        agency?.id
+      );
+      if (result.data) {
+        const data = result.data;
         setAgencyName(data.agencyName || "");
         setAgencyPhone(data.phone || "");
         setAgencyEmail(data.email || "");
         setFlightReminderTemplate(data.flightReminder || getDefaultFlightTemplate(data.agencyName));
         setPaymentReminderTemplate(data.paymentReminder || getDefaultPaymentTemplate(data.agencyName));
       } else {
+        if (result.errorMessage) {
+          toast({
+            title: "Error",
+            description: result.errorMessage,
+            variant: "destructive",
+          });
+        }
         setFlightReminderTemplate(getDefaultFlightTemplate());
         setPaymentReminderTemplate(getDefaultPaymentTemplate());
       }
@@ -86,7 +97,7 @@ ${name}`;
     }
   };
 
-  const handleSaveTemplates = () => {
+  const handleSaveTemplates = async () => {
     setIsSaving(true);
     try {
       const templates = {
@@ -98,13 +109,24 @@ ${name}`;
         updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem("reminder_templates", JSON.stringify(templates));
+      const saveResult = await saveAgencyTemplate("reminder_templates", templates, agency?.id);
+      if (!saveResult.ok) {
+        toast({
+          title: "Could not save templates",
+          description: saveResult.errorMessage || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
-        description: "Reminder templates saved successfully",
+        description: saveResult.savedToDb
+          ? "Reminder templates saved successfully"
+          : "Reminder templates saved locally (pending server sync)",
       });
     } catch (error) {
+      console.error("Failed to save reminder templates:", error);
       toast({
         title: "Error",
         description: "Failed to save reminder templates",

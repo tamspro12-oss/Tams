@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
+import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -259,17 +260,23 @@ export default function UmrahCalculator() {
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
   const [mobilePresetSheetOpen, setMobilePresetSheetOpen] = useState(false);
 
-  // Load custom presets from localStorage
+  // Load custom presets (DB first, localStorage fallback + auto-migration)
   useEffect(() => {
-    const saved = localStorage.getItem("umrah_custom_presets");
-    if (saved) {
-      try {
-        setCustomPresets(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load custom presets", e);
+    let active = true;
+    void loadAgencyTemplate<PresetPackage[]>("umrah_custom_presets", agency?.id).then(
+      (result) => {
+        if (!active) return;
+        if (Array.isArray(result.data)) {
+          setCustomPresets(result.data);
+        } else if (result.errorMessage) {
+          toast.error(result.errorMessage);
+        }
       }
-    }
-  }, []);
+    );
+    return () => {
+      active = false;
+    };
+  }, [agency?.id]);
 
   // Charges
   const [visaFee, setVisaFee] = useState("0");
@@ -364,7 +371,7 @@ export default function UmrahCalculator() {
     toast.info("Preset unlocked - all fields are now editable");
   };
 
-  const saveAsPreset = () => {
+  const saveAsPreset = async () => {
     if (!newPresetName.trim()) {
       toast.error("Please enter a preset name");
       return;
@@ -398,16 +405,39 @@ export default function UmrahCalculator() {
 
     const updatedPresets = [...customPresets, newPreset];
     setCustomPresets(updatedPresets);
-    localStorage.setItem("umrah_custom_presets", JSON.stringify(updatedPresets));
+    const saveResult = await saveAgencyTemplate(
+      "umrah_custom_presets",
+      updatedPresets,
+      agency?.id
+    );
+    if (!saveResult.ok) {
+      toast.error(saveResult.errorMessage || "Could not save preset to cloud. Kept local copy.");
+      return;
+    }
     setNewPresetName("");
     setShowAddPresetDialog(false);
-    toast.success(`Preset "${newPreset.name}" saved successfully!`);
+    toast.success(
+      saveResult.savedToDb
+        ? `Preset "${newPreset.name}" saved successfully!`
+        : `Preset "${newPreset.name}" saved locally (pending server sync).`
+    );
   };
 
-  const deleteCustomPreset = (presetId: string) => {
+  const deleteCustomPreset = async (presetId: string) => {
+    const previousPresets = customPresets;
     const updatedPresets = customPresets.filter(p => p.id !== presetId);
     setCustomPresets(updatedPresets);
-    localStorage.setItem("umrah_custom_presets", JSON.stringify(updatedPresets));
+    const saveResult = await saveAgencyTemplate(
+      "umrah_custom_presets",
+      updatedPresets,
+      agency?.id
+    );
+    if (!saveResult.ok) {
+      setCustomPresets(previousPresets);
+      await saveAgencyTemplate("umrah_custom_presets", previousPresets, agency?.id);
+      toast.error(saveResult.errorMessage || "Could not delete preset right now. Please try again.");
+      return;
+    }
     if (selectedPreset === presetId) {
       setSelectedPreset("none");
       setIsPresetLocked(false);

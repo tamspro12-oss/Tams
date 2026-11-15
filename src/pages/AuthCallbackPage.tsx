@@ -6,8 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, AlertCircle, Loader2, Mail, ArrowRight, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, Mail, ArrowRight } from "lucide-react";
 import { sessionManager } from "@/lib/sessionManager";
+import { getAuthCallbackUrl } from "@/lib/authRedirect";
+import {
+  AuthCallbackOutcome,
+  classifyAuthCallbackFailure,
+  getResendCooldownRemaining,
+  RESEND_COOLDOWN_SECONDS,
+} from "@/lib/authFlowState";
+import { logAndFriendlyMessage } from "@/lib/friendlyError";
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -15,69 +23,137 @@ export default function AuthCallbackPage() {
   const { toast } = useToast();
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [outcome, setOutcome] = useState<AuthCallbackOutcome>({
+    kind: "error",
+    title: "Could not finish verification",
+    message: "Please request a fresh confirmation email or try signing in.",
+  });
   const [emailInput, setEmailInput] = useState<string>(searchParams.get("email") || "");
   const [resending, setResending] = useState<boolean>(false);
-  const [activating, setActivating] = useState<boolean>(false);
+  const [lastResendAt, setLastResendAt] = useState<number | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  useEffect(() => {
+    if (!lastResendAt) {
+      setCooldownLeft(0);
+      return;
+    }
+    const tick = () => setCooldownLeft(getResendCooldownRemaining(lastResendAt));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [lastResendAt]);
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      const hashParams = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : ""
+      );
+
+      const urlError = searchParams.get("error") || hashParams.get("error");
+      const urlErrorCode = searchParams.get("error_code") || hashParams.get("error_code");
+      const urlErrorDesc =
+        searchParams.get("error_description") || hashParams.get("error_description");
+      const isRecovery =
+        searchParams.get("type") === "recovery" ||
+        hashParams.get("type") === "recovery" ||
+        searchParams.get("next") === "/reset-password";
+      const successRoute = isRecovery ? "/reset-password" : "/app/dashboard";
+
       try {
-        const error = searchParams.get("error");
-        const errorDescription = searchParams.get("error_description");
-        if (error) {
-          throw new Error(errorDescription || error || "Email verification failed or expired.");
+        if (urlError || urlErrorCode || urlErrorDesc) {
+          setOutcome(
+            classifyAuthCallbackFailure({
+              errorCode: urlErrorCode || urlError,
+              errorDescription: urlErrorDesc,
+            })
+          );
+          setStatus("error");
+          return;
         }
 
         // 1. PKCE Code Exchange (e.g. ?code=...)
         const code = searchParams.get("code");
         if (code) {
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
+          if (exchangeError) {
+            console.warn("Auth callback PKCE exchange note:", exchangeError);
+            setOutcome(
+              classifyAuthCallbackFailure({
+                errorCode: (exchangeError as { code?: string }).code,
+                errorMessage: exchangeError.message,
+              })
+            );
+            setStatus("error");
+            return;
+          }
           if (data?.user) {
             sessionManager.startSession(data.user.id);
             setStatus("success");
-            setTimeout(() => navigate("/app/dashboard", { replace: true }), 1500);
+            setTimeout(() => navigate(successRoute, { replace: true }), 1200);
             return;
           }
         }
 
-        // 2. Token Hash verification (e.g. ?token_hash=...&type=signup|email_verification)
+        // 2. Token Hash verification (e.g. ?token_hash=...&type=signup|email|recovery)
         const tokenHash = searchParams.get("token_hash");
         const type = searchParams.get("type");
         if (tokenHash) {
           const { data, error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
-            type: (type as any) || "signup",
+            type: (type as "signup" | "email" | "recovery") || "signup",
           });
-          if (verifyError) throw verifyError;
+          if (verifyError) {
+            console.warn("Auth callback verifyOtp error:", verifyError);
+            setOutcome(
+              classifyAuthCallbackFailure({
+                errorCode: (verifyError as { code?: string }).code,
+                errorMessage: verifyError.message,
+              })
+            );
+            setStatus("error");
+            return;
+          }
           if (data?.user) {
             sessionManager.startSession(data.user.id);
             setStatus("success");
-            setTimeout(() => navigate("/app/dashboard", { replace: true }), 1500);
+            setTimeout(() => navigate(successRoute, { replace: true }), 1200);
             return;
           }
         }
 
         // 3. Hash Fragment tokens (e.g. #access_token=...&refresh_token=...)
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          console.warn("Auth callback getSession error:", sessionError);
+          setOutcome(
+            classifyAuthCallbackFailure({
+              errorCode: (sessionError as { code?: string }).code,
+              errorMessage: sessionError.message,
+            })
+          );
+          setStatus("error");
+          return;
+        }
 
         if (sessionData?.session?.user) {
           sessionManager.startSession(sessionData.session.user.id);
           setStatus("success");
-          setTimeout(() => navigate("/app/dashboard", { replace: true }), 1500);
+          setTimeout(() => navigate(successRoute, { replace: true }), 1200);
           return;
         }
 
-        // If no code, token or session is detected, check if we arrived here by mistake
-        throw new Error("No valid verification code or token found in the confirmation URL.");
-      } catch (err: any) {
-        console.warn("Auth verification callback error:", err);
-        setStatus("error");
-        setErrorMessage(
-          err?.message || "This email verification link is invalid, expired, or was already used."
+        setOutcome(
+          classifyAuthCallbackFailure({
+            errorMessage: "No verification code or token found in URL.",
+          })
         );
+        setStatus("error");
+      } catch (err: unknown) {
+        console.warn("Auth verification callback error:", err);
+        const msg = err instanceof Error ? err.message : "";
+        setOutcome(classifyAuthCallbackFailure({ errorMessage: msg }));
+        setStatus("error");
       }
     };
 
@@ -95,10 +171,11 @@ export default function AuthCallbackPage() {
       });
       return;
     }
+    if (resending || cooldownLeft > 0) return;
 
     setResending(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const redirectUrl = getAuthCallbackUrl();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: emailInput.trim(),
@@ -107,62 +184,27 @@ export default function AuthCallbackPage() {
         },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
+      setLastResendAt(Date.now());
+      setCooldownLeft(RESEND_COOLDOWN_SECONDS);
       toast({
         title: "Verification Email Sent",
-        description: `We've sent a fresh verification link to ${emailInput.trim()}. Please check your inbox and spam folder.`,
+        description: `We've sent a fresh confirmation link to ${emailInput.trim()}. Please check your inbox and spam folder.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const friendly = logAndFriendlyMessage(
+        "AuthCallbackPage.handleResendVerification",
+        err,
+        "Could not resend the confirmation email right now. Please try again shortly."
+      );
       toast({
         title: "Could not resend email",
-        description: err.message || "Failed to resend verification link. Please try again later.",
+        description: friendly,
         variant: "destructive",
       });
     } finally {
       setResending(false);
-    }
-  };
-
-  // Direct Account Activation Override Fallback
-  const handleInstantActivate = async () => {
-    if (!emailInput.trim()) {
-      toast({
-        title: "Email Required",
-        description: "Please enter your registered email address to activate your account.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setActivating(true);
-    try {
-      const { data, error } = await supabase.rpc("verify_agency_account_fallback" as any, {
-        p_email: emailInput.trim(),
-      });
-
-      if (error) throw error;
-
-      if (data && data.success) {
-        toast({
-          title: "Account Activated!",
-          description: "Your agency account has been verified. You can now sign in immediately.",
-        });
-        setStatus("success");
-        setTimeout(() => navigate("/login?verified=true", { replace: true }), 1500);
-      } else {
-        throw new Error(data?.message || "Could not activate account.");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Activation Error",
-        description: err.message || "Could not activate account automatically. Please contact support.",
-        variant: "destructive",
-      });
-    } finally {
-      setActivating(false);
     }
   };
 
@@ -194,7 +236,7 @@ export default function AuthCallbackPage() {
               <div className="space-y-2">
                 <h2 className="text-xl font-bold text-foreground">Email Verified Successfully!</h2>
                 <p className="text-sm text-muted-foreground">
-                  Your TAMS Pro agency account is now fully active. Opening your dashboard...
+                  Your TAMS Pro agency account is confirmed. Opening your workspace...
                 </p>
               </div>
               <Button
@@ -207,26 +249,49 @@ export default function AuthCallbackPage() {
             </div>
           )}
 
-          {/* 3. ERROR / FALLBACK STATE */}
+          {/* 3. CROSS-DEVICE / EXPIRED / ERROR STATE */}
           {status === "error" && (
             <div className="space-y-5 animate-fade-in text-left">
               <div className="text-center space-y-3">
-                <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                  <AlertCircle className="w-8 h-8 text-amber-500" />
+                <div
+                  className={
+                    outcome.kind === "cross_device_confirmed"
+                      ? "mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20"
+                      : "mx-auto w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20"
+                  }
+                >
+                  {outcome.kind === "cross_device_confirmed" ? (
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                  ) : (
+                    <AlertCircle className="w-8 h-8 text-amber-500" />
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg sm:text-xl font-bold text-foreground">
-                    Verification Link Expired or Broken
+                    {outcome.title}
                   </h2>
-                  <p className="text-xs text-muted-foreground mt-1">{errorMessage}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {outcome.message}
+                  </p>
                 </div>
               </div>
 
-              {/* Recovery Form */}
+              {outcome.kind === "cross_device_confirmed" && (
+                <Button
+                  type="button"
+                  onClick={() => navigate("/login?verified=true", { replace: true })}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-2 cursor-pointer shadow-sm"
+                >
+                  <span>Go to Login</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              )}
+
+              {/* Recovery Resend Form */}
               <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-3">
                 <Label htmlFor="callback-email" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-blue-600" />
-                  Your Registered Email Address
+                  Need a fresh link? Enter your registered email
                 </Label>
                 <Input
                   id="callback-email"
@@ -237,30 +302,19 @@ export default function AuthCallbackPage() {
                   className="h-10 text-xs"
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={resending || !emailInput.trim()}
-                    onClick={() => handleResendVerification()}
-                    className="h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-medium"
-                  >
-                    {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                    <span>Resend Link</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={activating || !emailInput.trim()}
-                    onClick={handleInstantActivate}
-                    className="h-9 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer shadow-xs"
-                  >
-                    {activating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                    <span>Activate Now</span>
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={resending || cooldownLeft > 0 || !emailInput.trim()}
+                  onClick={() => handleResendVerification()}
+                  className="w-full h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-medium"
+                >
+                  {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                  <span>
+                    {cooldownLeft > 0 ? `Resend in ${cooldownLeft}s` : "Resend Confirmation Link"}
+                  </span>
+                </Button>
               </div>
 
               <div className="pt-2 text-center">

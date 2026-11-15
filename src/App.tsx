@@ -190,7 +190,6 @@ const App = () => {
                   <Route path="/app/bank-cash" element={<Navigate to="/app/accounts?tab=bank-cash" replace />} />
                   <Route path="/app/expenses" element={<Navigate to="/app/accounts?tab=expenses" replace />} />
                   <Route path="/app/refunds" element={<Navigate to="/app/accounts?tab=refunds" replace />} />
-                  <Route path="/app/reports" element={<Navigate to="/app/accounts?tab=reports" replace />} />
                   <Route path="/app/opening-balances" element={<Navigate to="/app/accounts?tab=opening-balances" replace />} />
 
                   <Route path="/app/reminders" element={<Navigate to="/app/notifications?tab=reminders" replace />} />

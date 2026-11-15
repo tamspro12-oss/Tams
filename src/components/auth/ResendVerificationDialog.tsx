@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, CheckCircle2, Loader2, ShieldCheck, HelpCircle } from "lucide-react";
+import { Mail, CheckCircle2, Loader2 } from "lucide-react";
+import { getAuthCallbackUrl } from "@/lib/authRedirect";
+import { getResendCooldownRemaining, RESEND_COOLDOWN_SECONDS } from "@/lib/authFlowState";
+import { logAndFriendlyMessage } from "@/lib/friendlyError";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +22,6 @@ interface ResendVerificationDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onAccountActivated?: (email: string) => void;
 }
 
 export function ResendVerificationDialog({
@@ -27,7 +29,6 @@ export function ResendVerificationDialog({
   trigger,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
-  onAccountActivated,
 }: ResendVerificationDialogProps) {
   const { toast } = useToast();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -37,8 +38,20 @@ export function ResendVerificationDialog({
 
   const [email, setEmail] = useState(initialEmail);
   const [resending, setResending] = useState(false);
-  const [activating, setActivating] = useState(false);
   const [sent, setSent] = useState(false);
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  useEffect(() => {
+    if (!lastSentAt) {
+      setCooldownLeft(0);
+      return;
+    }
+    const tick = () => setCooldownLeft(getResendCooldownRemaining(lastSentAt));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [lastSentAt]);
 
   // Sync initialEmail when opened
   const handleOpenChange = (nextOpen: boolean) => {
@@ -61,10 +74,11 @@ export function ResendVerificationDialog({
       });
       return;
     }
+    if (resending || cooldownLeft > 0) return;
 
     setResending(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const redirectUrl = getAuthCallbackUrl();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: email.trim(),
@@ -76,59 +90,25 @@ export function ResendVerificationDialog({
       if (error) throw error;
 
       setSent(true);
+      setLastSentAt(Date.now());
+      setCooldownLeft(RESEND_COOLDOWN_SECONDS);
       toast({
         title: "Verification Email Sent",
         description: `We've sent a new confirmation link to ${email.trim()}. Please check your inbox and spam folder.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const friendly = logAndFriendlyMessage(
+        "ResendVerificationDialog.handleResend",
+        err,
+        "Could not resend the confirmation email right now. Please try again shortly."
+      );
       toast({
         title: "Could not send verification email",
-        description: err.message || "Failed to resend confirmation link. Please try again or use direct activation.",
+        description: friendly,
         variant: "destructive",
       });
     } finally {
       setResending(false);
-    }
-  };
-
-  const handleInstantActivate = async () => {
-    if (!email.trim()) {
-      toast({
-        title: "Email Required",
-        description: "Please enter your registered email address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setActivating(true);
-    try {
-      const { data, error } = await supabase.rpc("verify_agency_account_fallback" as any, {
-        p_email: email.trim(),
-      });
-
-      if (error) throw error;
-
-      if (data && data.success) {
-        toast({
-          title: "Account Activated!",
-          description: "Your agency account has been verified. You can now sign in immediately.",
-        });
-        setOpen(false);
-        if (onAccountActivated) {
-          onAccountActivated(email.trim());
-        }
-      } else {
-        throw new Error(data?.message || "Could not activate account.");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Activation Error",
-        description: err.message || "Account activation could not be completed. Please contact support.",
-        variant: "destructive",
-      });
-    } finally {
-      setActivating(false);
     }
   };
 
@@ -142,7 +122,7 @@ export function ResendVerificationDialog({
             <span>Resend Verification Email</span>
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-            If your email confirmation link expired or failed to open, you can request a new link or activate your account directly.
+            Enter your registered email address and we will send you a fresh confirmation link.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +136,7 @@ export function ResendVerificationDialog({
                 <h3 className="text-sm font-bold text-foreground">Verification Email Dispatched!</h3>
                 <p className="text-muted-foreground text-xs leading-relaxed">
                   We've sent a fresh confirmation link to <strong className="text-foreground">{email}</strong>.
-                  Please click the link in your email to activate your account.
+                  Please click the link in your email to confirm your account.
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   Can't find it? Check your spam or promotions folder.
@@ -168,12 +148,14 @@ export function ResendVerificationDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={handleInstantActivate}
-                  disabled={activating}
+                  onClick={() => handleResend()}
+                  disabled={resending || cooldownLeft > 0}
                   className="w-full text-xs font-semibold gap-1.5"
                 >
-                  {activating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />}
-                  <span>Or Activate Account Instantly Without Waiting</span>
+                  {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                  <span>
+                    {cooldownLeft > 0 ? `Resend again in ${cooldownLeft}s` : "Resend Email"}
+                  </span>
                 </Button>
 
                 <Button
@@ -203,37 +185,16 @@ export function ResendVerificationDialog({
                 />
               </div>
 
-              <div className="p-3 rounded-lg bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200 space-y-1 text-[11px]">
-                <div className="font-semibold flex items-center gap-1">
-                  <HelpCircle className="w-3 h-3 text-blue-600" />
-                  <span>Activation Options:</span>
-                </div>
-                <p className="leading-relaxed">
-                  You can send a fresh confirmation link to your inbox, or use <strong>Instant Activation</strong> to verify your account right away.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <Button
-                  type="submit"
-                  disabled={resending || !email.trim()}
-                  className="h-9 text-xs font-semibold gap-1.5 cursor-pointer"
-                >
-                  {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                  <span>Send Email Link</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={activating || !email.trim()}
-                  onClick={handleInstantActivate}
-                  className="h-9 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
-                >
-                  {activating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                  <span>Instant Activate</span>
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={resending || cooldownLeft > 0 || !email.trim()}
+                className="w-full h-9 text-xs font-semibold gap-1.5 cursor-pointer"
+              >
+                {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                <span>
+                  {cooldownLeft > 0 ? `Resend in ${cooldownLeft}s` : "Send Confirmation Link"}
+                </span>
+              </Button>
             </form>
           )}
         </div>

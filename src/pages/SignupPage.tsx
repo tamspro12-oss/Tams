@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Mail, CheckCircle2, ShieldCheck, Loader2, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Mail, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
+import { getAuthCallbackUrl } from "@/lib/authRedirect";
+import { getResendCooldownRemaining, RESEND_COOLDOWN_SECONDS } from "@/lib/authFlowState";
+import { logAndFriendlyMessage } from "@/lib/friendlyError";
 
 const signupSchema = z.object({
   agencyName: z
@@ -30,7 +33,7 @@ const signupSchema = z.object({
     .max(255, "Email must be less than 255 characters"),
   password: z
     .string()
-    .min(6, "Password must be at least 6 characters")
+    .min(8, "Password must be at least 8 characters")
     .max(128, "Password must be less than 128 characters"),
 });
 
@@ -51,9 +54,24 @@ export default function SignupPage() {
   // Awaiting email verification state
   const [awaitingVerificationEmail, setAwaitingVerificationEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
-  const [activating, setActivating] = useState(false);
+  const [lastResendAt, setLastResendAt] = useState<number | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!lastResendAt) {
+      setCooldownLeft(0);
+      return;
+    }
+    const update = () => {
+      const rem = getResendCooldownRemaining(lastResendAt);
+      setCooldownLeft(rem);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [lastResendAt]);
 
   // Autofocus first field on desktop only (avoids popping keyboard on mobile)
   useEffect(() => {
@@ -98,8 +116,8 @@ export default function SignupPage() {
     const { agencyName, phone, email, password } = validation.data;
 
     try {
-      // 1. Create account with Supabase Auth (default plan = trial / free, 14-day access)
-      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      // 1. Create account with Supabase Auth (always trial / free; never trusts client/URL plan)
+      const redirectUrl = getAuthCallbackUrl();
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -122,13 +140,18 @@ export default function SignupPage() {
           setFieldErrors({ email: "This email is already registered. Please sign in." });
           toast({
             title: "Email already registered",
-            description: "This email is already registered. Please sign in.",
+            description: "This email is already registered. Please sign in instead.",
             variant: "destructive",
           });
         } else {
+          const friendly = logAndFriendlyMessage(
+            "SignupPage.handleSignup",
+            signUpError,
+            "Unable to create your account right now. Please check your details and try again."
+          );
           toast({
             title: "Unable to create account",
-            description: signUpError.message || "Please check your information and try again.",
+            description: friendly,
             variant: "destructive",
           });
         }
@@ -136,67 +159,30 @@ export default function SignupPage() {
         return;
       }
 
-      // Check for user enumeration case where Supabase returns empty identities
+      // Check for duplicate signup when email confirmation is enabled (Supabase returns empty identities)
       if (signUpData?.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
         setFieldErrors({ email: "This email is already registered. Please sign in." });
         toast({
           title: "Email already registered",
-          description: "This email is already registered. Please sign in.",
+          description: "This email is already registered. Please sign in instead.",
           variant: "destructive",
         });
         setLoading(false);
         return;
       }
 
-      // 2. Ensure active session (auto-login immediately)
-      let activeSession = signUpData?.session;
-
+      // 2. If email confirmation is required, show "Check your email" screen
+      const activeSession = signUpData?.session;
       if (!activeSession) {
-        let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        // If blocked by unconfirmed email, attempt auto-activation fallback
-        if (
-          signInError &&
-          (signInError.message?.toLowerCase().includes("email not confirmed") ||
-            signInError.message?.toLowerCase().includes("unconfirmed"))
-        ) {
-          try {
-            await (supabase as any).rpc("verify_agency_account_fallback", { p_email: email });
-            const retry = await supabase.auth.signInWithPassword({ email, password });
-            signInData = retry.data;
-            signInError = retry.error;
-          } catch (autoErr) {
-            console.warn("Auto-activation attempt on signup:", autoErr);
-          }
-        }
-
-        if (signInError) {
-          const signInMsg = signInError.message?.toLowerCase() || "";
-          if (signInMsg.includes("invalid login credentials")) {
-            setFieldErrors({ email: "This email is already registered. Please sign in." });
-            toast({
-              title: "Email already registered",
-              description: "This email is already registered. Please sign in.",
-              variant: "destructive",
-            });
-            setLoading(false);
-            return;
-          }
-
-          if (signInMsg.includes("email not confirmed")) {
-            setAwaitingVerificationEmail(email);
-            setLoading(false);
-            return;
-          }
-        }
-        activeSession = signInData?.session || null;
+        setAwaitingVerificationEmail(email);
+        setLastResendAt(Date.now());
+        setCooldownLeft(RESEND_COOLDOWN_SECONDS);
+        setLoading(false);
+        return;
       }
 
-      // 3. Save / Sync agency_name and phone in the profiles / agencies table
-      const activeUser = activeSession?.user || signUpData?.user;
+      // 3. Session already active: sync agency/profile fields and open dashboard
+      const activeUser = activeSession.user || signUpData?.user;
       if (activeUser) {
         try {
           import("@/lib/sessionManager").then(({ sessionManager }) => {
@@ -222,7 +208,6 @@ export default function SignupPage() {
               .eq("id", profile.agency_id);
           }
 
-          // Backfill email on profile & record in registered directory
           try {
             await supabase
               .from("profiles")
@@ -231,25 +216,29 @@ export default function SignupPage() {
                 full_name: agencyName,
               })
               .eq("id", activeUser.id);
-          } catch (e) {
-            // Non-blocking if email column isn't migrated yet
+          } catch {
+            // Non-blocking if email column isn't present
           }
         } catch (syncErr) {
           console.warn("Post-signup profile sync:", syncErr);
         }
       }
 
-      // 4. Success toast and instant redirect to dashboard
       toast({
         title: "Your account is confirmed. Welcome to TAMS Pro!",
         description: "Your 14-day free trial has started. Opening dashboard...",
       });
 
       navigate("/app/dashboard", { replace: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const friendly = logAndFriendlyMessage(
+        "SignupPage.handleSignup",
+        err,
+        "Something went wrong creating your account. Please try again."
+      );
       toast({
         title: "Registration error",
-        description: err?.message || "Something went wrong. Please try again.",
+        description: friendly,
         variant: "destructive",
       });
       setLoading(false);
@@ -257,10 +246,10 @@ export default function SignupPage() {
   };
 
   const handleResendFromSignup = async () => {
-    if (!awaitingVerificationEmail || resending) return;
+    if (!awaitingVerificationEmail || resending || cooldownLeft > 0) return;
     setResending(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const redirectUrl = getAuthCallbackUrl();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: awaitingVerificationEmail,
@@ -269,47 +258,25 @@ export default function SignupPage() {
         },
       });
       if (error) throw error;
+      setLastResendAt(Date.now());
+      setCooldownLeft(RESEND_COOLDOWN_SECONDS);
       toast({
-        title: "Verification email sent",
+        title: "Confirmation email sent",
         description: `We've sent a new confirmation link to ${awaitingVerificationEmail}. Please check your inbox and spam folder.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const friendly = logAndFriendlyMessage(
+        "SignupPage.handleResendFromSignup",
+        err,
+        "Could not resend the confirmation email right now. Please try again in a moment."
+      );
       toast({
         title: "Could not resend email",
-        description: err.message || "Failed to resend confirmation email.",
+        description: friendly,
         variant: "destructive",
       });
     } finally {
       setResending(false);
-    }
-  };
-
-  const handleInstantActivateFromSignup = async () => {
-    if (!awaitingVerificationEmail || activating) return;
-    setActivating(true);
-    try {
-      const { data, error } = await (supabase as any).rpc("verify_agency_account_fallback", {
-        p_email: awaitingVerificationEmail,
-      });
-      if (error) throw error;
-      if (data && data.success) {
-        toast({
-          title: "Account verified & activated!",
-          description: "Your agency account has been confirmed. Redirecting to login...",
-        });
-        navigate("/login?verified=true", { replace: true });
-      } else {
-        throw new Error(data?.message || "Could not activate account.");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Activation Error",
-        description: err.message || "Could not activate account. Please sign in via login page.",
-        variant: "destructive",
-      });
-      navigate("/login?verified=true");
-    } finally {
-      setActivating(false);
     }
   };
 
@@ -330,24 +297,15 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <h2 className="text-base sm:text-lg font-bold text-foreground">
-              Confirmation Link Dispatched!
+              Check Your Email
             </h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              We've sent a verification link to{" "}
+              We've sent a confirmation link to{" "}
               <strong className="text-foreground">{awaitingVerificationEmail}</strong>.
-              Click the link in your email to activate your account.
+              Click the link in your email to activate your account and start your 14-day free trial.
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Be sure to check your spam or promotions folder if you don't see it within 2 minutes.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-left space-y-1">
-            <span className="font-semibold text-blue-900 dark:text-blue-200 text-xs">
-              Link not opening or expired?
-            </span>
-            <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
-              You can request a fresh verification link or use <strong>Instant Activation</strong> to start your 14-day trial immediately.
+              Be sure to check your spam or promotions folder if you don't see it within a minute or two.
             </p>
           </div>
 
@@ -355,22 +313,28 @@ export default function SignupPage() {
             <Button
               type="button"
               variant="outline"
-              disabled={resending}
+              disabled={resending || cooldownLeft > 0}
               onClick={handleResendFromSignup}
               className="h-10 text-xs font-semibold gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700"
             >
               {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-              <span>Resend Email</span>
+              <span>
+                {cooldownLeft > 0 ? `Resend in ${cooldownLeft}s` : "Resend Email"}
+              </span>
             </Button>
 
             <Button
               type="button"
-              disabled={activating}
-              onClick={handleInstantActivateFromSignup}
-              className="h-10 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
+              variant="ghost"
+              onClick={() => {
+                setAwaitingVerificationEmail(null);
+                setLastResendAt(null);
+                setCooldownLeft(0);
+              }}
+              className="h-10 text-xs font-semibold gap-1.5 cursor-pointer"
             >
-              {activating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-              <span>Activate Instantly</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Wrong email? Go back</span>
             </Button>
           </div>
 
@@ -502,12 +466,12 @@ export default function SignupPage() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 enterKeyHint="done"
-                placeholder="•••••••• (min 6 chars)"
+                placeholder="•••••••• (min 8 chars)"
                 className={`h-11 sm:h-11 lg:h-11 text-[16px] sm:text-sm rounded-lg pr-11 transition-colors focus-visible:ring-emerald-500 ${
                   fieldErrors.password ? "border-destructive focus-visible:ring-destructive" : ""
                 }`}
                 required
-                minLength={6}
+                minLength={8}
                 onChange={() => {
                   if (fieldErrors.password) {
                     setFieldErrors((prev) => ({ ...prev, password: undefined }));
@@ -536,7 +500,7 @@ export default function SignupPage() {
               </p>
             ) : (
               <p className="text-[10px] text-muted-foreground/75 leading-none mt-0.5">
-                Must be at least 6 characters
+                Must be at least 8 characters
               </p>
             )}
           </div>

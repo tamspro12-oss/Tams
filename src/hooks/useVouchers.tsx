@@ -11,11 +11,11 @@ export function useVouchers() {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
 
-  const { data: vouchers = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: vouchers = [], isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["vouchers", agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from("vouchers" as any)
         .select(`
           *,
@@ -27,9 +27,9 @@ export function useVouchers() {
         .eq("agency_id", agencyId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Failed to fetch vouchers:", error);
-        return [];
+      if (queryError) {
+        console.error("Failed to fetch vouchers:", queryError);
+        throw queryError;
       }
       return (data || []) as unknown as Voucher[];
     },
@@ -148,6 +148,8 @@ export function useVouchers() {
     vouchers,
     isLoading,
     isFetching,
+    isError,
+    error,
     refetch,
     getNextVoucherNumber,
     addVoucher,

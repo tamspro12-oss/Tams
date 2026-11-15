@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { verifySuperAdminStatus } from "@/lib/adminAuth";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { getDaysRemaining, isLicenseExpiredWithGrace } from "@/lib/licenseUtils";
 
 export function useSubscription() {
   const { data: cachedAgencyId } = useCurrentAgencyId();
@@ -50,12 +51,8 @@ export function useSubscription() {
       if (error || !agency) return null;
 
       const now = new Date();
-      const expiryDate = agency.license_expiry ? new Date(agency.license_expiry) : null;
-      const isExpired = expiryDate ? expiryDate < now : false;
-
-      const daysRemaining = expiryDate
-        ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+      const isExpired = isLicenseExpiredWithGrace(agency.license_expiry, now);
+      const daysRemaining = getDaysRemaining(agency.license_expiry, now);
 
       return {
         isExpired,

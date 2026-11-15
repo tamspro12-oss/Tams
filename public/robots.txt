@@ -15,4 +15,4 @@ Allow: /
 Disallow: /app/
 Disallow: /admin/
 
-Sitemap: https://imkaantams.online/sitemap.xml
+Sitemap: https://tamspro.vercel.app/sitemap.xml

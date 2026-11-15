@@ -13,6 +13,9 @@ import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { preloadEssentialData } from "@/lib/dataPreloader";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
+import { getAuthCallbackUrl } from "@/lib/authRedirect";
+import { getResendCooldownRemaining, RESEND_COOLDOWN_SECONDS } from "@/lib/authFlowState";
+import { logAndFriendlyMessage } from "@/lib/friendlyError";
 
 const loginSchema = z.object({
   email: z
@@ -47,11 +50,22 @@ export default function LoginPage() {
 
   // Email verification recovery states
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
-  const [lastTypedPassword, setLastTypedPassword] = useState<string>("");
   const [resendingVerification, setResendingVerification] = useState(false);
-  const [activatingFromLogin, setActivatingFromLogin] = useState(false);
+  const [lastResendAt, setLastResendAt] = useState<number | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
 
   const emailInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!lastResendAt) {
+      setCooldownLeft(0);
+      return;
+    }
+    const tick = () => setCooldownLeft(getResendCooldownRemaining(lastResendAt));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [lastResendAt]);
 
   // Autofocus first field on desktop only (avoids popping keyboard on mobile)
   useEffect(() => {
@@ -92,7 +106,6 @@ export default function LoginPage() {
     }
 
     const { email, password } = result.data;
-    setLastTypedPassword(password);
     clearAllAgencyDataCache();
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -109,11 +122,11 @@ export default function LoginPage() {
       if (isUnconfirmed) {
         setUnverifiedEmail(email);
         setFieldErrors({
-          email: "Email verification is required before signing in",
+          email: "Email confirmation is required before signing in",
         });
         toast({
-          title: "Email verification required",
-          description: "Your account is not verified yet. Please check your inbox or use the buttons below to activate.",
+          title: "Email confirmation required",
+          description: "Please confirm your email address before signing in. Check your inbox or click Resend Email below.",
           variant: "destructive",
         });
       } else {
@@ -145,10 +158,10 @@ export default function LoginPage() {
   };
 
   const handleResendVerificationFromLogin = async (targetEmail: string) => {
-    if (!targetEmail || resendingVerification) return;
+    if (!targetEmail || resendingVerification || cooldownLeft > 0) return;
     setResendingVerification(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback?type=signup`;
+      const redirectUrl = getAuthCallbackUrl();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: targetEmail,
@@ -157,65 +170,25 @@ export default function LoginPage() {
         },
       });
       if (error) throw error;
+      setLastResendAt(Date.now());
+      setCooldownLeft(RESEND_COOLDOWN_SECONDS);
       toast({
-        title: "Verification email sent",
+        title: "Confirmation email sent",
         description: `A fresh confirmation link has been sent to ${targetEmail}. Please check your inbox and spam folder.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const friendly = logAndFriendlyMessage(
+        "LoginPage.handleResendVerificationFromLogin",
+        err,
+        "Could not resend the confirmation email right now. Please try again shortly."
+      );
       toast({
         title: "Could not resend email",
-        description: err.message || "Failed to resend email. Please try instant activation.",
+        description: friendly,
         variant: "destructive",
       });
     } finally {
       setResendingVerification(false);
-    }
-  };
-
-  const handleActivateAndLogin = async (targetEmail: string) => {
-    if (!targetEmail || activatingFromLogin) return;
-    setActivatingFromLogin(true);
-    try {
-      const { data, error } = await (supabase as any).rpc("verify_agency_account_fallback", {
-        p_email: targetEmail,
-      });
-      if (error) throw error;
-
-      toast({
-        title: "Account verified & activated!",
-        description: "Signing in to your dashboard...",
-      });
-
-      // If user typed password, auto sign-in
-      if (lastTypedPassword) {
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: targetEmail,
-          password: lastTypedPassword,
-        });
-
-        if (!signInError && signInData?.user) {
-          import("@/lib/sessionManager").then(({ sessionManager }) => {
-            sessionManager.startSession(signInData.user.id);
-          });
-          preloadEssentialData(queryClient);
-          navigate("/app/dashboard");
-          return;
-        }
-      }
-
-      setUnverifiedEmail(null);
-      toast({
-        title: "Account activated",
-        description: "Please click Sign In with your password.",
-      });
-    } catch (err: any) {
-      toast({
-        title: "Activation Error",
-        description: err.message || "Could not activate account. Please contact support.",
-        variant: "destructive",
-      });
-    } finally {
-      setActivatingFromLogin(false);
     }
   };
 
@@ -329,45 +302,36 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Unverified Email Warning Card & Resend/Activation Actions */}
+        {/* Unverified Email Warning Card & Resend Action */}
         {unverifiedEmail && (
           <div className="p-3.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 space-y-2.5 animate-fade-in text-xs shadow-xs">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold text-amber-900 dark:text-amber-200">
-                  Email Verification Required
+                  Please Confirm Your Email
                 </h4>
                 <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
-                  Your account is registered, but your email (<strong className="font-semibold">{unverifiedEmail}</strong>) has not completed verification.
+                  Your account is registered, but <strong className="font-semibold">{unverifiedEmail}</strong> is not confirmed yet. Click the confirmation link we emailed you (check spam too), or request a fresh link below.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={resendingVerification}
-                onClick={() => handleResendVerificationFromLogin(unverifiedEmail)}
-                className="h-8 text-xs font-semibold gap-1.5 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
-              >
-                {resendingVerification ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3 text-amber-600" />}
-                <span>Resend Email</span>
-              </Button>
-
-              <Button
-                type="button"
-                size="sm"
-                disabled={activatingFromLogin}
-                onClick={() => handleActivateAndLogin(unverifiedEmail)}
-                className="h-8 text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
-              >
-                {activatingFromLogin ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
-                <span>Activate Now</span>
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={resendingVerification || cooldownLeft > 0}
+              onClick={() => handleResendVerificationFromLogin(unverifiedEmail)}
+              className="w-full h-8 text-xs font-semibold gap-1.5 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
+            >
+              {resendingVerification ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3 text-amber-600" />}
+              <span>
+                {cooldownLeft > 0
+                  ? `Resend Confirmation Email (${cooldownLeft}s)`
+                  : "Resend Confirmation Email"}
+              </span>
+            </Button>
           </div>
         )}
 

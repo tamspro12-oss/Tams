@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import { Mail, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
@@ -29,7 +30,7 @@ export function ForgotPasswordDialog() {
 
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getAuthRedirectUrl("/reset-password"),
     });
 
     if (error) {

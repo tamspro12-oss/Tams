@@ -1,8 +1,9 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { sessionManager } from "@/lib/sessionManager";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
+import { migrateAllLocalTemplatesToDb } from "@/lib/agencyTemplates";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -80,10 +81,20 @@ function AppSidebar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const { unreadCount: unreadAlertsCount } = useUnifiedAlerts();
+  const migratedAgencyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!agency?.id || migratedAgencyRef.current === agency.id) return;
+    migratedAgencyRef.current = agency.id;
+    void migrateAllLocalTemplatesToDb(agency.id);
+  }, [agency?.id]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      if (agency?.id) {
+        await migrateAllLocalTemplatesToDb(agency.id);
+      }
       sessionManager.endSession();
       await supabase.auth.signOut({ scope: 'local' });
       clearAllAgencyDataCache();

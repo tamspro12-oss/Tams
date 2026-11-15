@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 interface Props {
   children: ReactNode;
@@ -37,8 +38,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
   private handleHardReset = async () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
+      clearAllAgencyDataCache();
       if ("caches" in window) {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map((name) => caches.delete(name)));
