@@ -220,6 +220,9 @@ BEGIN
   v_txt2 := public.next_unused_agency_number(v_agency_a, 'invoice');
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user_b, 'role', 'authenticated')::text, true);
   PERFORM set_config('request.jwt.claim.sub', v_user_b::text, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
@@ -227,6 +230,9 @@ BEGIN
 
   v_txt3 := public.next_unused_agency_number(v_agency_b, 'invoice');
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_txt1 ~ '-0001$' AND v_txt2 ~ '-0002$' AND v_txt1 <> v_txt2 AND v_txt3 ~ '-0001$' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -308,7 +314,7 @@ BEGIN
   INSERT INTO public.reminders (id, user_id, agency_id, title, type, remind_date)
   VALUES (v_reminder_id_a, v_user_a, v_agency_a, 'Secret Agency A Reminder', 'manual', CURRENT_DATE);
 
-  INSERT INTO public.quotations (id, agency_id, quotation_number, client_name, items, subtotal, total_amount)
+  INSERT INTO public.quotations (id, agency_id, quotation_number, client_name, items, subtotal, total)
   VALUES (v_quotation_id_a, v_agency_a, 'QT-TEST-0001', 'Quote Client A', '[]'::jsonb, 1000, 1000);
 
   INSERT INTO public.clients (id, agency_id, name, contact_number)
@@ -343,6 +349,9 @@ BEGIN
     AND (id = v_cash_tx_id_a OR reversed_of = v_cash_tx_id_a);
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_cnt = 0 AND v_cnt2 = 2 AND v_net = 0 THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -419,6 +428,9 @@ BEGIN
   v_ob_id_a := (v_ob_res->'opening_balance'->>'id')::uuid;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_net = 8500 AND v_cnt = 0 AND v_cnt2 = 0 THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -479,6 +491,9 @@ BEGIN
   v_bank_id_a := (v_bank_res->'bank'->>'id')::uuid;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_net = 40000 AND v_cnt = 0 AND v_cnt2 = 0 THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -584,6 +599,9 @@ BEGIN
   END;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_isolated_fails = '' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -633,6 +651,9 @@ BEGIN
   END;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -672,6 +693,9 @@ BEGIN
   END;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -728,13 +752,32 @@ BEGIN
   v_tmp_summary := public.get_agency_financial_summary(NULL, NULL, v_agency_a);
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
-  -- Check 3-day grace window (2 days expired => ok) and NULL expiry (=> ok)
+  -- Check 3-day grace window (2 days expired => ok) and NULL expiry (=> ok) as authenticated user
   UPDATE public.agencies SET license_expiry = NOW() - INTERVAL '2 days' WHERE id = v_agency_a;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user_a, 'role', 'authenticated')::text, true);
+  PERFORM set_config('request.jwt.claim.sub', v_user_a::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SET LOCAL ROLE authenticated;
   v_bool := public.agency_license_ok(v_agency_a);
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   UPDATE public.agencies SET license_expiry = NULL WHERE id = v_agency_a;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user_a, 'role', 'authenticated')::text, true);
+  PERFORM set_config('request.jwt.claim.sub', v_user_a::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SET LOCAL ROLE authenticated;
   v_bool := v_bool AND public.agency_license_ok(v_agency_a);
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   -- Restore healthy expiry
   UPDATE public.agencies SET license_expiry = NOW() + INTERVAL '14 days' WHERE id = v_agency_a;
@@ -756,6 +799,7 @@ BEGIN
   v_err := '';
 
   PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'anon', true);
   SET LOCAL ROLE anon;
 
@@ -767,6 +811,9 @@ BEGIN
   END;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF NOT v_bool AND v_err = '' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
@@ -824,6 +871,9 @@ BEGIN
   IF v_cnt <> 1 THEN v_err := v_err || 'owner_safe_update_failed,'; END IF;
 
   RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   IF v_err = '' THEN
     INSERT INTO _self_test_results (test_name, pass_or_fail, detail)
