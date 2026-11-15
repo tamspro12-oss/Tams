@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     // Verify the requesting user is an admin
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
+
     if (userError || !user) {
       throw new Error('Unauthorized');
     }
@@ -78,8 +78,8 @@ Deno.serve(async (req) => {
     const normalizedPlan = plan.toLowerCase();
     if (!PLAN_DURATIONS[normalizedPlan]) {
       return new Response(
-        JSON.stringify({ 
-          error: `Invalid plan. Must be one of: ${Object.keys(PLAN_DURATIONS).join(', ')}` 
+        JSON.stringify({
+          error: `Invalid plan. Must be one of: ${Object.keys(PLAN_DURATIONS).join(', ')}`
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     console.log(`Subscription updated for agency ${agency.name}: ${normalizedPlan} (expires: ${expiryDate.toISOString()})`);
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
         agency_name: agency.name,
         plan: normalizedPlan,

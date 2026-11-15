@@ -80,8 +80,8 @@ Deno.serve(async (req) => {
       const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
       if (authError) throw authError;
 
-      const userEmailMap = new Map(authUsers.users.map(u => [u.id, u.email]));
-      const userMetaMap = new Map(authUsers.users.map(u => [u.id, u.user_metadata]));
+      const userEmailMap = new Map(authUsers.users.map(u => [u.id, u.email] as const));
+      const userMetaMap = new Map(authUsers.users.map(u => [u.id, u.user_metadata] as const));
 
       const { data: profiles } = await supabaseAdmin
         .from('profiles')
