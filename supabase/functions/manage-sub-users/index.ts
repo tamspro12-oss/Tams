@@ -72,6 +72,21 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const callerAgencyId = callerProfile?.agency_id ?? null;
 
+    // Sub-users cannot manage other sub-users (strictly agency owners or super admins)
+    const { data: callerSubRow } = await supabaseAdmin
+      .from('sub_users')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const callerIsSubUser = Boolean(callerSubRow?.id);
+
+    if (!isSuperAdmin && callerIsSubUser && ['create', 'update', 'delete'].includes(action)) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Only the main agency account holder can manage sub-users' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     switch (action) {
       case 'list': {
         // Use service role for Super Admin to bypass RLS and see all agencies
@@ -134,7 +149,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Get agency name for sub_id_code generation (server-side lookup only).
+        // Verify agency exists server-side.
         const { data: agency, error: agencyError } = await supabaseAdmin
           .from('agencies')
           .select('name')
@@ -148,11 +163,6 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Generate unique sub_id_code
-        const prefix = agency?.name?.substring(0, 3).toUpperCase() || 'SUB';
-        const random = Math.floor(1000 + Math.random() * 9000);
-        const sub_id_code = `SUB-${prefix}-${random}`;
-
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email,
           password,
@@ -162,51 +172,65 @@ Deno.serve(async (req) => {
 
         if (createError) throw createError;
 
-        // Create profile
-        const { error: profileError } = await supabaseAdmin
-          .from('profiles')
-          .insert({
-            id: newUser.user.id,
-            agency_id,
-            full_name,
+        try {
+          // Create profile
+          const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .insert({
+              id: newUser.user.id,
+              agency_id,
+              full_name,
+            });
+
+          if (profileError) throw profileError;
+
+          // Create sub_user record (sub_id_code omitted so DB BEFORE INSERT trigger assigns atomic sequential code)
+          const { data: subUser, error: subUserError } = await supabaseAdmin
+            .from('sub_users')
+            .insert({
+              user_id: newUser.user.id,
+              main_user_id: user.id,
+              agency_id,
+              permissions,
+            })
+            .select()
+            .single();
+
+          if (subUserError) throw subUserError;
+
+          console.log(`[manage-sub-users] Created Sub ID: ${subUser?.sub_id_code}`);
+
+          return new Response(JSON.stringify({ sub_user: subUser }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
-
-        if (profileError) throw profileError;
-
-        // Create sub_user record
-        const { data: subUser, error: subUserError } = await supabaseAdmin
-          .from('sub_users')
-          .insert({
-            user_id: newUser.user.id,
-            main_user_id: user.id,
-            agency_id,
-            sub_id_code,
-            permissions,
-          })
-          .select()
-          .single();
-
-        if (subUserError) throw subUserError;
-
-        console.log(`[manage-sub-users] Created Sub ID: ${sub_id_code}`);
-
-        return new Response(JSON.stringify({ sub_user: subUser }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        } catch (creationErr) {
+          // Roll back auth user on partial failure so no orphaned auth account remains
+          await supabaseAdmin.auth.admin.deleteUser(newUser.user.id).catch(() => {});
+          throw creationErr;
+        }
       }
 
       case 'update': {
         const { permissions, is_active } = data;
 
-        // Use service role for Super Admin to bypass RLS
+        // Use service role for Super Admin to bypass RLS; scope strictly by agency for agency owners
         const updateClient = isSuperAdmin ? supabaseAdmin : supabaseClient;
-
-        const { data: subUser, error } = await updateClient
+        let updateQuery = updateClient
           .from('sub_users')
           .update({ permissions, is_active })
-          .eq('id', sub_user_id)
-          .select()
-          .single();
+          .eq('id', sub_user_id);
+
+        if (!isSuperAdmin) {
+          if (!callerAgencyId) {
+            return new Response(
+              JSON.stringify({ error: 'Forbidden: caller has no agency' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          updateQuery = updateQuery.eq('agency_id', callerAgencyId);
+        }
+
+        const { data: subUser, error } = await updateQuery.select().single();
 
         if (error) throw error;
 
@@ -218,15 +242,25 @@ Deno.serve(async (req) => {
       }
 
       case 'delete': {
-        // Use service role for Super Admin to bypass RLS
+        // Use service role for Super Admin to bypass RLS; scope strictly by agency for agency owners
         const deleteClient = isSuperAdmin ? supabaseAdmin : supabaseClient;
-        
-        // Delete sub_user record (cascade will handle auth user deletion)
-        const { data: subUser } = await deleteClient
+
+        let fetchQuery = deleteClient
           .from('sub_users')
           .select('user_id')
-          .eq('id', sub_user_id)
-          .single();
+          .eq('id', sub_user_id);
+
+        if (!isSuperAdmin) {
+          if (!callerAgencyId) {
+            return new Response(
+              JSON.stringify({ error: 'Forbidden: caller has no agency' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          fetchQuery = fetchQuery.eq('agency_id', callerAgencyId);
+        }
+
+        const { data: subUser } = await fetchQuery.single();
 
         if (!subUser) {
           throw new Error('Sub user not found');
