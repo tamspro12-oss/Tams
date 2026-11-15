@@ -9,6 +9,7 @@ import { FileText, Save, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
+import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
 
 export function BookingTemplateDesigner() {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -28,8 +29,8 @@ export function BookingTemplateDesigner() {
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    loadBookingTemplate();
-  }, []);
+    void loadBookingTemplate();
+  }, [agency?.id]);
 
   // Auto-populate from signup/account profile if empty
   useEffect(() => {
@@ -40,11 +41,14 @@ export function BookingTemplateDesigner() {
     }
   }, [agency, user]);
 
-  const loadBookingTemplate = () => {
+  const loadBookingTemplate = async () => {
     try {
-      const template = localStorage.getItem("booking_template");
-      if (template) {
-        const data = JSON.parse(template);
+      const result = await loadAgencyTemplate<Record<string, any>>(
+        "booking_template",
+        agency?.id
+      );
+      if (result.data) {
+        const data = result.data;
         setAgencyName(data.agencyName || "");
         setAgencyPhone(data.phone || "");
         setAgencyEmail(data.email || "");
@@ -53,13 +57,19 @@ export function BookingTemplateDesigner() {
         setHeaderText(data.headerText || "BOOKING CONFIRMATION");
         setFooterText(data.footerText || "Thank you for booking with us!");
         setThemeColor(data.themeColor || "#1e40af");
+      } else if (result.errorMessage) {
+        toast({
+          title: "Error",
+          description: result.errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Failed to load booking template:", error);
     }
   };
 
-  const handleSaveTemplate = () => {
+  const handleSaveTemplate = async () => {
     if (!agencyName.trim()) {
       toast({
         title: "Error",
@@ -83,13 +93,24 @@ export function BookingTemplateDesigner() {
         updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem("booking_template", JSON.stringify(template));
+      const saveResult = await saveAgencyTemplate("booking_template", template, agency?.id);
+      if (!saveResult.ok) {
+        toast({
+          title: "Could not save template",
+          description: saveResult.errorMessage || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
-        description: "Booking template saved successfully",
+        description: saveResult.savedToDb
+          ? "Booking template saved successfully"
+          : "Booking template saved locally (pending server sync)",
       });
     } catch (error) {
+      console.error("Failed to save booking template:", error);
       toast({
         title: "Error",
         description: "Failed to save booking template",

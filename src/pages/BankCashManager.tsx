@@ -7,6 +7,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Building2, Banknote, Plus, Wallet, ArrowUpRight, ArrowDownLeft, Pencil, Trash2, Settings, CreditCard, ArrowRightLeft } from "lucide-react";
@@ -43,10 +53,15 @@ export default function BankCashManager() {
   const { ledgerEntries: b2bLedger = [] } = useB2BLedger();
 
   // Manual entries
-  const { entries: manualEntries, addEntry, deleteEntry } = useCashBankEntries();
+  const {
+    entries: manualEntries,
+    isError: entriesError,
+    refetch: refetchEntries,
+    addEntry,
+    deleteEntry,
+  } = useCashBankEntries();
   const { banks: agencyBanks, allBankNames, addBank, deleteBank } = useAgencyBanks();
-  const { accounts, cashAccount, bankAccounts, createAccount } = useAccounts();
-  const { recordPayment, recordExpense } = useTransactionMutations();
+  const { accounts, cashAccount, bankAccounts } = useAccounts();
 
   // Filter function for date range using shared DateFilter (defaults to This Month)
   const isInDateRange = (dateStr: string | undefined) => {
@@ -58,6 +73,7 @@ export default function BankCashManager() {
   const [showTransactions, setShowTransactions] = useState(false);
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showAddBank, setShowAddBank] = useState(false);
+  const [entryIdToDelete, setEntryIdToDelete] = useState<string | null>(null);
   const [entryType, setEntryType] = useState<'cash_in' | 'cash_out' | 'bank_in' | 'bank_out'>('cash_in');
   const [entryDate, setEntryDate] = useState<string>(getTodayDateString());
   const [entryCategory, setEntryCategory] = useState<string>('');
@@ -411,37 +427,10 @@ export default function BankCashManager() {
 
     isEntrySubmittingRef.current = true;
     try {
-      // Record via atomic unified transaction
+      // Resolve target account and execute single-step atomic cash/bank entry + ledger sync.
       const targetAccount = isBankEntry
         ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
         : cashAccount || accounts[0];
-
-      if (targetAccount && amount > 0) {
-        try {
-          if (entryType === 'cash_in' || entryType === 'bank_in') {
-            await recordPayment.mutateAsync({
-              direction: 'in',
-              amount,
-              accountId: targetAccount.id,
-              date: entryDate,
-              referenceNo: referenceNumber || undefined,
-              notes: description || undefined,
-              category: category || undefined,
-            });
-          } else if (entryType === 'cash_out' || entryType === 'bank_out') {
-            await recordExpense.mutateAsync({
-              amount,
-              accountId: targetAccount.id,
-              category: category || 'General Expense',
-              date: entryDate,
-              referenceNo: referenceNumber || undefined,
-              notes: description || undefined,
-            });
-          }
-        } catch (err) {
-          console.warn("Unified entry recorded:", err);
-        }
-      }
 
       await addEntry.mutateAsync({
         entry_date: entryDate,
@@ -452,9 +441,12 @@ export default function BankCashManager() {
         category,
         description,
         reference_number: referenceNumber,
+        account_id: targetAccount?.id ?? null,
       });
 
       setShowAddEntry(false);
+    } catch {
+      // Error toast and console logging handled by useCashBankEntries.addEntry
     } finally {
       isEntrySubmittingRef.current = false;
     }
@@ -491,16 +483,6 @@ export default function BankCashManager() {
 
     isBankSubmittingRef.current = true;
     try {
-      try {
-        await createAccount.mutateAsync({
-          name: bankName,
-          type: 'bank',
-          opening_balance: openingBalance,
-        });
-      } catch (err) {
-        console.warn("Account sync notice:", err);
-      }
-
       await addBank.mutateAsync({
         bank_name: bankName,
         account_number: formData.get('account_number') as string || null,
@@ -511,6 +493,8 @@ export default function BankCashManager() {
       });
 
       setShowAddBank(false);
+    } catch {
+      // Error toast and console logging handled by useAgencyBanks.addBank
     } finally {
       isBankSubmittingRef.current = false;
     }
@@ -707,7 +691,20 @@ export default function BankCashManager() {
               <CardTitle className="text-base">All Cash Transactions</CardTitle>
             </CardHeader>
             <CardContent>
-              <TransactionTable transactions={getTransactions(null)} onDelete={(id) => deleteEntry.mutate(id)} />
+              {entriesError && (
+                <div className="mb-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm text-destructive font-medium">
+                    Could not load cash/bank entries.
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => void refetchEntries()}>
+                    Tap to retry
+                  </Button>
+                </div>
+              )}
+              <TransactionTable
+                transactions={getTransactions(null)}
+                onDelete={(id) => setEntryIdToDelete(id)}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -884,7 +881,7 @@ export default function BankCashManager() {
           </DialogHeader>
           <TransactionTable
             transactions={getTransactions(selectedBank)}
-            onDelete={(id) => deleteEntry.mutate(id)}
+            onDelete={(id) => setEntryIdToDelete(id)}
           />
         </DialogContent>
       </Dialog>
@@ -1113,6 +1110,43 @@ export default function BankCashManager() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Cash/Bank Entry Confirmation */}
+      <AlertDialog
+        open={Boolean(entryIdToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleteEntry.isPending) setEntryIdToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete cash/bank entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the entry and automatically reverses its matching ledger transaction.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteEntry.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteEntry.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!entryIdToDelete) return;
+                try {
+                  await deleteEntry.mutateAsync(entryIdToDelete);
+                  setEntryIdToDelete(null);
+                } catch {
+                  // Error toast handled by mutation
+                }
+              }}
+            >
+              {deleteEntry.isPending ? "Deleting..." : "Delete Entry"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

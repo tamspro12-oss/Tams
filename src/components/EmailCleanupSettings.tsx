@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Mail, Trash2, AlertCircle, Check } from 'lucide-react';
 import { useAgency } from '@/hooks/useAgency';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,6 +15,7 @@ import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 
 export function EmailCleanupSettings() {
   const { data: agency } = useAgency();
+  const { isSubUser } = useUserPermissions();
   const queryClient = useQueryClient();
   const [cleanupEnabled, setCleanupEnabled] = useState(false);
   const [cleanupFrequency, setCleanupFrequency] = useState('monthly');
@@ -68,6 +70,19 @@ export function EmailCleanupSettings() {
     autoFocusFirst: false,
     onSave: handleSave,
   });
+
+  if (isSubUser) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center space-y-2">
+          <p className="text-sm font-semibold">Agency Owner Access Required</p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Only the main agency owner can update email cleanup preferences.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card ref={cardRef}>

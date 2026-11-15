@@ -6,6 +6,7 @@ import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { sendEmail, createBookingEmailBody } from "@/lib/emailService";
 import { useAgency } from "@/hooks/useAgency";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
+import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import {
   Tooltip,
   TooltipContent,
@@ -61,9 +62,12 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
     setIsSending(true);
     console.log('[EmailBookingButton] Starting booking email process...');
     try {
-      // Load invoice template
-      const template = localStorage.getItem('invoice_template');
-      const parsedTemplate = template ? JSON.parse(template) : {};
+      // Load invoice template (DB first, localStorage fallback)
+      const templateResult = await loadAgencyTemplate<Record<string, any>>(
+        'invoice_template',
+        agency?.id
+      );
+      const parsedTemplate = templateResult.data || {};
       
       // Generate PDF and get blob (correct parameter order: client, vendor, template)
       const pdfResult = await generateBookingConfirmationPDF(client, vendor, parsedTemplate);

@@ -143,18 +143,49 @@ export function ManualLocalBackup({ quotaCard }: ManualLocalBackupProps = {}) {
     setIsBackingUp(true);
 
     try {
-      // Fetch all data from Supabase
-      const [clientsRes, bookingsRes, expensesRes, vendorsRes, queriesRes] = await Promise.all([
+      // Fetch all data from Supabase (canonical + legacy tables)
+      const [
+        clientsRes,
+        bookingsRes,
+        expensesRes,
+        vendorsRes,
+        queriesRes,
+        invoicesRes,
+        vouchersRes,
+        partiesRes,
+        transactionsRes,
+        accountsRes,
+      ] = await Promise.all([
         supabase.from("clients").select("*").eq("agency_id", agency.id),
         supabase.from("bookings").select("*").eq("agency_id", agency.id),
         supabase.from("expenses").select("*").eq("agency_id", agency.id),
         supabase.from("vendors").select("*").eq("agency_id", agency.id),
         supabase.from("queries").select("*").eq("agency_id", agency.id),
+        (supabase as any).from("booking_invoices").select("*").eq("agency_id", agency.id),
+        (supabase as any).from("payment_vouchers").select("*").eq("agency_id", agency.id),
+        (supabase as any).from("parties").select("*").eq("agency_id", agency.id),
+        (supabase as any).from("transactions").select("*").eq("agency_id", agency.id),
+        (supabase as any).from("accounts").select("*").eq("agency_id", agency.id),
       ]);
+
+      const firstError =
+        clientsRes.error ||
+        bookingsRes.error ||
+        expensesRes.error ||
+        vendorsRes.error ||
+        queriesRes.error ||
+        invoicesRes.error ||
+        vouchersRes.error ||
+        partiesRes.error ||
+        transactionsRes.error ||
+        accountsRes.error;
+      if (firstError) {
+        throw firstError;
+      }
 
       // Create backup object
       const backupData = {
-        version: "3.1.0",
+        version: "3.2.0",
         timestamp: new Date().toISOString(),
         agencyId: agency.id,
         agencyName: agency.name,
@@ -164,6 +195,11 @@ export function ManualLocalBackup({ quotaCard }: ManualLocalBackupProps = {}) {
           expenses: expensesRes.data || [],
           vendors: vendorsRes.data || [],
           queries: queriesRes.data || [],
+          booking_invoices: invoicesRes.data || [],
+          payment_vouchers: vouchersRes.data || [],
+          parties: partiesRes.data || [],
+          transactions: transactionsRes.data || [],
+          accounts: accountsRes.data || [],
         },
         metadata: {
           clientCount: clientsRes.data?.length || 0,
@@ -171,6 +207,11 @@ export function ManualLocalBackup({ quotaCard }: ManualLocalBackupProps = {}) {
           expenseCount: expensesRes.data?.length || 0,
           vendorCount: vendorsRes.data?.length || 0,
           queryCount: queriesRes.data?.length || 0,
+          invoiceCount: invoicesRes.data?.length || 0,
+          voucherCount: vouchersRes.data?.length || 0,
+          partyCount: partiesRes.data?.length || 0,
+          transactionCount: transactionsRes.data?.length || 0,
+          accountCount: accountsRes.data?.length || 0,
         },
         settings: {
           agencyName: agency.name,

@@ -23,6 +23,8 @@ import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useAgency } from "@/hooks/useAgency";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
+import { PermissionGate } from "@/components/PermissionGate";
+import { Lock } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -260,7 +262,12 @@ export default function ReportsHub() {
   const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
 
   // 1. Fetch Invoices
-  const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
+  const {
+    data: rawInvoices = [],
+    isLoading: loadingInvoices,
+    isError: errorInvoices,
+    refetch: refetchInvoices,
+  } = useQuery({
     queryKey: ["report_invoices", agency?.id],
     enabled: !!agency?.id,
     queryFn: async () => {
@@ -272,14 +279,23 @@ export default function ReportsHub() {
         .eq("agency_id", agency.id)
         .order("invoice_date", { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+      if (error) {
+        console.error("Failed to fetch report invoices:", error);
+        throw error;
+      }
+      if (data && data.length > 0) return data;
 
       // Fallback: clients table (only when booking_invoices has zero rows)
-      const { data: clientsData } = await supabase
+      const { data: clientsData, error: clientsError } = await supabase
         .from("clients")
         .select("*")
         .eq("agency_id", agency.id)
         .order("created_at", { ascending: false });
+
+      if (clientsError) {
+        console.error("Failed to fetch fallback clients for reports:", clientsError);
+        throw clientsError;
+      }
 
       return (clientsData || []).map((c: any) => ({
         id: c.id,
@@ -304,63 +320,109 @@ export default function ReportsHub() {
   });
 
   // 1b. Fetch Payment Vouchers for canonical vendor dues calculation
-  const { data: rawVouchers = [] } = useQuery({
+  const {
+    data: rawVouchers = [],
+    isError: errorVouchers,
+    refetch: refetchVouchers,
+  } = useQuery({
     queryKey: ["report_vouchers", agency?.id],
     enabled: !!agency?.id,
     queryFn: async () => {
       if (!agency?.id) return [];
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("payment_vouchers")
         .select("*")
         .eq("agency_id", agency.id);
+      if (error) {
+        console.error("Failed to fetch report vouchers:", error);
+        throw error;
+      }
       return data || [];
     },
   });
 
   // 2. Fetch Transactions / Vouchers
-  const { data: rawTransactions = [], isLoading: loadingTransactions } = useQuery({
+  const {
+    data: rawTransactions = [],
+    isLoading: loadingTransactions,
+    isError: errorTransactions,
+    refetch: refetchTransactions,
+  } = useQuery({
     queryKey: ["report_transactions", agency?.id],
     enabled: !!agency?.id,
     queryFn: async () => {
       if (!agency?.id) return [];
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("transactions")
         .select("*")
         .eq("agency_id", agency.id)
         .order("date", { ascending: false });
+      if (error) {
+        console.error("Failed to fetch report transactions:", error);
+        throw error;
+      }
       return data || [];
     },
   });
 
   // 3. Fetch Expenses
-  const { data: rawExpenses = [], isLoading: loadingExpenses } = useQuery({
+  const {
+    data: rawExpenses = [],
+    isLoading: loadingExpenses,
+    isError: errorExpenses,
+    refetch: refetchExpenses,
+  } = useQuery({
     queryKey: ["report_expenses", agency?.id],
     enabled: !!agency?.id,
     queryFn: async () => {
       if (!agency?.id) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("expenses")
         .select("*")
         .eq("agency_id", agency.id)
         .order("expense_date", { ascending: false });
+      if (error) {
+        console.error("Failed to fetch report expenses:", error);
+        throw error;
+      }
       return data || [];
     },
   });
 
   // 4. Fetch Refunds
-  const { data: rawRefunds = [], isLoading: loadingRefunds } = useQuery({
+  const {
+    data: rawRefunds = [],
+    isLoading: loadingRefunds,
+    isError: errorRefunds,
+    refetch: refetchRefunds,
+  } = useQuery({
     queryKey: ["report_refunds", agency?.id],
     enabled: !!agency?.id,
     queryFn: async () => {
       if (!agency?.id) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("refunds")
         .select("*")
         .eq("agency_id", agency.id)
         .order("refund_date", { ascending: false });
+      if (error) {
+        console.error("Failed to fetch report refunds:", error);
+        throw error;
+      }
       return data || [];
     },
   });
+
+  const hasReportLoadError =
+    errorInvoices || errorVouchers || errorTransactions || errorExpenses || errorRefunds;
+
+  const retryFailedReports = () => {
+    void refetchInvoices();
+    void refetchVouchers();
+    void refetchTransactions();
+    void refetchExpenses();
+    void refetchRefunds();
+  };
 
   // Canonical DB financial summary RPC for position reconciliation with Dashboard
   const { data: financialSummaryRpc } = useQuery({
@@ -1041,7 +1103,22 @@ export default function ReportsHub() {
   );
 
   return (
-    <div className="space-y-4">
+    <PermissionGate
+      module="reports"
+      action="read"
+      fallback={
+        <div className="p-6 max-w-lg mx-auto">
+          <div className="rounded-xl border border-border bg-card p-6 text-center space-y-2">
+            <Lock className="w-8 h-8 mx-auto text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Reports Access Restricted</h2>
+            <p className="text-sm text-muted-foreground">
+              You do not have permission to view reports. Ask your agency owner to grant report access.
+            </p>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4">
       <SeoHead
         title="Reports - TAMS Pro"
         description="Live dynamic accounting views: Account Statements, Booking Wise Profit, Daily Report, and Financial Statements with Excel-like precision."
@@ -1058,6 +1135,17 @@ export default function ReportsHub() {
           Real-time double-entry reports with zero data duplication. Every number drills down.
         </p>
       </div>
+
+      {hasReportLoadError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs sm:text-sm font-medium text-destructive">
+            Could not load some report data. Totals may be incomplete.
+          </p>
+          <Button variant="outline" size="sm" onClick={retryFailedReports}>
+            Tap to retry
+          </Button>
+        </div>
+      )}
 
       {/* 4 Canonical Sub-Tabs: Styled exactly like tabs in Sales & Expenses */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/50">
@@ -2670,6 +2758,7 @@ export default function ReportsHub() {
         initialOverdueBucket={overdueBucket}
         quotationSummary={quoteStats}
       />
-    </div>
+      </div>
+    </PermissionGate>
   );
 }

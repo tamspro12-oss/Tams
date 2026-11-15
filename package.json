@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "check": "tsc --noEmit && eslint . && vite build",
     "lint": "eslint .",
+    "test": "node --import ./tests/ts-alias-register.mjs --test tests/*.test.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "preview": "vite preview"
   },

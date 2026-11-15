@@ -47,8 +47,16 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 export default function Vouchers() {
-  const { vouchers, isLoading, addVoucher, updateVoucher, deleteVoucher, duplicateVoucher } =
-    useVouchers();
+  const {
+    vouchers,
+    isLoading,
+    isError,
+    refetch,
+    addVoucher,
+    updateVoucher,
+    deleteVoucher,
+    duplicateVoucher,
+  } = useVouchers();
   const { data: agency } = useAgency();
 
   const [filterService, setFilterService] = useState<string>("all");
@@ -222,6 +230,20 @@ export default function Vouchers() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <Card className="p-10 text-center border-destructive/40 bg-destructive/5">
+          <h3 className="text-base font-semibold text-destructive">Could not load vouchers</h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Something went wrong while loading your vouchers.
+          </p>
+          <Button
+            onClick={() => void refetch()}
+            variant="outline"
+            className="mt-4 gap-2 text-xs"
+          >
+            Tap to retry
+          </Button>
+        </Card>
       ) : filteredVouchers.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-3">

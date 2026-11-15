@@ -10,6 +10,7 @@ import { FileText, Save, Eye, Upload, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
+import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
 
 export function InvoiceTemplateDesigner() {
   const { toast } = useToast();
@@ -28,8 +29,8 @@ export function InvoiceTemplateDesigner() {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   useEffect(() => {
-    loadInvoiceTemplate();
-  }, []);
+    void loadInvoiceTemplate();
+  }, [agency?.id]);
 
   // Auto-fill from signup/account profile
   useEffect(() => {
@@ -40,11 +41,14 @@ export function InvoiceTemplateDesigner() {
     }
   }, [agency, user]);
 
-  const loadInvoiceTemplate = () => {
+  const loadInvoiceTemplate = async () => {
     try {
-      const template = localStorage.getItem("invoice_template");
-      if (template) {
-        const data = JSON.parse(template);
+      const result = await loadAgencyTemplate<Record<string, any>>(
+        "invoice_template",
+        agency?.id
+      );
+      if (result.data) {
+        const data = result.data;
         setInvoiceLogo(data.logo || "");
         setInvoiceAgencyName(data.agencyName || "");
         setInvoicePhone(data.phone || "");
@@ -53,6 +57,12 @@ export function InvoiceTemplateDesigner() {
         setInvoicePrefix(data.prefix || "INV");
         setInvoiceLayout(data.layout || "standard");
         setInvoiceThemeColor(data.themeColor || "#1e40af");
+      } else if (result.errorMessage) {
+        toast({
+          title: "Error",
+          description: result.errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Failed to load invoice template:", error);
@@ -79,7 +89,7 @@ export function InvoiceTemplateDesigner() {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveInvoiceTemplate = () => {
+  const handleSaveInvoiceTemplate = async () => {
     if (!invoiceAgencyName.trim()) {
       toast({
         title: "Error",
@@ -103,13 +113,24 @@ export function InvoiceTemplateDesigner() {
         updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem("invoice_template", JSON.stringify(template));
+      const saveResult = await saveAgencyTemplate("invoice_template", template, agency?.id);
+      if (!saveResult.ok) {
+        toast({
+          title: "Could not save template",
+          description: saveResult.errorMessage || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
-        description: "Invoice template saved successfully",
+        description: saveResult.savedToDb
+          ? "Invoice template saved successfully"
+          : "Invoice template saved locally (pending server sync)",
       });
     } catch (error) {
+      console.error("Failed to save invoice template:", error);
       toast({
         title: "Error",
         description: "Failed to save invoice template",

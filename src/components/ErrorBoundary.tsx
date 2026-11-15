@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
+import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 
 interface Props {
   children: ReactNode;
@@ -35,8 +36,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleHardReset = async () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
+      clearAllAgencyDataCache();
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("sb-")) {
+          localStorage.removeItem(k);
+        }
+      }
       if ("caches" in window) {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map((name) => caches.delete(name)));

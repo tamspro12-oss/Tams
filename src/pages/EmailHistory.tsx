@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mail, CheckCircle, XCircle, Clock, RefreshCw, Filter, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, CheckCircle, XCircle, Clock, Filter, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,12 +40,15 @@ export default function EmailHistory() {
 
   const activeDateRange = getDateRangeForPreset(dateFilter.preset, dateFilter.customFrom, dateFilter.customTo);
 
-  const { data: emailLogs, isLoading } = useQuery({
-    queryKey: ['email-logs', statusFilter, typeFilter, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo],
+  const { data: emailLogs, isLoading, isError, refetch } = useQuery({
+    queryKey: ['email-logs', agency?.id, statusFilter, typeFilter, dateFilter.preset, dateFilter.customFrom, dateFilter.customTo],
+    enabled: !!agency?.id,
     queryFn: async () => {
+      if (!agency?.id) return [];
       let query = supabase
         .from('email_logs')
         .select('*, clients(name)')
+        .eq('agency_id', agency.id)
         .order('sent_at', { ascending: false });
 
       if (statusFilter !== 'all') {
@@ -63,8 +66,11 @@ export default function EmailHistory() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error('[TAMS Error] EmailHistory query:', error);
+        throw error;
+      }
+      return data ?? [];
     },
   });
 
@@ -116,33 +122,6 @@ export default function EmailHistory() {
     },
     onError: (error: unknown) => {
       handleSupabaseError(error, 'Failed to delete email log', 'EmailHistory.deleteMutation');
-    },
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: async (logId: string) => {
-      const log = emailLogs?.find(l => l.id === logId);
-      if (!log || !agency) throw new Error('Log or agency not found');
-
-      // Update retry count
-      const { error: updateError } = await supabase
-        .from('email_logs')
-        .update({ retry_count: (log.retry_count || 0) + 1 })
-        .eq('id', logId);
-
-      if (updateError) throw updateError;
-
-      // Note: Actual retry would need stored email body/attachments
-      // This is a placeholder that marks the log as retried
-      toast.info('Retry feature requires stored email content. Please resend from the original location.');
-      return { success: true, message: 'Marked for retry' };
-    },
-    onSuccess: () => {
-      toast.success('Email marked for retry');
-      queryClient.invalidateQueries({ queryKey: ['email-logs'] });
-    },
-    onError: (error: unknown) => {
-      handleSupabaseError(error, 'Failed to mark email for retry', 'EmailHistory.retryMutation');
     },
   });
 
@@ -268,6 +247,14 @@ export default function EmailHistory() {
             <div className="text-center py-10 text-xs text-muted-foreground">
               Loading email history...
             </div>
+          ) : isError ? (
+            <div className="text-center py-10 space-y-2">
+              <AlertTriangle className="w-8 h-8 mx-auto text-destructive/80" />
+              <p className="text-sm font-semibold text-destructive">Could not load email history</p>
+              <Button size="sm" variant="outline" onClick={() => refetch()} className="h-8 text-xs">
+                Tap to retry
+              </Button>
+            </div>
           ) : emailLogs && emailLogs.length > 0 ? (
             <div className="space-y-2.5">
               {emailLogs.map((log) => (
@@ -309,18 +296,11 @@ export default function EmailHistory() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {log.status === 'failed' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs"
-                          onClick={() => retryMutation.mutate(log.id)}
-                          disabled={retryMutation.isPending}
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                          Retry
-                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          Re-send from booking
+                        </span>
                       )}
                       <Button
                         size="sm"

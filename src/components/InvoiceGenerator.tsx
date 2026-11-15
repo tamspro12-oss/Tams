@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
 import { parseSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -109,9 +110,19 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
     isGeneratingRef.current = true;
     setIsGenerating(true);
     try {
-      // Load template from localStorage
-      const templateData = localStorage.getItem("invoice_template");
-      if (!templateData) {
+      // Get user and agency info
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const agencyId = await getAuthenticatedAgencyId();
+      if (!agencyId) throw new Error("Agency not found");
+
+      // Load template (database first, localStorage fallback)
+      const templateResult = await loadAgencyTemplate<Record<string, any>>(
+        "invoice_template",
+        agencyId
+      );
+      if (!templateResult.data) {
         toast({
           title: "Error",
           description: "Please set up your invoice template in Settings first",
@@ -120,14 +131,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
         return;
       }
 
-      const template = JSON.parse(templateData);
-
-      // Get user and agency info
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-
-      const agencyId = await getAuthenticatedAgencyId();
-      if (!agencyId) throw new Error("Agency not found");
+      const template = templateResult.data;
 
       const invoiceDate = new Date().toLocaleDateString();
 

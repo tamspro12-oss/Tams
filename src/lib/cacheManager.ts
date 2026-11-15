@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { shouldPreserveStorageKeyOnClear } from "@/lib/templateStorageKeys";
 
 let globalQueryClient: QueryClient | null = null;
 
@@ -16,8 +17,8 @@ const PRESERVED_UI_PREF_KEYS = new Set([
 
 /**
  * Strict multi-tenant isolation: Clear all cached domain & agency data from React Query,
- * localStorage (preserving only UI theme/sidebar/device preferences), and sessionStorage
- * on logout and before/on login so another agency never sees leftover data.
+ * localStorage (preserving UI preferences AND any template not yet uploaded to the DB),
+ * and sessionStorage on logout and before/on login so another agency never sees leftover data.
  */
 export function clearAllAgencyDataCache() {
   if (globalQueryClient) {
@@ -34,9 +35,7 @@ export function clearAllAgencyDataCache() {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key) continue;
-      // Leave Supabase GoTrue auth storage intact when called during active sign-in,
-      // and preserve pure UI preferences; remove everything else.
-      if (PRESERVED_UI_PREF_KEYS.has(key) || key.startsWith("sb-")) {
+      if (shouldPreserveStorageKeyOnClear(key, localStorage, PRESERVED_UI_PREF_KEYS)) {
         continue;
       }
       keysToRemove.push(key);

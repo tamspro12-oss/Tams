@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { AgencyBank } from "@/hooks/useAgencyBanks";
 import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { isMissingFunctionError } from "@/lib/friendlyError";
 
 interface AddBankDialogProps {
   open: boolean;
@@ -93,15 +94,43 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
     setIsSubmitting(true);
     try {
 
-      if (bankToEdit) {
-        // Update existing agency bank
+      const trimmedAccountTitle = accountTitle.trim();
+      const trimmedAccountNumber = accountNumber.trim() || null;
+      const trimmedBranchName = branchName.trim() || null;
+
+      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+        "upsert_agency_bank_atomic",
+        {
+          p_id: bankToEdit?.id ?? null,
+          p_bank_name: trimmedBankName,
+          p_account_title: trimmedAccountTitle,
+          p_account_number: trimmedAccountNumber,
+          p_branch_name: trimmedBranchName,
+          p_opening_balance: balanceNum,
+          p_is_active: bankToEdit ? bankToEdit.is_active ?? true : true,
+        }
+      );
+
+      if (!rpcErr) {
+        const savedBank = rpcData?.bank as AgencyBank | undefined;
+        await invalidateAllFinancialQueries(queryClient, activeAgencyId);
+        toast.success(
+          bankToEdit
+            ? `Bank account ${trimmedBankName} updated successfully`
+            : `Bank account ${trimmedBankName} added successfully`
+        );
+        onSaved?.(trimmedBankName, savedBank);
+      } else if (!isMissingFunctionError(rpcErr, "upsert_agency_bank_atomic")) {
+        throw rpcErr;
+      } else if (bankToEdit) {
+        // Pre-SQL fallback: update bank & sync ledger account with rollback on failure
         const { data: updatedBank, error: updateErr } = await (supabase as any)
           .from("agency_banks")
           .update({
             bank_name: trimmedBankName,
-            account_title: accountTitle.trim(),
-            account_number: accountNumber.trim() || null,
-            branch_name: branchName.trim() || null,
+            account_title: trimmedAccountTitle,
+            account_number: trimmedAccountNumber,
+            branch_name: trimmedBranchName,
             opening_balance: balanceNum,
             updated_at: new Date().toISOString(),
           })
@@ -114,8 +143,8 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
         const oldFullAccountName = bankToEdit.account_number
           ? `${bankToEdit.bank_name} (${bankToEdit.account_number})`
           : bankToEdit.bank_name;
-        const newFullAccountName = accountNumber.trim()
-          ? `${trimmedBankName} (${accountNumber.trim()})`
+        const newFullAccountName = trimmedAccountNumber
+          ? `${trimmedBankName} (${trimmedAccountNumber})`
           : trimmedBankName;
 
         const { error: accSyncErr } = await (supabase as any)
@@ -127,22 +156,35 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
           .eq("agency_id", activeAgencyId)
           .eq("name", oldFullAccountName);
 
-        if (accSyncErr) throw accSyncErr;
+        if (accSyncErr) {
+          await (supabase as any)
+            .from("agency_banks")
+            .update({
+              bank_name: bankToEdit.bank_name,
+              account_title: bankToEdit.account_title,
+              account_number: bankToEdit.account_number ?? null,
+              branch_name: bankToEdit.branch_name ?? null,
+              opening_balance: bankToEdit.opening_balance ?? 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", bankToEdit.id);
+          throw accSyncErr;
+        }
 
         await invalidateAllFinancialQueries(queryClient, activeAgencyId);
 
         toast.success(`Bank account ${trimmedBankName} updated successfully`);
         onSaved?.(trimmedBankName, updatedBank);
       } else {
-        // Insert new agency bank
+        // Pre-SQL fallback: insert new bank & matching ledger account
         const { data: newBank, error: bankErr } = await (supabase as any)
           .from("agency_banks")
           .insert({
             agency_id: activeAgencyId,
             bank_name: trimmedBankName,
-            account_title: accountTitle.trim(),
-            account_number: accountNumber.trim() || null,
-            branch_name: branchName.trim() || null,
+            account_title: trimmedAccountTitle,
+            account_number: trimmedAccountNumber,
+            branch_name: trimmedBranchName,
             opening_balance: balanceNum,
             is_active: true,
           })
@@ -151,8 +193,8 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
 
         if (bankErr) throw bankErr;
 
-        const fullAccountName = accountNumber.trim()
-          ? `${trimmedBankName} (${accountNumber.trim()})`
+        const fullAccountName = trimmedAccountNumber
+          ? `${trimmedBankName} (${trimmedAccountNumber})`
           : trimmedBankName;
 
         const { error: accErr } = await (supabase as any).from("accounts").insert({

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, Key, ShieldCheck, CheckCircle2, AlertCircle, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgency } from "@/hooks/useAgency";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ const APP_PASSWORD_PATTERN = /^[a-zA-Z0-9]{16}$/;
 
 export function EmailConfiguration() {
   const { data: agency } = useAgency();
+  const { isSubUser } = useUserPermissions();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -125,6 +127,19 @@ export function EmailConfiguration() {
 
   const savedEmail = (agency?.email || "").trim();
   const isConfigured = Boolean(EMAIL_PATTERN.test(savedEmail) && agency?.smtp_configured);
+
+  if (isSubUser) {
+    return (
+      <Card className="border shadow-xs max-w-4xl mx-auto">
+        <CardContent className="py-8 text-center space-y-2">
+          <p className="text-sm font-semibold">Agency Owner Access Required</p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Only the main agency owner can view or update SMTP email credentials.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border shadow-xs max-w-4xl mx-auto">

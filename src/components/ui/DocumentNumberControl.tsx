@@ -3,52 +3,16 @@ import { Lock, Pencil, RotateCcw, CheckCircle2, AlertCircle, Loader2 } from "luc
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CopyValue } from "@/components/ui/CopyValue";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  AutoDocType,
+  DocumentNumberAvailabilityCheck,
+  checkDocumentNumberAvailabilityDetailed,
+  checkDocumentNumberAvailable,
+} from "@/lib/documentNumberAvailability";
 
-export type AutoDocType =
-  | "invoice"
-  | "voucher_crv"
-  | "voucher_cpv"
-  | "voucher_uv"
-  | "voucher_hv"
-  | "voucher_tv"
-  | "refund"
-  | "void"
-  | "expense"
-  | "quotation"
-  | "client"
-  | "vendor"
-  | "reminder"
-  | "transfer"
-  | "sub_user";
-
-export async function checkDocumentNumberAvailable(
-  docType: AutoDocType,
-  value: string,
-  excludeId?: string | null
-): Promise<boolean> {
-  const trimmed = value.trim();
-  if (!trimmed || /^(__AUTO__|preview|auto-generated)$/i.test(trimmed)) {
-    return false;
-  }
-
-  try {
-    const { data, error } = await (supabase as any).rpc("check_document_number_available", {
-      p_doc_type: docType,
-      p_number: trimmed,
-      p_exclude_id: excludeId ?? null,
-    });
-    if (error) {
-      console.warn("Availability check warning:", error);
-      return true;
-    }
-    return Boolean(data);
-  } catch (err) {
-    console.warn("Availability check failed:", err);
-    return true;
-  }
-}
+export type { AutoDocType, DocumentNumberAvailabilityCheck };
+export { checkDocumentNumberAvailabilityDetailed, checkDocumentNumberAvailable };
 
 interface DocumentNumberControlProps {
   label?: string;
@@ -85,10 +49,12 @@ export const DocumentNumberControl: React.FC<DocumentNumberControlProps> = ({
 }) => {
   const [checking, setChecking] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isManual) {
       setAvailable(null);
+      setCheckError(null);
       onAvailabilityChange?.(null);
       return;
     }
@@ -96,19 +62,22 @@ export const DocumentNumberControl: React.FC<DocumentNumberControlProps> = ({
     const trimmed = manualValue.trim();
     if (!trimmed) {
       setAvailable(false);
+      setCheckError(null);
       onAvailabilityChange?.(false);
       return;
     }
 
     let cancelled = false;
     setChecking(true);
+    setCheckError(null);
 
     const timer = window.setTimeout(async () => {
-      const ok = await checkDocumentNumberAvailable(docType, trimmed, excludeId);
+      const result = await checkDocumentNumberAvailabilityDetailed(docType, trimmed, excludeId);
       if (!cancelled) {
-        setAvailable(ok);
+        setAvailable(result.failed ? false : result.available);
+        setCheckError(result.failed ? (result.errorMessage || "Check failed") : null);
         setChecking(false);
-        onAvailabilityChange?.(ok);
+        onAvailabilityChange?.(result.failed ? false : result.available);
       }
     }, 280);
 
@@ -129,6 +98,7 @@ export const DocumentNumberControl: React.FC<DocumentNumberControlProps> = ({
   const handleResetAuto = () => {
     onManualModeChange(false);
     setAvailable(null);
+    setCheckError(null);
     onAvailabilityChange?.(null);
   };
 
@@ -179,6 +149,13 @@ export const DocumentNumberControl: React.FC<DocumentNumberControlProps> = ({
           />
           {checking ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />
+          ) : checkError ? (
+            <span
+              title={checkError}
+              className="inline-flex items-center gap-0.5 text-[10px] font-sans font-semibold text-amber-600 dark:text-amber-400 shrink-0"
+            >
+              <AlertCircle className="w-3 h-3" /> Could not check
+            </span>
           ) : available === true ? (
             <span className="inline-flex items-center gap-0.5 text-[10px] font-sans font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
               <CheckCircle2 className="w-3 h-3" /> OK

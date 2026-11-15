@@ -37,6 +37,17 @@ import { NewReminderDialog } from "@/components/NewReminderDialog";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useReminders } from "@/hooks/useReminders";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -63,7 +74,15 @@ export default function NotificationsHub() {
     markAsDone,
     snoozeAlert,
     dismissAlert,
+    remindersError,
+    refetchReminders,
   } = useUnifiedAlerts();
+  const { deleteReminder } = useReminders();
+  const [reminderToDelete, setReminderToDelete] = useState<{
+    alertId: string;
+    sourceId?: string;
+    title?: string;
+  } | null>(null);
 
   // Search, Status, and Date filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -556,7 +575,22 @@ export default function NotificationsHub() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredAlerts.length === 0 ? (
+                  {remindersError ? (
+                    <tr>
+                      <td colSpan={9} className="py-6 text-center">
+                        <p className="text-xs sm:text-sm font-medium text-destructive mb-2">
+                          Could not load custom reminders.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void refetchReminders()}
+                        >
+                          Tap to retry
+                        </Button>
+                      </td>
+                    </tr>
+                  ) : filteredAlerts.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-8 text-center text-muted-foreground">
                         No reminders found for this filter.
@@ -624,7 +658,13 @@ export default function NotificationsHub() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => dismissAlert(r.id)}
+                                onClick={() =>
+                                  setReminderToDelete({
+                                    alertId: r.id,
+                                    sourceId: r.sourceId,
+                                    title: r.title,
+                                  })
+                                }
                                 className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10"
                               >
                                 Delete
@@ -910,6 +950,47 @@ export default function NotificationsHub() {
           setIsAddReminderOpen(false);
         }}
       />
+
+      {/* Confirm Reminder Deletion */}
+      <AlertDialog
+        open={Boolean(reminderToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleteReminder.isPending) setReminderToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete reminder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reminderToDelete?.title
+                ? `Are you sure you want to delete "${reminderToDelete.title}"? This action cannot be undone.`
+                : "Are you sure you want to delete this reminder? This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteReminder.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteReminder.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!reminderToDelete) return;
+                try {
+                  if (reminderToDelete.sourceId) {
+                    await deleteReminder.mutateAsync(reminderToDelete.sourceId);
+                  }
+                  dismissAlert(reminderToDelete.alertId);
+                  setReminderToDelete(null);
+                } catch {
+                  // Error toast handled by useReminders
+                }
+              }}
+            >
+              {deleteReminder.isPending ? "Deleting..." : "Delete Reminder"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
