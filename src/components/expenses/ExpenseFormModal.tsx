@@ -26,11 +26,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import {
   Receipt,
   Repeat,
   CalendarDays,
-  Lock,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -104,10 +105,13 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   // Dialogs
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [newCatInput, setNewCatInput] = useState("");
-  const [autoExpenseNo, setAutoExpenseNo] = useState<string>("EXP-1001");
+  const [autoExpenseNo, setAutoExpenseNo] = useState<string>("Auto-assigned");
+  const [isManualExpenseNo, setIsManualExpenseNo] = useState<boolean>(false);
+  const [manualExpenseNo, setManualExpenseNo] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false);
 
-  // Fetch / preview auto expense number
+  // Fetch / preview auto expense number (DB assigns real number atomically on save)
   const fetchNextExpenseNumber = async () => {
     try {
       const { data, error } = await supabase.rpc("preview_next_number", {
@@ -117,17 +121,18 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         setAutoExpenseNo(String(data));
         return;
       }
-    } catch { }
-    const count = (expenses?.length || 0) + 1001;
-    setAutoExpenseNo(`EXP-${count}`);
+    } catch {}
+    setAutoExpenseNo("Auto-assigned");
   };
 
   useEffect(() => {
     if (open) {
       setExpenseDate(getTodayDateString());
+      setIsManualExpenseNo(false);
+      setManualExpenseNo("");
       fetchNextExpenseNumber();
     }
-  }, [open, expenses.length]);
+  }, [open]);
 
   const allCategories = useMemo(() => {
     return Array.from(new Set([...DEFAULT_CATEGORIES, ...customCategories]));
@@ -159,11 +164,20 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
-    const numAmount = parseFloat(amount) || 0;
+
+    if (!category.trim()) {
+      toast.error("Please select or enter an expense category");
+      return;
+    }
+
+    const rawAmount = Number.parseFloat(amount);
+    const numAmount = Number.isFinite(rawAmount) ? rawAmount : 0;
     if (numAmount <= 0) {
       toast.error("Expense amount must be greater than zero");
       return;
@@ -174,6 +188,25 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       return;
     }
 
+    if (expenseMode === "recurring" && endDate && startDate && endDate < startDate) {
+      toast.error("Recurring end date cannot be earlier than start date");
+      return;
+    }
+
+    if (isManualExpenseNo) {
+      const customNo = manualExpenseNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom expense number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable("expense", customNo);
+      if (!available) {
+        toast.error("This expense number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       let activeAgencyId = currentAgencyId;
@@ -185,6 +218,10 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         throw new Error("Unable to identify active agency account.");
       }
 
+      const externalBillNote = !isManualExpenseNo && referenceNo.trim()
+        ? `Bill/Ref: ${referenceNo.trim()}`
+        : null;
+
       if (expenseMode === "recurring") {
         const recurringPayload: any = {
           agency_id: activeAgencyId,
@@ -193,42 +230,60 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
           payment_mode: paymentMode,
           bank_name: paymentMode === "bank" ? selectedBank : null,
           expense_date: startDate || expenseDate,
-          notes: notes ? `[Recurring ${frequency}] ${notes}` : `[Recurring ${frequency}]`,
+          notes: [
+            `[Recurring ${frequency}]`,
+            externalBillNote,
+            notes.trim() || null,
+          ]
+            .filter(Boolean)
+            .join(" — "),
           is_recurring: true,
           recurring_frequency: frequency.toLowerCase(),
           recurring_parent_id: null,
           is_paid: true,
-          reference_number: referenceNo || null,
+          reference_number: isManualExpenseNo ? manualExpenseNo.trim() : null,
         };
 
-        const { error } = await (supabase as any).from("expenses").insert(recurringPayload);
-        if (error) throw error;
+        await withDuplicateRetry(
+          async () => {
+            const { error } = await (supabase as any).from("expenses").insert(recurringPayload);
+            if (error) throw error;
+          },
+          { isAutoMode: !isManualExpenseNo }
+        );
         toast.success(`Recurring expense (${frequency}) registered successfully`);
       } else {
         const resolvedAccountId = resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
-        const { data: rpcData, error: rpcError } = await (supabase as any).rpc("record_expense", {
-          p_amount: numAmount,
-          p_account_id: resolvedAccountId,
-          p_category: category,
-          p_date: expenseDate,
-          p_method: paymentMode,
-          p_reference_no: referenceNo || null,
-          p_notes: [
-            paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
-            notes,
-          ]
-            .filter(Boolean)
-            .join(" — ") || null,
-          p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-        });
+        const rpcData = await withDuplicateRetry(
+          async () => {
+            const { data, error: rpcError } = await (supabase as any).rpc("record_expense", {
+              p_amount: numAmount,
+              p_account_id: resolvedAccountId,
+              p_category: category,
+              p_date: expenseDate,
+              p_method: paymentMode,
+              p_reference_no: isManualExpenseNo ? manualExpenseNo.trim() : null,
+              p_notes: [
+                paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+                externalBillNote,
+                notes.trim() || null,
+              ]
+                .filter(Boolean)
+                .join(" — ") || null,
+              p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+              p_is_manual: isManualExpenseNo,
+            });
 
-        if (rpcError) {
-          throw new Error(rpcError.message || "Failed to save expense");
-        }
-        if (rpcData && rpcData.success === false) {
-          throw new Error(rpcData.error || "Failed to save expense");
-        }
-        toast.success("Expense recorded successfully");
+            if (rpcError) throw rpcError;
+            if (data && data.success === false) {
+              throw new Error(data.error || "Failed to save expense");
+            }
+            return data;
+          },
+          { isAutoMode: !isManualExpenseNo }
+        );
+        const assignedNo = rpcData?.reference_no || (isManualExpenseNo ? manualExpenseNo.trim() : "");
+        toast.success(`Expense ${assignedNo} recorded successfully`.replace(/\s+/g, " "));
       }
 
       await invalidateAllFinancialQueries(queryClient, activeAgencyId);
@@ -237,6 +292,8 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       setAmount("");
       setReferenceNo("");
       setNotes("");
+      setIsManualExpenseNo(false);
+      setManualExpenseNo("");
 
       // Regenerate next auto expense number
       fetchNextExpenseNumber();
@@ -244,8 +301,9 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
       if (onSuccess) onSuccess();
       // Keep modal open so user can enter the next record quickly!
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message || "Failed to record expense"}`);
+      handleSupabaseError(err, "Failed to record expense", "ExpenseFormModal.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -278,11 +336,11 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* HEADER: Left Title | CENTER Segmented Toggle | Right Read-only Expense No badge */}
-        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+        {/* HEADER: Left Title | CENTER Segmented Toggle | Right Auto/Manual Expense No badge */}
+        <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
           {/* Left Title */}
           <div className="flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-amber-600" />
+            <Receipt className="w-4 h-4 text-amber-600 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
               Record Daily Operating Expense
             </DialogTitle>
@@ -318,20 +376,22 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
             </button>
           </div>
 
-          {/* Right: auto-generated Expense No badge */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
-            <Lock className="w-3 h-3 text-slate-400" />
-            <span>Expense #:</span>
-            <span className="text-amber-600 dark:text-amber-400">{autoExpenseNo}</span>
-            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
-              Auto
-            </Badge>
-          </div>
+          {/* Right: auto-generated / optional manual Expense No badge */}
+          <DocumentNumberControl
+            label="Expense #:"
+            docType="expense"
+            previewNumber={autoExpenseNo}
+            isManual={isManualExpenseNo}
+            manualValue={manualExpenseNo}
+            onManualModeChange={setIsManualExpenseNo}
+            onManualValueChange={setManualExpenseNo}
+            accentClassName="text-amber-600 dark:text-amber-400"
+          />
         </div>
 
-        {/* ONE COMPACT FORM: Fits on one screen with NO scrolling */}
+        {/* ONE COMPACT FORM: Scroll-safe on smaller viewports */}
         <form ref={formRef} onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
-          <div className="px-5 py-3 space-y-2.5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
             {/* LINE 1: Expense Date | Category * | Amount (PKR) * | Paid From | (Bank if Bank Account) | Bill / Receipt / Ref No */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
               {/* Expense Date: Standardized Locked System Date */}

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 interface AgentLumpSumPaymentDialogProps {
   agent: B2BAgent | null;
@@ -35,6 +36,7 @@ export function AgentLumpSumPaymentDialog({
   const [entryDate, setEntryDate] = useState<string>(() => getTodayDateString());
   const [remarks, setRemarks] = useState<string>("Lump sum payment received");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -120,15 +122,28 @@ export function AgentLumpSumPaymentDialog({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const paymentVal = parseFloat(amount) || 0;
+    if (isSubmittingRef.current || isSubmitting) return;
 
-    if (paymentVal <= 0) {
-      toast.error("Please enter a valid payment amount");
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
+    const paymentVal = parseFloat(amount);
+
+    if (!Number.isFinite(paymentVal) || paymentVal <= 0) {
+      toast.error("Please enter a valid payment amount greater than 0");
+      return;
+    }
+
+    if (paymentMode === "bank" && !bankName.trim()) {
+      toast.error("Please select a bank name for bank payment");
       return;
     }
 
     if (!agent) return;
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -185,9 +200,10 @@ export function AgentLumpSumPaymentDialog({
       );
       onOpenChange(false);
       onSuccess?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to process lump sum payment");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to process lump sum payment", "AgentLumpSumPaymentDialog.handleSubmit");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

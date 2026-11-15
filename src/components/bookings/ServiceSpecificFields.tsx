@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -370,7 +371,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
                 <div
                   key={idx}
                   data-repeatable-row={idx}
-                  className="flex items-center gap-1.5"
+                  className="flex flex-wrap sm:flex-nowrap items-center gap-1.5"
                 >
                   <span className="text-[10px] font-mono font-bold text-muted-foreground w-4 text-center">
                     #{idx + 1}
@@ -593,6 +594,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
               </Label>
               <Input
                 type="number"
+                min={0}
                 value={details.makkahNights}
                 onChange={(e) => onDetailChange("makkahNights", e.target.value)}
                 placeholder="7"
@@ -618,6 +620,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
               </Label>
               <Input
                 type="number"
+                min={0}
                 value={details.madinahNights}
                 onChange={(e) =>
                   onDetailChange("madinahNights", e.target.value)
@@ -744,20 +747,21 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
               className="h-8 text-xs bg-background"
             />
           </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-              Duration (Days)
-            </Label>
-            <Input
-              type="number"
-              value={details.insuranceDuration}
-              onChange={(e) =>
-                onDetailChange("insuranceDuration", e.target.value)
-              }
-              placeholder="30"
-              className="h-8 text-xs font-mono bg-background"
-            />
-          </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Duration (Days)
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                value={details.insuranceDuration}
+                onChange={(e) =>
+                  onDetailChange("insuranceDuration", e.target.value)
+                }
+                placeholder="30"
+                className="h-8 text-xs font-mono bg-background"
+              />
+            </div>
         </div>
       )}
 
@@ -848,9 +852,9 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
         {rightHeaderSlot}
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {passengers.map((pax, idx) => (
-          <div key={idx} className="flex items-center gap-1.5" data-pax-row={idx}>
+          <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-1.5" data-pax-row={idx}>
             <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-center">
               #{idx + 1}
             </span>
@@ -867,6 +871,7 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
             />
             <Input
               data-pax-field="passport"
+              maxLength={20}
               value={pax.passport || ""}
               onChange={(e) =>
                 handlePassengerChange(
@@ -910,6 +915,9 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
             </Select>
             <Input
               type="date"
+              min="1900-01-01"
+              max={getTodayDateString()}
+              title="Date of Birth (dd/mm/yyyy)"
               value={pax.dob || ""}
               onChange={(e) => handlePassengerChange(idx, "dob", e.target.value)}
               data-pax-last-field="true"

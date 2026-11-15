@@ -16,7 +16,6 @@ import {
   ArrowRightCircle,
   Download,
   FileText,
-  Lock,
   Plus,
   Save,
   Trash2,
@@ -39,6 +38,10 @@ import {
   getTodayDateString,
 } from "@/components/ui/LockedDateField";
 import {
+  DocumentNumberControl,
+  checkDocumentNumberAvailable,
+} from "@/components/ui/DocumentNumberControl";
+import {
   SearchableSelect,
   type SearchableSelectItem,
 } from "@/components/ui/SearchableSelect";
@@ -54,6 +57,7 @@ import {
   getServiceDisplayLabel,
   buildServiceTitle,
   buildServiceSummaryLines,
+  validateServiceAndPassengers,
 } from "@/lib/serviceDefinitions";
 import {
   ServiceTypeSelect,
@@ -93,7 +97,10 @@ export default function QuotationFormPage() {
   const prefillAppliedRef = useRef(false);
 
   // Header fields
-  const [quotationNumber, setQuotationNumber] = useState("Auto-generated");
+  const [quotationNumber, setQuotationNumber] = useState("Auto-assigned");
+  const [isManualQuotationNo, setIsManualQuotationNo] = useState(false);
+  const [manualQuotationNo, setManualQuotationNo] = useState("");
+  const isSubmittingRef = useRef(false);
   const [quotationDate, setQuotationDate] = useState(() => getTodayDateString());
   const [validUntil, setValidUntil] = useState(() =>
     format(addDays(new Date(), 14), "yyyy-MM-dd")
@@ -177,8 +184,7 @@ export default function QuotationFormPage() {
         console.warn("Could not preview next quotation number:", err);
       }
       if (!cancelled) {
-        const code = agency?.agency_code || "A00001";
-        setQuotationNumber(`QT-${code}-00000001`);
+        setQuotationNumber("Auto-assigned");
       }
     }
     setQuotationDate(getTodayDateString());
@@ -186,7 +192,7 @@ export default function QuotationFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [isEdit, agency?.agency_code]);
+  }, [isEdit]);
 
   // Load existing quotation for edit OR incoming prefill (Queries / Umrah Calculator)
   useEffect(() => {
@@ -381,6 +387,11 @@ export default function QuotationFormPage() {
       return false;
     }
 
+    if (validUntil && quotationDate && validUntil < quotationDate) {
+      toast.error("Valid Until date cannot be earlier than Quotation Date");
+      return false;
+    }
+
     const nonEmptyItems = items.filter((i) => i.description.trim());
     if (nonEmptyItems.length === 0) {
       toast.error("Please add at least one line item description");
@@ -388,6 +399,28 @@ export default function QuotationFormPage() {
         '[data-repeatable-row="0"] input[data-line-field="description"]'
       );
       firstDesc?.focus();
+      return false;
+    }
+
+    if (nonEmptyItems.some((i) => !Number.isFinite(Number(i.qty)) || Number(i.qty) <= 0 || !Number.isFinite(Number(i.unit_price)) || Number(i.unit_price) < 0)) {
+      toast.error("Line item quantities must be positive and prices cannot be negative");
+      return false;
+    }
+
+    const safeDiscount = Number(discount) || 0;
+    const safeTax = Number(tax) || 0;
+    if (safeDiscount < 0 || safeTax < 0) {
+      toast.error("Discount and tax cannot be negative");
+      return false;
+    }
+
+    const serviceError = validateServiceAndPassengers(
+      serviceType,
+      serviceDetails,
+      serviceType === "Ticket" ? passengers : []
+    );
+    if (serviceError) {
+      toast.error(serviceError);
       return false;
     }
 
@@ -399,9 +432,9 @@ export default function QuotationFormPage() {
       .filter((i) => i.description.trim())
       .map((i) => ({
         description: i.description.trim(),
-        qty: Number(i.qty) || 1,
-        unit_price: Number(i.unit_price) || 0,
-        amount: (Number(i.qty) || 1) * (Number(i.unit_price) || 0),
+        qty: Math.max(1, Number(i.qty) || 1),
+        unit_price: Math.max(0, Number(i.unit_price) || 0),
+        amount: Math.max(1, Number(i.qty) || 1) * Math.max(0, Number(i.unit_price) || 0),
       }));
 
     const derivedTitle = buildServiceTitle(serviceType, serviceDetails);
@@ -412,8 +445,12 @@ export default function QuotationFormPage() {
     ).join(" · ");
 
     return {
-      // Leave quotation_number blank on create so the DB sequence trigger assigns the unique formatted number atomically
-      quotation_number: isEdit ? quotationNumber.trim() : "",
+      // Leave quotation_number blank on Auto create so DB assigns atomic formatted number
+      quotation_number: isEdit
+        ? quotationNumber.trim()
+        : isManualQuotationNo
+          ? manualQuotationNo.trim()
+          : "",
       quotation_date: quotationDate,
       valid_until: validUntil || null,
       service_type: serviceType,
@@ -426,8 +463,8 @@ export default function QuotationFormPage() {
       description: derivedSummary || null,
       items: normalizedItems,
       subtotal,
-      discount: Number(discount) || 0,
-      tax: Number(tax) || 0,
+      discount: Math.max(0, Number(discount) || 0),
+      tax: Math.max(0, Number(tax) || 0),
       total,
       currency,
       status,
@@ -443,12 +480,27 @@ export default function QuotationFormPage() {
   };
 
   const handleSave = async (andDownloadPdf = false) => {
+    if (isSubmittingRef.current || isSubmitting) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
     if (!validate()) return;
 
+    if (!isEdit && isManualQuotationNo) {
+      const customNo = manualQuotationNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom quotation number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable("quotation", customNo);
+      if (!available) {
+        toast.error("This quotation number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     const payload = buildPayload();
 
@@ -456,10 +508,8 @@ export default function QuotationFormPage() {
       let savedQuote: any;
       if (isEdit && id) {
         savedQuote = await updateQuotation.mutateAsync({ id, ...payload });
-        toast.success("Quotation updated successfully");
       } else {
         savedQuote = await addQuotation.mutateAsync(payload);
-        toast.success("Quotation saved successfully");
       }
 
       if (andDownloadPdf) {
@@ -485,6 +535,7 @@ export default function QuotationFormPage() {
     } catch (e: any) {
       console.error("Failed to save quotation:", e);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -592,18 +643,23 @@ export default function QuotationFormPage() {
         {/* 1. HEADER FIELDS */}
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
-            {/* Quotation # (Auto read-only, skipped) */}
+            {/* Quotation # (Auto with optional Manual Override on create) */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Quotation #
-                <Lock className="w-3 h-3 text-slate-400" />
               </Label>
-              <Input
-                value={quotationNumber}
-                readOnly
-                tabIndex={-1}
-                aria-readonly="true"
-                className="h-8 text-xs font-mono font-semibold bg-muted/60 text-muted-foreground cursor-not-allowed"
+              <DocumentNumberControl
+                label=""
+                docType="quotation"
+                previewNumber={quotationNumber}
+                isManual={isManualQuotationNo}
+                manualValue={manualQuotationNo}
+                onManualModeChange={setIsManualQuotationNo}
+                onManualValueChange={setManualQuotationNo}
+                allowManualOverride={!isEdit}
+                readOnly={isEdit}
+                accentClassName="text-blue-600 dark:text-blue-400"
+                className="h-8 justify-between bg-muted/60"
               />
             </div>
 

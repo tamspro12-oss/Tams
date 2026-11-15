@@ -4,14 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
 import {
   Tooltip,
   TooltipContent,
@@ -21,7 +15,7 @@ import {
 import { Party, useParties } from "@/hooks/useParties";
 import { supabase } from "@/integrations/supabase/client";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
-import { Lock, Info, Users } from "lucide-react";
+import { Info, Users } from "lucide-react";
 import { toast } from "sonner";
 
 interface AddPartyDialogProps {
@@ -51,8 +45,11 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
   );
   const [name, setName] = useState(partyToEdit ? partyToEdit.name : "");
   const [codePreview, setCodePreview] = useState<string>(
-    partyToEdit?.code || "Loading..."
+    partyToEdit?.code || "Auto-assigned"
   );
+  const [isManualCode, setIsManualCode] = useState<boolean>(false);
+  const [manualCode, setManualCode] = useState<string>("");
+  const isSubmittingRef = useRef<boolean>(false);
   const [phone, setPhone] = useState(partyToEdit?.phone || "");
   const [email, setEmail] = useState(partyToEdit?.email || "");
   const [city, setCity] = useState(partyToEdit?.city || "");
@@ -111,8 +108,10 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       } catch (err) {
         console.warn("Could not preview party code:", err);
       }
+      setIsManualCode(false);
+      setManualCode("");
       if (!isCancelled) {
-        setCodePreview(type === "vendor" ? "V-000001" : "C-000001");
+        setCodePreview("Auto-assigned");
       }
     }
 
@@ -125,8 +124,10 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmittingRef.current || isSaving) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
     if (!name.trim()) {
@@ -134,10 +135,37 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       return;
     }
 
-    try {
-      const parsedCredit = parseFloat(creditLimit) || 0;
-      const parsedOpening = parseFloat(openingBalance) || 0;
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
 
+    const rawCredit = Number.parseFloat(creditLimit);
+    const rawOpening = Number.parseFloat(openingBalance);
+    const parsedCredit = Number.isFinite(rawCredit) ? rawCredit : 0;
+    const parsedOpening = Number.isFinite(rawOpening) ? rawOpening : 0;
+
+    if (parsedCredit < 0) {
+      toast.error("Credit limit cannot be negative");
+      return;
+    }
+
+    const docType = type === "vendor" ? "vendor" : "client";
+    if (!partyToEdit && isManualCode) {
+      const customCode = manualCode.trim();
+      if (!customCode) {
+        toast.error("Please enter a custom party code or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable(docType, customCode);
+      if (!available) {
+        toast.error("This party code is already in use. Please use Auto or choose another code.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
+    try {
       let saved: Party | undefined;
 
       if (partyToEdit) {
@@ -159,6 +187,7 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       } else {
         saved = await addParty({
           type,
+          ...(isManualCode ? { code: manualCode.trim() } : {}),
           name: name.trim(),
           phone: phone.trim() || undefined,
           whatsapp: phone.trim() || undefined,
@@ -179,6 +208,8 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       }
     } catch {
       // Error handled by mutation
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -201,28 +232,32 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-3xl p-0 gap-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
-        {/* Header: title, auto Party Code badge, close (X) */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70">
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
+        {/* Header: title, auto/manual Party Code badge, close (X) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 pr-10 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-600" />
+            <Users className="w-4 h-4 text-blue-600 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
               {partyToEdit ? "Edit Party" : "Add New Party"}
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 mr-7">
-            <Lock className="w-3 h-3 text-slate-400" />
-            <span>Party Code:</span>
-            <span className="text-blue-600 dark:text-blue-400">{codePreview}</span>
-            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
-              Auto
-            </Badge>
-          </div>
+          <DocumentNumberControl
+            label="Party Code:"
+            docType={type === "vendor" ? "vendor" : "client"}
+            previewNumber={codePreview}
+            isManual={isManualCode}
+            manualValue={manualCode}
+            onManualModeChange={setIsManualCode}
+            onManualValueChange={setManualCode}
+            allowManualOverride={!partyToEdit}
+            readOnly={!!partyToEdit}
+            accentClassName="text-blue-600 dark:text-blue-400"
+          />
         </div>
 
-        {/* ONE COMPACT FORM: Flat tight 4-column grid, compact inputs, fits on one screen with NO scrolling */}
-        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3">
+        {/* ONE COMPACT FORM: Flat tight 4-column grid, scroll-safe on small screens */}
+        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3 flex-1 min-h-0 overflow-y-auto">
           {/* LINE 1: Type | Name * | Phone | Email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             <div>

@@ -14,6 +14,8 @@ import { useClients } from "@/hooks/useStorage";
 import { useB2BAgents } from "@/hooks/useB2BAgents";
 import type { Voucher, VoucherType, VoucherStatus, VoucherPassenger } from "@/types/voucher";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { supabase } from "@/integrations/supabase/client";
+import { DocumentNumberControl, checkDocumentNumberAvailable, type AutoDocType } from "@/components/ui/DocumentNumberControl";
 
 interface CreateVoucherDialogProps {
   open: boolean;
@@ -86,7 +88,27 @@ export function CreateVoucherDialog({
   const [remarks, setRemarks] = useState("");
   const [terms, setTerms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(true);
+  const [voucherPreviewNo, setVoucherPreviewNo] = useState("Auto-assigned");
+  const [isManualVoucherNo, setIsManualVoucherNo] = useState(false);
+  const [manualVoucherNo, setManualVoucherNo] = useState("");
+
+  const activeDocType: AutoDocType =
+    voucherType === "Umrah" ? "voucher_uv" : voucherType === "Hotel" ? "voucher_hv" : "voucher_tv";
+
+  useEffect(() => {
+    if (!open || voucherToEdit) return;
+    let cancelled = false;
+    supabase.rpc("preview_next_number", { p_counter_type: activeDocType }).then(({ data, error }) => {
+      if (!cancelled) {
+        setVoucherPreviewNo(!error && data ? String(data) : "Auto-assigned");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, voucherToEdit, activeDocType]);
 
   // Keyboard navigation & Ctrl+Enter to save
   useEffect(() => {
@@ -203,6 +225,8 @@ export function CreateVoucherDialog({
 
     setRemarks("");
     setTerms("");
+    setIsManualVoucherNo(false);
+    setManualVoucherNo("");
   };
 
   const applyBookingAutofill = (booking: any) => {
@@ -309,15 +333,52 @@ export function CreateVoucherDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
 
     if (!passengerName.trim()) {
       toast.error("Please enter the Lead Passenger Name");
       return;
     }
 
+    if (voucherType === "Hotel" && checkIn && checkOut && checkOut < checkIn) {
+      toast.error("Hotel check-out date cannot be earlier than check-in date");
+      return;
+    }
+
+    if (voucherType === "Umrah") {
+      if (makkahCheckIn && makkahCheckOut && makkahCheckOut < makkahCheckIn) {
+        toast.error("Makkah check-out date cannot be earlier than check-in date");
+        return;
+      }
+      if (madinahCheckIn && madinahCheckOut && madinahCheckOut < madinahCheckIn) {
+        toast.error("Madinah check-out date cannot be earlier than check-in date");
+        return;
+      }
+    }
+
+    if (Number(numberOfRooms) < 1 || Number(nights) < 0 || Number(makkahNights) < 0 || Number(madinahNights) < 0) {
+      toast.error("Rooms and nights must be valid positive values");
+      return;
+    }
+
+    if (!voucherToEdit && isManualVoucherNo) {
+      const customNo = manualVoucherNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom voucher number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
+      if (!available) {
+        toast.error("This voucher number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       const payload: any = {
+        ...(!voucherToEdit ? { voucher_number: isManualVoucherNo ? manualVoucherNo.trim() : "" } : {}),
         voucher_type: voucherType,
         status,
         passenger_name: passengerName.trim(),
@@ -382,6 +443,7 @@ export function CreateVoucherDialog({
     } catch (err: any) {
       console.error("Voucher submission error:", err);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -405,10 +467,10 @@ export function CreateVoucherDialog({
           ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6"
           : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6"
       )}>
-        <DialogHeader className="shrink-0 border-b pb-3">
-          <div className="flex items-center justify-between">
+        <DialogHeader className="shrink-0 border-b pb-3 pr-8">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
+              <FileText className="w-5 h-5 text-primary shrink-0" />
               <div>
                 <DialogTitle className="text-xl font-bold">
                   {voucherToEdit ? `Edit Voucher (${voucherToEdit.voucher_number})` : "Create New Voucher"}
@@ -418,17 +480,30 @@ export function CreateVoucherDialog({
                 </DialogDescription>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              tabIndex={-1}
-              onClick={() => setIsFullScreen(!isFullScreen)}
-              className="h-8 w-8 shrink-0"
-              title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
-            >
-              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </Button>
+            <div className="flex items-center gap-2">
+              {!voucherToEdit && (
+                <DocumentNumberControl
+                  label="Voucher #:"
+                  docType={activeDocType}
+                  previewNumber={voucherPreviewNo}
+                  isManual={isManualVoucherNo}
+                  manualValue={manualVoucherNo}
+                  onManualModeChange={setIsManualVoucherNo}
+                  onManualValueChange={setManualVoucherNo}
+                />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                tabIndex={-1}
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="h-8 w-8 shrink-0"
+                title={isFullScreen ? "Compact mode" : "Fullscreen mode"}
+              >
+                {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 

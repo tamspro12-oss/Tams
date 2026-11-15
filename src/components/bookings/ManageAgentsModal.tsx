@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { cn } from "@/lib/utils";
 
 interface ManageAgentsModalProps {
@@ -76,8 +77,8 @@ export function ManageAgentsModal({ open, onOpenChange }: ManageAgentsModalProps
       await deleteAgent.mutateAsync(agentToDelete.id);
       toast.success(`Agent "${agentToDelete.agent_name}" deleted successfully`);
       setAgentToDelete(null);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete agent");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to delete agent", "ManageAgentsModal.handleDelete");
     }
   };
 

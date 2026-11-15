@@ -29,6 +29,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { useVendors, useClients } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
@@ -145,8 +146,8 @@ export function DirectBookingDetailModal({
       setShowDeleteConfirm(false);
       onOpenChange(false);
       onDeleteSuccess?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete booking");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to delete booking", "DirectBookingDetailModal.handleDelete");
     }
   };
 

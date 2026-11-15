@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
 import { useParties, Party } from "@/hooks/useParties";
 import { generateBookingConfirmationPdf, generateBookingInvoicePdf, BookingPdfData } from "@/lib/pdf/bookingInvoicePdf";
@@ -24,7 +23,8 @@ import { SearchableSelect, SearchableSelectItem } from "@/components/ui/Searchab
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CopyValue } from "@/components/ui/CopyValue";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import {
   ServiceType,
   TripType,
@@ -32,6 +32,7 @@ import {
   ServiceDetailsState,
   createDefaultServiceDetails,
   createDefaultPassenger,
+  validateServiceAndPassengers,
 } from "@/lib/serviceDefinitions";
 import {
   ServiceTypeSelect,
@@ -44,7 +45,6 @@ import {
   FileText,
   Plus,
   TrendingUp,
-  Lock,
 } from "lucide-react";
 
 export type { ServiceType, TripType };
@@ -66,9 +66,12 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const { accounts = [] } = useAccounts();
   const queryClient = useQueryClient();
 
-  // Read-only auto invoice number
-  const [autoInvoiceNo, setAutoInvoiceNo] = useState<string>("INV-1001");
+  // Read-only auto invoice number preview + optional manual override
+  const [autoInvoiceNo, setAutoInvoiceNo] = useState<string>("Auto-assigned");
+  const [isManualInvoiceNo, setIsManualInvoiceNo] = useState<boolean>(false);
+  const [manualInvoiceNo, setManualInvoiceNo] = useState<string>("");
   const formRef = useRef<HTMLDivElement>(null);
+  const isSubmittingRef = useRef<boolean>(false);
 
   // Top Row: Date, Service Type, Client, Vendor
   const [invoiceDate, setInvoiceDate] = useState<string>(
@@ -154,7 +157,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Compute Auto Next Invoice Number on Open
+  // Compute Auto Next Invoice Number preview on Open (DB assigns final atomic number on save)
   useEffect(() => {
     async function fetchNextInvoiceNo() {
       try {
@@ -169,15 +172,16 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       } catch (err) {
         console.warn("Could not preview next invoice number:", err);
       }
-      const code = agency?.agency_code || "A00001";
-      setAutoInvoiceNo(`INV-${code}-00000001`);
+      setAutoInvoiceNo("Auto-assigned");
     }
 
     if (open) {
       setInvoiceDate(getTodayDateString());
+      setIsManualInvoiceNo(false);
+      setManualInvoiceNo("");
       fetchNextInvoiceNo();
     }
-  }, [open, agency?.agency_code]);
+  }, [open]);
 
   // Filter clients and vendors
   const clientsList = useMemo(
@@ -218,10 +222,13 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     }
   };
 
-  // Money Calculations
-  const clientAmtNum = parseFloat(totalAmount) || 0;
-  const vendorPayNum = parseFloat(vendorPayable) || 0;
-  const amountPaidNum = parseFloat(amountPaid) || 0;
+  // Money Calculations (NaN-safe)
+  const rawClientAmt = Number.parseFloat(totalAmount);
+  const rawVendorPay = Number.parseFloat(vendorPayable);
+  const rawAmountPaid = Number.parseFloat(amountPaid);
+  const clientAmtNum = Number.isFinite(rawClientAmt) ? rawClientAmt : 0;
+  const vendorPayNum = Number.isFinite(rawVendorPay) ? rawVendorPay : 0;
+  const amountPaidNum = Number.isFinite(rawAmountPaid) ? rawAmountPaid : 0;
   const remainingAmountNum = Math.max(0, clientAmtNum - amountPaidNum);
   const liveProfit = clientAmtNum - vendorPayNum;
 
@@ -252,13 +259,20 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   // Handle Save
   const handleSave = async (downloadConfirmation = false, downloadInvoice = false) => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
 
     if (!partyId && !passengers[0]?.name.trim()) {
       toast.error("Please select a client or enter a passenger name");
+      return;
+    }
+
+    if (vendorPayNum < 0 || amountPaidNum < 0) {
+      toast.error("Amounts cannot be negative");
       return;
     }
 
@@ -268,7 +282,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     }
 
     if (amountPaidNum > clientAmtNum) {
-      toast.error("Could not save: Paid amount cannot exceed total client amount");
+      toast.error("Paid amount cannot exceed total client amount");
       return;
     }
 
@@ -277,8 +291,27 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       return;
     }
 
+    const serviceError = validateServiceAndPassengers(service, serviceDetails, passengers);
+    if (serviceError) {
+      toast.error(serviceError);
+      return;
+    }
+
+    if (isManualInvoiceNo) {
+      const customNo = manualInvoiceNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom invoice number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable("invoice", customNo);
+      if (!available) {
+        toast.error("This invoice number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
-    const invoiceNo = autoInvoiceNo || `INV-${Date.now().toString().slice(-6)}`;
 
     try {
       const resolvedAccountId =
@@ -310,46 +343,51 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         .join("\n");
 
       // Single atomic RPC saves booking invoice, ledger entries, initial payment voucher & account transaction together
-      const { data, error } = await (supabase as any).rpc("save_booking_invoice", {
-        p_invoice_no: invoiceNo,
-        p_service: service,
-        p_party_id: partyId || null,
-        p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-        p_client_amount: clientAmtNum,
-        p_vendor_payable: vendorPayNum,
-        p_amount_paid: amountPaidNum,
-        p_payment_mode: paymentMode,
-        p_account_id: resolvedAccountId,
-        p_invoice_date: invoiceDate,
-        p_due_date: remainingAmountNum > 0 ? remainingDueDate || invoiceDate : invoiceDate,
-        p_pnr: pnr || null,
-        p_ticket_no: ticketNo || null,
-        p_passport_no: passengers[0]?.passport || null,
-        p_passengers: passengers,
-        p_currency: "PKR",
-        p_more_details: {
-          remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
-          selected_bank: paymentMode === "bank" ? selectedBank || null : null,
-          client_name: selectedParty?.name || passengers[0]?.name || null,
-          trip_type: service === "Ticket" ? tripType : null,
-          origin: service === "Ticket" ? origin : null,
-          destination: service === "Ticket" ? destination : null,
-          airline: service === "Ticket" ? airline : null,
-        },
-        p_notes: serviceDetailsSummary || null,
-      });
+      const data = await withDuplicateRetry(
+        async () => {
+          const { data: rpcData, error } = await (supabase as any).rpc("save_booking_invoice", {
+            p_invoice_no: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
+            p_service: service,
+            p_party_id: partyId || null,
+            p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
+            p_client_amount: clientAmtNum,
+            p_vendor_payable: vendorPayNum,
+            p_amount_paid: amountPaidNum,
+            p_payment_mode: paymentMode,
+            p_account_id: resolvedAccountId,
+            p_invoice_date: invoiceDate,
+            p_due_date: remainingAmountNum > 0 ? remainingDueDate || invoiceDate : invoiceDate,
+            p_pnr: pnr || null,
+            p_ticket_no: ticketNo || null,
+            p_passport_no: passengers[0]?.passport || null,
+            p_passengers: passengers,
+            p_currency: "PKR",
+            p_more_details: {
+              remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
+              selected_bank: paymentMode === "bank" ? selectedBank || null : null,
+              client_name: selectedParty?.name || passengers[0]?.name || null,
+              trip_type: service === "Ticket" ? tripType : null,
+              origin: service === "Ticket" ? origin : null,
+              destination: service === "Ticket" ? destination : null,
+              airline: service === "Ticket" ? airline : null,
+            },
+            p_notes: serviceDetailsSummary || null,
+            p_is_manual: isManualInvoiceNo,
+          });
 
-      if (error) {
-        throw new Error(error.message || "Database rejected booking invoice save");
-      }
-      if (data && data.success === false) {
-        throw new Error(data.error || "Failed to save booking invoice");
-      }
+          if (error) throw error;
+          if (rpcData && rpcData.success === false) {
+            throw new Error(rpcData.error || "Failed to save booking invoice");
+          }
+          return rpcData;
+        },
+        { isAutoMode: !isManualInvoiceNo }
+      );
 
       await invalidateAllFinancialQueries(queryClient, currentAgencyId || agency?.id);
 
-      const assignedInvoiceNo = data?.invoice_no || invoiceNo;
-      toast.success("Booking Invoice created successfully");
+      const assignedInvoiceNo = data?.invoice_no || (isManualInvoiceNo ? manualInvoiceNo.trim() : autoInvoiceNo);
+      toast.success(`Booking Invoice ${assignedInvoiceNo} created successfully`);
 
       if (downloadConfirmation) {
         generateBookingConfirmationPdf(getPdfData(assignedInvoiceNo));
@@ -361,8 +399,9 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message || "Failed to save booking invoice"}`);
+      handleSupabaseError(err, "Failed to save booking invoice", "BookingInvoiceForm.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -396,23 +435,25 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[96vw] max-w-6xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl"
       >
-        {/* HEADER: Title, Auto Invoice # badge, Close (X is standard from DialogContent) */}
-        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+        {/* HEADER: Title, Auto/Manual Invoice # badge, Close (X is standard from DialogContent) */}
+        <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
-            <FileText className="w-4 h-4 text-blue-600" />
+            <FileText className="w-4 h-4 text-blue-600 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
               New Booking Invoice
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
-            <Lock className="w-3 h-3 text-slate-400" />
-            <span>Invoice #:</span>
-            <CopyValue value={autoInvoiceNo} label="invoice number" className="text-blue-600 dark:text-blue-400" />
-            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
-              Auto
-            </Badge>
-          </div>
+          <DocumentNumberControl
+            label="Invoice #:"
+            docType="invoice"
+            previewNumber={autoInvoiceNo}
+            isManual={isManualInvoiceNo}
+            manualValue={manualInvoiceNo}
+            onManualModeChange={setIsManualInvoiceNo}
+            onManualValueChange={setManualInvoiceNo}
+            accentClassName="text-blue-600 dark:text-blue-400"
+          />
         </div>
 
         {/* BODY + FOOTER wrapped in ref for keyboard navigation */}
@@ -558,6 +599,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </Label>
                 <Input
                   type="number"
+                  min={0}
                   value={vendorPayable}
                   onChange={(e) => setVendorPayable(e.target.value)}
                   placeholder="0"
@@ -572,6 +614,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </Label>
                 <Input
                   type="number"
+                  min={0}
                   value={totalAmount}
                   onChange={(e) => setTotalAmount(e.target.value)}
                   placeholder="0"
@@ -589,6 +632,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </Label>
                 <Input
                   type="number"
+                  min={0}
                   value={amountPaid}
                   onChange={(e) => setAmountPaid(e.target.value)}
                   placeholder="0"

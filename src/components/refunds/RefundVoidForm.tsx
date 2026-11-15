@@ -22,11 +22,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import {
   RotateCcw,
   Search,
   CheckCircle2,
-  Lock,
   Plus,
   CalendarDays,
 } from "lucide-react";
@@ -85,31 +86,34 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   const [pendingVendorRefund, setPendingVendorRefund] = useState<boolean>(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef<boolean>(false);
 
-  // Auto-generated sequence for Refund No
-  const [refundSeq, setRefundSeq] = useState<string>("1001");
+  // Auto-generated sequence preview + optional manual override
+  const [autoRecordNo, setAutoRecordNo] = useState<string>("Auto-assigned");
+  const [isManualRecordNo, setIsManualRecordNo] = useState<boolean>(false);
+  const [manualRecordNo, setManualRecordNo] = useState<string>("");
 
-  // Generate sequence on open or actionType change
+  const activeDocType = actionType === "void" ? "void" : "refund";
+
+  // Generate sequence preview on open or actionType change
   const fetchNextNumber = useCallback(async () => {
     try {
       const { data, error } = await supabase.rpc("preview_next_number", {
-        p_counter_type: "refund",
+        p_counter_type: actionType === "void" ? "void" : "refund",
       });
       if (!error && data) {
-        const match = String(data).match(/\d+$/);
-        if (match) {
-          setRefundSeq(match[0]);
-          return;
-        }
+        setAutoRecordNo(String(data));
+        return;
       }
     } catch {}
-    const randomSeq = String(Math.floor(1000 + Math.random() * 9000));
-    setRefundSeq(randomSeq);
-  }, []);
+    setAutoRecordNo(`${actionType === "void" ? "VOID" : "RF"}-Auto`);
+  }, [actionType]);
 
   useEffect(() => {
     if (open) {
       setRefundDate(getTodayDateString());
+      setIsManualRecordNo(false);
+      setManualRecordNo("");
       fetchNextNumber();
     }
   }, [open, actionType, fetchNextNumber]);
@@ -131,8 +135,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
     enabled: open && !!currentAgencyId,
   });
 
-  const recordPrefix = actionType === "void" ? "VOID" : "REF";
-  const autoRecordNo = `${recordPrefix}-${refundSeq}`;
+  // Recent refunds query uses updated preview state directly without local random prefix
 
   // Search booking / invoice by Invoice No, PNR, or Ticket No
   const executeSearchInvoice = async (queryText?: string) => {
@@ -250,16 +253,18 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
       toast.info("No matching invoice found. You can enter details manually.");
       setMatchedBooking(null);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to search for invoice");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to search for invoice", "RefundVoidForm.handleSearch");
     } finally {
       setIsSearching(false);
     }
   };
 
   const handleSave = async () => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
 
@@ -273,7 +278,18 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       return;
     }
 
-    const clientAmt = parseFloat(clientRefundAmount) || 0;
+    const rawClientAmt = Number.parseFloat(clientRefundAmount);
+    const rawDeductions = Number.parseFloat(deductionsAmount);
+    const rawVendorRefAmt = Number.parseFloat(vendorRefundAmount);
+    const clientAmt = Number.isFinite(rawClientAmt) ? rawClientAmt : 0;
+    const deductions = Number.isFinite(rawDeductions) ? rawDeductions : 0;
+    const vendorRefAmt = Number.isFinite(rawVendorRefAmt) ? rawVendorRefAmt : 0;
+
+    if (clientAmt < 0 || deductions < 0 || vendorRefAmt < 0) {
+      toast.error("Amounts cannot be negative");
+      return;
+    }
+
     // When Type = Refund: Client Refund is REQUIRED (> 0)
     // When Type = Void: Void Charges is OPTIONAL (no validation error if empty or 0)
     if (actionType === "refund" && clientAmt <= 0) {
@@ -281,13 +297,26 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       return;
     }
 
-    if (paymentMode === "bank" && !selectedBank) {
+    if (clientAmt > 0 && paymentMode === "bank" && !selectedBank) {
       toast.error("Please select a bank account");
       return;
     }
 
+    if (isManualRecordNo) {
+      const customNo = manualRecordNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom refund/void number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
+      if (!available) {
+        toast.error("This refund or void number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
-    const recordNo = autoRecordNo;
 
     try {
       let activeAgencyId = currentAgencyId;
@@ -298,8 +327,6 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         throw new Error("Unable to identify active agency account.");
       }
 
-      const deductions = parseFloat(deductionsAmount) || 0;
-      const vendorRefAmt = parseFloat(vendorRefundAmount) || 0;
       const combinedNotes = [
         notes,
         paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
@@ -317,35 +344,41 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           : null;
 
       // Call atomic refund RPC (single transaction updating refund, invoice, ledger & cash/bank)
-      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("record_refund", {
-        p_amount: clientAmt,
-        p_account_id: resolvedAccountId,
-        p_party_id: matchedBooking?.partyId || null,
-        p_party_type: "client",
-        p_booking_id:
-          matchedBooking?.sourceTable === "booking_invoices" ? matchedBooking.id : null,
-        p_date: refundDate,
-        p_method: paymentMode,
-        p_reference_no: recordNo,
-        p_reason: reason,
-        p_notes: combinedNotes || null,
-        p_action_type: actionType,
-        p_vendor_refund_amount: vendorRefAmt,
-        p_deductions: deductions,
-        p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-        p_party_name: partyName || null,
-        p_invoice_search: invoiceSearch || null,
-        p_void_invoice: actionType === "void",
-      });
+      const rpcData = await withDuplicateRetry(
+        async () => {
+          const { data, error: rpcError } = await (supabase as any).rpc("record_refund", {
+            p_amount: clientAmt,
+            p_account_id: resolvedAccountId,
+            p_party_id: matchedBooking?.partyId || null,
+            p_party_type: "client",
+            p_booking_id:
+              matchedBooking?.sourceTable === "booking_invoices" ? matchedBooking.id : null,
+            p_date: refundDate,
+            p_method: paymentMode,
+            p_reference_no: isManualRecordNo ? manualRecordNo.trim() : null,
+            p_reason: reason.trim(),
+            p_notes: combinedNotes || null,
+            p_action_type: actionType,
+            p_vendor_refund_amount: vendorRefAmt,
+            p_deductions: deductions,
+            p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+            p_party_name: partyName || null,
+            p_invoice_search: invoiceSearch || null,
+            p_void_invoice: actionType === "void",
+            p_is_manual: isManualRecordNo,
+          });
 
-      if (rpcError) {
-        throw new Error(rpcError.message || "Failed to record refund/void");
-      }
-      if (rpcData && rpcData.success === false) {
-        throw new Error(rpcData.error || "Failed to record refund/void");
-      }
+          if (rpcError) throw rpcError;
+          if (data && data.success === false) {
+            throw new Error(data.error || "Failed to record refund/void");
+          }
+          return data;
+        },
+        { isAutoMode: !isManualRecordNo }
+      );
 
-      toast.success(`${actionType === "void" ? "Void recorded" : "Refund recorded"} successfully`);
+      const assignedNo = rpcData?.refund_no || (isManualRecordNo ? manualRecordNo.trim() : autoRecordNo);
+      toast.success(`${actionType === "void" ? "Void" : "Refund"} ${assignedNo} recorded successfully`);
 
       await invalidateAllFinancialQueries(queryClient, activeAgencyId);
       refetchRecentRefunds();
@@ -359,6 +392,8 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       setDeductionsAmount("0");
       setReason("");
       setNotes("");
+      setIsManualRecordNo(false);
+      setManualRecordNo("");
 
       // Regenerate sequence for next number
       fetchNextNumber();
@@ -366,8 +401,9 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
       if (onSuccess) onSuccess();
       // Keep modal open so user can enter next record quickly!
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message || "Failed to process request"}`);
+      handleSupabaseError(err, "Failed to process refund/void", "RefundVoidForm.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -415,26 +451,27 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* HEADER: Title, Auto-generated Refund # badge, Close (X) */}
-        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-3">
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <RotateCcw className="w-4 h-4 text-purple-600" />
-              Process Refund / Void
-            </DialogTitle>
+        {/* HEADER: Title, Auto/Manual Refund # badge, Close (X) */}
+        <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
+          <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-purple-600 shrink-0" />
+            Process Refund / Void
+          </DialogTitle>
 
-            {/* Read-Only Refund # badge */}
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
-              <Lock className="w-3 h-3 text-slate-400" />
-              <span>{actionType === "void" ? "Void #:" : "Refund #:"}</span>
-              <span className={actionType === "void" ? "text-red-600 dark:text-red-400" : "text-purple-600 dark:text-purple-400"}>
-                {autoRecordNo}
-              </span>
-              <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
-                Auto
-              </Badge>
-            </div>
-          </div>
+          <DocumentNumberControl
+            label={actionType === "void" ? "Void #:" : "Refund #:"}
+            docType={activeDocType}
+            previewNumber={autoRecordNo}
+            isManual={isManualRecordNo}
+            manualValue={manualRecordNo}
+            onManualModeChange={setIsManualRecordNo}
+            onManualValueChange={setManualRecordNo}
+            accentClassName={
+              actionType === "void"
+                ? "text-red-600 dark:text-red-400"
+                : "text-purple-600 dark:text-purple-400"
+            }
+          />
         </div>
 
         {/* BODY + FOOTER wrapped for keyboard navigation */}

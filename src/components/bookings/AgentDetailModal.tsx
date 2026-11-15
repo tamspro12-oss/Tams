@@ -40,6 +40,7 @@ import { Scale } from "lucide-react";
 import { format, parseISO, isSameDay, isSameMonth, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -258,8 +259,8 @@ export function AgentDetailModal({
       if (selectedBookingForView?.id === bookingToDelete.id) {
         setSelectedBookingForView(null);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete booking");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to delete booking", "AgentDetailModal.handleDeleteBooking");
     }
   };
 

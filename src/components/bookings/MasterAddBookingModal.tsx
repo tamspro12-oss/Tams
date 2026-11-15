@@ -36,6 +36,8 @@ import {
 import { AddB2BAgentDialog } from "@/components/AddB2BAgentDialog";
 import { AddVendorDialog } from "@/components/AddVendorDialog";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -176,6 +178,7 @@ export function MasterAddBookingModal({
   // Unsaved changes confirmation dialog
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // API Hooks
   const { addClient, updateClient } = useClients();
@@ -589,8 +592,8 @@ export function MasterAddBookingModal({
       setShowQuickVendorAdd(false);
       setQuickVendorName("");
       toast.success(`Vendor "${newV.name}" created and selected!`);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to add vendor");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to add vendor", "MasterAddBookingModal.handleQuickVendorAdd");
     }
   };
 
@@ -619,7 +622,7 @@ export function MasterAddBookingModal({
           party_id: created.id,
           balance_type: newAgentOpeningBalanceType,
           amount: opBal,
-          as_of_date: new Date().toISOString().split("T")[0],
+          as_of_date: getTodayDateString(),
           notes: "Initial brought-forward opening balance",
         });
       }
@@ -631,8 +634,8 @@ export function MasterAddBookingModal({
       toast.success(`Agent "${created.agent_name}" created & linked!`);
       // Focus Service field next
       setTimeout(() => serviceTriggerRef.current?.focus(), 60);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to create agent");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to create agent", "MasterAddBookingModal.handleCreateInlineAgent");
     }
   };
 
@@ -667,6 +670,7 @@ export function MasterAddBookingModal({
 
   // Main Save Handler
   const handleSave = async (isSaveAndAddNext = false) => {
+    if (isSubmittingRef.current) return;
     // Validation in on-screen order
     if (bookingMode === "b2b" && !selectedAgentId) {
       toast.error("Please select or create a B2B Agent");
@@ -685,7 +689,7 @@ export function MasterAddBookingModal({
     }
 
     const sellPrice = parseFloat(sellingPrice) || 0;
-    if (sellPrice <= 0) {
+    if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
       toast.error("Total Amount (Selling Price) is required");
       const sellInput = formContainerRef.current?.querySelector<HTMLInputElement>(
         'input[data-field="sellingPrice"]'
@@ -694,6 +698,32 @@ export function MasterAddBookingModal({
       return;
     }
 
+    if (purchasingPrice.trim() !== "") {
+      const parsedPurchase = Number(purchasingPrice);
+      if (!Number.isFinite(parsedPurchase) || parsedPurchase < 0) {
+        toast.error("Purchasing cost cannot be negative");
+        return;
+      }
+    }
+
+    if (amountPaid.trim() !== "") {
+      const parsedPaid = Number(amountPaid);
+      if (!Number.isFinite(parsedPaid) || parsedPaid < 0) {
+        toast.error("Amount paid cannot be negative");
+        return;
+      }
+      if (parsedPaid > sellPrice) {
+        toast.error("Amount paid cannot exceed selling price");
+        return;
+      }
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("No internet connection. Please check your network and try again.");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -766,7 +796,7 @@ export function MasterAddBookingModal({
               client_id: savedResult.id,
               payment_amount: paidVal,
               payment_type: paidVal >= sellPrice ? "full" : "partial",
-              payment_date: new Date().toISOString().split("T")[0],
+              payment_date: getTodayDateString(),
               payment_mode: paymentMode,
               bank_name: paymentMode === "bank" ? bankName : null,
               notes: `Initial payment on booking`,
@@ -781,7 +811,7 @@ export function MasterAddBookingModal({
               party_id: savedResult.id,
               balance_type: openingBalanceType,
               amount: opBal,
-              as_of_date: new Date().toISOString().split("T")[0],
+              as_of_date: getTodayDateString(),
               notes: "Client opening balance brought forward",
             });
           }
@@ -836,9 +866,10 @@ export function MasterAddBookingModal({
       } else {
         onOpenChange(false);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save booking");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to save booking", "MasterAddBookingModal.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

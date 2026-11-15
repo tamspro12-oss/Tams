@@ -62,6 +62,7 @@ export default function QueryFormPage() {
 
   const [errors, setErrors] = useState<{ clientName?: string; queryText?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Field refs for keyboard focus & validation
   const formContainerRef = useRef<HTMLDivElement>(null);
@@ -132,12 +133,14 @@ export default function QueryFormPage() {
 
   const handleSave = useCallback(
     async (andAddAnother: boolean = false) => {
+      if (isSubmittingRef.current || isSubmitting) return;
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         toast.error("You are offline, not saved");
         return;
       }
       if (!validate()) return;
 
+      isSubmittingRef.current = true;
       setIsSubmitting(true);
       const payload = {
         client_name: clientName.trim(),
@@ -153,10 +156,8 @@ export default function QueryFormPage() {
       try {
         if (isEdit && id) {
           await updateQuery.mutateAsync({ id, query: payload });
-          toast.success("Query updated successfully");
         } else {
           await addQuery.mutateAsync(payload);
-          toast.success("Query saved successfully");
         }
 
         if (andAddAnother) {
@@ -174,13 +175,13 @@ export default function QueryFormPage() {
           navigate("/app/leads-quotes?tab=queries");
         }
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Failed to save query";
-        toast.error(`Could not save: ${msg}`);
+        console.error("[QueryFormPage.handleSave]", e);
       } finally {
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
       }
     },
-    [clientName, contactNumber, priority, queryText, status, assignedTo, dueDate, notes, isEdit, id, updateQuery, addQuery, navigate]
+    [clientName, contactNumber, priority, queryText, status, assignedTo, dueDate, notes, isEdit, id, updateQuery, addQuery, navigate, isSubmitting]
   );
 
   useFormKeyboardNav({

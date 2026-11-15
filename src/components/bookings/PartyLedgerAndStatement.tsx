@@ -26,6 +26,7 @@ import { useAgency } from "@/hooks/useAgency";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { getKarachiYmd, getKarachiTodayNoon } from "@/lib/karachiTime";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { cn } from "@/lib/utils";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
@@ -195,8 +196,8 @@ export function PartyLedgerAndStatement({
       XLSX.utils.book_append_sheet(wb, ws, "Party Ledger");
       XLSX.writeFile(wb, `${partyName.replace(/\s+/g, "_")}_Ledger.xlsx`);
       toast.success("Ledger exported to Excel");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Export failed. Please try again.", "PartyLedgerAndStatement.export");
     }
   };
 
@@ -239,8 +240,8 @@ export function PartyLedgerAndStatement({
 
       doc.save(`${partyName.replace(/\s+/g, "_")}_Statement.pdf`);
       toast.success("Statement exported to PDF");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Export failed. Please try again.", "PartyLedgerAndStatement.export");
     }
   };
 
@@ -291,8 +292,8 @@ export function PartyLedgerAndStatement({
               summary.balance > 0
                 ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
                 : summary.balance < 0
-                ? "bg-red-500/10 text-red-600 border-red-500/30"
-                : "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                  ? "bg-red-500/10 text-red-600 border-red-500/30"
+                  : "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
             )}
           >
             PKR {Math.abs(summary.balance).toLocaleString()}{" "}

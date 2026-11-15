@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Download, History } from "lucide-react";
+import { FileText, History, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { parseSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -39,12 +41,21 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
   );
   const [invoiceHistory, setInvoiceHistory] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const isGeneratingRef = useRef(false);
+  const [invoicePreviewNo, setInvoicePreviewNo] = useState("Auto-assigned");
+  const [isManualInvoiceNo, setIsManualInvoiceNo] = useState(false);
+  const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const { toast } = useToast();
 
-  // Load invoice history when dialog opens
+  // Load invoice history and preview number when dialog opens
   useEffect(() => {
     if (open) {
       loadInvoiceHistory();
+      setIsManualInvoiceNo(false);
+      setManualInvoiceNo("");
+      supabase.rpc("preview_next_number", { p_counter_type: "invoice" }).then(({ data, error }) => {
+        setInvoicePreviewNo(!error && data ? String(data) : "Auto-assigned");
+      });
     }
   }, [open]);
 
@@ -63,31 +74,39 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
     }
   };
 
-  const generateUniqueInvoiceNumber = async (prefix: string): Promise<string> => {
-    const year = new Date().getFullYear();
-    const agencyId = await getAuthenticatedAgencyId();
-
-    if (!agencyId) {
-      throw new Error("Agency not found");
+  const generateInvoice = async () => {
+    if (isGeneratingRef.current || isGenerating) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast({
+        title: "Offline",
+        description: "Network connection issue. You are offline, not saved.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    // Get the count of invoices for this agency this year
-    const { count, error } = await supabase
-      .from("invoices")
-      .select("*", { count: "exact", head: true })
-      .eq("agency_id", agencyId)
-      .gte("created_at", `${year}-01-01`)
-      .lte("created_at", `${year}-12-31`);
+    if (isManualInvoiceNo) {
+      const customNo = manualInvoiceNo.trim();
+      if (!customNo) {
+        toast({
+          title: "Validation Error",
+          description: "Please enter a custom invoice number or switch back to Auto.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const available = await checkDocumentNumberAvailable("invoice", customNo);
+      if (!available) {
+        toast({
+          title: "Duplicate Number",
+          description: "This invoice number already exists. Please choose another.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
-    if (error) throw error;
-
-    const nextNumber = (count || 0) + 1;
-    return `${prefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
-  };
-
-  const generateInvoice = async () => {
-    if (isGenerating) return;
-
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     try {
       // Load template from localStorage
@@ -98,7 +117,6 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
           description: "Please set up your invoice template in Settings first",
           variant: "destructive",
         });
-        setIsGenerating(false);
         return;
       }
 
@@ -111,14 +129,47 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       const agencyId = await getAuthenticatedAgencyId();
       if (!agencyId) throw new Error("Agency not found");
 
-      // Generate unique invoice number
-      const invoiceNumber = await generateUniqueInvoiceNumber(template.prefix || "INV");
       const invoiceDate = new Date().toLocaleDateString();
 
-      // Calculate amounts
-      const amount = client.selling_price || 0;
-      const paid = client.amount_paid || 0;
-      const balance = amount - paid;
+      // Calculate amounts (NaN-safe)
+      const amount = Math.max(0, Number(client.selling_price) || 0);
+      const paid = Math.max(0, Number(client.amount_paid) || 0);
+      const balance = Math.max(0, amount - paid);
+
+      // Save invoice record FIRST so DB trigger assigns atomic invoice_number before PDF creation
+      const insertedInvoice = await withDuplicateRetry(
+        async () => {
+          const { data, error: insertError } = await (supabase as any)
+            .from("invoices")
+            .insert({
+              invoice_number: isManualInvoiceNo ? manualInvoiceNo.trim() : "",
+              client_id: client.id,
+              agency_id: agencyId,
+              generated_by: user.id,
+              amount,
+              amount_paid: paid,
+              balance_due: balance,
+              invoice_date: new Date().toISOString().split("T")[0],
+              item_description: itemDescription.trim() || "Travel Package",
+              additional_notes: additionalNotes || null,
+              pdf_data: {
+                client_name: client.name,
+                destination: client.destination,
+                flight_date: client.flight_date,
+                pnr: client.pnr,
+                airline: client.airline,
+              },
+            })
+            .select("invoice_number")
+            .single();
+
+          if (insertError) throw insertError;
+          return data;
+        },
+        { isAutoMode: !isManualInvoiceNo }
+      );
+
+      const invoiceNumber = insertedInvoice?.invoice_number || (isManualInvoiceNo ? manualInvoiceNo.trim() : invoicePreviewNo);
 
       // Generate PDF
       const doc = new jsPDF();
@@ -282,55 +333,27 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       doc.setTextColor(150, 150, 150);
       doc.text('Thank you for your business!', 105, yPos, { align: 'center' });
 
-      // Save PDF
-      const fileName = `Invoice-${client.name.replace(/\s+/g, '-')}-${new Date().getTime()}.pdf`;
+      // Save PDF cleanly after atomic DB save succeeded
+      const fileName = `Invoice-${invoiceNumber}-${client.name.replace(/\s+/g, '-')}.pdf`;
       doc.save(fileName);
-
-      // Save invoice record to database
-      const { error: insertError } = await supabase
-        .from("invoices")
-        .insert({
-          invoice_number: invoiceNumber,
-          client_id: client.id,
-          agency_id: agencyId,
-          generated_by: user.id,
-          amount,
-          amount_paid: paid,
-          balance_due: balance,
-          invoice_date: new Date().toISOString().split('T')[0],
-          item_description: itemDescription,
-          additional_notes: additionalNotes || null,
-          pdf_data: {
-            client_name: client.name,
-            destination: client.destination,
-            flight_date: client.flight_date,
-            pnr: client.pnr,
-            airline: client.airline,
-          },
-        });
-
-      if (insertError) {
-        console.error("Failed to save invoice record:", insertError);
-      }
 
       toast({
         title: "Success",
         description: `Invoice ${invoiceNumber} generated successfully`,
       });
 
-      if (!insertError) {
-        loadInvoiceHistory(); // Refresh history
-      }
-
+      loadInvoiceHistory();
       setOpen(false);
     } catch (error: any) {
       console.error("Error generating invoice:", error);
+      const parsed = parseSupabaseError(error, "Failed to generate invoice");
       toast({
         title: "Error",
-        description: error.message || "Failed to generate invoice",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
     }
   };
@@ -348,11 +371,24 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Generate Invoice</DialogTitle>
-            <DialogDescription>
-              Create a professional invoice for {client.name}
-            </DialogDescription>
+          <DialogHeader className="pr-8">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <DialogTitle>Generate Invoice</DialogTitle>
+                <DialogDescription>
+                  Create a professional invoice for {client.name}
+                </DialogDescription>
+              </div>
+              <DocumentNumberControl
+                label="Invoice #:"
+                docType="invoice"
+                previewNumber={invoicePreviewNo}
+                isManual={isManualInvoiceNo}
+                manualValue={manualInvoiceNo}
+                onManualModeChange={setIsManualInvoiceNo}
+                onManualValueChange={setManualInvoiceNo}
+              />
+            </div>
           </DialogHeader>
 
           <div className="space-y-4 py-4">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Lock, Bell } from "lucide-react";
+import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -16,7 +16,8 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useParties, type Party } from "@/hooks/useParties";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
-import { CopyValue } from "@/components/ui/CopyValue";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import { getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { cn } from "@/lib/utils";
@@ -65,11 +66,14 @@ export function NewReminderDialog({
   const [remarks, setRemarks] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [isAddPartyOpen, setIsAddPartyOpen] = useState(false);
   const [addPartyType, setAddPartyType] = useState<"client" | "vendor">("client");
 
-  // Running auto reminder sequence: REM-YYYY-0001
-  const [reminderSeq, setReminderSeq] = useState("0001");
+  // Running auto reminder sequence preview + optional manual override
+  const [autoReminderNo, setAutoReminderNo] = useState("Auto-assigned");
+  const [isManualReminderNo, setIsManualReminderNo] = useState(false);
+  const [manualReminderNo, setManualReminderNo] = useState("");
 
   // Query records for linking
   const { data: bookingInvoices = [] } = useQuery({
@@ -133,37 +137,45 @@ export function NewReminderDialog({
     enabled: open,
   });
 
-  // Fetch sequence
+  // Fetch live preview sequence on open (DB trigger assigns real atomic reminder_no)
   useEffect(() => {
-    if (open) {
-      const year = new Date().getFullYear();
-      const count = (recentReminders.length || 0) + 1;
-      const pad = String(count).padStart(4, "0");
-      setReminderSeq(`${year}-${pad}`);
+    if (!open) return;
 
-      // Apply prefill if supplied
-      if (prefill) {
-        if (prefill.title) setTitle(prefill.title);
-        if (prefill.date) setRemDate(prefill.date);
-        if (prefill.time) setRemTime(prefill.time);
-        if (prefill.type) setRemType(prefill.type);
-        if (prefill.priority) setPriority(prefill.priority);
-        if (prefill.linkTo) setLinkTo(prefill.linkTo);
-        if (prefill.linkId) setSelectedRecordId(prefill.linkId);
-        if (prefill.linkTitle) setSelectedRecordLabel(prefill.linkTitle);
-        if (prefill.remarks) setRemarks(prefill.remarks);
+    let cancelled = false;
+    setIsManualReminderNo(false);
+    setManualReminderNo("");
+    supabase.rpc("preview_next_number", { p_counter_type: "reminder" }).then(({ data, error }) => {
+      if (!cancelled) {
+        setAutoReminderNo(!error && data ? String(data) : "Auto-assigned");
       }
-    }
-  }, [open, prefill, recentReminders.length]);
+    });
 
-  const autoReminderNo = `REM-${reminderSeq}`;
+    // Apply prefill if supplied
+    if (prefill) {
+      if (prefill.title) setTitle(prefill.title);
+      if (prefill.date) setRemDate(prefill.date);
+      if (prefill.time) setRemTime(prefill.time);
+      if (prefill.type) setRemType(prefill.type);
+      if (prefill.priority) setPriority(prefill.priority);
+      if (prefill.linkTo) setLinkTo(prefill.linkTo);
+      if (prefill.linkId) setSelectedRecordId(prefill.linkId);
+      if (prefill.linkTitle) setSelectedRecordLabel(prefill.linkTitle);
+      if (prefill.remarks) setRemarks(prefill.remarks);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, prefill]);
 
   const clientParties = useMemo(() => parties.filter((p) => p.type === "client" || p.type === "both"), [parties]);
   const vendorParties = useMemo(() => parties.filter((p) => p.type === "vendor" || p.type === "both"), [parties]);
 
   const handleSave = async () => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
     if (!title.trim()) {
@@ -179,10 +191,25 @@ export function NewReminderDialog({
       return;
     }
 
+    if (isManualReminderNo) {
+      const customNo = manualReminderNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom reminder number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable("reminder", customNo);
+      if (!available) {
+        toast.error("This reminder number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       const payload: any = {
         agency_id: agencyId,
+        reminder_no: isManualReminderNo ? manualReminderNo.trim() : null,
         title: title.trim(),
         type: remType.toLowerCase().includes("flight") ? "flight" : remType.toLowerCase().includes("umrah") ? "umrah" : remType.toLowerCase().includes("expense") ? "daily_expense" : "manual",
         remind_date: remDate,
@@ -194,7 +221,6 @@ export function NewReminderDialog({
           repeat !== "none" ? `Repeat: ${repeat}` : null,
           remindBefore !== "at_time" ? `Remind Before: ${remindBefore}` : null,
           remarks ? `Remarks: ${remarks}` : null,
-          `No: ${autoReminderNo}`,
         ]
           .filter(Boolean)
           .join(" | "),
@@ -202,10 +228,20 @@ export function NewReminderDialog({
         is_recurring_daily: repeat === "daily",
       };
 
-      const { error } = await supabase.from("reminders" as any).insert(payload);
-      if (error) throw error;
+      const savedRow = await withDuplicateRetry(
+        async () => {
+          const { data, error } = await (supabase as any)
+            .from("reminders")
+            .insert(payload)
+            .select("reminder_no")
+            .single();
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: !isManualReminderNo }
+      );
 
-      toast.success("Reminder saved successfully");
+      toast.success(`Reminder ${savedRow?.reminder_no || ""} saved successfully`.replace(/\s+/g, " "));
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["recent_reminders_sheet"] });
       queryClient.invalidateQueries({ queryKey: ["alert_custom_reminders"] });
@@ -217,11 +253,14 @@ export function NewReminderDialog({
       setLinkTo("none");
       setSelectedRecordId("");
       setSelectedRecordLabel("");
+      setIsManualReminderNo(false);
+      setManualReminderNo("");
 
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message || "Failed to save reminder"}`);
+      handleSupabaseError(err, "Failed to save reminder", "NewReminderDialog.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -242,23 +281,25 @@ export function NewReminderDialog({
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[96vw] max-w-4xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl"
       >
-        {/* Header: title, auto Reminder No badge (read-only), close (X) */}
-        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+        {/* Header: title, auto/manual Reminder No badge, close (X) */}
+        <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
-            <Bell className="w-4 h-4 text-amber-500" />
+            <Bell className="w-4 h-4 text-amber-500 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
               New Reminder
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
-            <Lock className="w-3 h-3 text-slate-400" />
-            <span>Reminder #:</span>
-            <CopyValue value={autoReminderNo} label="reminder number" className="text-amber-600 dark:text-amber-400" />
-            <Badge variant="secondary" className="text-[9px] px-1 h-3.5 ml-0.5">
-              Auto
-            </Badge>
-          </div>
+          <DocumentNumberControl
+            label="Reminder #:"
+            docType="reminder"
+            previewNumber={autoReminderNo}
+            isManual={isManualReminderNo}
+            manualValue={manualReminderNo}
+            onManualModeChange={setIsManualReminderNo}
+            onManualValueChange={setManualReminderNo}
+            accentClassName="text-amber-600 dark:text-amber-400"
+          />
         </div>
 
         {/* Body: Flat single screen, tight grid, no section headers */}

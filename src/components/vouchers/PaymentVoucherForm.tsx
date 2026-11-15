@@ -27,12 +27,12 @@ import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
+import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import {
   Search,
   CheckCircle2,
-  Lock,
   CreditCard,
 } from "lucide-react";
 
@@ -92,31 +92,34 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   const [adjustmentReason, setAdjustmentReason] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false);
 
-  // Auto Voucher Number
-  const [voucherSeq, setVoucherSeq] = useState<string>("1001");
+  // Auto Voucher Number preview + optional manual override
+  const [autoVoucherNo, setAutoVoucherNo] = useState<string>("Auto-assigned");
+  const [isManualVoucherNo, setIsManualVoucherNo] = useState<boolean>(false);
+  const [manualVoucherNo, setManualVoucherNo] = useState<string>("");
 
-  // Generate sequence on open or direction change
+  const activeDocType = direction === "received" ? "voucher_crv" : "voucher_cpv";
+
+  // Generate sequence preview on open or direction change
   const fetchNextNumber = useCallback(async () => {
     try {
       const { data, error } = await supabase.rpc("preview_next_number", {
-        p_counter_type: "voucher",
+        p_counter_type: direction === "received" ? "voucher_crv" : "voucher_cpv",
       });
       if (!error && data) {
-        const match = String(data).match(/\d+$/);
-        if (match) {
-          setVoucherSeq(match[0]);
-          return;
-        }
+        setAutoVoucherNo(String(data));
+        return;
       }
     } catch {}
-    const randomSeq = String(Math.floor(1000 + Math.random() * 9000));
-    setVoucherSeq(randomSeq);
-  }, []);
+    setAutoVoucherNo(`${direction === "received" ? "CRV" : "CPV"}-Auto`);
+  }, [direction]);
 
   useEffect(() => {
     if (open) {
       setVoucherDate(getTodayDateString());
+      setIsManualVoucherNo(false);
+      setManualVoucherNo("");
       fetchNextNumber();
     }
   }, [open, direction, fetchNextNumber]);
@@ -157,15 +160,13 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     enabled: open && !!currentAgencyId,
   });
 
-  const voucherPrefix = direction === "received" ? "CRV" : "CPV";
-  const autoVoucherNo = `${voucherPrefix}-${voucherSeq}`;
-
   const typeLabel =
     direction === "received"
       ? "Cash / Bank Receipt Voucher (CRV)"
       : "Cash / Bank Payment Voucher (CPV)";
 
-  const numericAmount = parseFloat(amount) || 0;
+  const rawNumericAmount = Number.parseFloat(amount);
+  const numericAmount = Number.isFinite(rawNumericAmount) ? rawNumericAmount : 0;
 
   // Search invoice
   const executeSearchInvoice = async (queryText?: string) => {
@@ -272,8 +273,10 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   // Save handler
   const handleSave = async () => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
+      toast.error("Network connection issue. You are offline, not saved.");
       return;
     }
 
@@ -286,13 +289,26 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
       return;
     }
 
-    if (numericAmount <= 0) {
+    if (numericAmount <= 0 || !Number.isFinite(numericAmount)) {
       toast.error("Amount must be greater than zero");
       return;
     }
 
+    if (isManualVoucherNo) {
+      const customNo = manualVoucherNo.trim();
+      if (!customNo) {
+        toast.error("Please enter a custom voucher number or switch back to Auto");
+        return;
+      }
+      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
+      if (!available) {
+        toast.error("This voucher number already exists. Please use Auto or choose another number.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
-    const voucherNo = autoVoucherNo;
 
     try {
       // Ensure agency_id is resolved
@@ -309,35 +325,40 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         ? null
         : resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
 
-      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("save_payment_voucher", {
-        p_direction: direction,
-        p_amount: numericAmount,
-        p_payment_mode: paymentMode,
-        p_account_id: resolvedAccountId,
-        p_party_id: partyId || null,
-        p_voucher_no: voucherNo,
-        p_voucher_date: voucherDate,
-        p_reference_no: referenceNo || null,
-        p_is_adjustment: isAdjustment,
-        p_adjustment_reason: adjustmentReason || null,
-        p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-        p_invoice_id: matchedInvoice?.sourceTable === "booking_invoices" ? matchedInvoice.id : null,
-        p_notes: [
-          paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
-          notes,
-        ]
-          .filter(Boolean)
-          .join(" — ") || null,
-      });
+      const rpcData = await withDuplicateRetry(
+        async () => {
+          const { data, error: rpcError } = await (supabase as any).rpc("save_payment_voucher", {
+            p_direction: direction,
+            p_amount: numericAmount,
+            p_payment_mode: paymentMode,
+            p_account_id: resolvedAccountId,
+            p_party_id: partyId || null,
+            p_voucher_no: isManualVoucherNo ? manualVoucherNo.trim() : null,
+            p_voucher_date: voucherDate,
+            p_reference_no: referenceNo || null,
+            p_is_adjustment: isAdjustment,
+            p_adjustment_reason: adjustmentReason || null,
+            p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+            p_invoice_id: matchedInvoice?.sourceTable === "booking_invoices" ? matchedInvoice.id : null,
+            p_notes: [
+              paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+              notes,
+            ]
+              .filter(Boolean)
+              .join(" — ") || null,
+            p_is_manual: isManualVoucherNo,
+          });
 
-      if (rpcError) {
-        throw new Error(rpcError.message || "Failed to save payment voucher");
-      }
-      if (rpcData && rpcData.success === false) {
-        throw new Error(rpcData.error || "Failed to record payment voucher");
-      }
+          if (rpcError) throw rpcError;
+          if (data && data.success === false) {
+            throw new Error(data.error || "Failed to record payment voucher");
+          }
+          return data;
+        },
+        { isAutoMode: !isManualVoucherNo }
+      );
 
-      const assignedNo = rpcData?.voucher_no || voucherNo;
+      const assignedNo = rpcData?.voucher_no || (isManualVoucherNo ? manualVoucherNo.trim() : autoVoucherNo);
       toast.success(
         `${direction === "received" ? "Receipt (CRV)" : "Payment (CPV)"} ${assignedNo} recorded successfully`
       );
@@ -354,14 +375,17 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
       setPartyId("");
       setIsAdjustment(false);
       setAdjustmentReason("");
+      setIsManualVoucherNo(false);
+      setManualVoucherNo("");
 
       // Regenerate sequence for next voucher
       fetchNextNumber();
 
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message || "Failed to record payment voucher"}`);
+      handleSupabaseError(err, "Failed to record payment voucher", "PaymentVoucherForm.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -400,20 +424,25 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
-        {/* HEADER: Title, Auto-generated Voucher # badge, Type Label, Close (X) */}
-        <div className="px-5 py-2.5 border-b flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+        {/* HEADER: Title, Auto/Manual Voucher # badge, Type Label, Close (X) */}
+        <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
-            <CreditCard className="w-4 h-4 text-teal-600" />
+            <CreditCard className="w-4 h-4 text-teal-600 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
               Payment Voucher
             </DialogTitle>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs font-mono font-bold text-slate-700 dark:text-slate-200" data-nav-skip="true">
-            <Lock className="w-3 h-3 text-slate-400" />
-            <span>Voucher #:</span>
-            <CopyValue value={autoVoucherNo} label="voucher number" className="text-teal-600 dark:text-teal-400" />
-          </div>
+          <DocumentNumberControl
+            label="Voucher #:"
+            docType={activeDocType}
+            previewNumber={autoVoucherNo}
+            isManual={isManualVoucherNo}
+            manualValue={manualVoucherNo}
+            onManualModeChange={setIsManualVoucherNo}
+            onManualValueChange={setManualVoucherNo}
+            accentClassName="text-teal-600 dark:text-teal-400"
+          />
 
           <Badge
             variant="outline"
