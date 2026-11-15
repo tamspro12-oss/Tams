@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useSearchParams } from "react-router-dom";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { SeoHead } from "@/components/SeoHead";
 import { useParties, Party } from "@/hooks/useParties";
 import {
@@ -210,8 +211,8 @@ export default function ClientsVendors() {
 
       await deleteBank.mutateAsync(bankToDelete.id);
       setBankToDelete(null);
-    } catch (err: any) {
-      toast.error(`Failed to delete bank: ${err.message || "Unknown error"}`);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to delete bank account", "ClientsVendors.handleDeleteBank");
     } finally {
       setIsDeletingBank(false);
     }
@@ -279,11 +280,10 @@ export default function ClientsVendors() {
         return (
           <div className="text-right">
             <span
-              className={`font-mono text-xs font-bold ${
-                bal >= 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-red-600 dark:text-red-400"
-              }`}
+              className={`font-mono text-xs font-bold ${bal >= 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-red-600 dark:text-red-400"
+                }`}
             >
               PKR {bal.toLocaleString()}
             </span>
@@ -445,11 +445,10 @@ export default function ClientsVendors() {
         return (
           <div className="text-right">
             <span
-              className={`font-mono text-xs font-bold ${
-                isZero
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-red-600 dark:text-red-400"
-              }`}
+              className={`font-mono text-xs font-bold ${isZero
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-red-600 dark:text-red-400"
+                }`}
             >
               PKR {Math.abs(bal).toLocaleString()}{" "}
               {isReceivable ? "DR" : isPayable ? "CR" : ""}
@@ -907,13 +906,12 @@ export default function ClientsVendors() {
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span
-                    className={`text-2xl font-bold font-mono ${
-                      selectedParty.current_balance > 0
-                        ? "text-red-600 dark:text-red-400"
-                        : selectedParty.current_balance < 0
+                    className={`text-2xl font-bold font-mono ${selectedParty.current_balance > 0
+                      ? "text-red-600 dark:text-red-400"
+                      : selectedParty.current_balance < 0
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-slate-700"
-                    }`}
+                      }`}
                   >
                     PKR {Math.abs(selectedParty.current_balance).toLocaleString()}
                   </span>
@@ -921,8 +919,8 @@ export default function ClientsVendors() {
                     {selectedParty.current_balance > 0
                       ? "Receivable (DR)"
                       : selectedParty.current_balance < 0
-                      ? "Payable (CR)"
-                      : "Settled"}
+                        ? "Payable (CR)"
+                        : "Settled"}
                   </span>
                 </div>
               </div>

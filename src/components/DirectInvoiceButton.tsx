@@ -4,6 +4,7 @@ import { FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
   TooltipContent,
@@ -47,11 +48,12 @@ export function DirectInvoiceButton({ client }: DirectInvoiceButtonProps) {
         title: "Invoice Generated",
         description: `Downloaded ${filename}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DirectInvoiceButton] Generation failed:', error);
+      const parsed = parseSupabaseError(error, "Failed to generate invoice");
       toast({
         title: "Error",
-        description: error.message || "Failed to generate invoice",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

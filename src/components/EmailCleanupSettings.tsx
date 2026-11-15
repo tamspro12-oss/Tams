@@ -10,6 +10,7 @@ import { useAgency } from '@/hooks/useAgency';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 
 export function EmailCleanupSettings() {
   const { data: agency } = useAgency();
@@ -18,6 +19,7 @@ export function EmailCleanupSettings() {
   const [cleanupFrequency, setCleanupFrequency] = useState('monthly');
   const [keepDays, setKeepDays] = useState('30');
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     if (agency) {
@@ -28,8 +30,13 @@ export function EmailCleanupSettings() {
   }, [agency]);
 
   const handleSave = async () => {
-    if (!agency?.id) return;
-    
+    if (isSavingRef.current || isSaving || !agency?.id) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('Network connection issue. You are offline, not saved.');
+      return;
+    }
+
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const { error } = await supabase
@@ -37,7 +44,7 @@ export function EmailCleanupSettings() {
         .update({
           email_cleanup_enabled: cleanupEnabled,
           email_cleanup_frequency: cleanupFrequency,
-          email_cleanup_keep_days: parseInt(keepDays),
+          email_cleanup_keep_days: parseInt(keepDays, 10) || 30,
         })
         .eq('id', agency.id);
 
@@ -45,10 +52,10 @@ export function EmailCleanupSettings() {
 
       toast.success('Email cleanup settings saved');
       queryClient.invalidateQueries({ queryKey: ['agency'] });
-    } catch (error: any) {
-      console.error('Failed to save cleanup settings:', error);
-      toast.error(`Failed to save: ${error.message}`);
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to save cleanup settings', 'EmailCleanupSettings.handleSave');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };

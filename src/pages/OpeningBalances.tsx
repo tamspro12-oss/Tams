@@ -35,6 +35,7 @@ const emptyForm: OpeningBalanceInput = {
 export default function OpeningBalances() {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const [editing, setEditing] = useState<OpeningBalance | null>(null);
   const [form, setForm] = useState<OpeningBalanceInput>(() => ({ ...emptyForm, as_of_date: getTodayDateString() }));
 
@@ -118,7 +119,10 @@ export default function OpeningBalances() {
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!form.party_id) e.party_id = "Please select a party";
-    if (!form.amount || Number(form.amount) < 0) e.amount = "Amount must be 0 or greater";
+    const parsedAmount = Number(form.amount);
+    if (form.amount === undefined || form.amount === null || !Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      e.amount = "Amount must be 0 or greater";
+    }
     if (!form.as_of_date) e.as_of_date = "Date is required";
     // Duplicate guard (only on create)
     if (!editing && form.party_id) {
@@ -135,12 +139,27 @@ export default function OpeningBalances() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || upsertBalance.isPending || updateBalance.isPending) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
     if (!validate()) return;
     const payload: OpeningBalanceInput = { ...form, amount: Number(form.amount) };
+    isSubmittingRef.current = true;
     if (editing) {
-      updateBalance.mutate({ id: editing.id, ...payload }, { onSuccess: () => { setOpen(false); refetch(); } });
+      updateBalance.mutate(
+        { id: editing.id, ...payload },
+        {
+          onSuccess: () => { setOpen(false); refetch(); },
+          onSettled: () => { isSubmittingRef.current = false; },
+        }
+      );
     } else {
-      upsertBalance.mutate(payload, { onSuccess: () => { setOpen(false); refetch(); } });
+      upsertBalance.mutate(payload, {
+        onSuccess: () => { setOpen(false); refetch(); },
+        onSettled: () => { isSubmittingRef.current = false; },
+      });
     }
   };
 

@@ -60,6 +60,7 @@ export function AddEntryModal({
   const [referenceNo, setReferenceNo] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isSubmittingRef = useRef(false);
 
   const { accounts, cashAccount, bankAccounts } = useAccounts();
   const { clients } = useClients();
@@ -114,8 +115,15 @@ export function AddEntryModal({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const numAmount = parseFloat(amount);
-    if (!numAmount || numAmount <= 0) {
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
       toast.error("Please enter a valid amount greater than 0");
       return;
     }
@@ -125,6 +133,7 @@ export function AddEntryModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       if (mode === "received") {
@@ -189,6 +198,7 @@ export function AddEntryModal({
     } catch (err: any) {
       console.error(err);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

@@ -7,6 +7,7 @@ import { useAgency } from '@/hooks/useAgency';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 import { UserCircle2, Monitor, AlertTriangle, Loader2, Trash2, Shield, Calendar, Smartphone, Crown, Infinity, ChevronDown, LogOut, Building2, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -91,8 +92,8 @@ export const AdminAccountInfo = () => {
       // Sign out current session (use local scope to only logout this device)
       await supabase.auth.signOut({ scope: 'local' });
       navigate('/auth');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to logout all devices');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to logout all devices', 'AdminAccountInfo.handleLogoutAll');
     } finally {
       setActionLoading(false);
       setLogoutAllDialogOpen(false);
@@ -110,8 +111,8 @@ export const AdminAccountInfo = () => {
 
       toast.success('Session terminated successfully');
       fetchActiveSessions();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to terminate session');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to terminate session', 'AdminAccountInfo.handleDeleteSession');
     } finally {
       setActionLoading(false);
       setDeleteSessionId(null);

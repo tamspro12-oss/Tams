@@ -22,6 +22,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
   const formRef = useRef<HTMLFormElement>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -33,12 +34,13 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       toast.error("You are offline, not saved");
       return;
     }
 
-    setIsSubmitting(true);
     const form = e.currentTarget;
     const formData = new FormData(form);
 
@@ -57,27 +59,26 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
     const validation = validateData(querySchema, queryData);
 
     if (!validation.success) {
-      setIsSubmitting(false);
       toast.error((validation as { success: false; error: string }).error);
       return;
     }
 
     const validatedData = validation.data;
 
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       if (editQuery) {
         await updateQuery.mutateAsync({ id: editQuery.id, query: validatedData });
-        toast.success("Query updated successfully");
       } else {
         await addQuery.mutateAsync(validatedData);
-        toast.success("Query added successfully");
       }
       form.reset();
       onOpenChange(false);
-    } catch (error: any) {
-      const errorMessage = error?.message || (editQuery ? "Failed to update query" : "Failed to add query");
-      toast.error(`Could not save: ${errorMessage}`);
+    } catch (error) {
+      console.error("[AddQueryDialogValidated.handleSubmit]", error);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

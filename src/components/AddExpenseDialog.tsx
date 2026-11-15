@@ -13,6 +13,7 @@ import { FormSectionNav } from "@/components/FormSectionNav";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { toast } from "sonner";
 
 interface AddExpenseDialogProps {
   open: boolean;
@@ -26,12 +27,13 @@ const SECTIONS = [
 
 export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpenseDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [paymentMode, setPaymentMode] = useState(editExpense?.payment_mode || "cash");
   const [bankName, setBankName] = useState(editExpense?.bank_name || "");
   const [expenseDate, setExpenseDate] = useState(() => getTodayDateString());
   const { addExpense, updateExpense } = useExpenses();
-  
+
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
 
   // Sync payment mode & locked date when dialog opens
@@ -57,32 +59,57 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || addExpense.isPending || updateExpense.isPending) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
+    const expenseType = (formData.get("expenseType") as string || "").trim();
+    const amountVal = parseFloat(formData.get("amount") as string);
+
+    if (!expenseType) {
+      toast.error("Expense category / type is required");
+      return;
+    }
+
+    if (!Number.isFinite(amountVal) || amountVal <= 0) {
+      toast.error("Please enter a valid expense amount greater than 0");
+      return;
+    }
+
+    if (paymentMode === "bank" && !bankName.trim()) {
+      toast.error("Please select a bank account for bank payment");
+      return;
+    }
 
     const expenseData = {
-      expense_date: formData.get("expenseDate") as string,
-      expense_type: formData.get("expenseType") as string,
-      amount: parseFloat(formData.get("amount") as string),
-      notes: formData.get("notes") as string,
+      expense_date: (formData.get("expenseDate") as string) || expenseDate,
+      expense_type: expenseType,
+      amount: amountVal,
+      notes: (formData.get("notes") as string) || "",
       payment_mode: paymentMode,
       bank_name: paymentMode === "bank" ? bankName : null,
     };
 
-    if (editExpense) {
-      updateExpense.mutate({ id: editExpense.id, expense: expenseData }, {
-        onSuccess: () => {
-          onOpenChange(false);
-        }
-      });
-    } else {
-      addExpense.mutate(expenseData, {
-        onSuccess: () => {
-          onOpenChange(false);
-          e.currentTarget.reset();
-          setPaymentMode("cash");
-          setBankName("");
-        }
-      });
+    isSubmittingRef.current = true;
+    try {
+      if (editExpense) {
+        await updateExpense.mutateAsync({ id: editExpense.id, expense: expenseData });
+        onOpenChange(false);
+      } else {
+        await addExpense.mutateAsync(expenseData);
+        onOpenChange(false);
+        e.currentTarget.reset();
+        setPaymentMode("cash");
+        setBankName("");
+      }
+    } catch (error) {
+      console.error("[AddExpenseDialog.handleSubmit]", error);
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -91,11 +118,11 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-        "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen 
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0" 
-          : "w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh]"
-      )}>
+          "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
+          isFullScreen
+            ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
+            : "w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh]"
+        )}>
         <DialogHeader className="pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -120,7 +147,7 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
             </Button>
           </div>
         </DialogHeader>
-        
+
         {/* Section Navigation - Only in fullscreen (hidden for single section) */}
         {isFullScreen && SECTIONS.length > 1 && (
           <FormSectionNav
@@ -129,131 +156,131 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
             onNavigate={scrollToSection}
           />
         )}
-        
-        <form 
+
+        <form
           ref={formRef}
-          onSubmit={handleSubmit} 
+          onSubmit={handleSubmit}
           className={cn(
             "flex-1 overflow-y-auto form-scroll-container",
             isFullScreen ? "p-6 lg:p-8" : "p-2"
           )}
         >
-          <div 
+          <div
             ref={containerRef}
             className={isFullScreen ? "max-w-3xl mx-auto space-y-6" : "space-y-4"}
           >
-          {/* Expense Details Card */}
-          <div 
-            ref={setSectionRef(0)}
-            className={cn(
-              "scroll-reveal",
-              isVisible(0) && "is-visible"
-            )}
-          >
-            <Card className="form-card form-card-amber">
-              <CardHeader className="pb-4 pt-5">
-                <div className="form-section-header">
-                  <div className="form-section-icon form-section-icon-amber">
-                    <DollarSign className="w-5 h-5" />
+            {/* Expense Details Card */}
+            <div
+              ref={setSectionRef(0)}
+              className={cn(
+                "scroll-reveal",
+                isVisible(0) && "is-visible"
+              )}
+            >
+              <Card className="form-card form-card-amber">
+                <CardHeader className="pb-4 pt-5">
+                  <div className="form-section-header">
+                    <div className="form-section-icon form-section-icon-amber">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="form-section-title form-section-title-amber">Expense Details</h3>
+                      <p className="form-section-description">Enter the expense information</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="form-section-title form-section-title-amber">Expense Details</h3>
-                    <p className="form-section-description">Enter the expense information</p>
+                </CardHeader>
+                <CardContent className="space-y-4 pb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <LockedDateField
+                      label="Date"
+                      name="expenseDate"
+                      value={expenseDate}
+                      onChange={setExpenseDate}
+                      required
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="amount" className="text-sm font-medium flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-amber-600" />
+                        Amount (PKR) *
+                      </Label>
+                      <Input
+                        id="amount"
+                        name="amount"
+                        type="number"
+                        step="0.01"
+                        required
+                        data-required-positive="true"
+                        data-required-message="Amount must be greater than 0"
+                        defaultValue={editExpense?.amount || ''}
+                        placeholder="0.00"
+                        className="enterprise-input"
+                      />
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <LockedDateField
-                    label="Date"
-                    name="expenseDate"
-                    value={expenseDate}
-                    onChange={setExpenseDate}
-                    required
-                  />
+
                   <div className="space-y-2">
-                    <Label htmlFor="amount" className="text-sm font-medium flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-amber-600" />
-                      Amount (PKR) *
+                    <Label htmlFor="expenseType" className="text-sm font-medium flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-amber-600" />
+                      Expense Type *
                     </Label>
-                    <Input 
-                      id="amount" 
-                      name="amount" 
-                      type="number" 
-                      step="0.01" 
-                      required 
-                      data-required-positive="true"
-                      data-required-message="Amount must be greater than 0"
-                      defaultValue={editExpense?.amount || ''} 
-                      placeholder="0.00"
+                    <Input
+                      id="expenseType"
+                      name="expenseType"
+                      required
+                      placeholder="e.g., Office Rent, Salaries, Utilities"
+                      defaultValue={editExpense?.expense_type || ''}
                       className="enterprise-input"
                     />
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="expenseType" className="text-sm font-medium flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-amber-600" />
-                    Expense Type *
-                  </Label>
-                  <Input 
-                    id="expenseType" 
-                    name="expenseType" 
-                    required 
-                    placeholder="e.g., Office Rent, Salaries, Utilities" 
-                    defaultValue={editExpense?.expense_type || ''} 
-                    className="enterprise-input"
-                  />
-                </div>
 
-                {/* Payment Mode - ADDITIVE FIELD */}
-                <PaymentModeSelect
-                  value={paymentMode}
-                  onChange={setPaymentMode}
-                  bankName={bankName}
-                  onBankNameChange={setBankName}
-                />
-                
-                <div className="space-y-2">
-                  <Label htmlFor="notes" className="text-sm font-medium flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-amber-600" />
-                    Notes
-                  </Label>
-                  <Textarea 
-                    id="notes" 
-                    name="notes" 
-                    rows={3} 
-                    defaultValue={editExpense?.notes || ''} 
-                    placeholder="Add any additional details..."
-                    className="enterprise-input min-h-[80px] resize-none"
+                  {/* Payment Mode - ADDITIVE FIELD */}
+                  <PaymentModeSelect
+                    value={paymentMode}
+                    onChange={setPaymentMode}
+                    bankName={bankName}
+                    onBankNameChange={setBankName}
                   />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-end pt-4 mt-4 border-t border-border/50 sticky bottom-0 bg-background pb-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              tabIndex={-1}
-              onClick={() => onOpenChange(false)}
-              className="px-6"
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              data-save-button="true"
-              disabled={addExpense.isPending || updateExpense.isPending}
-              className="px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25"
-            >
-              {addExpense.isPending || updateExpense.isPending 
-                ? (editExpense ? "Updating..." : "Adding...") 
-                : (editExpense ? "Update Expense" : "Add Expense")}
-            </Button>
-          </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notes" className="text-sm font-medium flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                      Notes
+                    </Label>
+                    <Textarea
+                      id="notes"
+                      name="notes"
+                      rows={3}
+                      defaultValue={editExpense?.notes || ''}
+                      placeholder="Add any additional details..."
+                      className="enterprise-input min-h-[80px] resize-none"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 justify-end pt-4 mt-4 border-t border-border/50 sticky bottom-0 bg-background pb-2">
+              <Button
+                type="button"
+                variant="outline"
+                tabIndex={-1}
+                onClick={() => onOpenChange(false)}
+                className="px-6"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                data-save-button="true"
+                disabled={addExpense.isPending || updateExpense.isPending}
+                className="px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25"
+              >
+                {addExpense.isPending || updateExpense.isPending
+                  ? (editExpense ? "Updating..." : "Adding...")
+                  : (editExpense ? "Update Expense" : "Add Expense")}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

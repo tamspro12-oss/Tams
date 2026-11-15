@@ -22,6 +22,7 @@ import { format, parseISO, isWithinInterval } from "date-fns";
 import { useLocation } from "react-router-dom";
 import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
 import { CopyValue } from "@/components/ui/CopyValue";
+import { toast } from "sonner";
 
 export default function BankCashManager() {
   const { expenses } = useExpenses();
@@ -63,6 +64,8 @@ export default function BankCashManager() {
   const [entryDescription, setEntryDescription] = useState<string>('');
   const entryFormRef = useRef<HTMLFormElement>(null);
   const bankFormRef = useRef<HTMLFormElement>(null);
+  const isEntrySubmittingRef = useRef(false);
+  const isBankSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (showAddEntry) setEntryDate(getTodayDateString());
@@ -379,89 +382,138 @@ export default function BankCashManager() {
   // Handle add entry form
   const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isEntrySubmittingRef.current || addEntry.isPending) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
 
     const isBankEntry = entryType === 'bank_in' || entryType === 'bank_out';
-    const bankName = isBankEntry ? (formData.get('bank_name') as string) : null;
+    const bankName = isBankEntry ? ((formData.get('bank_name') as string) || '').trim() : null;
     const amount = parseFloat(formData.get('amount') as string);
-    const entryDate = formData.get('entry_date') as string;
+    const entryDate = (formData.get('entry_date') as string) || entryDateFallback();
     const category = (formData.get('category') as string) || null;
     const description = (formData.get('description') as string) || null;
     const referenceNumber = (formData.get('reference_number') as string) || null;
 
-    // Record via atomic unified transaction
-    const targetAccount = isBankEntry
-      ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
-      : cashAccount || accounts[0];
-
-    if (targetAccount && amount > 0) {
-      try {
-        if (entryType === 'cash_in' || entryType === 'bank_in') {
-          await recordPayment.mutateAsync({
-            direction: 'in',
-            amount,
-            accountId: targetAccount.id,
-            date: entryDate,
-            referenceNo: referenceNumber || undefined,
-            notes: description || undefined,
-            category: category || undefined,
-          });
-        } else if (entryType === 'cash_out' || entryType === 'bank_out') {
-          await recordExpense.mutateAsync({
-            amount,
-            accountId: targetAccount.id,
-            category: category || 'General Expense',
-            date: entryDate,
-            referenceNo: referenceNumber || undefined,
-            notes: description || undefined,
-          });
-        }
-      } catch (err) {
-        console.warn("Unified entry recorded:", err);
-      }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Please enter a valid amount greater than 0");
+      return;
     }
 
-    await addEntry.mutateAsync({
-      entry_date: entryDate,
-      entry_type: entryType,
-      amount,
-      payment_mode: isBankEntry ? 'bank' : 'cash',
-      bank_name: bankName,
-      category,
-      description,
-      reference_number: referenceNumber,
-    });
+    if (isBankEntry && !bankName) {
+      toast.error("Please select or enter a bank name");
+      return;
+    }
 
-    setShowAddEntry(false);
+    isEntrySubmittingRef.current = true;
+    try {
+      // Record via atomic unified transaction
+      const targetAccount = isBankEntry
+        ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
+        : cashAccount || accounts[0];
+
+      if (targetAccount && amount > 0) {
+        try {
+          if (entryType === 'cash_in' || entryType === 'bank_in') {
+            await recordPayment.mutateAsync({
+              direction: 'in',
+              amount,
+              accountId: targetAccount.id,
+              date: entryDate,
+              referenceNo: referenceNumber || undefined,
+              notes: description || undefined,
+              category: category || undefined,
+            });
+          } else if (entryType === 'cash_out' || entryType === 'bank_out') {
+            await recordExpense.mutateAsync({
+              amount,
+              accountId: targetAccount.id,
+              category: category || 'General Expense',
+              date: entryDate,
+              referenceNo: referenceNumber || undefined,
+              notes: description || undefined,
+            });
+          }
+        } catch (err) {
+          console.warn("Unified entry recorded:", err);
+        }
+      }
+
+      await addEntry.mutateAsync({
+        entry_date: entryDate,
+        entry_type: entryType,
+        amount,
+        payment_mode: isBankEntry ? 'bank' : 'cash',
+        bank_name: bankName,
+        category,
+        description,
+        reference_number: referenceNumber,
+      });
+
+      setShowAddEntry(false);
+    } finally {
+      isEntrySubmittingRef.current = false;
+    }
   };
+
+  function entryDateFallback() {
+    return entryDate || getTodayDateString();
+  }
 
   // Handle add bank form
   const handleAddBank = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const bankName = formData.get('bank_name') as string;
-    const openingBalance = parseFloat(formData.get('opening_balance') as string) || 0;
+    if (isBankSubmittingRef.current || addBank.isPending) return;
 
-    try {
-      await createAccount.mutateAsync({
-        name: bankName,
-        type: 'bank',
-        opening_balance: openingBalance,
-      });
-    } catch (err) {
-      console.warn("Account sync notice:", err);
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
     }
 
-    await addBank.mutateAsync({
-      bank_name: bankName,
-      account_number: formData.get('account_number') as string || null,
-      account_title: formData.get('account_title') as string || null,
-      branch_name: formData.get('branch_name') as string || null,
-      is_active: true,
-      opening_balance: openingBalance,
-    });
+    const formData = new FormData(e.currentTarget);
+    const bankName = ((formData.get('bank_name') as string) || '').trim();
+    const rawOpening = formData.get('opening_balance') as string;
+    const openingBalance = rawOpening ? Number(rawOpening) : 0;
 
-    setShowAddBank(false);
+    if (!bankName) {
+      toast.error("Bank name is required");
+      return;
+    }
+
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+      toast.error("Opening balance must be zero or positive");
+      return;
+    }
+
+    isBankSubmittingRef.current = true;
+    try {
+      try {
+        await createAccount.mutateAsync({
+          name: bankName,
+          type: 'bank',
+          opening_balance: openingBalance,
+        });
+      } catch (err) {
+        console.warn("Account sync notice:", err);
+      }
+
+      await addBank.mutateAsync({
+        bank_name: bankName,
+        account_number: formData.get('account_number') as string || null,
+        account_title: formData.get('account_title') as string || null,
+        branch_name: formData.get('branch_name') as string || null,
+        is_active: true,
+        opening_balance: openingBalance,
+      });
+
+      setShowAddBank(false);
+    } finally {
+      isBankSubmittingRef.current = false;
+    }
   };
 
   return (

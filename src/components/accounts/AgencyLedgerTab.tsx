@@ -32,6 +32,7 @@ import { useAgency } from "@/hooks/useAgency";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { getKarachiTodayNoon, getKarachiYmd } from "@/lib/karachiTime";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { cn } from "@/lib/utils";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
@@ -197,8 +198,8 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
       XLSX.utils.book_append_sheet(wb, ws, "Agency Ledger");
       XLSX.writeFile(wb, `Agency_Ledger_${format(new Date(), "yyyyMMdd")}.xlsx`);
       toast.success("Ledger exported to Excel");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Export failed. Please try again.", "AgencyLedgerTab.export");
     }
   };
 
@@ -235,8 +236,8 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
 
       doc.save(`Agency_Ledger_${format(new Date(), "yyyyMMdd")}.pdf`);
       toast.success("Ledger exported to PDF");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Export failed. Please try again.", "AgencyLedgerTab.export");
     }
   };
 

@@ -39,6 +39,7 @@ const emptyForm: RefundInput = {
 export default function Refunds() {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const [editing, setEditing] = useState<Refund | null>(null);
   const [form, setForm] = useState<RefundInput>(() => ({ ...emptyForm, refund_date: getTodayDateString() }));
 
@@ -118,7 +119,8 @@ export default function Refunds() {
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!form.refund_date) e.refund_date = "Date is required";
-    if (!form.refund_amount || Number(form.refund_amount) <= 0) e.refund_amount = "Amount must be greater than 0";
+    const amt = Number(form.refund_amount);
+    if (!Number.isFinite(amt) || amt <= 0) e.refund_amount = "Amount must be greater than 0";
     if (form.payment_mode === "bank" && !form.bank_name?.trim()) e.bank_name = "Bank name is required for bank payments";
     setErrors(e);
     if (Object.keys(e).length) {
@@ -130,12 +132,27 @@ export default function Refunds() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || addRefund.isPending || updateRefund.isPending) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
     if (!validate()) return;
     const payload: RefundInput = { ...form, refund_amount: Number(form.refund_amount) };
+    isSubmittingRef.current = true;
     if (editing) {
-      updateRefund.mutate({ id: editing.id, ...payload }, { onSuccess: () => { setOpen(false); refetch(); } });
+      updateRefund.mutate(
+        { id: editing.id, ...payload },
+        {
+          onSuccess: () => { setOpen(false); refetch(); },
+          onSettled: () => { isSubmittingRef.current = false; },
+        }
+      );
     } else {
-      addRefund.mutate(payload, { onSuccess: () => { setOpen(false); refetch(); } });
+      addRefund.mutate(payload, {
+        onSuccess: () => { setOpen(false); refetch(); },
+        onSettled: () => { isSubmittingRef.current = false; },
+      });
     }
   };
 

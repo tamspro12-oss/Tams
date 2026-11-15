@@ -4,6 +4,7 @@ import { Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, createReminderEmailBody } from "@/lib/emailService";
 import { useAgency } from "@/hooks/useAgency";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
   TooltipContent,
@@ -123,11 +124,12 @@ export function EmailReminderButton({ client, type }: EmailReminderButtonProps) 
           variant: "default",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[EmailReminderButton] ✗ Send failed:', error);
+      const parsed = parseSupabaseError(error, "Failed to send reminder email");
       toast({
         title: "Error",
-        description: error.message || "Failed to send reminder email",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

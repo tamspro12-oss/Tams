@@ -10,6 +10,7 @@ import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { CopyValue } from "@/components/ui/CopyValue";
@@ -211,8 +212,8 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
 
       doc.save(`Statement_${scopeType}_${format(new Date(), "yyyyMMdd")}.pdf`);
       toast.success("Statement PDF downloaded");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Export failed. Please try again.", "StatementsTab.handleExportPDF");
     }
   };
 

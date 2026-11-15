@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Users, Edit, Trash2, Key, RefreshCw, Loader2, Shield, Calendar, Search, Monitor, Crown, Infinity, Copy, ExternalLink, Database, Check, Code } from 'lucide-react';
 import { format } from 'date-fns';
 import type { RegisteredUserRecord } from '@/lib/userDirectorySync';
+import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 
 const SUPABASE_SETUP_SQL = `-- Run project migrations in Supabase SQL Editor / CLI in order:
 -- 1. supabase/migrations/20261114_00_add_super_admin_enum.sql
@@ -151,9 +152,8 @@ export const UserManagementList = () => {
       });
 
       setUsers(convertedUsers);
-    } catch (error: any) {
-      console.error('Error fetching registered users:', error);
-      toast.error(error?.message || 'Failed to load user directory from database');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to load user directory from database', 'UserManagementList.fetchUsers');
       setUsers([]);
     } finally {
       setLoading(false);
@@ -186,15 +186,15 @@ export const UserManagementList = () => {
           .eq('id', editUser.id);
 
         if (profileError) {
-          throw new Error(data?.error || error?.message || profileError.message);
+          throw profileError;
         }
       }
 
       toast.success('User updated successfully');
       setEditUser(null);
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update user');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to update user', 'UserManagementList.handleEditUser');
     } finally {
       setProcessing(false);
     }
@@ -233,8 +233,8 @@ export const UserManagementList = () => {
       setResetPasswordUser(null);
       setPasswordForm({ password: '', confirmPassword: '' });
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to reset password');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to reset password', 'UserManagementList.handleResetPassword');
     } finally {
       setProcessing(false);
     }
@@ -262,8 +262,8 @@ export const UserManagementList = () => {
       toast.success('User deleted successfully');
       setDeleteUser(null);
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete user');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to delete user', 'UserManagementList.handleDeleteUser');
     } finally {
       setProcessing(false);
     }
@@ -327,8 +327,8 @@ export const UserManagementList = () => {
       toast.success(`Subscription plan updated to "${subscriptionForm.plan}" successfully`);
       setEditSubscriptionUser(null);
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to update subscription');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to update subscription', 'UserManagementList.handleUpdateSubscription');
     } finally {
       setProcessing(false);
     }

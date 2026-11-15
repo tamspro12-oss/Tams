@@ -9,11 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
 import { B2BAgent } from "@/hooks/useB2BAgents";
 import { useVendors } from "@/hooks/useStorage";
-import { useAgency } from "@/hooks/useAgency";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Plane, User, CreditCard, Building2, Plus, Store, Search, Filter, Maximize2, Minimize2, FileText, Hotel, Car, Wrench, Calendar, Banknote, Trash2, Clock, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { BulkScanAutofillButton } from "@/components/ai/BulkScanAutofillButton";
@@ -47,6 +47,7 @@ const parsePackageData = (notes: string | null) => {
 
 export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: AddB2BBookingDialogProps) {
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showQuickVendorAdd, setShowQuickVendorAdd] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState(editBooking?.vendor_id || "none");
@@ -112,7 +113,6 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
 
   const { addBooking, updateBooking } = useB2BBookings(agent.id);
   const { vendors, addVendor } = useVendors();
-  const { data: agency } = useAgency();
   const quickVendorFormRef = useRef<HTMLFormElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -267,11 +267,9 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
       toast.dismiss();
       toast.success(`✓ Vendor "${newVendor.name}" added and linked successfully!`);
       quickVendorFormRef.current.reset();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.dismiss();
-      toast.error("Failed to add vendor", {
-        description: error?.message || "Please try again",
-      });
+      handleSupabaseError(error, "Failed to add vendor. Please try again.", "AddB2BBookingDialog.handleQuickVendorAdd");
     }
   };
 
@@ -285,23 +283,61 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
+    if (isSubmittingRef.current || loading) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
 
-    const sellingPriceVal = parseFloat(formData.get("selling_price") as string) || 0;
-    const purchasingPrice = parseFloat(formData.get("purchasing_price") as string) || 0;
+    const passengerName = (formData.get("passenger_name") as string || "").trim();
+    if (!passengerName) {
+      toast.error("Passenger name is required");
+      return;
+    }
+
+    const rawSelling = parseFloat(formData.get("selling_price") as string);
+    const rawPurchasing = parseFloat(formData.get("purchasing_price") as string);
+    const sellingPriceVal = Number.isFinite(rawSelling) ? rawSelling : 0;
+    const purchasingPrice = Number.isFinite(rawPurchasing) ? rawPurchasing : 0;
+
+    if (sellingPriceVal < 0 || purchasingPrice < 0 || amountReceived < 0) {
+      toast.error("Amounts cannot be negative");
+      return;
+    }
+
+    if (amountReceived > 0 && paymentMode === "bank" && !bankName.trim()) {
+      toast.error("Please select a bank name for bank payment");
+      return;
+    }
+
+    const depDate = (formData.get("flight_date") as string) || "";
+    const retDate = isUmrah
+      ? (formData.get("umrah_return_date") as string) || ""
+      : isReturnTicket
+        ? (formData.get("return_date") as string) || ""
+        : "";
+    if (depDate && retDate && retDate < depDate) {
+      toast.error("Return date cannot be earlier than departure date");
+      return;
+    }
+
     const commissionAmount = calculateCommission(sellingPriceVal);
     const profit = sellingPriceVal - purchasingPrice - commissionAmount;
 
     // Validate amount received doesn't exceed total service amount
-    const totalServiceAmount = sellingPriceVal - commissionAmount;
+    const totalServiceAmount = Math.max(0, sellingPriceVal - commissionAmount);
     if (amountReceived > totalServiceAmount && !editBooking) {
       toast.error('Amount received cannot exceed outstanding amount', {
         description: `Maximum allowed: PKR ${totalServiceAmount.toLocaleString()}`
       });
-      setLoading(false);
       return;
     }
+
+    isSubmittingRef.current = true;
+    setLoading(true);
 
     // Build structured notes based on service type
     let structuredNotes = "";
@@ -418,9 +454,11 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
       } else {
         await addBooking.mutateAsync(bookingData);
       }
-      setLoading(false);
       onOpenChange(false);
     } catch (error) {
+      console.error("[AddB2BBookingDialog.handleSubmit]", error);
+    } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

@@ -40,6 +40,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
   const { data: agency } = useAgency();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   const isOpen = open !== undefined ? open : internalOpen;
@@ -71,12 +72,29 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
+    const totalAmount = formData.payment_amount ? parseFloat(formData.payment_amount) : 0;
+    const amountPaid = formData.amount_paid ? parseFloat(formData.amount_paid) : 0;
+    if (!Number.isFinite(totalAmount) || totalAmount < 0 || !Number.isFinite(amountPaid) || amountPaid < 0) {
+      toast.error("Payment amounts must be zero or positive");
+      return;
+    }
+    if (totalAmount > 0 && amountPaid > totalAmount) {
+      toast.error("Amount paid cannot exceed total payable amount");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
-      const totalAmount = formData.payment_amount ? parseFloat(formData.payment_amount) : 0;
-      const amountPaid = formData.amount_paid ? parseFloat(formData.amount_paid) : 0;
-      
+
       const vendorData = {
         name: formData.name.trim(),
         contact_person: formData.contact_person?.trim() || undefined,
@@ -90,7 +108,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
 
       // Validate
       const validation = validateData(vendorSchema, vendorData);
-      
+
       if (!validation.success) {
         setIsSubmitting(false);
         toast.error((validation as { success: false; error: string }).error);
@@ -98,7 +116,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
       }
 
       const validatedData = validation.data;
-      
+
       // Calculate payment status
       let paymentStatus = "Pending";
       if (totalAmount > 0) {
@@ -108,7 +126,7 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
           paymentStatus = "Partial";
         }
       }
-      
+
       const finalData = {
         ...validatedData,
         payment_status: paymentStatus,
@@ -117,10 +135,9 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
 
       if (editVendor) {
         await updateVendor.mutateAsync({ id: editVendor.id, vendor: finalData });
-        toast.success("Vendor updated successfully");
       } else {
         const newVendor = await addVendor.mutateAsync(finalData);
-        
+
         // Record initial payment history if amount was paid
         if (amountPaid > 0 && agency?.id) {
           const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
@@ -129,20 +146,20 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
             agency_id: agency.id,
             payment_amount: amountPaid,
             payment_type: paymentType,
-            payment_date: new Date().toISOString().split('T')[0],
+            payment_date: getTodayDateString(),
             notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
           });
         }
-        toast.success("Vendor added successfully");
       }
 
       setIsOpen(false);
       if (!editVendor) {
         setFormData(getInitialFormData());
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to save vendor");
+    } catch (error) {
+      console.error("[AddVendorDialogValidated.handleSubmit]", error);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -183,118 +200,118 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
         </DialogHeader>
         <form ref={formRef} onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-4" : "space-y-4"}>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="name">Vendor Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                maxLength={100}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="name">Vendor Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact_person">Contact Person</Label>
+                <Input
+                  id="contact_person"
+                  value={formData.contact_person}
+                  onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact_number">Contact Number</Label>
+                <Input
+                  id="contact_number"
+                  value={formData.contact_number}
+                  onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
+                  placeholder="03001234567"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  maxLength={255}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service_type">Service Type</Label>
+                <Input
+                  id="service_type"
+                  value={formData.service_type}
+                  onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
+                  placeholder="e.g., Hotel, Transport"
+                  maxLength={100}
+                />
+              </div>
+              <LockedDateField
+                id="booking_date"
+                label="Entry Date"
+                value={formData.booking_date}
+                onChange={(val) => setFormData((prev) => ({ ...prev, booking_date: val }))}
               />
+              <div className="space-y-2">
+                <Label htmlFor="payment_amount">Payment Amount (₨)</Label>
+                <Input
+                  id="payment_amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10000000"
+                  value={formData.payment_amount}
+                  onChange={(e) => setFormData({ ...formData, payment_amount: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amount_paid">Amount Paid (₨)</Label>
+                <Input
+                  id="amount_paid"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10000000"
+                  value={formData.amount_paid}
+                  onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment_status">Payment Status</Label>
+                <Select value={formData.payment_status} onValueChange={(value) => setFormData({ ...formData, payment_status: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Partial">Partial</SelectItem>
+                    <SelectItem value="Paid">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contact_person">Contact Person</Label>
-              <Input
-                id="contact_person"
-                value={formData.contact_person}
-                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                maxLength={100}
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={3}
+                maxLength={5000}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="contact_number">Contact Number</Label>
-              <Input
-                id="contact_number"
-                value={formData.contact_number}
-                onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                placeholder="03001234567"
-              />
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="outline" tabIndex={-1} onClick={() => setIsOpen(false)} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" data-save-button="true" disabled={isSubmitting} className="gap-2">
+                <Save className="w-4 h-4" />
+                {isSubmitting ? (editVendor ? "Updating..." : "Adding...") : (editVendor ? "Update Vendor" : "Add Vendor")}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                maxLength={255}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="service_type">Service Type</Label>
-              <Input
-                id="service_type"
-                value={formData.service_type}
-                onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
-                placeholder="e.g., Hotel, Transport"
-                maxLength={100}
-              />
-            </div>
-            <LockedDateField
-              id="booking_date"
-              label="Entry Date"
-              value={formData.booking_date}
-              onChange={(val) => setFormData((prev) => ({ ...prev, booking_date: val }))}
-            />
-            <div className="space-y-2">
-              <Label htmlFor="payment_amount">Payment Amount (₨)</Label>
-              <Input
-                id="payment_amount"
-                type="number"
-                step="0.01"
-                min="0"
-                max="10000000"
-                value={formData.payment_amount}
-                onChange={(e) => setFormData({ ...formData, payment_amount: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="amount_paid">Amount Paid (₨)</Label>
-              <Input
-                id="amount_paid"
-                type="number"
-                step="0.01"
-                min="0"
-                max="10000000"
-                value={formData.amount_paid}
-                onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="payment_status">Payment Status</Label>
-              <Select value={formData.payment_status} onValueChange={(value) => setFormData({ ...formData, payment_status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Partial">Partial</SelectItem>
-                  <SelectItem value="Paid">Paid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              maxLength={5000}
-            />
-          </div>
-          <div className="flex gap-2 justify-end pt-2">
-            <Button type="button" variant="outline" tabIndex={-1} onClick={() => setIsOpen(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="submit" data-save-button="true" disabled={isSubmitting} className="gap-2">
-              <Save className="w-4 h-4" />
-              {isSubmitting ? (editVendor ? "Updating..." : "Adding...") : (editVendor ? "Update Vendor" : "Add Vendor")}
-            </Button>
-          </div>
           </div>
         </form>
       </DialogContent>

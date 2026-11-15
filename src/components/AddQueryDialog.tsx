@@ -28,6 +28,7 @@ const SECTIONS = [
 
 export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const { addQuery, updateQuery } = useQueries();
 
@@ -43,13 +44,26 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || addQuery.isPending || updateQuery.isPending) return;
+
     const form = e.currentTarget;
     const formData = new FormData(form);
 
+    const clientNameVal = (formData.get("client_name") as string || "").trim();
+    const queryTextVal = (formData.get("query_text") as string || "").trim();
+    if (!clientNameVal) {
+      toast.error("Client name is required");
+      return;
+    }
+    if (!queryTextVal) {
+      toast.error("Query details are required");
+      return;
+    }
+
     const queryData = {
-      client_name: formData.get("client_name") as string,
+      client_name: clientNameVal,
       contact_number: formData.get("contact_number") as string,
-      query_text: formData.get("query_text") as string,
+      query_text: queryTextVal,
       priority: formData.get("priority") as string,
       status: formData.get("status") as string,
       assigned_to: formData.get("assigned_to") as string,
@@ -62,19 +76,19 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
       return;
     }
 
+    isSubmittingRef.current = true;
     try {
       if (editQuery) {
         await updateQuery.mutateAsync({ id: editQuery.id, query: queryData });
-        toast.success("Query updated successfully");
       } else {
         await addQuery.mutateAsync(queryData);
-        toast.success("Query added successfully");
       }
       form.reset();
       onOpenChange(false);
-    } catch (error: any) {
-      const errorMessage = error?.message || (editQuery ? "Failed to update query" : "Failed to add query");
-      toast.error(`Could not save: ${errorMessage}`);
+    } catch (error) {
+      console.error("[AddQueryDialog.handleSubmit]", error);
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -83,11 +97,11 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-        "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
-          : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
-      )}>
+          "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
+          isFullScreen
+            ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
+            : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
+        )}>
         <DialogHeader className="pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

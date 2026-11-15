@@ -23,6 +23,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export default function Vendors() {
   const navigate = useNavigate();
@@ -121,7 +122,7 @@ export default function Vendors() {
         .eq('vendor_id', deleteId);
 
       if (b2bError) {
-        throw new Error(`Failed to unlink B2B bookings: ${b2bError.message}`);
+        throw b2bError;
       }
 
       // 3. Now delete the vendor
@@ -138,11 +139,8 @@ export default function Vendors() {
         description: "All linked bookings have been unlinked."
       });
       setDeleteId(null);
-    } catch (error: any) {
-      console.error('Force delete error:', error);
-      toast.error("Failed to force delete vendor", {
-        description: error.message
-      });
+    } catch (error: unknown) {
+      handleSupabaseError(error, "Failed to force delete vendor", "Vendors.handleForceDelete");
     } finally {
       setIsForceDeleting(false);
     }

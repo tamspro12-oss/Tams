@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { sendEmail, createInvoiceEmailBody } from "@/lib/emailService";
 import { useAgency } from "@/hooks/useAgency";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
   TooltipContent,
@@ -125,11 +126,12 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
           variant: "default",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[EmailInvoiceButton] ✗ Send failed:', error);
+      const parsed = parseSupabaseError(error, "Failed to send invoice email");
       toast({
         title: "Error",
-        description: error.message || "Failed to send invoice email",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

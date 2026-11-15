@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { sendEmail, createBookingEmailBody } from "@/lib/emailService";
 import { useAgency } from "@/hooks/useAgency";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
   TooltipContent,
@@ -130,11 +131,12 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
           variant: "default",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[EmailBookingButton] ✗ Send failed:', error);
+      const parsed = parseSupabaseError(error, "Failed to send booking email");
       toast({
         title: "Error",
-        description: error.message || "Failed to send booking email",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

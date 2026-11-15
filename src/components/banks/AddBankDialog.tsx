@@ -12,6 +12,7 @@ import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { toast } from "sonner";
 import { AgencyBank } from "@/hooks/useAgencyBanks";
 import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 interface AddBankDialogProps {
   open: boolean;
@@ -36,6 +37,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
   const [branchName, setBranchName] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -57,6 +59,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
 
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       toast.error("You are offline — bank account not saved");
@@ -74,15 +77,21 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
       return;
     }
 
+    const balanceNum = openingBalance.trim() === "" ? 0 : Number(openingBalance);
+    if (!Number.isFinite(balanceNum) || balanceNum < 0) {
+      toast.error("Opening balance must be a valid non-negative number");
+      return;
+    }
+
     const activeAgencyId = agencyId || (await getAuthenticatedAgencyId());
     if (!activeAgencyId) {
       toast.error("Unable to identify agency. Please reload and try again.");
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      const balanceNum = parseFloat(openingBalance) || 0;
 
       if (bankToEdit) {
         // Update existing agency bank
@@ -118,9 +127,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
           .eq("agency_id", activeAgencyId)
           .eq("name", oldFullAccountName);
 
-        if (accSyncErr) {
-          throw new Error(`Bank saved but ledger account sync failed: ${accSyncErr.message}`);
-        }
+        if (accSyncErr) throw accSyncErr;
 
         await invalidateAllFinancialQueries(queryClient, activeAgencyId);
 
@@ -142,14 +149,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
           .select()
           .single();
 
-        if (bankErr) {
-          if (bankErr.message?.includes("duplicate")) {
-            toast.error("Bank account already exists");
-          } else {
-            throw bankErr;
-          }
-          return;
-        }
+        if (bankErr) throw bankErr;
 
         const fullAccountName = accountNumber.trim()
           ? `${trimmedBankName} (${accountNumber.trim()})`
@@ -165,7 +165,7 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
 
         if (accErr) {
           await (supabase as any).from("agency_banks").delete().eq("id", newBank.id);
-          throw new Error(`Could not create linked bank ledger account: ${accErr.message}`);
+          throw accErr;
         }
 
         await invalidateAllFinancialQueries(queryClient, activeAgencyId);
@@ -175,9 +175,10 @@ export const AddBankDialog: React.FC<AddBankDialogProps> = ({
       }
 
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save bank account");
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Failed to save bank account", "AddBankDialog.handleSave");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

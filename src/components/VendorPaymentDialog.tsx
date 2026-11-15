@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { PaymentModeSelect } from "./PaymentModeSelect";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 
 interface VendorPaymentDialogProps {
   vendor: any;
@@ -30,6 +32,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -46,6 +49,16 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast({
+        title: "Offline",
+        description: "Network connection issue. You are offline, not saved.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!agency?.id) {
       toast({
@@ -59,7 +72,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
     // Validate input - allow both positive and negative values
     const additionalPayment = parseFloat(paymentAmount);
 
-    if (isNaN(additionalPayment) || additionalPayment === 0) {
+    if (!Number.isFinite(additionalPayment) || additionalPayment === 0) {
       toast({
         title: "Invalid Amount",
         description: "Please enter a valid payment amount (positive to add, negative to adjust)",
@@ -69,7 +82,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
     }
 
     // For positive payments, check if it exceeds remaining balance
-    if (additionalPayment > 0 && additionalPayment > remaining) {
+    if (additionalPayment > 0 && remaining >= 0 && additionalPayment > remaining) {
       toast({
         title: "Amount Too Large",
         description: `Payment amount cannot exceed remaining balance of ₨${remaining.toLocaleString()}`,
@@ -89,9 +102,20 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
       return;
     }
 
+    if (additionalPayment > 0 && paymentMode === "bank" && !bankName.trim()) {
+      toast({
+        title: "Bank Required",
+        description: "Please select or enter a bank name for bank payments",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
+      const todayYmd = getTodayDateString();
       const newTotalPaid = Math.max(0, currentPaid + additionalPayment);
 
       // Calculate payment status based on amounts
@@ -116,7 +140,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
         agency_id: agency.id,
         payment_amount: additionalPayment,
         payment_type: paymentType,
-        payment_date: new Date().toISOString().split('T')[0],
+        payment_date: todayYmd,
         notes: noteText,
         payment_mode: paymentMode,
         bank_name: paymentMode === "bank" ? bankName : null,
@@ -135,7 +159,7 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
       try {
         await supabase.from("transactions").insert({
           agency_id: agency.id,
-          date: new Date().toISOString().split("T")[0],
+          date: todayYmd,
           type: "payment_out",
           party_id: vendor.id,
           party_type: "vendor",
@@ -159,14 +183,15 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
       setPaymentMode("cash");
       setBankName("");
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Vendor payment error:', error);
       toast({
         title: "Error",
-        description: error?.message || "Failed to record payment. Please try again.",
+        description: parseSupabaseError(error, "Failed to record payment. Please try again.").userMessage,
         variant: "destructive",
       });
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

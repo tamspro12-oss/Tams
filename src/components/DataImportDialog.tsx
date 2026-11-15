@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import { useClients, useBookings, useVendors, useExpenses } from "@/hooks/useStorage";
 import {
   parseExcelFile,
@@ -111,10 +112,12 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
       if (validRows.length > 0) {
         setStep('preview');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("[TAMS Error] DataImport parse:", error);
+      const parsed = parseSupabaseError(error, "Failed to parse file");
       toast({
         title: "Error",
-        description: error.message || "Failed to parse file",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     }
@@ -196,10 +199,12 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
         title: "Import Complete",
         description: `Successfully imported ${successCount} records. ${failCount} failed.`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("[TAMS Error] DataImport import:", error);
+      const parsed = parseSupabaseError(error, "Failed to import data");
       toast({
         title: "Import Failed",
-        description: error.message || "Failed to import data",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

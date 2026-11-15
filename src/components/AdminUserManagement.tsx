@@ -10,9 +10,11 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { UserPlus, Loader2, Users } from 'lucide-react';
 import { UserManagementList } from './UserManagementList';
+import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 
 export const AdminUserManagement = () => {
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -23,9 +25,20 @@ export const AdminUserManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.email || !formData.password || !formData.full_name || !formData.agency_name) {
+    if (isSubmittingRef.current || loading) return;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('Network connection issue. You are offline, not saved.');
+      return;
+    }
+
+    if (!formData.email.trim() || !formData.password || !formData.full_name.trim() || !formData.agency_name.trim()) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
@@ -34,6 +47,7 @@ export const AdminUserManagement = () => {
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
@@ -64,10 +78,10 @@ export const AdminUserManagement = () => {
         agency_name: '',
         subscription_plan: 'free'
       });
-    } catch (error: any) {
-      console.error('Error creating user:', error);
-      toast.error(error.message || 'Failed to create user');
+    } catch (error: unknown) {
+      handleSupabaseError(error, 'Failed to create user', 'AdminUserManagement.handleSubmit');
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

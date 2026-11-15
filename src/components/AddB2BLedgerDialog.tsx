@@ -9,7 +9,8 @@ import { useB2BLedger, B2BLedgerEntry } from "@/hooks/useB2BLedger";
 import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
 import { B2BAgent } from "@/hooks/useB2BAgents";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Receipt, CreditCard, Link2, Plane, Maximize2, Minimize2, FileText, AlertCircle, Split, Wand2, X, Check, Banknote } from "lucide-react";
+import { Receipt, CreditCard, Link2, Plane, Maximize2, Minimize2, FileText, AlertCircle, Split, Wand2, X, Banknote } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +38,7 @@ interface BookingAllocation {
 export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, preselectedBookingId }: AddB2BLedgerDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [entryType, setEntryType] = useState<string>("credit");
   const [amount, setAmount] = useState("");
   const [entryDate, setEntryDate] = useState(() => getTodayDateString());
@@ -254,7 +256,25 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || loading) return;
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Please enter a valid amount greater than 0");
+      return;
+    }
+
+    if (entryType === 'credit' && cashBankMode === 'bank' && !bankName.trim()) {
+      toast.error("Please select a bank name for bank payment");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
@@ -313,9 +333,11 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
         }
       }
 
-      setLoading(false);
       onOpenChange(false);
     } catch (error) {
+      console.error("[AddB2BLedgerDialog.handleSubmit]", error);
+    } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

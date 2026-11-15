@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { sessionManager } from "@/lib/sessionManager";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export function ChangePasswordSection() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -121,11 +122,12 @@ export function ChangePasswordSection() {
         replace: true,
         state: { message: "Password changed. Please login again." },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Password change error:", error);
+      const parsed = parseSupabaseError(error, "Please try again later");
       toast({
         title: "Failed to change password",
-        description: error.message || "Please try again later",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

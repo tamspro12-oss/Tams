@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FileDown, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
   TooltipContent,
@@ -65,11 +66,12 @@ export function BookingDownloadButton({ client, vendor }: BookingDownloadButtonP
         title: "Booking confirmation downloaded",
         description: `${filename} has been saved to your device`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to generate booking confirmation:", error);
+      const parsed = parseSupabaseError(error, "Failed to generate booking confirmation");
       toast({
         title: "Error",
-        description: error.message || "Failed to generate booking confirmation",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     } finally {

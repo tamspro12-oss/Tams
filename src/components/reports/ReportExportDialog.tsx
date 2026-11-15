@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   format,
   startOfDay,
@@ -672,9 +673,8 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         doc.save(filename);
         toast.success("Financial report exported successfully");
       }
-    } catch (err: any) {
-      console.error("Export error:", err);
-      toast.error(`Could not export PDF: ${err.message || "Unknown error"}`);
+    } catch (err: unknown) {
+      handleSupabaseError(err, "Could not export PDF. Please try again.", "ReportExportDialog.handleExportPDF");
     } finally {
       setIsExporting(false);
     }

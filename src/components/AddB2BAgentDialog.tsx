@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEnterToNext } from "@/hooks/useEnterToNext";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
 
 export interface AddB2BAgentDialogProps {
   open: boolean;
@@ -40,6 +41,7 @@ export function AddB2BAgentDialog({
   onSaved,
 }: AddB2BAgentDialogProps) {
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const { addAgent, updateAgent } = useB2BAgents();
   const { balances, upsertBalance } = useOpeningBalances();
 
@@ -118,6 +120,13 @@ export function AddB2BAgentDialog({
 
   // Main submit handler
   const handleSaveInternal = async (isSaveAndAddNext = false) => {
+    if (isSubmittingRef.current || loading) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const trimmedName = agentName.trim();
     if (!trimmedName) {
       toast.error("Agent Name is required");
@@ -125,6 +134,28 @@ export function AddB2BAgentDialog({
       return;
     }
 
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    const parsedCommission = commissionValue.trim() ? Number(commissionValue) : 0;
+    if (!Number.isFinite(parsedCommission) || parsedCommission < 0) {
+      toast.error("Commission value must be zero or positive");
+      return;
+    }
+    if (commissionType === "percentage" && parsedCommission > 100) {
+      toast.error("Commission percentage cannot exceed 100%");
+      return;
+    }
+
+    const parsedOpBal = openingBalanceAmount.trim() ? Number(openingBalanceAmount) : 0;
+    if (!Number.isFinite(parsedOpBal) || parsedOpBal < 0) {
+      toast.error("Opening balance must be zero or positive");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setLoading(true);
     const agentData = {
       agent_name: trimmedName,
@@ -134,7 +165,7 @@ export function AddB2BAgentDialog({
       country: country.trim() || null,
       city: city.trim() || null,
       commission_type: commissionType,
-      commission_value: commissionValue ? parseFloat(commissionValue) : null,
+      commission_value: commissionValue.trim() ? parsedCommission : null,
       status: status,
       notes: notes.trim() || null,
     };
@@ -144,21 +175,18 @@ export function AddB2BAgentDialog({
       if (editAgent) {
         await updateAgent.mutateAsync({ id: editAgent.id, agent: agentData });
         savedResult = { ...editAgent, ...agentData } as B2BAgent;
-        toast.success(`Agent "${trimmedName}" updated successfully!`);
       } else {
         savedResult = await addAgent.mutateAsync(agentData);
-        toast.success(`Agent "${trimmedName}" created successfully!`);
       }
 
       // Record optional Opening Balance
-      const opBalNum = parseFloat(openingBalanceAmount);
-      if (savedResult?.id && !isNaN(opBalNum) && opBalNum > 0) {
+      if (savedResult?.id && parsedOpBal > 0) {
         await upsertBalance.mutateAsync({
           party_type: "b2b_agent",
           party_id: savedResult.id,
           balance_type: openingBalanceType,
-          amount: opBalNum,
-          as_of_date: new Date().toISOString().split("T")[0],
+          amount: parsedOpBal,
+          as_of_date: getTodayDateString(),
           notes: "Initial brought-forward opening balance",
         });
       }
@@ -176,9 +204,10 @@ export function AddB2BAgentDialog({
       } else {
         onOpenChange(false);
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to save agent");
+    } catch (error) {
+      console.error("[AddB2BAgentDialog.handleSaveInternal]", error);
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

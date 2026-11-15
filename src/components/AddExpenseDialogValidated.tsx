@@ -20,6 +20,7 @@ interface AddExpenseDialogProps {
 export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: AddExpenseDialogProps) {
   const { addExpense, updateExpense } = useExpenses();
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expenseDate, setExpenseDate] = useState(() => getTodayDateString());
@@ -40,41 +41,51 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
+    const parsedAmount = parseFloat(formData.get("amount") as string);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Amount must be greater than 0");
+      return;
+    }
 
     const expenseData = {
       expense_date: formData.get("expenseDate") as string,
       expense_type: formData.get("expenseType") as string,
-      amount: parseFloat(formData.get("amount") as string),
+      amount: parsedAmount,
       notes: formData.get("notes") as string || undefined,
     };
 
     // Validate data
     const validation = validateData(expenseSchema, expenseData);
-    
+
     if (!validation.success) {
-      setIsSubmitting(false);
       toast.error((validation as { success: false; error: string }).error);
       return;
     }
 
     const validatedData = validation.data;
 
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       if (editExpense) {
         await updateExpense.mutateAsync({ id: editExpense.id, expense: validatedData });
-        toast.success("Expense updated successfully");
       } else {
         await addExpense.mutateAsync(validatedData);
-        toast.success("Expense added successfully");
         e.currentTarget.reset();
       }
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to save expense");
+    } catch (error) {
+      console.error("[AddExpenseDialogValidated.handleSubmit]", error);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -105,58 +116,58 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
         </DialogHeader>
         <form ref={formRef} onSubmit={handleSubmit} className={isFullScreen ? "p-6 lg:p-8" : ""}>
           <div className={isFullScreen ? "max-w-6xl mx-auto space-y-4" : "space-y-4"}>
-          <LockedDateField
-            id="expenseDate"
-            name="expenseDate"
-            label="Date"
-            value={expenseDate}
-            onChange={setExpenseDate}
-            required
-          />
-          <div className="space-y-2">
-            <Label htmlFor="expenseType">Expense Type *</Label>
-            <Input 
-              id="expenseType" 
-              name="expenseType" 
-              required 
-              placeholder="e.g., Office Rent, Salaries" 
-              defaultValue={editExpense?.expense_type || ''} 
-              maxLength={100}
+            <LockedDateField
+              id="expenseDate"
+              name="expenseDate"
+              label="Date"
+              value={expenseDate}
+              onChange={setExpenseDate}
+              required
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="amount">Amount (₨) *</Label>
-            <Input 
-              id="amount" 
-              name="amount" 
-              type="number" 
-              step="0.01" 
-              min="0.01"
-              max="10000000"
-              required 
-              data-required-positive="true"
-              data-required-message="Amount must be greater than 0"
-              defaultValue={editExpense?.amount || ''} 
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea 
-              id="notes" 
-              name="notes" 
-              rows={3} 
-              defaultValue={editExpense?.notes || ''} 
-              maxLength={5000}
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" tabIndex={-1} onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" data-save-button="true" disabled={isSubmitting}>
-              {isSubmitting ? (editExpense ? "Updating..." : "Adding...") : (editExpense ? "Update Expense" : "Add Expense")}
-            </Button>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="expenseType">Expense Type *</Label>
+              <Input
+                id="expenseType"
+                name="expenseType"
+                required
+                placeholder="e.g., Office Rent, Salaries"
+                defaultValue={editExpense?.expense_type || ''}
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount (₨) *</Label>
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                max="10000000"
+                required
+                data-required-positive="true"
+                data-required-message="Amount must be greater than 0"
+                defaultValue={editExpense?.amount || ''}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                name="notes"
+                rows={3}
+                defaultValue={editExpense?.notes || ''}
+                maxLength={5000}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" tabIndex={-1} onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" data-save-button="true" disabled={isSubmitting}>
+                {isSubmitting ? (editExpense ? "Updating..." : "Adding...") : (editExpense ? "Update Expense" : "Add Expense")}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 const SECTIONS = [
   { id: 'contact-info', label: 'Contact Information', color: 'blue' },
@@ -290,11 +291,9 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
         description: "Now available in Vendors section",
       });
       quickVendorFormRef.current.reset();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.dismiss();
-      toast.error("Failed to add vendor", {
-        description: error?.message || "Please try again",
-      });
+      handleSupabaseError(error, "Failed to add vendor", "AddClientDialog.handleQuickVendorAdd");
     }
   };
 
@@ -326,8 +325,8 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
       await updateVendor.mutateAsync({ id: vendorToEdit.id, vendor: vendorData });
       setShowQuickVendorEdit(false);
       toast.success(`Vendor "${vendorData.name}" updated successfully!`);
-    } catch (error) {
-      toast.error("Failed to update vendor");
+    } catch (error: unknown) {
+      handleSupabaseError(error, "Failed to update vendor", "AddClientDialog.handleQuickVendorEdit");
     }
   };
 
@@ -565,7 +564,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
             client_id: newClient.id,
             payment_amount: amountPaid,
             payment_type: paymentType,
-            payment_date: new Date().toISOString().split('T')[0],
+            payment_date: getTodayDateString(),
             notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
             payment_mode: paymentMode,
             bank_name: paymentMode === 'bank' ? bankName : null,
@@ -580,7 +579,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
             party_id: newClient.id,
             balance_type: openingBalanceType,
             amount: opBalNum,
-            as_of_date: new Date().toISOString().split("T")[0],
+            as_of_date: getTodayDateString(),
             notes: "Client opening balance brought forward",
           });
         }
@@ -615,6 +614,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
         setGroupBookingType("individual");
         setGroupSize(1);
       } catch (error) {
+        console.error("[AddClientDialog.handleSubmit]", error);
         setLoading(false);
       }
     }

@@ -52,6 +52,7 @@ export function AddVendorDialog({
   const { balances, upsertBalance } = useOpeningBalances();
   const { data: agency } = useAgency();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // References
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -133,6 +134,13 @@ export function AddVendorDialog({
 
   // Main Submit Handler
   const handleSaveInternal = async (isSaveAndAddNext = false) => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const trimmedName = name.trim();
     if (!trimmedName) {
       toast.error("Vendor Name is required");
@@ -147,11 +155,32 @@ export function AddVendorDialog({
       return;
     }
 
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    const totalAmount = paymentAmount.trim() ? parseFloat(paymentAmount) : 0;
+    const paidVal = amountPaid.trim() ? parseFloat(amountPaid) : 0;
+    if (!Number.isFinite(totalAmount) || totalAmount < 0 || !Number.isFinite(paidVal) || paidVal < 0) {
+      toast.error("Payment amounts must be zero or positive");
+      return;
+    }
+    if (totalAmount > 0 && paidVal > totalAmount) {
+      toast.error("Amount paid cannot exceed total payable amount");
+      return;
+    }
+
+    const opBalNum = openingBalanceAmount.trim() ? parseFloat(openingBalanceAmount) : 0;
+    if (!Number.isFinite(opBalNum) || opBalNum < 0) {
+      toast.error("Opening balance must be zero or positive");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      const totalAmount = paymentAmount ? parseFloat(paymentAmount) : 0;
-      const paidVal = amountPaid ? parseFloat(amountPaid) : 0;
-      const paymentStatus = paidVal >= totalAmount ? "Paid" : "Pending";
+      const paymentStatus = totalAmount > 0 && paidVal >= totalAmount ? "Paid" : paidVal > 0 ? "Partial" : "Pending";
 
       const vendorData = {
         name: trimmedName,
@@ -170,10 +199,8 @@ export function AddVendorDialog({
       if (editVendor) {
         await updateVendor.mutateAsync({ id: editVendor.id, vendor: vendorData });
         savedVendorResult = { ...editVendor, ...vendorData };
-        toast.success(`Vendor "${trimmedName}" updated successfully!`);
       } else {
         savedVendorResult = await addVendor.mutateAsync(vendorData);
-        toast.success(`Vendor "${trimmedName}" created successfully!`);
 
         if (paidVal > 0 && agency?.id) {
           const paymentType: "partial" | "full" = paidVal >= totalAmount ? "full" : "partial";
@@ -182,21 +209,20 @@ export function AddVendorDialog({
             agency_id: agency.id,
             payment_amount: paidVal,
             payment_type: paymentType,
-            payment_date: new Date().toISOString().split("T")[0],
+            payment_date: getTodayDateString(),
             notes: `Initial payment of PKR ${paidVal.toLocaleString()}`,
           });
         }
       }
 
       // Record optional Opening Balance
-      const opBalNum = parseFloat(openingBalanceAmount);
-      if (savedVendorResult?.id && !isNaN(opBalNum) && opBalNum > 0) {
+      if (savedVendorResult?.id && opBalNum > 0) {
         await upsertBalance.mutateAsync({
           party_type: "vendor",
           party_id: savedVendorResult.id,
           balance_type: openingBalanceType,
           amount: opBalNum,
-          as_of_date: new Date().toISOString().split("T")[0],
+          as_of_date: getTodayDateString(),
           notes: "Initial brought-forward opening balance",
         });
       }
@@ -214,9 +240,10 @@ export function AddVendorDialog({
       } else {
         setIsOpen(false);
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to save vendor");
+    } catch (error) {
+      console.error("[AddVendorDialog.handleSaveInternal]", error);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

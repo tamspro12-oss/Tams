@@ -22,6 +22,7 @@ interface AddBookingDialogProps {
 export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBookingDialogProps) {
   const [selectedClientId, setSelectedClientId] = useState(editBooking?.client_id || "");
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const { clients } = useClients();
   const { addBooking, updateBooking } = useBookings();
 
@@ -54,7 +55,19 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || addBooking.isPending || updateBooking.isPending) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
+    const discountRaw = Number(formData.get("discountAmount") || 0);
+    if (!Number.isFinite(discountRaw) || discountRaw < 0) {
+      toast.error("Discount amount must be zero or positive");
+      return;
+    }
 
     const bookingData = {
       client_id: selectedClientId,
@@ -64,7 +77,7 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
       payment_status: formData.get("paymentStatus") as string,
       booking_type: formData.get("bookingType") as string,
       notes: (formData.get("notes") as string) || undefined,
-      discount_amount: Number(formData.get("discountAmount")) || 0,
+      discount_amount: discountRaw,
     };
 
     // Validate booking data
@@ -77,23 +90,20 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
 
     const validatedData = validation.data;
 
-    if (editBooking) {
-      updateBooking.mutate({ id: editBooking.id, booking: validatedData }, {
-        onSuccess: () => {
-          onOpenChange(false);
-          setSelectedClientId("");
-          toast.success("Booking updated successfully");
-        }
-      });
-    } else {
-      addBooking.mutate(validatedData, {
-        onSuccess: () => {
-          onOpenChange(false);
-          e.currentTarget.reset();
-          setSelectedClientId("");
-          toast.success("Booking added successfully");
-        }
-      });
+    isSubmittingRef.current = true;
+    try {
+      if (editBooking) {
+        await updateBooking.mutateAsync({ id: editBooking.id, booking: validatedData });
+      } else {
+        await addBooking.mutateAsync(validatedData);
+        e.currentTarget.reset();
+      }
+      onOpenChange(false);
+      setSelectedClientId("");
+    } catch (error) {
+      console.error("[AddBookingDialog.handleSubmit]", error);
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

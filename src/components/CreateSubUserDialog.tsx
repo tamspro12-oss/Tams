@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useSubUsers, SubUserPermissions } from "@/hooks/useSubUsers";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CreateSubUserDialogProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface CreateSubUserDialogProps {
 
 export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogProps) => {
   const formRef = useRef<HTMLFormElement>(null);
+  const isSubmittingRef = useRef(false);
   const { createSubUser } = useSubUsers();
   const { data: agencyId } = useCurrentAgencyId();
   const [formData, setFormData] = useState({
@@ -38,11 +40,39 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!agencyId) return;
+    if (isSubmittingRef.current || createSubUser.isPending) return;
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
+    if (!agencyId) {
+      toast.error("Unable to identify active agency");
+      return;
+    }
+
+    const emailTrimmed = formData.email.trim();
+    const nameTrimmed = formData.full_name.trim();
+    if (!nameTrimmed) {
+      toast.error("Full name is required");
+      return;
+    }
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (!formData.password || formData.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     createSubUser.mutate(
       {
-        ...formData,
+        email: emailTrimmed,
+        password: formData.password,
+        full_name: nameTrimmed,
         permissions,
         agency_id: agencyId,
       },
@@ -50,6 +80,9 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
         onSuccess: () => {
           onOpenChange(false);
           setFormData({ email: "", password: "", full_name: "" });
+        },
+        onSettled: () => {
+          isSubmittingRef.current = false;
         },
       }
     );

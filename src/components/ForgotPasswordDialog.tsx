@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import { Mail, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
@@ -32,7 +33,9 @@ export function ForgotPasswordDialog() {
     });
 
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      console.error("[TAMS Error] resetPasswordForEmail:", error);
+      const parsed = parseSupabaseError(error, "Could not send password reset email. Please try again.");
+      toast({ title: "Error", description: parsed.userMessage, variant: "destructive" });
     } else {
       setSent(true);
     }

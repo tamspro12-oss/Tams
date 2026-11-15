@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAgency } from '@/hooks/useAgency';
 import { getAuthenticatedAgencyId } from '@/lib/agencyContext';
+import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
 import {
   DateFilter,
   DEFAULT_DATE_FILTER,
@@ -113,8 +114,8 @@ export default function EmailHistory() {
       queryClient.invalidateQueries({ queryKey: ['email-logs'] });
       setShowDeleteDialog(false);
     },
-    onError: (error: any) => {
-      toast.error(`Delete failed: ${error.message}`);
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete email log', 'EmailHistory.deleteMutation');
     },
   });
 
@@ -140,8 +141,8 @@ export default function EmailHistory() {
       toast.success('Email marked for retry');
       queryClient.invalidateQueries({ queryKey: ['email-logs'] });
     },
-    onError: (error: any) => {
-      toast.error(`Retry failed: ${error.message}`);
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to mark email for retry', 'EmailHistory.retryMutation');
     },
   });
 

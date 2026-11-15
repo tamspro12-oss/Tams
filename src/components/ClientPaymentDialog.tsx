@@ -10,6 +10,9 @@ import { Banknote, Plus, Minus } from "lucide-react";
 import { PaymentHistorySection } from "./PaymentHistorySection";
 import { PaymentModeSelect } from "./PaymentModeSelect";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { getTodayDateString } from "@/components/ui/LockedDateField";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { toast } from "sonner";
 
 interface ClientPaymentDialogProps {
   client: any;
@@ -25,6 +28,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -46,17 +50,46 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
+    const additionalPayment = parseFloat(paymentAmount);
+    if (!Number.isFinite(additionalPayment) || additionalPayment === 0) {
+      toast.error("Please enter a valid non-zero payment or adjustment amount");
+      return;
+    }
+
+    if (additionalPayment > 0 && remaining >= 0 && additionalPayment > remaining) {
+      toast.error(`Payment amount cannot exceed remaining balance of ₨${remaining.toLocaleString()}`);
+      return;
+    }
+
+    const newTotalPaid = currentPaid + additionalPayment;
+    if (newTotalPaid < 0) {
+      toast.error(`Adjustment cannot make total paid negative (Current paid: ₨${currentPaid.toLocaleString()})`);
+      return;
+    }
+
+    if (additionalPayment > 0 && paymentMode === "bank" && !bankName.trim()) {
+      toast.error("Please select or enter a bank name for bank payments");
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
-      const additionalPayment = parseFloat(paymentAmount) || 0;
-      const newTotalPaid = currentPaid + additionalPayment;
+      const todayYmd = getTodayDateString();
 
       // Determine payment status
       let paymentStatus = "Pending";
       let paymentType: "partial" | "full" = "partial";
 
-      if (newTotalPaid >= totalReceivable) {
+      if (newTotalPaid >= totalReceivable && totalReceivable > 0) {
         paymentStatus = "Paid";
         paymentType = "full";
       } else if (newTotalPaid > 0) {
@@ -79,7 +112,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
           client_id: client.id,
           payment_amount: additionalPayment,
           payment_type: paymentType,
-          payment_date: new Date().toISOString().split('T')[0],
+          payment_date: todayYmd,
           notes: `Payment of ₨${additionalPayment.toLocaleString()}`,
           payment_mode: paymentMode,
           bank_name: paymentMode === "bank" ? bankName : null,
@@ -89,7 +122,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
         try {
           await supabase.from("transactions").insert({
             agency_id: client.agency_id,
-            date: new Date().toISOString().split("T")[0],
+            date: todayYmd,
             type: "payment_in",
             party_id: client.id,
             party_type: "client",
@@ -109,9 +142,10 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
       setPaymentAmount("");
       setPaymentMode("cash");
       setBankName("");
-    } catch (error) {
-      // Error handled by mutation
+    } catch (error: unknown) {
+      handleSupabaseError(error, "Failed to update client payment", "ClientPaymentDialog.handleSubmit");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

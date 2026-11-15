@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { GmailAppPasswordGuide } from "@/components/GmailAppPasswordGuide";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const APP_PASSWORD_PATTERN = /^[a-zA-Z0-9]{16}$/;
@@ -31,6 +32,7 @@ export function EmailConfiguration() {
   const [agencyEmailPassword, setAgencyEmailPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     setHasInitializedEmail(false);
@@ -48,6 +50,13 @@ export function EmailConfiguration() {
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSavingRef.current || isSaving) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Network connection issue. You are offline, not saved.");
+      return;
+    }
+
     if (!agency?.id) {
       toast.error("No active agency found");
       return;
@@ -68,6 +77,7 @@ export function EmailConfiguration() {
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const updatePayload: { email: string; email_password?: string } = {
@@ -96,9 +106,10 @@ export function EmailConfiguration() {
       } else {
         toast.success("Agency email saved. Add a 16-character Gmail App Password to enable email sending.");
       }
-    } catch (error: any) {
-      toast.error("Failed to update email configuration", { description: error.message });
+    } catch (error: unknown) {
+      handleSupabaseError(error, "Failed to update email configuration", "EmailConfiguration.handleSave");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
