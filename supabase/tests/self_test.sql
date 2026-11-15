@@ -263,7 +263,11 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
 
-  IF v_txt1 ~ '-0001$' AND v_txt2 ~ '-0002$' AND v_txt1 <> v_txt2 AND v_txt3 ~ '-0001$' THEN
+  IF v_txt1 ~ '^INV-[^-]+-00000001$'
+     AND v_txt2 ~ '^INV-[^-]+-00000002$'
+     AND v_txt1 <> v_txt2
+     AND v_txt3 ~ '^INV-[^-]+-00000001$'
+     AND substring(v_txt1 FROM '^INV-([^-]+)-') <> substring(v_txt3 FROM '^INV-([^-]+)-') THEN
     v_seq := v_seq + 1;
     v_results := v_results || jsonb_build_array(jsonb_build_object(
       'seq', v_seq,
