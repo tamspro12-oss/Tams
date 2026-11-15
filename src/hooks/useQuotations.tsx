@@ -17,7 +17,7 @@ export interface Quotation {
   quotation_number: string;
   quotation_date: string;
   valid_until: string | null;
-  service_type: "client_booking" | "b2b" | "umrah" | "custom";
+  service_type: string;
   client_name: string;
   client_email: string | null;
   client_phone: string | null;

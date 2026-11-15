@@ -1,36 +1,33 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { 
-  BookOpen, 
-  ChevronDown, 
-  ChevronRight, 
-  Settings, 
-  LayoutDashboard, 
-  Users, 
-  Building2, 
-  HelpCircle, 
-  Receipt, 
-  Mail, 
-  FileText, 
-  BarChart3, 
-  Calculator, 
-  Shield, 
-  CreditCard,
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  Settings,
+  LayoutDashboard,
+  Users,
+  HelpCircle,
+  Receipt,
+  Mail,
+  FileText,
+  BarChart3,
+  Calculator,
+  Shield,
   AlertTriangle,
   Lightbulb,
   ArrowLeft,
-  Ticket,
   Bell,
-  Eye,
   Compass,
   Scale,
   MessageSquare,
-  CheckCircle2
+  Keyboard,
+  Wallet,
+  RotateCcw,
+  Plane,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Collapsible,
   CollapsibleContent,
@@ -66,729 +63,631 @@ const StepList = ({ steps }: { steps: string[] }) => (
   </ol>
 );
 
+const BulletList = ({ items }: { items: string[] }) => (
+  <ul className="list-disc list-inside space-y-1.5 my-3">
+    {items.map((item, index) => (
+      <li key={index} className="text-sm text-muted-foreground pl-2">{item}</li>
+    ))}
+  </ul>
+);
+
+const SubHeading = ({ children }: { children: React.ReactNode }) => (
+  <h4 className="font-semibold text-base">{children}</h4>
+);
+
+const Intro = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-sm text-muted-foreground">{children}</p>
+);
+
+const KeyRow = ({ keys, action }: { keys: string; action: string }) => (
+  <tr className="border-b last:border-0">
+    <td className="py-2 pr-4 align-top">
+      <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded whitespace-nowrap">{keys}</code>
+    </td>
+    <td className="py-2 text-sm text-muted-foreground">{action}</td>
+  </tr>
+);
+
+const KeyTable = ({ rows }: { rows: { keys: string; action: string }[] }) => (
+  <div className="overflow-x-auto my-3">
+    <table className="w-full text-left">
+      <tbody>
+        {rows.map((row) => (
+          <KeyRow key={row.keys + row.action} keys={row.keys} action={row.action} />
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 const sections: Section[] = [
+  {
+    id: "getting-started",
+    title: "Getting Started",
+    icon: Compass,
+    content: (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <SubHeading>A. Create Your Account</SubHeading>
+          <StepList steps={[
+            "Open the TAMS Pro website and click Sign Up Free.",
+            "Enter your agency name, phone number, email and password.",
+            "Click to create the account. Your 14-day free trial starts right away.",
+            "The email you sign up with is saved as your agency email. It shows on your invoices, vouchers and receipts.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Log In</SubHeading>
+          <StepList steps={[
+            "Click Login and enter your email and password.",
+            "Click the eye icon to show or hide the password.",
+            "Forgot it? Click Forgot Password and follow the email link.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>C. The Side Menu</SubHeading>
+          <Intro>Every screen is in the left menu. On a phone, tap the menu button at the top.</Intro>
+          <BulletList items={[
+            "Dashboard — today's numbers and quick buttons.",
+            "Sales & Expenses — Booking Invoice, Payment Vouchers, Refunds / Voids, Expenses.",
+            "Clients & Vendors — all parties and your bank accounts.",
+            "Reports — day book, statements, profit and financial reports.",
+            "Queries & Quotes — customer enquiries and quotations.",
+            "Umrah Calculator — package costing from SAR to PKR.",
+            "Notifications — alerts and your reminders.",
+            "Settings — account, branding, email, backup and this manual.",
+          ]} />
+          <TipBox>Admins also see Admin Panel at the top of the menu.</TipBox>
+        </div>
+      </div>
+    ),
+  },
   {
     id: "first-time-setup",
     title: "First-Time Setup (MANDATORY)",
     icon: Settings,
     content: (
-      <div className="space-y-6">
-        <WarningBox>
-          Complete these setup steps BEFORE using any other features. Skipping this will result in incomplete invoices, failed emails, and missing branding.
-        </WarningBox>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">A. Agency Branding Setup</h4>
-          <p className="text-sm text-muted-foreground">Your agency branding appears on all invoices, booking confirmations, and emails.</p>
+      <div className="space-y-4">
+        <Intro>Do these three steps once, before you create your first invoice.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Branding</SubHeading>
           <StepList steps={[
-            "Click Settings in the sidebar menu",
-            "Select the Agency Branding tab",
-            "Upload your agency logo (PNG or JPG recommended)",
-            "Enter your Agency Name, Contact Number, and Support Email",
-            "Add Invoice Footer Text and Terms & Conditions",
-            "Click Save Branding button"
+            "Go to Settings → Branding.",
+            "Open Invoice Template. Add your logo, agency details and colours. Save.",
+            "Open Booking Template and set up your booking confirmation the same way.",
+            "Open Reminder Messages to edit the text used in client reminders.",
           ]} />
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Gmail SMTP Configuration</h4>
-          <p className="text-sm text-muted-foreground">TAMS uses your Gmail account to send invoices and reminders. You need a Gmail App Password.</p>
+        <div className="space-y-2">
+          <SubHeading>B. Email Integration (Gmail)</SubHeading>
+          <Intro>TAMS Pro sends invoices and reminders from your own Gmail. You need a Google App Password for this. It is not your normal Gmail password.</Intro>
           <StepList steps={[
-            "Go to https://myaccount.google.com and enable 2-Step Verification",
-            "Visit https://myaccount.google.com/apppasswords",
-            "Create a new App Password with name 'TAMS'",
-            "Copy the 16-character password (remove spaces)",
-            "In TAMS Settings → Agency Branding, paste it in Email Password field",
-            "Click Save Branding"
+            "Go to Settings → Email Integration → Email Configuration.",
+            "Agency Gmail Email is already filled with your sign-up email. Change it if needed.",
+            "Click How to Create App Password? and follow the steps in your Google account.",
+            "Type the 16-character App Password into 16-Character Gmail App Password. Spaces are fine.",
+            "Click Save Configuration. The badge changes from Not Configured to Configured.",
           ]} />
-          <WarningBox>Never share your App Password. If compromised, delete it from Google and create a new one.</WarningBox>
+          <TipBox>You can save the agency email alone, without a password. Emails will only send once the badge says Configured.</TipBox>
+          <WarningBox>The App Password field is always empty when you open the page, even after saving. This is for safety. It shows "Saved · type a new one to replace". Type a new one only if you want to change it.</WarningBox>
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">C. Storage & Backup Setup</h4>
-          <p className="text-sm text-muted-foreground">All data is saved to secure cloud servers. Create local backups for extra safety.</p>
+        <div className="space-y-2">
+          <SubHeading>C. Storage & Backup</SubHeading>
           <StepList steps={[
-            "Go to Settings → Account tab",
-            "Scroll to Storage & Backup section",
-            "Click Manual Backup to download your data",
-            "Enable Auto-Backup and select frequency (Daily/Weekly/Monthly)",
-            "Store backup files in a safe location"
+            "Go to Settings → Storage & Backup.",
+            "Check your storage use in the quota meter.",
+            "Click Choose Folder and pick a folder on your computer.",
+            "Click Backup Now to save a backup straight away.",
+            "Optional: tick Enable Auto Backup and choose a Backup Frequency (Daily, Weekly or Monthly).",
+          ]} />
+          <TipBox>Next Backup and Last Backup show you when backups run.</TipBox>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "keyboard",
+    title: "Working with the Keyboard",
+    icon: Keyboard,
+    content: (
+      <div className="space-y-4">
+        <Intro>Every form in TAMS Pro can be filled with the keyboard only. The mouse still works the same as before.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Moving Between Fields</SubHeading>
+          <KeyTable rows={[
+            { keys: "Enter", action: "Go to the next field." },
+            { keys: "Shift + Enter", action: "Go back one field." },
+            { keys: "Tab / Shift + Tab", action: "Next / previous field, including buttons like Quick Add." },
+            { keys: "Ctrl + S (Cmd + S on Mac)", action: "Save the form." },
+            { keys: "Esc", action: "Close the form. If you typed something, it asks you first." },
+          ]} />
+          <TipBox>The field you are on has a clear coloured ring around it.</TipBox>
+          <BulletList items={[
+            "Locked, read-only and auto fields are skipped. Examples: Date, Remaining (auto), Profit.",
+            "If a required field is empty, Enter does not move on. You see an error and stay on that field.",
+            "When you change Service Type or Trip Type, the order updates by itself.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Dropdowns (Client, Vendor, Service Type, Payment Mode…)</SubHeading>
+          <StepList steps={[
+            "Press Enter to open the list.",
+            "Type to search. Use the Up and Down arrows to pick.",
+            "Press Enter to select. The list closes and you move to the next field in one press.",
+            "Press Esc to close the list without moving.",
+          ]} />
+          <Intro>If nothing matches your search, Enter does nothing. Quick Add buttons are skipped by Enter. Reach them with Tab or the mouse.</Intro>
+        </div>
+        <div className="space-y-2">
+          <SubHeading>C. Passengers (Booking Invoice)</SubHeading>
+          <BulletList items={[
+            "Enter moves: Name → Passport # → Type → Gender → DOB.",
+            "Enter on DOB goes to the next passenger's Name.",
+            "Enter on the last passenger's DOB goes to Purchasing Cost. It never adds a row.",
+            "Ctrl + Enter (Cmd + Enter) inside a passenger row adds a new passenger.",
+            "You can also press Enter on the + Add Passenger button.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>D. Line Items (Quotation)</SubHeading>
+          <BulletList items={[
+            "Enter moves: Description → Qty → Unit Price → next line.",
+            "On the last line, Enter moves on to the totals. It never adds a line.",
+            "Ctrl + Enter (Cmd + Enter) adds a new line.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>E. Remarks and Notes Boxes</SubHeading>
+          <BulletList items={[
+            "Enter starts a new line inside the box.",
+            "Ctrl + Enter (Cmd + Enter) jumps to the Save button.",
+            "Enter on the Save button saves the form.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>F. Page Shortcuts</SubHeading>
+          <KeyTable rows={[
+            { keys: "Ctrl + 1", action: "Queries & Quotes → Quotations tab." },
+            { keys: "Ctrl + 2", action: "Queries & Quotes → Queries tab." },
           ]} />
         </div>
       </div>
-    )
+    ),
   },
   {
     id: "dashboard",
-    title: "Dashboard Overview",
+    title: "Dashboard",
     icon: LayoutDashboard,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">The Dashboard is your action-driven command center showing real-time business performance and daily operational triggers at a single glance.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Key Dashboard Modules</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Quick Actions Bar:</strong> Instant triggers for primary agency workflows: "+ Create Booking", "+ Add Payment", "+ Add Quotation", "+ New Client Query", and "+ Add Expense / Bill".</li>
-            <li><strong>Financial KPIs (Above the Fold):</strong> Aggregated B2C + B2B metrics including Total Bookings, Clients Pending Payment, Vendors Pending Payment, and Net Profit for the selected month.</li>
-            <li><strong>B2B Performance Strip:</strong> Compact wholesale overview tracking active B2B agents, sub-agent booking volume, sales revenue, and profit.</li>
-            <li><strong>Financials & Payables (3-Column Grid):</strong> Comprehensive monthly financial summary, today's payment collections alert (with inline "+ Receive Payment" action), and top vendor payables (with inline "+ Pay Vendor" action).</li>
-            <li><strong>Actionable Alerts Banner:</strong> A smart, conditional slim alert that activates only when urgent departures, name updates, or client queries need immediate action.</li>
-            <li><strong>Navbar Notification Bell:</strong> Unified notification drawer featuring dedicated tabs for Departures (Tickets & Umrah), Passenger Name Updates, Active Queries, and Daily Tasks.</li>
-          </ul>
+      <div className="space-y-4">
+        <Intro>The Dashboard shows how your agency is doing this month. Use the month button at the top right to see another month.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. The Six Cards</SubHeading>
+          <Intro>Click any card to open the full details.</Intro>
+          <BulletList items={[
+            "Cash & Bank — money in cash and all banks. Opens Payment Vouchers.",
+            "Client Dues — what clients still owe you. Opens Clients & Vendors.",
+            "Vendor Dues — what you still owe vendors.",
+            "Profit (Month) — profit for the selected month. Opens the Booking Report.",
+            "Today's Bookings — invoices made today.",
+            "Overdue Invoices — unpaid invoices past their due date.",
+          ]} />
         </div>
-
-        <TipBox>Pull down on touch screens or click the refresh button anytime to sync live real-time bookings and financial accounts.</TipBox>
+        <div className="space-y-2">
+          <SubHeading>B. Quick Buttons</SubHeading>
+          <BulletList items={[
+            "Create Booking — opens a new Booking Invoice.",
+            "Umrah Calculator — opens the calculator.",
+            "Add Payment — opens a new Payment Voucher.",
+            "Add Quotation — opens a new Quotation.",
+            "New Client Query — opens a new Query.",
+            "Add Expense / Bill — opens a new Expense.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>C. Notifications Panel</SubHeading>
+          <Intro>Shows the latest alerts. Click the action button to deal with it, or Mark Done to clear it.</Intro>
+        </div>
       </div>
-    )
+    ),
   },
   {
-    id: "client-booking",
-    title: "Client Booking Module",
+    id: "clients-vendors",
+    title: "Clients & Vendors",
     icon: Users,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">The Client Booking module is the heart of TAMS. Manage all bookings, payments, and client information.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Adding a New Booking</h4>
+      <div className="space-y-4">
+        <Intro>All clients, B2B agents and vendors are called parties. They live in one list. Your bank accounts are here too.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Parties Tab</SubHeading>
+          <Intro>Columns: Party Code, Name, Type, Current Balance, Actions.</Intro>
           <StepList steps={[
-            "Click + Add Booking button (top right)",
-            "Select Service Type: Ticket Only, Umrah, or Custom Package",
-            "Enter Client Contact: Name, Phone, Email, Contact Person",
-            "Enter Travel Details: PNR, Airline, Destination, Flight Date",
-            "Add Passenger Documents: Passport, CNIC, DOB, Gender for each passenger",
-            "Enter Pricing: Purchasing Price, Selling Price (profit auto-calculated)",
-            "Track Payment: Amount Paid, Payment Status, Remaining Date",
-            "Link Vendor (optional): Select existing or create new",
-            "Add Notes (optional)",
-            "Click Save Booking"
+            "Click Add New Party.",
+            "Choose the Type (client, vendor or both).",
+            "Fill in Name (required), Phone, Email, Opening Balance (PKR), Credit Limit (PKR), City, Address and Notes.",
+            "Save.",
+          ]} />
+          <TipBox>Use the search box and the type and balance filters to find a party fast.</TipBox>
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Party Profile</SubHeading>
+          <Intro>Click a party to open its profile. It has four tabs:</Intro>
+          <BulletList items={[
+            "Overview — contact details and balance.",
+            "Bookings — all invoices for this party.",
+            "Payments — all money received or paid.",
+            "Statement — full ledger with running balance. You can print or export it.",
           ]} />
         </div>
-
-        <WarningBox>Passenger info is separate from client contact. The client may be booking for family members.</WarningBox>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Other Actions</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Edit Booking:</strong> Click pencil icon, modify fields, click Update</li>
-            <li><strong>Delete Booking:</strong> Click trash icon, confirm deletion</li>
-            <li><strong>Record Payment:</strong> Click payment icon, enter amount and details</li>
-            <li><strong>Share via WhatsApp:</strong> Click WhatsApp icon</li>
-            <li><strong>Generate Invoice:</strong> Click invoice button, download or email</li>
-            <li><strong>Search:</strong> Use search bar to find by name, passport, PNR, or phone</li>
-          </ul>
+        <div className="space-y-2">
+          <SubHeading>C. Banks Tab</SubHeading>
+          <Intro>Columns: Bank Name, Account Title, Account No, Branch, Current Balance, Actions.</Intro>
+          <StepList steps={[
+            "Click Add New Bank.",
+            "Fill in Bank Name and Account Title (both required).",
+            "Optional: Account Number, Branch Name / City, Opening Balance (PKR).",
+            "Save. The bank now appears in every Payment Mode list.",
+          ]} />
         </div>
+        <TipBox>In any form, the Quick Add button next to Client or Vendor adds a new party without leaving the form.</TipBox>
       </div>
-    )
+    ),
   },
   {
-    id: "b2b-agents",
-    title: "B2B Agents Module",
-    icon: Building2,
+    id: "booking-invoice",
+    title: "Booking Invoice",
+    icon: Plane,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Manage business-to-business agents who sell tickets on your behalf. Each agent has a running account with automatic balance tracking using professional double-entry accounting.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">A. Adding a New B2B Agent</h4>
+      <div className="space-y-4">
+        <Intro>Go to Sales & Expenses → Booking Invoice. Click New Booking Invoice to create an invoice.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Fill in the Invoice</SubHeading>
           <StepList steps={[
-            "Go to B2B Agents from the sidebar menu",
-            "Click '+ Add New Agent' button",
-            "Enter Agent Name (required) and Business Name",
-            "Enter Phone number and Email",
-            "Select Country and City",
-            "Set Commission Type: Percentage or Fixed Amount",
-            "Enter Commission Value",
-            "Set Status: Active or Inactive",
-            "Add Notes (optional)",
-            "Click Add Agent to save"
+            "Date is locked to today. You cannot change it.",
+            "Choose the Service Type: Air Ticket, Umrah Package, Visa Services, Hotel Booking, Travel Insurance or Other Services.",
+            "Choose the Client (required) and the Vendor.",
+            "Fill in the fields for that service (see below).",
+            "Add the passengers.",
+            "Enter Purchasing Cost, Total Amount (required) and Amount Paid.",
+            "Remaining (auto) and Profit are worked out for you.",
+            "Set the Due Date and Payment Mode, and add Remarks if needed.",
+            "Click Save.",
           ]} />
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Unified Agent & Booking Search</h4>
-          <p className="text-sm text-muted-foreground">The search bar on the B2B Agents page searches both agents AND their individual bookings simultaneously:</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li>Search by <strong>Agent Name, Business Name, or City</strong> to locate agent records.</li>
-            <li>Search by <strong>Passenger Name, Passport Number, PNR, or Voucher Code</strong> to instantly locate specific B2B bookings.</li>
-            <li>Use the category chips (<strong>All, Agents, Bookings</strong>) to quickly focus your search results.</li>
-            <li>Tap any booking card in the results to view or edit full booking and passenger details.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">C. Agent Dashboard Overview</h4>
-          <p className="text-sm text-muted-foreground">Click "View" button on any agent card to access their dashboard with 5 tabs:</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Summary:</strong> Financial overview with debit, credit, balance, and profit stats</li>
-            <li><strong>Bookings:</strong> All bookings for this agent with payment tracking</li>
-            <li><strong>Ledger:</strong> Complete account statement with running balance</li>
-            <li><strong>Vouchers:</strong> Generate branded vouchers and configure agent voucher permissions</li>
-            <li><strong>Reports:</strong> Export sales, commission, and ledger reports</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">C. Summary Tab Stats</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Total Debit (Owed):</strong> Sum of all booking service amounts agent owes you</li>
-            <li><strong>Total Credit (Paid):</strong> Sum of all payments received from agent</li>
-            <li><strong>Total Receivable:</strong> Sum of all service amounts from bookings</li>
-            <li><strong>Balance Due/Advance:</strong> Outstanding amount (positive = agent owes, negative = advance)</li>
-            <li><strong>Agent Commission:</strong> Total commission earned by the agent</li>
-            <li><strong>Net Profit:</strong> Your agency's profit from this agent</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">D. Adding B2B Bookings</h4>
-          <StepList steps={[
-            "In agent dashboard, click '+ Add Booking' button",
-            "Enter Passenger Name, Passport Number, and Contact",
-            "Enter PNR, Destination, Airline, and Flight Date",
-            "Select Vendor (optional)",
-            "Enter Purchasing Price (your cost) and Selling Price (agent pays)",
-            "Commission auto-calculates based on agent's rate",
-            "Enter Amount Received at booking time (optional, for advance payments)",
-            "System shows Accounting Summary with Outstanding Balance",
-            "Click Save Booking"
+        <div className="space-y-2">
+          <SubHeading>B. Fields for Each Service</SubHeading>
+          <BulletList items={[
+            "Air Ticket — Trip Type, Flight Date, Flight Time, Sector, Airline, PNR, Ticket No. For Return trips: Return Flight Date and Return Flight Time.",
+            "Umrah Package — Ziyarat, Departure City, Arrival City, Flight Date, Return Date, Transport, Makkah Hotel, Makkah Nights, Madinah Hotel, Madinah Nights.",
+            "Visa Services — Country, Visa Type, Validity.",
+            "Hotel Booking — Hotel Name, City, Check-In, Check-Out, Room Type.",
+            "Travel Insurance — Insurance Provider / Plan, Duration (Days).",
+            "Other Services — Service Description.",
           ]} />
-          <WarningBox>Payment status is auto-calculated based on actual payments. Do NOT manually select payment status - the system determines it from ledger entries.</WarningBox>
-          <TipBox>Leave "Amount Received" at 0 for full credit bookings. Enter partial amount if agent pays advance.</TipBox>
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">E. Recording Payments (Ledger)</h4>
-          <p className="text-sm text-muted-foreground">Two ways to record payments:</p>
-          <StepList steps={[
-            "Option 1: In Bookings tab, click credit card icon on any booking with balance",
-            "Option 2: Click 'Add Payment Entry' button in Ledger tab",
-            "Select Entry Type: Credit (payment received) or Debit (adjustment)",
-            "Enter Amount - cannot exceed outstanding balance for linked bookings",
-            "Link to specific booking (optional but recommended)",
-            "System shows booking balance before payment",
-            "Enter Date and Remarks",
-            "Click Submit"
+        <div className="space-y-2">
+          <SubHeading>C. Passengers</SubHeading>
+          <Intro>Each row has Name, Passport #, Type, Gender and DOB. Click + Add Passenger for another row, or press Ctrl + Enter.</Intro>
+        </div>
+        <div className="space-y-2">
+          <SubHeading>D. The Invoice List</SubHeading>
+          <Intro>Columns: Invoice #, Date, Service, Client, PDF, Status, Remaining Amount (PKR), Paid Amount (PKR), Total Amount (PKR).</Intro>
+          <BulletList items={[
+            "Search by invoice #, client, PNR, ticket #, service or status.",
+            "Use the date filter to choose a period.",
+            "Click a row to see the full details.",
+            "Use the PDF column to print the invoice or booking confirmation.",
           ]} />
-          <TipBox>Payments linked to bookings automatically update the booking's status to Paid/Partial.</TipBox>
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">F. Understanding the Ledger</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Debit Entry:</strong> Agent owes you (created automatically when booking added)</li>
-            <li><strong>Credit Entry:</strong> Agent paid you (payment received)</li>
-            <li><strong>Running Balance:</strong> Positive = Agent owes you, Negative = Advance payment</li>
-            <li><strong>Service Amt / Paid / Balance:</strong> Shown per booking in Bookings tab</li>
-          </ul>
-          <TipBox>The ledger is the single source of truth for all financial calculations. All Summary stats derive from ledger entries.</TipBox>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">G. Reports & Exports</h4>
-          <p className="text-sm text-muted-foreground">Available exports from Reports tab:</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Sales Report:</strong> All bookings with purchase/selling prices (CSV/PDF)</li>
-            <li><strong>Commission Report:</strong> Commission breakdown per booking (CSV/PDF)</li>
-            <li><strong>Ledger Statement:</strong> Complete account statement (CSV/PDF)</li>
-          </ul>
-          <p className="text-sm text-muted-foreground mt-2">Date filters: Current Month, Last Month, Last 3 Months, Year to Date, All Time, or Custom Range</p>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">H. Important Accounting Rules</h4>
-          <WarningBox>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Ledger is the single source of truth for all balances</li>
-              <li>Deleting a booking creates automatic reversal entry (history preserved)</li>
-              <li>Payment amount cannot exceed outstanding balance</li>
-              <li>All calculations (Summary, Reports) derive from ledger, not bookings</li>
-              <li>Do not manually change payment status - it's auto-calculated</li>
-            </ul>
-          </WarningBox>
-        </div>
+        <TipBox>Saving an invoice posts it to the accounts by itself. You do not need to make any ledger entry.</TipBox>
       </div>
-    )
+    ),
   },
   {
-    id: "vendor-management",
-    title: "Vendor Management",
+    id: "payment-vouchers",
+    title: "Payment Vouchers",
+    icon: Wallet,
+    content: (
+      <div className="space-y-4">
+        <Intro>Use a Payment Voucher every time money comes in or goes out. Go to Sales & Expenses → Payment Vouchers.</Intro>
+        <StepList steps={[
+          "Click New Payment Voucher.",
+          "Date is locked to today.",
+          "Choose the Direction: Received (CRV) for money in, Paid (CPV) for money out.",
+          "Choose the party.",
+          "Choose the Payment Mode (cash or one of your banks).",
+          "Enter Amount (PKR).",
+          "Optional: Cheque / Reference No, Link to Invoice, Remarks.",
+          "Save.",
+        ]} />
+        <Intro>List columns: Voucher #, Date, Type, Party / Particulars, Mode, Amount (PKR), Print.</Intro>
+        <TipBox>Link the voucher to an invoice so that invoice's remaining amount goes down.</TipBox>
+      </div>
+    ),
+  },
+  {
+    id: "refunds-voids",
+    title: "Refunds / Voids",
+    icon: RotateCcw,
+    content: (
+      <div className="space-y-4">
+        <Intro>Go to Sales & Expenses → Refunds / Voids. Use this when a client cancels.</Intro>
+        <StepList steps={[
+          "Click New Refund / Void.",
+          "Choose the Type: Refund (give money back) or Void (cancel the invoice).",
+          "Enter the Original Invoice / PNR / Ticket No. The Party Name fills in.",
+          "Enter Supplier Refund (PKR) and Deductions (PKR).",
+          "Add Notes / Deductions Breakdown and the reason.",
+          "Tick Pending Vendor if the vendor has not paid you back yet.",
+          "Save.",
+        ]} />
+        <Intro>List columns: Date, Refund #, Invoice / Ticket / PNR, Party Name, Reason, Mode, Amount (PKR).</Intro>
+      </div>
+    ),
+  },
+  {
+    id: "expenses",
+    title: "Expenses",
     icon: Receipt,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Track your suppliers, their payments, and link them to client bookings.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Adding a New Vendor</h4>
-          <StepList steps={[
-            "Click + Add Vendor button",
-            "Enter Vendor Name, Service Type (Airlines, Hotels, etc.)",
-            "Enter Contact Person and Contact Number",
-            "Enter Total Amount owed and Amount Paid",
-            "Click Add Vendor"
-          ]} />
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Recording Vendor Payments</h4>
-          <StepList steps={[
-            "Find the vendor in the list",
-            "Click Record Payment button",
-            "Enter Amount (positive or negative for corrections)",
-            "Enter Date and Notes",
-            "Click Record Payment"
-          ]} />
-        </div>
-
-        <TipBox>Use negative amounts for payment corrections or refunds.</TipBox>
+      <div className="space-y-4">
+        <Intro>Go to Sales & Expenses → Expenses for office costs like rent, salaries and bills.</Intro>
+        <StepList steps={[
+          "Click New Expense.",
+          "Choose the Category. Use Quick Add for a new one.",
+          "Enter Amount (PKR).",
+          "Choose Paid From (cash or a bank).",
+          "Optional: Bill / Receipt / Ref No and Particulars & Notes.",
+          "For a repeating bill, set the Frequency, Start Date, End Date (Optional) and Next Due Date.",
+          "Save.",
+        ]} />
+        <Intro>List columns: Date, Expense #, Category, Type, Paid From, Ref / Receipt #, Particulars, Amount (PKR).</Intro>
       </div>
-    )
+    ),
   },
   {
-    id: "queries-management",
-    title: "Queries Management",
-    icon: HelpCircle,
+    id: "queries-quotes",
+    title: "Queries & Quotes",
+    icon: MessageSquare,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Track and manage all client inquiries from initial contact to conversion.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Adding a New Query</h4>
+      <div className="space-y-4">
+        <Intro>This screen has two tabs: Quotations (Ctrl + 1) and Queries (Ctrl + 2).</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Add a Query</SubHeading>
           <StepList steps={[
-            "Click + Add Query button",
-            "Enter Client Name and Contact Number",
-            "Enter Query Details (what they're asking about)",
-            "Set Priority: High, Medium, or Low",
-            "Set Due Date for follow-up",
-            "Assign to team member (optional)",
-            "Click Save Query"
+            "Open the Queries tab and click Add Query.",
+            "Fill in Client Name and Query / Request Details (both required).",
+            "Add Contact Number, Assigned To, Priority, Status and Due Date.",
+            "Add Internal Follow-up Notes if needed.",
+            "Save.",
+          ]} />
+          <Intro>List columns: Client, Contact, Query / Request, Priority, Status, Assigned To, Due Date, Actions.</Intro>
+          <TipBox>From a query, use Create Quotation to start a quote with the client already filled in.</TipBox>
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Make a Quotation</SubHeading>
+          <StepList steps={[
+            "Open the Quotations tab and click New Quotation.",
+            "Quotation # is made for you. Date is locked to today.",
+            "Choose the Service Type. The service name is used as the quotation title.",
+            "Choose the Client / Recipient Name. Phone Number fills in from the client record. You can change it.",
+            "Set Valid Until. Use the +7, +15 or +30 day buttons for speed.",
+            "Choose the Status.",
+            "Fill in the service fields. These are the same as on the Booking Invoice.",
+            "Add line items: Description, Qty, Unit Price. Amount is worked out. Use Add line for more.",
+            "On the right, check Currency, Subtotal, Discount (−), Tax / Fee (+) and Total.",
+            "On the left, write Notes / Terms.",
+            "Click Save Quotation, or Save & PDF to also download it.",
           ]} />
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Query Statuses</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Pending:</strong> New inquiry, not yet addressed</li>
-            <li><strong>In Progress:</strong> Being worked on</li>
-            <li><strong>Completed:</strong> Query resolved or converted</li>
-          </ul>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: "expenses-tracking",
-    title: "Expenses Tracking",
-    icon: Receipt,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Track all business expenses for accurate profit calculations.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Adding an Expense</h4>
-          <StepList steps={[
-            "Click + Add Expense button",
-            "Select Expense Type: Office Rent, Utilities, Travel, etc.",
-            "Enter Amount",
-            "Select Expense Date",
-            "Add Notes (optional)",
-            "Click Add Expense"
-          ]} />
-        </div>
-
-        <TipBox>Expenses are included in the Reports module for accurate profit calculation.</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "email-system",
-    title: "Email System",
-    icon: Mail,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Send professional emails directly from TAMS using your Gmail account.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Email Types</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Booking Confirmation:</strong> Send booking details with PDF attachment</li>
-            <li><strong>Invoice Email:</strong> Send invoice PDF to client</li>
-            <li><strong>Flight Reminder:</strong> Remind client of upcoming flight</li>
-            <li><strong>Payment Reminder:</strong> Remind client of pending payment</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Sending an Email</h4>
-          <StepList steps={[
-            "Ensure client has a valid email address",
-            "Click the appropriate email button (envelope icon)",
-            "Email is sent automatically using your configured Gmail",
-            "Check Email History to verify delivery status"
-          ]} />
-        </div>
-
-        <WarningBox>Gmail SMTP must be configured in Settings before sending emails.</WarningBox>
-      </div>
-    )
-  },
-  {
-    id: "pdf-generation",
-    title: "PDF Generation",
-    icon: FileText,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Generate professional PDFs for invoices and booking confirmations.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Invoice PDF</h4>
-          <StepList steps={[
-            "Open any client booking",
-            "Click Generate Invoice button",
-            "Preview the invoice",
-            "Click Download PDF or Send Email"
-          ]} />
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Booking Confirmation PDF</h4>
-          <StepList steps={[
-            "Open any client booking",
-            "Click Download/Export button",
-            "Select Booking Confirmation",
-            "PDF downloads automatically"
-          ]} />
-        </div>
-
-        <TipBox>PDFs include your agency branding. Make sure Agency Branding is configured first!</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "reports-module",
-    title: "Reports Module",
-    icon: BarChart3,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Comprehensive business reports with charts and export options.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Available Reports</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Revenue Report:</strong> Total income over time</li>
-            <li><strong>Profit Report:</strong> Revenue minus expenses</li>
-            <li><strong>Booking Report:</strong> Booking trends and statistics</li>
-            <li><strong>Payment Report:</strong> Payment status breakdown</li>
-            <li><strong>Vendor Report:</strong> Vendor payments and balances</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Exporting Reports</h4>
-          <StepList steps={[
-            "Go to Reports page",
-            "Select date range using the filter",
-            "Click Export button",
-            "Choose format: PDF or Excel",
-            "File downloads automatically"
+        <div className="space-y-2">
+          <SubHeading>C. The Quotation List</SubHeading>
+          <Intro>Columns: Quotation #, Date, Client, Service Type, Total, Status, Actions.</Intro>
+          <BulletList items={[
+            "Convert — turn the quotation into a booking.",
+            "Eye icon — preview.",
+            "Pencil icon — edit.",
+            "Download icon — download the PDF.",
+            "Mail icon — email the PDF to the client (Email Integration must be Configured).",
           ]} />
         </div>
       </div>
-    )
+    ),
   },
   {
-    id: "vouchers-module",
-    title: "Vouchers & Itineraries",
-    icon: Ticket,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Generate, print, and share branded service vouchers for Umrah packages, hotel reservations, and airline tickets.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">A. Supported Voucher Types</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Umrah Package Voucher (UV-xxxx):</strong> Full package details including dual hotels (Makkah & Madinah), check-in/out dates, nights, room configuration, meal plan, transport/transfer arrangements, ziyarat services, and visa status.</li>
-            <li><strong>Hotel Accommodation Voucher (HV-xxxx):</strong> Hotel name, destination city, check-in, check-out, room category, meal plan, and supplier confirmation code.</li>
-            <li><strong>Flight / Ticket Voucher (TV-xxxx):</strong> Airline, flight number, sector route, departure & arrival timings, cabin class, PNR, e-ticket number, and baggage allowance.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Generating a Voucher</h4>
-          <StepList steps={[
-            "Go to Vouchers from the sidebar menu, or click 'Create Voucher' directly from any open client booking",
-            "Choose your voucher type: Umrah Package, Hotel Only, or Flight / Ticket",
-            "Select an existing booking from the 'Auto-fill from Booking' dropdown to populate passenger details, passport, airline, and dates instantly",
-            "Add additional traveling passengers (adults, children, infants) as needed",
-            "Verify hotel confirmation numbers, meal plans, or transport notes",
-            "Click 'Issue Voucher' to generate a unique sequential voucher number"
-          ]} />
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">C. Sharing & Exporting Vouchers</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Download PDF:</strong> Generates a high-resolution, agency-branded PDF complete with your logo, contact numbers, detailed itinerary, terms, and signature block.</li>
-            <li><strong>WhatsApp Share:</strong> Pre-formats a formatted summary with dates, hotel names, confirmation numbers, and emergency contact details ready to send with 1 click.</li>
-            <li><strong>Print Voucher:</strong> Opens your browser's native print preview dialog for physical copy generation.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">D. B2B Agent Voucher Permissions</h4>
-          <p className="text-sm text-muted-foreground">Admins can control which B2B agents are permitted to issue branded vouchers directly by opening the agent's profile and toggling the <strong>'Agent Voucher Privileges'</strong> switch.</p>
-        </div>
-
-        <TipBox>Vouchers auto-calculate hotel nights based on check-in and check-out dates, eliminating manual calculation errors.</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "reminders-module",
-    title: "Smart Reminders & Operational Alerts",
-    icon: Bell,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Never miss a passenger departure, Umrah group flight, or end-of-day ledger reconciliation with automated operational reminders.</p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">A. Automated Departure Alerts (Today & Tomorrow)</h4>
-          <p className="text-sm text-muted-foreground">TAMS automatically scans all active bookings and alerts you to:</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Flights Departing Today:</strong> Highlighted in red with passenger name, PNR, and airline.</li>
-            <li><strong>Flights Departing Tomorrow:</strong> Highlighted in amber to give you advance notice to issue tickets, verify visas, or re-confirm timings.</li>
-            <li><strong>Umrah Departures:</strong> Group departures flagged with Umrah icons and direct 1-tap links to open the booking.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Daily Operational Prompts</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Morning Review (09:00):</strong> Prompts the agency team to check today's scheduled departures, passenger queries, and pending tasks.</li>
-            <li><strong>Evening Closing (20:00):</strong> Prompts you to record daily expenses and balance cash/bank ledger before closing for the night.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">C. Header Notification Bell</h4>
-          <p className="text-sm text-muted-foreground">A live notification bell sits in the top header on both desktop and mobile:</p>
-          <StepList steps={[
-            "The red counter badge reflects your total active departures and due reminders",
-            "Clicking the bell opens a compact 3-tab drawer: Departures, Daily Tasks, and Reminders",
-            "Mark tasks completed with 1 click, or click 'Manage' to visit the full Reminders dashboard"
-          ]} />
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">D. Custom Reminders & Settings</h4>
-          <p className="text-sm text-muted-foreground">Create custom reminders with specific dates, times, notes, and daily recurring options. Use Reminder Settings to configure morning/evening prompt hours or toggle alert categories.</p>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: "smart-calculators",
-    title: "Umrah Package Calculator",
+    id: "umrah-calculator",
+    title: "Umrah Calculator",
     icon: Calculator,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Professional per-person cost calculator with live currency conversion and automatic passenger multiplication.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Umrah Package Calculator Features</h4>
-          <StepList steps={[
-            "Select a Quick Preset (e.g. 15-day Economy, 21-day Premium) or enter custom costs",
-            "Set the SAR to PKR exchange rate (e.g. 1 SAR = 74.50 PKR) to convert hotel and ground service costs instantly",
-            "Enter flight cost per person, Makkah hotel, Madinah hotel, transport, and visa fees",
-            "Enter passenger count: all costs automatically multiply across the entire family/group",
-            "View net package cost, profit margin, and grand total per person and for the whole group"
-          ]} />
-        </div>
-
-        <TipBox>Save your frequently used package setups as Quick Presets to quote Umrah packages to prospective clients in under 30 seconds.</TipBox>
+      <div className="space-y-4">
+        <Intro>Work out the full cost of an Umrah package. Enter prices in SAR and see them in PKR.</Intro>
+        <StepList steps={[
+          "Go to Umrah Calculator in the side menu.",
+          "Enter the exchange rate, number of people, nights, hotels, visa, transport and flight costs.",
+          "Click Calculate.",
+          "Check the cost per person and the total.",
+        ]} />
+        <SubHeading>What You Can Do Next</SubHeading>
+        <BulletList items={[
+          "Download Summary — save the costing as a file.",
+          "Save Draft — keep it to finish later.",
+          "Copy Quote — copy the price text to send on WhatsApp.",
+          "Create Quotation — open a new quotation with these prices.",
+          "Save Preset — save your usual rates to reuse.",
+        ]} />
+        <TipBox>Use Unlock to change locked rate fields.</TipBox>
       </div>
-    )
+    ),
   },
   {
-    id: "authentication-security",
-    title: "Authentication & Security",
+    id: "reports",
+    title: "Reports",
+    icon: BarChart3,
+    content: (
+      <div className="space-y-4">
+        <Intro>Go to Reports in the side menu. Choose a date range with the date filter at the top.</Intro>
+        <BulletList items={[
+          "1. Daily Report (Day Book) — every entry for the day: Date, Voucher / Bill #, Description / Particulars, Entry, Debit (DR), Credit (CR), Running Balance.",
+          "2. Account Statement — the ledger for one party, with overdue items.",
+          "3. Booking Report (Profit) — Bill No, Date, Client, Vendor, Service, Ticket / PNR, Invoice Total, Payable, Profit (PKR).",
+          "4. Financial Reports — Profit & Loss Report, Accounts Summary, Assets & Dues, Monthly Income, Monthly Expenses.",
+        ]} />
+        <TipBox>Click Drill down → on any figure to see the entries behind it. Use the Export button to save a report.</TipBox>
+      </div>
+    ),
+  },
+  {
+    id: "notifications",
+    title: "Notifications & Reminders",
+    icon: Bell,
+    content: (
+      <div className="space-y-4">
+        <Intro>Go to Notifications. The bell in the menu shows how many alerts are unread.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Tabs</SubHeading>
+          <BulletList items={[
+            "All Activity — every alert.",
+            "Flights & Umrah — departures today and tomorrow.",
+            "Accounts & Operations — payments due, expenses and refunds.",
+            "My Reminders — reminders you created.",
+            "Preferences — choose which alerts you want.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Add a Reminder</SubHeading>
+          <StepList steps={[
+            "Click New Reminder.",
+            "Fill in Date and Title (both required).",
+            "Add Time, Type, Priority and Link To (a client or booking).",
+            "Choose Repeat and Remind Me Before.",
+            "Add Remarks and Save.",
+          ]} />
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "emails-pdfs",
+    title: "Emails & PDFs",
+    icon: Mail,
+    content: (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <SubHeading>A. PDFs</SubHeading>
+          <BulletList items={[
+            "Booking invoices and booking confirmations — from the PDF column in Booking Invoice.",
+            "Payment vouchers — from the Print column in Payment Vouchers.",
+            "Quotations — from the Download icon or Save & PDF.",
+            "All PDFs use your logo and details from Settings → Branding.",
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <SubHeading>B. Sending Emails</SubHeading>
+          <StepList steps={[
+            "Make sure the client has an email address.",
+            "Click the email button on the invoice, reminder or quotation.",
+            "The PDF is attached and sent from your agency Gmail.",
+          ]} />
+          <WarningBox>If you see "Add your Gmail App Password in Settings → Email Integration to send emails.", finish Email Integration in First-Time Setup.</WarningBox>
+          <TipBox>See every sent email in Settings → Email Integration → Email History. Use Email Log Cleanup to delete old logs automatically.</TipBox>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "settings",
+    title: "Settings",
     icon: Shield,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">TAMS implements robust enterprise-grade security to protect your agency records and user accounts.</p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">A. Instant Trial Signup</h4>
-          <p className="text-sm text-muted-foreground">Creating a new account takes seconds. Upon submitting your name, agency name, email, and password, you are immediately logged in and taken directly to your active dashboard with a 14-day free trial without frustrating email confirmation blocks.</p>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">B. Password Visibility Toggle</h4>
-          <p className="text-sm text-muted-foreground">An interactive eye icon toggle is available across all password input fields (Sign In, Create Account, Reset Password, and Change Password) allowing you to verify what you typed and prevent accidental lockouts.</p>
-        </div>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Login System</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li>Accounts are created by admin only (no public signup)</li>
-            <li>Login with email and password</li>
-            <li>Sessions automatically expire after inactivity</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Device Management</h4>
-          <StepList steps={[
-            "Go to Settings → Account tab",
-            "View Active Devices section",
-            "See all logged-in devices with details",
-            "Click Logout to terminate individual sessions",
-            "Click Logout All Devices for security"
+      <div className="space-y-4">
+        <Intro>Settings has five tabs: Account, Branding, Email Integration, Storage & Backup and User Manual.</Intro>
+        <div className="space-y-2">
+          <SubHeading>A. Account</SubHeading>
+          <BulletList items={[
+            "Admin & Subscription — your plan, trial days and expiry date.",
+            "Sub-Users — add staff and choose what each person can see and do.",
+            "Security & Password — change your password.",
+            "Legal & Support — privacy policy, terms and how to contact support.",
           ]} />
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Sub-User System</h4>
-          <p className="text-sm text-muted-foreground">Main accounts can create up to 2 Sub-IDs with limited permissions.</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li>Each Sub-ID has granular module permissions</li>
-            <li>Sub-IDs can only access their main account's data</li>
-            <li>Manage Sub-IDs from Settings → Team tab</li>
-          </ul>
+        <div className="space-y-2">
+          <SubHeading>B. Branding</SubHeading>
+          <Intro>Invoice Template, Booking Template and Reminder Messages. See First-Time Setup.</Intro>
         </div>
-
-        <WarningBox>If you suspect unauthorized access, immediately logout all devices from Settings.</WarningBox>
+        <div className="space-y-2">
+          <SubHeading>C. Email Integration</SubHeading>
+          <Intro>Email Configuration, Email History and Email Log Cleanup.</Intro>
+        </div>
+        <div className="space-y-2">
+          <SubHeading>D. Storage & Backup</SubHeading>
+          <Intro>Storage meter, Choose Folder, Backup Now and Auto Backup.</Intro>
+        </div>
+        <WarningBox>Sub-users cannot edit money records such as ledger, bank and refund entries. Only the main account can.</WarningBox>
       </div>
-    )
+    ),
   },
   {
-    id: "subscription-license",
-    title: "Subscription & License",
-    icon: CreditCard,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">TAMS operates on a subscription model with multiple plans.</p>
-        
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Subscription Plans</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Free Trial:</strong> 14 days full access</li>
-            <li><strong>Monthly:</strong> 32 days access</li>
-            <li><strong>Yearly:</strong> 370 days access (best value)</li>
-          </ul>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Checking Your Subscription</h4>
-          <StepList steps={[
-            "Go to Settings → Account tab",
-            "View your current plan and expiry date",
-            "Contact support to renew before expiry"
-          ]} />
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Subscription Expired?</h4>
-          <p className="text-sm text-muted-foreground">If your subscription expires:</p>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li>You'll be redirected to the expiry page</li>
-            <li>Your data remains safe and intact</li>
-            <li>Contact support at <strong>tamspro12@gmail.com</strong> to renew</li>
-          </ul>
-        </div>
-
-        <TipBox>Renew before expiry to avoid any interruption in service.</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "7-hub-navigation",
-    title: "The 7-Hub Navigation & Workspace Map",
-    icon: Compass,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          To provide a clutter-free, fast desktop and mobile workspace, TAMS Pro consolidates all agency tools into exactly <strong>7 Clean Hubs</strong> with instant-switching horizontal tabs:
-        </p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Hub-by-Hub Navigation Map</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>1. Dashboard (`/app/dashboard`):</strong> Executive overview of daily sales, live booking counts, pending queries, cash/bank totals, and top notification bell.</li>
-            <li><strong>2. Bookings Hub (`/app/bookings`):</strong> Consolidated travel bookings under 4 instant tabs:
-              <ul className="list-circle list-inside ml-5 mt-1 space-y-1">
-                <li><em>Direct Clients:</em> Retail customer passenger files, e-tickets, invoices, and payments.</li>
-                <li><em>B2B Agents:</em> Partner agency accounts, wholesale passenger bookings, and agent ledgers.</li>
-                <li><em>Vendors:</em> Service suppliers (airlines, Umrah operators, hotels) and payable ledgers.</li>
-                <li><em>Vouchers:</em> Service vouchers (UV Umrah, HV Hotel, TV Transport) with PDF, Print, and WhatsApp sharing.</li>
-              </ul>
-            </li>
-            <li><strong>3. Queries & Quotes Hub (`/app/leads-quotes`):</strong> Lead pipeline with <em>Client Queries</em> and <em>Quotations</em> tabs, equipped with 1-click booking approval.</li>
-            <li><strong>4. Accounts Hub (`/app/accounts`):</strong> Complete financial ledger featuring <em>Bank & Cash Manager</em>, <em>Expenses</em>, <em>Refunds</em>, <em>Financial Reports</em>, and <em>Opening Balances</em>.</li>
-            <li><strong>5. Notifications Hub (`/app/notifications`):</strong> Unified alert center combining upcoming flight and Umrah departures, daily closing expense prompts, and system notifications.</li>
-            <li><strong>6. Umrah Calculator (`/app/umrah-calculator`):</strong> Real-time dynamic Umrah package cost estimation with 1-click Quotation and Booking generation.</li>
-            <li><strong>7. Settings (`/app/settings`):</strong> Account security, agency branding templates, email integration, storage quota, and system user manual.</li>
-          </ul>
-        </div>
-
-        <TipBox>All your bookmarks and previous links (e.g. `/app/expenses`, `/app/vendors`, `/app/vouchers`) automatically and smoothly redirect to the correct hub and active tab without page reloads.</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "1-click-conversions",
-    title: "1-Click Approvals & Automated Booking Conversion",
-    icon: CheckCircle2,
-    content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          Eliminate manual re-typing. TAMS Pro provides instantaneous 1-click pipelines from inquiries and quotes directly into confirmed client bookings:
-        </p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">How to Convert Inquiries & Quotes</h4>
-          <StepList steps={[
-            "From Client Queries: On any active query card, click 'Convert to Booking'. The booking dialog opens with the client name, phone number, destination, and budget automatically pre-filled.",
-            "From Quotations: On any sent or accepted quotation, click 'Convert to Booking'. All quoted line items, client details, and total selling amounts are pre-filled instantly.",
-            "From Umrah Calculator: After calculating group or individual passenger costs, click 'Create Booking'. Group size, travel dates, package cost, and selling price pre-populate immediately.",
-            "Save Booking: Review the pre-filled fields, assign a vendor if needed, and click 'Add Booking'. The source query is automatically marked Completed, and the quotation is marked Accepted."
-          ]} />
-        </div>
-
-        <TipBox>Built-in idempotency ensures you never create duplicate bookings accidentally from the same query or quote.</TipBox>
-      </div>
-    )
-  },
-  {
-    id: "opening-balances",
-    title: "Opening Balances & Accounting Engine",
+    id: "accounting-rules",
+    title: "How the Accounts Work",
     icon: Scale,
     content: (
-      <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          Migrating existing customer or supplier balances into TAMS Pro is simple and safe:
-        </p>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-base">Key Accounting Principles</h4>
-          <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li><strong>Brought-Forward Only:</strong> Opening balances represent historical debt or credit prior to using the software. They <em>never</em> count as sales revenue, income, or operational expense in your P&L reports.</li>
-            <li><strong>Modal Integration:</strong> When creating a new Bank Account, setting your Cash Drawer Float, or adding a new Direct Client, B2B Agent, or Vendor, an optional 'Opening Balance' section lets you enter brought-forward amounts with 1 step.</li>
-            <li><strong>Opening Balances Hub:</strong> View, reconcile, export to Excel/PDF, and audit all agency opening balances anytime under Accounts Hub → Opening Balances tab.</li>
-          </ul>
-        </div>
+      <div className="space-y-4">
+        <BulletList items={[
+          "Every invoice, voucher, refund and expense posts to the accounts by itself.",
+          "The main date on these forms is locked to today. This keeps your books honest.",
+          "Client balance goes up with an invoice and down with a Received (CRV) voucher.",
+          "Vendor balance goes up with a purchase and down with a Paid (CPV) voucher.",
+          "Opening balances for parties and banks are set when you add them.",
+          "Each agency's data is private. No other agency can see it.",
+        ]} />
+        <TipBox>To fix a wrong invoice, use Refunds / Voids. Do not delete it. This keeps a clear record.</TipBox>
       </div>
-    )
-  }
+    ),
+  },
+  {
+    id: "common-problems",
+    title: "Common Problems",
+    icon: HelpCircle,
+    content: (
+      <div className="space-y-4">
+        <BulletList items={[
+          "Emails do not send → Check Settings → Email Integration shows Configured.",
+          "\"Gmail authentication failed\" → Create a new App Password in Google and save it again.",
+          "Enter does not move to the next field → A required field is empty. Fill it in first.",
+          "Cannot change the date → The date is locked to today on purpose.",
+          "A client is missing from the list → Add them with Quick Add or in Clients & Vendors.",
+          "Trial expired → Go to Settings → Account → Admin & Subscription.",
+        ]} />
+      </div>
+    ),
+  },
+  {
+    id: "documents",
+    title: "Quick Reference",
+    icon: FileText,
+    content: (
+      <div className="space-y-4">
+        <BulletList items={[
+          "New invoice: Sales & Expenses → New Booking Invoice.",
+          "Money in or out: Sales & Expenses → New Payment Voucher.",
+          "Client cancels: Sales & Expenses → New Refund / Void.",
+          "Office bill: Sales & Expenses → New Expense.",
+          "New client: Clients & Vendors → Add New Party.",
+          "New bank: Clients & Vendors → Banks → Add New Bank.",
+          "Price quote: Queries & Quotes → Quotations → New Quotation.",
+          "Today's entries: Reports → 1. Daily Report (Day Book).",
+        ]} />
+      </div>
+    ),
+  },
 ];
 
 export default function UserManual() {
-  const [openSections, setOpenSections] = useState<string[]>(["first-time-setup"]);
+  const [openSections, setOpenSections] = useState<string[]>(["getting-started"]);
 
   const toggleSection = (id: string) => {
-    setOpenSections(prev => 
-      prev.includes(id) 
+    setOpenSections(prev =>
+      prev.includes(id)
         ? prev.filter(s => s !== id)
         : [...prev, id]
     );
@@ -829,7 +728,7 @@ export default function UserManual() {
                 size="sm"
                 className="text-xs"
                 onClick={() => {
-                  setOpenSections(prev => 
+                  setOpenSections(prev =>
                     prev.includes(section.id) ? prev : [...prev, section.id]
                   );
                   document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });

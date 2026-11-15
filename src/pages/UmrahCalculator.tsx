@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -794,6 +795,7 @@ export default function UmrahCalculator() {
   // Keyboard Shortcuts: Ctrl/Cmd+S (Draft), Ctrl/Cmd+Enter (Quotation), Ctrl/Cmd+Shift+R (Reset)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const modifier = isMac ? e.metaKey : e.ctrlKey;
 
@@ -812,6 +814,24 @@ export default function UmrahCalculator() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSaveDraft, handleCreateQuotation]);
+
+  const calcContainerRef = useRef<HTMLDivElement>(null);
+  const presetDialogRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: calcContainerRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSaveDraft,
+  });
+
+  useFormKeyboardNav({
+    containerRef: presetDialogRef,
+    enabled: showAddPresetDialog,
+    autoFocusFirst: true,
+    onSave: saveAsPreset,
+    onCancel: () => setShowAddPresetDialog(false),
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-PK", {
@@ -941,7 +961,7 @@ export default function UmrahCalculator() {
           DESKTOP LAYOUT (Container query: >= 640px)
           ONE UNIFIED SHEET, TOP TO BOTTOM: Fits in ONE screen with ZERO vertical scroll
          ========================================================================= */}
-      <div className="calc-desktop-view flex-col w-full gap-2 bg-background">
+      <div ref={calcContainerRef} className="calc-desktop-view flex-col w-full gap-2 bg-background">
         {/* TOP TOOLBAR: SINGLE COMPACT CONTROL BAR (Task 1) */}
         <div className="shrink-0 h-9 px-3 rounded-xl bg-card border border-border/80 flex items-center justify-between gap-2.5 text-xs shadow-2xs">
           {/* Left controls: Rate, Dates, Hotel Currency */}
@@ -1022,7 +1042,7 @@ export default function UmrahCalculator() {
               <span className="text-xs font-medium text-muted-foreground hidden xl:inline">Preset:</span>
 
               <Select value={selectedPreset} onValueChange={applyPreset}>
-                <SelectTrigger className="h-6 w-[145px] text-xs border-0 bg-transparent shadow-none px-1 focus:ring-0">
+                <SelectTrigger className="h-6 w-[145px] text-xs border-0 bg-transparent shadow-none px-1 focus-visible:ring-2 focus-visible:ring-teal-500">
                   <SelectValue placeholder="Quick Preset..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -2327,7 +2347,7 @@ export default function UmrahCalculator() {
 
       {/* Save as New Preset Dialog */}
       <Dialog open={showAddPresetDialog} onOpenChange={setShowAddPresetDialog}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent ref={presetDialogRef} className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Save as New Preset</DialogTitle>
           </DialogHeader>
@@ -2351,7 +2371,7 @@ export default function UmrahCalculator() {
             <Button variant="outline" onClick={() => setShowAddPresetDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={saveAsPreset}>Save Preset</Button>
+            <Button data-save-button="true" onClick={saveAsPreset}>Save Preset</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

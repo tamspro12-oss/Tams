@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import type { Quotation } from "@/hooks/useQuotations";
+import { getServiceDisplayLabel } from "@/lib/serviceDefinitions";
 
 interface BuildOptions {
   agencyName?: string;
@@ -29,6 +30,9 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
   doc.setTextColor(0, 0, 0);
   y = 38;
 
+  const serviceLabel = getServiceDisplayLabel(q.service_type);
+  const serviceTitle = q.title?.trim() || serviceLabel;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("QUOTATION", 14, y);
@@ -44,30 +48,28 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
   }
   y += 8;
 
-  // Client block
+  // Client block (no client email line in Quotation PDF)
   doc.setFont("helvetica", "bold");
   doc.text("Quotation For:", 14, y);
   y += 5;
   doc.setFont("helvetica", "normal");
   doc.text(q.client_name, 14, y); y += 5;
-  if (q.client_email) { doc.text(q.client_email, 14, y); y += 5; }
   if (q.client_phone) { doc.text(q.client_phone, 14, y); y += 5; }
 
   doc.setFont("helvetica", "bold");
   doc.text(
-    `Service: ${({ client_booking: "Client Booking", b2b: "B2B Service", umrah: "Umrah Package", custom: "Custom" } as any)[q.service_type] || q.service_type}`,
+    `Service: ${serviceLabel}`,
     pageWidth - 14,
-    y - (q.client_phone ? 10 : q.client_email ? 5 : 0),
+    y - (q.client_phone ? 5 : 0),
     { align: "right" }
   );
   doc.setFont("helvetica", "normal");
-  y += 2;
+  y += 3;
 
-  if (q.title) {
-    doc.setFont("helvetica", "bold");
-    doc.text(q.title, 14, y); y += 6;
-    doc.setFont("helvetica", "normal");
-  }
+  doc.setFont("helvetica", "bold");
+  doc.text(serviceTitle, 14, y); y += 6;
+  doc.setFont("helvetica", "normal");
+
   if (q.description) {
     const lines = doc.splitTextToSize(q.description, pageWidth - 28);
     doc.text(lines, 14, y);
@@ -77,7 +79,7 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
   // Items
   const items = q.items?.length
     ? q.items
-    : [{ description: q.title || "Service", qty: 1, unit_price: q.total, amount: q.total }];
+    : [{ description: serviceTitle, qty: 1, unit_price: q.total, amount: q.total }];
 
   autoTable(doc, {
     startY: y + 2,

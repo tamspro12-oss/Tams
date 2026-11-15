@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,7 @@ export function ChangePasswordSection() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!currentPassword) {
       toast({
         title: "Current password required",
@@ -67,7 +68,7 @@ export function ChangePasswordSection() {
     try {
       // First verify the current password by re-authenticating
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user?.email) {
         throw new Error("User not found");
       }
@@ -132,6 +133,14 @@ export function ChangePasswordSection() {
     }
   };
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
   return (
     <Card className="w-full border shadow-xs">
       <CardHeader className="py-3 px-4 sm:px-5 border-b">
@@ -148,7 +157,7 @@ export function ChangePasswordSection() {
         </div>
       </CardHeader>
       <CardContent className="p-4 sm:p-5">
-        <form onSubmit={handleChangePassword} className="space-y-3">
+        <form ref={formRef} onSubmit={handleChangePassword} className="space-y-3">
           {/* 3 Columns Desktop Row: Current Password, New Password, Confirm New Password */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
             {/* 1. Current Password */}

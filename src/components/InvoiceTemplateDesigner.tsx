@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -119,8 +120,17 @@ export function InvoiceTemplateDesigner() {
     }
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: cardRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSaveInvoiceTemplate,
+  });
+
   return (
-    <Card className="border shadow-xs">
+    <Card ref={cardRef} className="border shadow-xs">
       <CardHeader className="py-3 px-4 sm:px-5 border-b">
         <div className="flex items-center justify-between">
           <div>
@@ -144,6 +154,7 @@ export function InvoiceTemplateDesigner() {
             </Button>
             <Button
               size="sm"
+              data-save-button="true"
               onClick={handleSaveInvoiceTemplate}
               disabled={isSavingTemplate || !invoiceAgencyName.trim()}
               className="h-8 text-xs font-semibold gap-1.5"

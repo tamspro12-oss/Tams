@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,12 +174,21 @@ export default function Queries() {
     [navigate]
   );
 
+  const filterBarRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: filterBarRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
   // Create Quotation from Query
   const handleCreateQuotation = useCallback(
     (query: any) => {
       navigate("/app/leads-quotes/quotations/new", {
         state: {
           prefill: {
+            service_type: query.service_type || "Ticket",
             client_name: query.client_name,
             client_phone: query.contact_number || "",
             title: `Quotation: ${query.query_text?.slice(0, 32)}...`,
@@ -280,7 +290,7 @@ export default function Queries() {
       </div>
 
       {/* ONE Filter Row: Search | DATE FILTER | All Priorities | All Status */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
+      <div ref={filterBarRef} className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
         <div className="relative flex-1">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input

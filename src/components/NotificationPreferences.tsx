@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -52,8 +53,17 @@ export function NotificationPreferences() {
     });
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: cardRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSave,
+  });
+
   return (
-    <Card className="border max-w-3xl shadow-sm rounded-xl">
+    <Card ref={cardRef} className="border max-w-3xl shadow-sm rounded-xl">
       <CardHeader className="py-3 px-4 sm:px-6 border-b">
         <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
           <Sliders className="w-4 h-4 text-primary" />
@@ -121,6 +131,7 @@ export function NotificationPreferences() {
         <div className="flex justify-end pt-2">
           <Button
             size="sm"
+            data-save-button="true"
             onClick={handleSave}
             disabled={updateSettings.isPending}
             className="font-semibold text-xs h-9 px-5 shadow-xs"

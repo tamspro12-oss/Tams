@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useFormKeyboardNav } from '@/hooks/useFormKeyboardNav';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -71,6 +72,14 @@ export const AdminUserManagement = () => {
     }
   };
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
   return (
     <Tabs defaultValue="manage" className="space-y-6">
       <TabsList className="grid w-full grid-cols-2">
@@ -102,7 +111,7 @@ export const AdminUserManagement = () => {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">

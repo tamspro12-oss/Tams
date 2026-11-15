@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ interface DataImportDialogProps {
 }
 
 export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) {
+  const dialogContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { addClient } = useClients();
   const { addBooking } = useBookings();
@@ -213,9 +215,21 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
     setResult(null);
   };
 
+  useFormKeyboardNav({
+    containerRef: dialogContainerRef,
+    enabled: open,
+    onCancel: () => {
+      resetDialog();
+      onOpenChange(false);
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={(open) => { onOpenChange(open); if (!open) resetDialog(); }}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        ref={dialogContainerRef}
+        className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>Import Data from Excel/CSV</DialogTitle>
           <DialogDescription>

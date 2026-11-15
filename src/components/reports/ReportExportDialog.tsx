@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import {
   Dialog,
   DialogContent,
@@ -111,6 +112,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   initialOverdueBucket = "none",
   quotationSummary,
 }) => {
+  const dialogContainerRef = useRef<HTMLDivElement>(null);
   // --------------------------------------------------------------------------
   // 1. DATE RANGE STATE (Synced to defaults on open)
   // --------------------------------------------------------------------------
@@ -695,9 +697,24 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
   }, [lastExportedParty, agency, datePreset, fromDate, toDate]);
 
+  useFormKeyboardNav({
+    containerRef: dialogContainerRef,
+    enabled: open,
+    autoFocusFirst: true,
+    onCancel: () => onOpenChange(false),
+    onSave: () => {
+      if (preview.isValid && preview.count > 0 && !isExporting) {
+        handleExport();
+      }
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border border-border shadow-2xl rounded-xl">
+      <DialogContent
+        ref={dialogContainerRef}
+        className="w-[96vw] max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border border-border shadow-2xl rounded-xl"
+      >
         {/* HEADER: Title & Close */}
         <DialogHeader className="px-5 py-3 border-b shrink-0 bg-muted/30">
           <div className="flex items-center justify-between">
@@ -1128,6 +1145,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
           <Button
             type="button"
             size="sm"
+            data-save-button="true"
             disabled={!preview.isValid || preview.count === 0 || isExporting}
             onClick={handleExport}
             className="h-8 px-4 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"

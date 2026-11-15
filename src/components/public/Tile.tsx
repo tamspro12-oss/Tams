@@ -10,6 +10,7 @@ export interface TileProps {
   href?: string;
   className?: string;
   compact?: boolean;
+  noTruncate?: boolean;
 }
 
 export const Tile: React.FC<TileProps> = ({
@@ -20,21 +21,42 @@ export const Tile: React.FC<TileProps> = ({
   href,
   className = "",
   compact = false,
+  noTruncate = false,
 }) => {
+  const iconBoxClasses = compact
+    ? "w-9 h-9 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0 transition-colors group-hover:bg-[#C9A961]/20"
+    : "w-11 h-11 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0 transition-colors group-hover:bg-[#C9A961]/20";
+
+  const iconClasses = compact ? "w-[18px] h-[18px]" : "w-[22px] h-[22px]";
+
   const content = (
     <div
       className={`group relative flex flex-col justify-between h-[132px] sm:h-[148px] rounded-2xl p-5 border border-[#E6E2D8] dark:border-[#1A294E] bg-white dark:bg-[#0E1B3B] shadow-sm hover:shadow-md hover:border-[#C9A961] dark:hover:border-[#C9A961] transition-all duration-200 motion-reduce:transition-none hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
     >
-      <div className="w-11 h-11 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0 transition-colors group-hover:bg-[#C9A961]/20">
-        <Icon className="w-[22px] h-[22px]" strokeWidth={1.5} />
+      <div className={iconBoxClasses}>
+        <Icon className={iconClasses} strokeWidth={1.5} />
       </div>
 
       <div className="mt-auto">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-snug truncate">
+        <h3
+          className={
+            noTruncate
+              ? compact
+                ? "text-[13px] xl:text-sm font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-tight whitespace-normal"
+                : "text-[15px] font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-snug whitespace-normal"
+              : "text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-snug truncate"
+          }
+        >
           {title}
         </h3>
         {!compact && caption && (
-          <p className="text-[13px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal">
+          <p
+            className={
+              noTruncate
+                ? "text-[12px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5 font-normal"
+                : "text-[13px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal"
+            }
+          >
             {caption}
           </p>
         )}

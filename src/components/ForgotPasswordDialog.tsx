@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,15 @@ export function ForgotPasswordDialog() {
     }
   };
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !sent,
+    autoFocusFirst: true,
+    onCancel: () => handleOpenChange(false),
+  });
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -81,7 +91,7 @@ export function ForgotPasswordDialog() {
                 Enter your email and we'll send you a link to reset your password.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSend} className="space-y-4 pt-2">
+            <form ref={formRef} onSubmit={handleSend} className="space-y-4 pt-2">
               <div className="space-y-2">
                 <Label htmlFor="reset-email">Email Address</Label>
                 <Input

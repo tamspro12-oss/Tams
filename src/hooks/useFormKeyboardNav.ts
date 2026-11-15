@@ -28,7 +28,6 @@ const FOCUSABLE_SELECTOR = [
   'button[role="checkbox"]:not([disabled])',
   'button[role="radio"]:not([disabled])',
   'button[data-enter-target="true"]:not([disabled])',
-  'button[data-add-passenger-btn="true"]:not([disabled])',
   'button[data-save-button="true"]:not([disabled])',
   'button[type="submit"]:not([disabled])',
   '[data-enter-target="true"]:not([disabled])',
@@ -39,7 +38,8 @@ const SKIP_ENTER_ON_BUTTON_SELECTOR =
 
 function isElementVisible(el: HTMLElement): boolean {
   if (!el.isConnected) return false;
-  if (el.closest('[hidden], .hidden, [aria-hidden="true"]')) return false;
+  // Ignore temporary `data-aria-hidden` applied to background nodes by Radix overlays during close transitions
+  if (el.closest('[hidden], .hidden, [aria-hidden="true"]:not([data-aria-hidden])')) return false;
   const style = window.getComputedStyle(el);
   if (style.display === "none" || style.visibility === "hidden") return false;
   const rect = el.getBoundingClientRect();
@@ -57,6 +57,9 @@ function isEditableOrNavigable(el: HTMLElement): boolean {
     return false;
   }
   if (el.dataset.navSkip === "true" || el.closest('[data-nav-skip="true"]')) {
+    return false;
+  }
+  if (el.dataset.quickAddBtn === "true") {
     return false;
   }
 
@@ -99,6 +102,15 @@ export function getVisualFocusableFields(
   }));
 
   withRects.sort((a, b) => {
+    const orderA = Number(
+      a.el.closest("[data-nav-order]")?.getAttribute("data-nav-order") || "0"
+    );
+    const orderB = Number(
+      b.el.closest("[data-nav-order]")?.getAttribute("data-nav-order") || "0"
+    );
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
     const verticalDiff = a.rect.top - b.rect.top;
     if (Math.abs(verticalDiff) > 8) {
       return verticalDiff;
@@ -293,23 +305,79 @@ export function useFormKeyboardNav({
     [containerRef]
   );
 
-  // Auto-focus first editable field on open (retries briefly for Portal mount timing)
+  const initializedContainerRef = useRef<HTMLElement | null>(null);
+  const lastFocusedElRef = useRef<HTMLElement | null>(null);
+
+  // Track last focused control inside container so returning from nested dialogs restores focus instead of jumping to #1
   useEffect(() => {
-    if (!enabled || !autoFocusFirst) return;
+    const handleFocusIn = (e: FocusEvent) => {
+      const container = containerRef.current;
+      const target = e.target as HTMLElement | null;
+      if (!container || !target || !container.contains(target)) return;
+      if (enabled && isHighestDialog(container)) {
+        lastFocusedElRef.current = target;
+      }
+    };
+    document.addEventListener("focusin", handleFocusIn, true);
+    return () => document.removeEventListener("focusin", handleFocusIn, true);
+  }, [enabled, containerRef]);
+
+  // Auto-focus first editable field on open (retries briefly for Portal mount timing; never resets on sub-modal close)
+  useEffect(() => {
+    if (!enabled) {
+      const checkTimer = window.setTimeout(() => {
+        const cur = containerRef.current;
+        if (!cur || !cur.isConnected || cur.getBoundingClientRect().width === 0) {
+          initializedContainerRef.current = null;
+          lastFocusedElRef.current = null;
+        }
+      }, 60);
+      return () => window.clearTimeout(checkTimer);
+    }
+
+    if (!autoFocusFirst) return;
+
+    let cancelled = false;
     let attempts = 0;
     let timer = window.setTimeout(() => {
       const tryFocus = () => {
-        if (containerRef.current && isHighestDialog(containerRef.current)) {
-          if (focusFirstField()) return;
+        if (cancelled) return;
+        const container = containerRef.current;
+        if (container && isHighestDialog(container)) {
+          const active = document.activeElement as HTMLElement | null;
+          if (active && active !== document.body && container.contains(active)) {
+            initializedContainerRef.current = container;
+            return;
+          }
+
+          // Returning from a nested child dialog (e.g. Quick Add): keep focus where user was instead of jumping to field #1
+          if (initializedContainerRef.current === container) {
+            const prev = lastFocusedElRef.current;
+            if (prev && container.contains(prev) && isElementVisible(prev)) {
+              focusControl(prev);
+            }
+            return;
+          }
+
+          if (focusFirstField()) {
+            const after = document.activeElement as HTMLElement | null;
+            if (after && container.contains(after)) {
+              initializedContainerRef.current = container;
+              return;
+            }
+          }
         }
         attempts += 1;
-        if (attempts < 4) {
+        if (attempts < 8) {
           timer = window.setTimeout(tryFocus, 60);
         }
       };
       tryFocus();
     }, 65);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [enabled, autoFocusFirst, containerRef, focusFirstField]);
 
   // Listen on document for auto-advance events so Portal dialogs never miss attachment timing
@@ -323,14 +391,12 @@ export function useFormKeyboardNav({
       const sourceEl = customEvent.detail?.sourceEl || (e.target as HTMLElement | null);
       if (!sourceEl || !container.contains(sourceEl)) return;
 
-      // Wait briefly so dynamic fields (e.g. Service Type, Trip Type, Payment Mode) finish mounting
-      window.requestAnimationFrame(() => {
-        window.setTimeout(() => {
-          if (containerRef.current && isHighestDialog(containerRef.current)) {
-            focusNextField(sourceEl);
-          }
-        }, 20);
-      });
+      // Wait one macrotask so dynamic fields triggered by onValueChange commit before ordering
+      window.setTimeout(() => {
+        if (containerRef.current && isHighestDialog(containerRef.current)) {
+          focusNextField(sourceEl);
+        }
+      }, 0);
     };
 
     document.addEventListener("tams:field-advance", handleFieldAdvance);
@@ -339,7 +405,7 @@ export function useFormKeyboardNav({
     };
   }, [enabled, containerRef, focusNextField]);
 
-  // Capture-phase keyboard handler for predictable Escape/Ctrl+S/Enter/Shift+Enter handling
+  // Capture-phase keyboard handler for predictable Escape/Ctrl+S/Enter/Shift+Enter/Shift+Tab handling
   useEffect(() => {
     if (!enabled) return;
 
@@ -395,7 +461,10 @@ export function useFormKeyboardNav({
         return;
       }
 
-      // 4. Ctrl/Cmd + Enter inside Textarea (or elsewhere) -> move on or save if last field
+      // 4. Ctrl/Cmd + Enter:
+      //    - Inside TEXTAREA: move focus to next control (e.g. Save button), or save if no next control
+      //    - Inside a repeatable row ([data-pax-row] / [data-repeatable-row]): add a new row and focus its first field
+      //    - Elsewhere: trigger Save
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
@@ -403,13 +472,76 @@ export function useFormKeyboardNav({
           const fields = getVisualFocusableFields(container);
           const idx = fields.indexOf(target);
           const next = idx !== -1 && idx < fields.length - 1 ? fields[idx + 1] : null;
-          if (next && next.dataset.saveButton !== "true" && next.getAttribute("type") !== "submit") {
+          if (next) {
             focusControl(next);
           } else {
             onSaveRef.current?.();
           }
-        } else {
-          onSaveRef.current?.();
+          return;
+        }
+
+        const repeatableRow = target.closest('[data-pax-row], [data-repeatable-row]') as HTMLElement | null;
+        if (repeatableRow) {
+          const group = (repeatableRow.closest('[data-repeatable-group]') as HTMLElement | null) || container;
+          const addBtn = group.querySelector<HTMLButtonElement>(
+            'button[data-add-row-btn="true"]:not([disabled]), button[data-add-passenger-btn="true"]:not([disabled])'
+          );
+          if (addBtn) {
+            const prevCount = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]').length;
+            const focusNewAddedRow = () => {
+              const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
+              if (rows.length <= prevCount) return false;
+              const lastRow = rows[rows.length - 1];
+              const active = document.activeElement as HTMLElement | null;
+              if (active && lastRow.contains(active)) return true;
+              const rowFields = getVisualFocusableFields(lastRow);
+              if (rowFields.length > 0) {
+                focusControl(rowFields[0]);
+                return true;
+              }
+              return false;
+            };
+
+            let settled = false;
+            let fallbackTimer: number | null = null;
+            const observer = new MutationObserver(() => {
+              if (settled) return;
+              const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
+              if (rows.length > prevCount) {
+                settled = true;
+                observer.disconnect();
+                if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+                window.setTimeout(() => {
+                  focusNewAddedRow();
+                }, 0);
+              }
+            });
+            observer.observe(group, { childList: true, subtree: true });
+            fallbackTimer = window.setTimeout(() => {
+              observer.disconnect();
+              if (!settled) {
+                settled = true;
+                focusNewAddedRow();
+              }
+            }, 600);
+
+            addBtn.click();
+            return;
+          }
+        }
+
+        onSaveRef.current?.();
+        return;
+      }
+
+      // 4b. Shift + Tab navigates backward in visual order (mirroring Shift + Enter, e.g. Purchasing Cost -> last passenger)
+      if (e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const fields = getVisualFocusableFields(container);
+        const currentIdx = fields.indexOf(target);
+        if (currentIdx > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          focusControl(fields[currentIdx - 1]);
         }
         return;
       }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -11,32 +11,40 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { GmailAppPasswordGuide } from "@/components/GmailAppPasswordGuide";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const APP_PASSWORD_PATTERN = /^[a-zA-Z0-9]{16}$/;
 
 export function EmailConfiguration() {
   const { data: agency } = useAgency();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
   const [agencyEmail, setAgencyEmail] = useState("");
+  const [hasInitializedEmail, setHasInitializedEmail] = useState(false);
+  // App Password always defaults to empty and is never loaded back from auth, state, or database.
   const [agencyEmailPassword, setAgencyEmailPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (agency?.email) {
-      setAgencyEmail(agency.email);
-    } else if (user?.email) {
-      setAgencyEmail(user.email);
-    }
+    setHasInitializedEmail(false);
+    setAgencyEmailPassword("");
+    setShowPassword(false);
+  }, [agency?.id]);
 
-    if (agency?.id) {
-      supabase
-        .rpc("get_agency_smtp_password")
-        .then(({ data }) => {
-          if (typeof data === "string" && data) setAgencyEmailPassword(data);
-        });
+  useEffect(() => {
+    if (!hasInitializedEmail && (agency || user)) {
+      const initialEmail = agency?.email || user?.email || "";
+      setAgencyEmail(initialEmail);
+      setHasInitializedEmail(true);
     }
-  }, [agency, user]);
+  }, [agency, user, hasInitializedEmail]);
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -45,31 +53,49 @@ export function EmailConfiguration() {
       return;
     }
 
-    if (agencyEmail && !agencyEmailPassword) {
-      toast.error("Gmail App Password is required when email is provided");
+    const trimmedEmail = agencyEmail.trim();
+    if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
+      toast.error("Please enter a valid Agency Gmail Email");
+      emailInputRef.current?.focus();
       return;
     }
 
-    const cleanPassword = agencyEmailPassword.replace(/\s+/g, "");
-    if (cleanPassword && cleanPassword.length !== 16) {
-      toast.error("Gmail App Password must be exactly 16 characters");
+    const rawPasswordInput = agencyEmailPassword;
+    const cleanPassword = rawPasswordInput.replace(/\s+/g, "");
+    if (rawPasswordInput.length > 0 && !APP_PASSWORD_PATTERN.test(cleanPassword)) {
+      toast.error("Gmail App Password must be a 16-character Google App Password (spaces allowed)");
+      passwordInputRef.current?.focus();
       return;
     }
 
     setIsSaving(true);
     try {
+      const updatePayload: { email: string; email_password?: string } = {
+        email: trimmedEmail,
+      };
+      if (cleanPassword.length === 16) {
+        updatePayload.email_password = cleanPassword;
+      }
+
       const { error } = await supabase
         .from("agencies")
-        .update({
-          email: agencyEmail.trim() || null,
-          email_password: cleanPassword || null,
-        })
+        .update(updatePayload)
         .eq("id", agency.id);
 
       if (error) throw error;
 
-      queryClient.invalidateQueries({ queryKey: ["agency"] });
-      toast.success("Email configuration updated successfully");
+      setAgencyEmail(trimmedEmail);
+      setAgencyEmailPassword("");
+      setShowPassword(false);
+      await queryClient.invalidateQueries({ queryKey: ["agency"] });
+
+      if (cleanPassword.length === 16) {
+        toast.success("Email configuration saved");
+      } else if (agency?.smtp_configured) {
+        toast.success("Agency email updated");
+      } else {
+        toast.success("Agency email saved. Add a 16-character Gmail App Password to enable email sending.");
+      }
     } catch (error: any) {
       toast.error("Failed to update email configuration", { description: error.message });
     } finally {
@@ -77,7 +103,17 @@ export function EmailConfiguration() {
     }
   };
 
-  const isConfigured = Boolean(agency?.smtp_configured || (agency?.email && agencyEmailPassword));
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: () => {
+      void handleSave();
+    },
+  });
+
+  const savedEmail = (agency?.email || "").trim();
+  const isConfigured = Boolean(EMAIL_PATTERN.test(savedEmail) && agency?.smtp_configured);
 
   return (
     <Card className="border shadow-xs max-w-4xl mx-auto">
@@ -96,7 +132,7 @@ export function EmailConfiguration() {
                 >
                   {isConfigured ? (
                     <>
-                      <CheckCircle2 className="w-3 h-3 mr-1" /> Connected
+                      <CheckCircle2 className="w-3 h-3 mr-1" /> Configured
                     </>
                   ) : (
                     <>
@@ -112,33 +148,42 @@ export function EmailConfiguration() {
           </div>
           <div className="flex items-center gap-2">
             <GmailAppPasswordGuide />
-            <Button
-              onClick={handleSave}
-              disabled={isSaving || !agencyEmail.trim()}
-              size="sm"
-              className="h-8 text-xs font-semibold gap-1.5"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? "Saving..." : "Save Configuration"}</span>
-            </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-4 sm:p-5 space-y-4">
-        <form onSubmit={handleSave} className="space-y-4">
+        <form
+          ref={formRef}
+          onSubmit={handleSave}
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-form-type="other"
+          noValidate
+          className="space-y-4"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="agency-gmail-email" className="text-xs font-semibold flex items-center gap-1.5">
+              <Label htmlFor="smtp_agency_email" className="text-xs font-semibold flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-muted-foreground" />
                 Agency Gmail Email *
               </Label>
               <Input
-                id="agency-gmail-email"
+                ref={emailInputRef}
+                id="smtp_agency_email"
+                name="smtp_agency_email"
                 type="email"
                 value={agencyEmail}
-                onChange={(e) => setAgencyEmail(e.target.value)}
+                onChange={(e) => {
+                  setHasInitializedEmail(true);
+                  setAgencyEmail(e.target.value);
+                }}
                 placeholder="youragency@gmail.com"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 className="h-9 text-xs"
                 required
               />
@@ -148,24 +193,32 @@ export function EmailConfiguration() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="agency-gmail-password" className="text-xs font-semibold flex items-center gap-1.5">
+              <Label htmlFor="smtp_app_password" className="text-xs font-semibold flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-muted-foreground" />
-                16-Character Gmail App Password *
+                16-Character Gmail App Password
               </Label>
               <div className="relative">
                 <Input
-                  id="agency-gmail-password"
+                  ref={passwordInputRef}
+                  id="smtp_app_password"
+                  name="smtp_app_password"
                   type={showPassword ? "text" : "password"}
                   value={agencyEmailPassword}
                   onChange={(e) => setAgencyEmailPassword(e.target.value)}
-                  placeholder="abcd efgh ijkl mnop"
+                  placeholder={agency?.smtp_configured ? "Saved · type a new one to replace" : "abcd efgh ijkl mnop"}
                   maxLength={19}
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   className="h-9 text-xs pr-10 font-mono tracking-wider"
-                  required
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                  data-nav-skip="true"
+                  aria-label={showPassword ? "Hide App Password" : "Show App Password"}
+                  onClick={() => setShowPassword((prev) => !prev)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -175,6 +228,21 @@ export function EmailConfiguration() {
                 Generate in your Google Account security page (2-Step Verification &rarr; App passwords).
               </p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] text-muted-foreground">
+              Enter = next field · Enter on Save = save configuration
+            </p>
+            <Button
+              type="submit"
+              disabled={isSaving || !agencyEmail.trim()}
+              size="sm"
+              className="h-8 text-xs font-semibold gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? "Saving..." : "Save Configuration"}</span>
+            </Button>
           </div>
 
           <div className="p-3 bg-muted/40 rounded-lg border flex items-start gap-2.5 text-xs text-muted-foreground">
@@ -191,4 +259,3 @@ export function EmailConfiguration() {
     </Card>
   );
 }
-

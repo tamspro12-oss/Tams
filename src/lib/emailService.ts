@@ -35,7 +35,7 @@ export const sendEmail = async (
     // Validate agency config
     if (!agencyConfig.email) {
       console.error('[Email Service] Agency email missing');
-      throw new Error('Agency email not configured. Please add it in Settings > Agency Branding.');
+      throw new Error('Add your Gmail App Password in Settings → Email Integration to send emails.');
     }
 
     // Validate recipient email
@@ -117,7 +117,7 @@ export const sendEmail = async (
       // Check for Gmail authentication errors
       const errorMsg = error.message || 'Failed to send email';
       if (errorMsg.includes('535') || errorMsg.includes('Username and Password not accepted')) {
-        throw new Error('Gmail authentication failed. Please verify:\n1. You created a Gmail App Password (16 characters)\n2. 2-Step Verification is enabled on your Gmail\n3. The password is copied correctly without spaces\n\nClick "How to Create App Password?" in Settings > Agency Branding for help.');
+        throw new Error('Gmail authentication failed. Please verify:\n1. You created a Gmail App Password (16 characters)\n2. 2-Step Verification is enabled on your Gmail\n3. The password is copied correctly without spaces\n\nClick "How to Create App Password?" in Settings → Email Integration for help.');
       }
       
       throw new Error(errorMsg);

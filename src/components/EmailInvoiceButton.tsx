@@ -50,7 +50,7 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
       console.error('[EmailInvoiceButton] Agency SMTP credentials missing');
       toast({
         title: "Email Not Configured",
-        description: "Please configure your agency email in Settings > Agency Branding.",
+        description: "Add your Gmail App Password in Settings → Email Integration to send emails.",
         variant: "destructive",
       });
       return;

@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Button } from "@/components/ui/button";
 import { Calendar, ChevronDown } from "lucide-react";
 import {
@@ -40,6 +42,15 @@ export function DateFilterSelector({ className, size = "sm" }: DateFilterSelecto
     }
   };
 
+  const customDialogRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: customDialogRef,
+    enabled: showCustomDialog,
+    autoFocusFirst: true,
+    onCancel: () => setShowCustomDialog(false),
+  });
+
   return (
     <>
       <DropdownMenu>
@@ -75,7 +86,7 @@ export function DateFilterSelector({ className, size = "sm" }: DateFilterSelecto
       </DropdownMenu>
 
       <Dialog open={showCustomDialog} onOpenChange={setShowCustomDialog}>
-        <DialogContent>
+        <DialogContent ref={customDialogRef}>
           <DialogHeader>
             <DialogTitle>Select Custom Date Range</DialogTitle>
           </DialogHeader>

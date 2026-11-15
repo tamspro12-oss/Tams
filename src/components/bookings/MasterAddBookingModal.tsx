@@ -1117,7 +1117,6 @@ export function MasterAddBookingModal({
                           type="button"
                           variant="outline"
                           size="icon"
-                          tabIndex={-1}
                           onClick={() => {
                             setIsAddAgentOpen(true);
                             setAddAgentInitialName("");
@@ -1772,7 +1771,6 @@ export function MasterAddBookingModal({
                       type="button"
                       variant="outline"
                       size="icon"
-                      tabIndex={-1}
                       onClick={() => {
                         setIsAddVendorOpen(true);
                         setAddVendorInitialName("");

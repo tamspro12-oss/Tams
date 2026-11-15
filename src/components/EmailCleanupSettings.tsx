@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useFormKeyboardNav } from '@/hooks/useFormKeyboardNav';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -52,8 +53,17 @@ export function EmailCleanupSettings() {
     }
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: cardRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSave,
+  });
+
   return (
-    <Card>
+    <Card ref={cardRef}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Trash2 className="w-5 h-5 text-destructive" />
@@ -143,6 +153,7 @@ export function EmailCleanupSettings() {
         </div>
 
         <Button 
+          data-save-button="true"
           onClick={handleSave}
           disabled={isSaving}
           className="w-full sm:w-auto"

@@ -13,27 +13,50 @@ const SelectKeyboardContext = React.createContext<SelectKeyboardContextValue | n
 
 const Select: React.FC<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>> = ({
   children,
-  onValueChange,
+  onOpenChange,
   ...props
 }) => {
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const advanceAfterSelectRef = React.useRef(false);
+  const fallbackTimerRef = React.useRef<number | null>(null);
   const ctx = React.useMemo(() => ({ triggerRef, advanceAfterSelectRef }), []);
 
-  const handleValueChange = React.useCallback(
-    (val: string) => {
-      if (triggerRef.current) {
-        triggerRef.current.removeAttribute("data-field-error");
-        triggerRef.current.removeAttribute("aria-invalid");
+  React.useEffect(() => {
+    return () => {
+      if (fallbackTimerRef.current !== null) {
+        window.clearTimeout(fallbackTimerRef.current);
       }
-      onValueChange?.(val);
-    },
-    [onValueChange]
-  );
+    };
+  }, []);
 
   return (
     <SelectKeyboardContext.Provider value={ctx}>
-      <SelectPrimitive.Root {...props} onValueChange={handleValueChange}>
+      <SelectPrimitive.Root
+        {...props}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen && fallbackTimerRef.current !== null) {
+            window.clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = null;
+          }
+          if (!nextOpen && advanceAfterSelectRef.current) {
+            fallbackTimerRef.current = window.setTimeout(() => {
+              fallbackTimerRef.current = null;
+              const trigger = triggerRef.current;
+              if (advanceAfterSelectRef.current && trigger) {
+                advanceAfterSelectRef.current = false;
+                trigger.focus({ preventScroll: true });
+                trigger.dispatchEvent(
+                  new CustomEvent("tams:field-advance", {
+                    bubbles: true,
+                    detail: { sourceEl: trigger },
+                  })
+                );
+              }
+            }, 16);
+          }
+          onOpenChange?.(nextOpen);
+        }}
+      >
         {children}
       </SelectPrimitive.Root>
     </SelectKeyboardContext.Provider>
@@ -137,6 +160,7 @@ const SelectContent = React.forwardRef<
           if (ctx) {
             if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
               ctx.advanceAfterSelectRef.current = true;
+              e.stopPropagation();
             } else if (e.key === "Escape") {
               ctx.advanceAfterSelectRef.current = false;
             }
@@ -147,23 +171,23 @@ const SelectContent = React.forwardRef<
           onCloseAutoFocus?.(e);
           if (!e.defaultPrevented && ctx?.advanceAfterSelectRef.current) {
             ctx.advanceAfterSelectRef.current = false;
+            e.preventDefault();
             const trigger = ctx.triggerRef.current;
             if (trigger) {
-              window.requestAnimationFrame(() => {
-                trigger.dispatchEvent(
-                  new CustomEvent("tams:field-advance", {
-                    bubbles: true,
-                    detail: { sourceEl: trigger },
-                  })
-                );
-              });
+              trigger.focus({ preventScroll: true });
+              trigger.dispatchEvent(
+                new CustomEvent("tams:field-advance", {
+                  bubbles: true,
+                  detail: { sourceEl: trigger },
+                })
+              );
             }
           }
         }}
         className={cn(
-          "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+          "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           position === "popper" &&
-            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,
         )}
         position={position}
@@ -174,7 +198,7 @@ const SelectContent = React.forwardRef<
           className={cn(
             "p-1",
             position === "popper" &&
-              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
           )}
         >
           {children}

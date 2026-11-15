@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { useParties, Party } from "@/hooks/useParties";
@@ -76,6 +77,20 @@ export default function ClientsVendors() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">(urlType || "all");
   const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">(urlBalance || "all");
+  const partiesFilterRef = useRef<HTMLDivElement>(null);
+  const banksFilterRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: partiesFilterRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
+  useFormKeyboardNav({
+    containerRef: banksFilterRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
 
   // Tabs: Parties vs Banks
   const urlTab = searchParams.get("tab") as "parties" | "banks" | null;
@@ -646,7 +661,7 @@ export default function ClientsVendors() {
           />
 
           {/* Filter Row: Search bar, All Types, All Balances */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
+          <div ref={partiesFilterRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
@@ -746,7 +761,7 @@ export default function ClientsVendors() {
           />
 
           {/* Filter / Search Row for Banks */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
+          <div ref={banksFilterRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-2">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ interface RequestAccessDialogProps {
 }
 
 export function RequestAccessDialog({ open, onOpenChange }: RequestAccessDialogProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [formData, setFormData] = useState({
@@ -108,6 +110,12 @@ Sent from TAMS PRO Request Access Form`
     }, 300);
   };
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open && !submitted,
+    onCancel: handleClose,
+  });
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
@@ -151,7 +159,13 @@ Sent from TAMS PRO Request Access Form`
               </div>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-5 pt-4">
+            <form
+              ref={(el) => {
+                (formRef as React.MutableRefObject<HTMLFormElement | null>).current = el;
+              }}
+              onSubmit={handleSubmit}
+              className="space-y-5 pt-4"
+            >
               {/* Agency Name */}
               <div className="space-y-2">
                 <Label htmlFor="agencyName" className="text-sm font-medium flex items-center gap-2">
@@ -268,6 +282,7 @@ Sent from TAMS PRO Request Access Form`
               {/* Submit Button */}
               <Button
                 type="submit"
+                data-save-button="true"
                 disabled={loading}
                 className="w-full h-12 text-base font-semibold gap-2"
               >

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
 
 export function BookingTemplateDesigner() {
+  const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { data: agency } = useAgency();
   const { user } = useAuth();
@@ -98,8 +100,15 @@ export function BookingTemplateDesigner() {
     }
   };
 
+  useFormKeyboardNav({
+    containerRef: cardRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSaveTemplate,
+  });
+
   return (
-    <Card className="border shadow-xs">
+    <Card ref={cardRef} className="border shadow-xs">
       <CardHeader className="py-3 px-4 sm:px-5 border-b">
         <div className="flex items-center justify-between">
           <div>
@@ -123,6 +132,7 @@ export function BookingTemplateDesigner() {
             </Button>
             <Button
               size="sm"
+              data-save-button="true"
               onClick={handleSaveTemplate}
               disabled={isSaving || !agencyName.trim()}
               className="h-8 text-xs font-semibold gap-1.5"

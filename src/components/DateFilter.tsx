@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,14 @@ export function DateFilter({
   const [open, setOpen] = useState(false);
   const [tempFrom, setTempFrom] = useState(activeValue.customFrom || "");
   const [tempTo, setTempTo] = useState(activeValue.customTo || "");
+  const customRangeRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: customRangeRef,
+    enabled: open && activeValue.preset === "custom",
+    autoFocusFirst: false,
+    onCancel: () => setOpen(false),
+  });
 
   const activeLabel = useMemo(() => {
     if (activeValue.preset === "custom" && activeValue.customFrom) {
@@ -158,7 +167,7 @@ export function DateFilter({
             </button>
 
             {activeValue.preset === "custom" && (
-              <div className="space-y-2 pt-1 px-1">
+              <div ref={customRangeRef} className="space-y-2 pt-1 px-1">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground mb-0.5 block">From</label>

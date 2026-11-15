@@ -75,9 +75,9 @@ export const UniversalPartySelect: React.FC<UniversalPartySelectProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            tabIndex={-1}
+            data-quick-add-btn="true"
             onClick={() => handleOpenQuickAdd(defaultQuickAddType)}
-            className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer hover:underline"
+            className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             title={`Quick add new ${defaultQuickAddType}`}
           >
             <Plus className="w-2.5 h-2.5" /> Quick Add
@@ -110,23 +110,23 @@ export const UniversalPartySelect: React.FC<UniversalPartySelectProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                tabIndex={-1}
+                data-quick-add-btn="true"
                 onClick={() => {
                   closePopover();
                   handleOpenQuickAdd("client");
                 }}
-                className="text-teal-600 hover:underline font-semibold cursor-pointer"
+                className="text-teal-600 hover:underline font-semibold cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
               >
                 + Client
               </button>
               <button
                 type="button"
-                tabIndex={-1}
+                data-quick-add-btn="true"
                 onClick={() => {
                   closePopover();
                   handleOpenQuickAdd("vendor");
                 }}
-                className="text-blue-600 hover:underline font-semibold cursor-pointer"
+                className="text-blue-600 hover:underline font-semibold cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 + Vendor
               </button>

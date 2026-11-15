@@ -4,54 +4,78 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ArrowLeft,
-  X,
-  Plus,
-  Trash2,
-  CheckCircle2,
   ArrowRightCircle,
   Download,
-  Hash,
-  Calendar,
-  CalendarDays,
-  Briefcase,
-  Tag,
-  User,
-  Mail,
-  Phone,
   FileText,
+  Lock,
+  Plus,
   Save,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, addDays, parseISO } from "date-fns";
-import { useQuotations, type Quotation, type QuotationInput, type QuotationItem } from "@/hooks/useQuotations";
-import { useClients } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
+import { format, addDays } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  useQuotations,
+  type Quotation,
+  type QuotationInput,
+  type QuotationItem,
+} from "@/hooks/useQuotations";
+import { useParties, type Party } from "@/hooks/useParties";
 import { useAgency } from "@/hooks/useAgency";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { cn } from "@/lib/utils";
-import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
-import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
+import {
+  LockedDateField,
+  getTodayDateString,
+} from "@/components/ui/LockedDateField";
+import {
+  SearchableSelect,
+  type SearchableSelectItem,
+} from "@/components/ui/SearchableSelect";
+import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import {
+  type ServiceType,
+  type Passenger,
+  type ServiceDetailsState,
+  createDefaultServiceDetails,
+  createDefaultPassenger,
+  normalizeServiceType,
+  getServiceDisplayLabel,
+  buildServiceTitle,
+  buildServiceSummaryLines,
+} from "@/lib/serviceDefinitions";
+import {
+  ServiceTypeSelect,
+  ServiceSpecificFields,
+  PassengersSection,
+} from "@/components/bookings/ServiceSpecificFields";
 
-type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
 
-const SERVICE_OPTIONS: { value: ServiceType; label: string }[] = [
-  { value: "client_booking", label: "Client Booking" },
-  { value: "b2b", label: "B2B Service" },
-  { value: "umrah", label: "Umrah Package" },
-  { value: "custom", label: "Custom" },
-];
-
-const STATUS_OPTIONS: { value: Status; label: string }[] = [
+const STATUS_OPTIONS: ReadonlyArray<{ value: Status; label: string }> = [
   { value: "draft", label: "Draft" },
   { value: "sent", label: "Sent" },
   { value: "accepted", label: "Accepted" },
   { value: "rejected", label: "Rejected" },
 ];
+
+const CURRENCY_OPTIONS = ["PKR", "SAR", "USD", "EUR", "GBP", "AED"] as const;
+
+const DEFAULT_NOTES =
+  "Quotation valid until the date mentioned above. Prices subject to availability at the time of confirmation.";
+
+const CUSTOM_RECIPIENT_ID = "__custom_recipient__";
 
 export default function QuotationFormPage() {
   const navigate = useNavigate();
@@ -60,243 +84,310 @@ export default function QuotationFormPage() {
   const location = useLocation();
 
   const { quotations = [], addQuotation, updateQuotation } = useQuotations();
-  const { clients = [] } = useClients();
-  const { agents: b2bAgents = [] } = useB2BAgents();
+  const { parties = [] } = useParties();
   const { data: agency } = useAgency();
 
-  // Find most recent quotation number for hint
-  const mostRecentQuotationNumber = useMemo(() => {
-    if (!quotations || quotations.length === 0) return null;
-    const sorted = [...quotations].sort(
-      (a, b) => new Date(b.created_at || b.quotation_date).getTime() - new Date(a.created_at || a.quotation_date).getTime()
-    );
-    return sorted[0]?.quotation_number || null;
-  }, [quotations]);
+  const formContainerRef = useRef<HTMLFormElement>(null);
+  const itemsSectionRef = useRef<HTMLDivElement>(null);
+  const loadedRecordIdRef = useRef<string | null>(null);
+  const prefillAppliedRef = useRef(false);
 
-  // Form State
-  const [quotationNumber, setQuotationNumber] = useState("");
+  // Header fields
+  const [quotationNumber, setQuotationNumber] = useState("Auto-generated");
   const [quotationDate, setQuotationDate] = useState(() => getTodayDateString());
-  const [validUntil, setValidUntil] = useState(() => format(addDays(new Date(), 14), "yyyy-MM-dd"));
-  const [serviceType, setServiceType] = useState<ServiceType>("client_booking");
+  const [validUntil, setValidUntil] = useState(() =>
+    format(addDays(new Date(), 14), "yyyy-MM-dd")
+  );
   const [status, setStatus] = useState<Status>("draft");
+  const [serviceType, setServiceType] = useState<ServiceType>("Ticket");
 
-  const [clientName, setClientName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [agentId, setAgentId] = useState<string | null>(null);
+  // Client / Recipient fields (same searchable client integration as Booking Invoice)
+  const [partyId, setPartyId] = useState<string>("");
+  const [clientName, setClientName] = useState<string>("");
+  const [clientPhone, setClientPhone] = useState<string>("");
+  const [legacyClientEmail, setLegacyClientEmail] = useState<string | null>(null);
+  const [legacyAgentId, setLegacyAgentId] = useState<string | null>(null);
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false);
 
-  const [currency, setCurrency] = useState("PKR");
+  // Shared Service-Specific fields + Passengers (Air Ticket)
+  const [serviceDetails, setServiceDetails] = useState<ServiceDetailsState>(() =>
+    createDefaultServiceDetails()
+  );
+  const [passengers, setPassengers] = useState<Passenger[]>(() => [
+    createDefaultPassenger(),
+  ]);
 
+  // Line items
   const [items, setItems] = useState<QuotationItem[]>([
     { description: "", qty: 1, unit_price: 0, amount: 0 },
   ]);
 
+  // Totals & Notes (two columns)
+  const [currency, setCurrency] = useState("PKR");
   const [discount, setDiscount] = useState<number>(0);
   const [tax, setTax] = useState<number>(0);
-
-  const [notes, setNotes] = useState("");
-  const [terms, setTerms] = useState(
-    "Quotation valid until the date mentioned above. Prices subject to availability at the time of confirmation."
-  );
+  const [notes, setNotes] = useState(DEFAULT_NOTES);
 
   const [convertedBookingId, setConvertedBookingId] = useState<string | null>(null);
-
-  // Validation & Autocomplete State
-  const [errors, setErrors] = useState<{
-    quotationNumber?: string;
-    clientName?: string;
-    items?: string;
-  }>({});
-  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
-  // Field Refs for keyboard-first navigation
-  const formContainerRef = useRef<HTMLDivElement>(null);
-  const quotationNumberRef = useRef<HTMLInputElement>(null);
-  const validUntilRef = useRef<HTMLInputElement>(null);
-  const clientNameRef = useRef<HTMLInputElement>(null);
-  const firstItemDescRef = useRef<HTMLInputElement>(null);
-  const itemDescRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const clientsList = useMemo(
+    () => parties.filter((p) => p.type === "client" || p.type === "both"),
+    [parties]
+  );
 
-  // Prefill or load existing quotation
+  const clientSelectItems: SearchableSelectItem[] = useMemo(() => {
+    const baseItems: SearchableSelectItem[] = clientsList.map((c) => ({
+      id: c.id,
+      label: c.name,
+      sublabel: [c.code, c.phone].filter(Boolean).join(" · "),
+      badge: c.type === "both" ? "Both" : undefined,
+      searchText: `${c.name} ${c.code || ""} ${c.phone || ""} ${c.email || ""}`,
+    }));
+    if (!partyId && clientName.trim()) {
+      return [
+        {
+          id: CUSTOM_RECIPIENT_ID,
+          label: clientName.trim(),
+          sublabel: clientPhone || "Recipient",
+          badge: "Prefilled",
+          searchText: `${clientName} ${clientPhone}`,
+        },
+        ...baseItems,
+      ];
+    }
+    return baseItems;
+  }, [clientsList, partyId, clientName, clientPhone]);
+
+  // Preview next auto-generated quotation number for new quotations
   useEffect(() => {
-    if (isEdit && quotations.length > 0) {
+    if (isEdit) return;
+    let cancelled = false;
+    async function fetchPreviewNumber() {
+      try {
+        const { data, error } = await supabase.rpc("preview_next_number", {
+          p_counter_type: "quotation",
+        });
+        if (!cancelled && !error && data) {
+          setQuotationNumber(String(data));
+          return;
+        }
+      } catch (err) {
+        console.warn("Could not preview next quotation number:", err);
+      }
+      if (!cancelled) {
+        const code = agency?.agency_code || "A00001";
+        setQuotationNumber(`QT-${code}-00000001`);
+      }
+    }
+    setQuotationDate(getTodayDateString());
+    fetchPreviewNumber();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, agency?.agency_code]);
+
+  // Load existing quotation for edit OR incoming prefill (Queries / Umrah Calculator)
+  useEffect(() => {
+    if (isEdit) {
+      if (!quotations.length || loadedRecordIdRef.current === id) return;
       const q = quotations.find((x) => x.id === id);
-      if (q) {
-        setQuotationNumber(q.quotation_number || "");
-        setQuotationDate(getTodayDateString());
-        setValidUntil(q.valid_until || "");
-        setServiceType(q.service_type || "client_booking");
-        setStatus(q.status || "draft");
-        setClientName(q.client_name || "");
-        setClientEmail(q.client_email || "");
-        setClientPhone(q.client_phone || "");
-        setClientId(q.client_id || null);
-        setAgentId(q.agent_id || null);
-        setTitle(q.title || "");
-        setDescription(q.description || "");
-        setCurrency(q.currency || "PKR");
-        setItems(
-          q.items && q.items.length > 0
-            ? q.items
-            : [{ description: "", qty: 1, unit_price: 0, amount: 0 }]
-        );
-        setDiscount(Number(q.discount) || 0);
-        setTax(Number(q.tax) || 0);
-        setNotes(q.notes || "");
-        setTerms(q.terms || "");
-        setConvertedBookingId(q.booking_id || q.converted_booking_id || null);
-      } else {
+      if (!q) {
         toast.error("Quotation not found");
         navigate("/app/leads-quotes?tab=quotations", { replace: true });
+        return;
       }
-    } else {
+      loadedRecordIdRef.current = id || null;
+
+      setQuotationNumber(q.quotation_number || "");
+      setQuotationDate(getTodayDateString());
+      setValidUntil(q.valid_until || "");
+      setStatus((q.status as Status) || "draft");
+      setServiceType(normalizeServiceType(q.service_type));
+
+      const matchedClient =
+        parties.find((p) => p.id === q.client_id) ||
+        parties.find(
+          (p) =>
+            (p.type === "client" || p.type === "both") &&
+            p.name.trim().toLowerCase() === (q.client_name || "").trim().toLowerCase()
+        );
+      setPartyId(matchedClient?.id || q.client_id || "");
+      setClientName(q.client_name || matchedClient?.name || "");
+      setClientPhone(q.client_phone || matchedClient?.phone || "");
+      setLegacyClientEmail(q.client_email || null);
+      setLegacyAgentId(q.agent_id || null);
+
+      const savedRef = q.source_ref && typeof q.source_ref === "object" ? q.source_ref : null;
+      if (savedRef?.serviceDetails) {
+        setServiceDetails({
+          ...createDefaultServiceDetails(),
+          ...savedRef.serviceDetails,
+        });
+      }
+      if (Array.isArray(savedRef?.passengers) && savedRef.passengers.length > 0) {
+        setPassengers(savedRef.passengers);
+      }
+
+      setCurrency(q.currency || "PKR");
+      setItems(
+        q.items && q.items.length > 0
+          ? q.items
+          : [{ description: q.title || "", qty: 1, unit_price: Number(q.total) || 0, amount: Number(q.total) || 0 }]
+      );
+      setDiscount(Number(q.discount) || 0);
+      setTax(Number(q.tax) || 0);
+      const combinedNotes = [q.notes, q.terms].filter(Boolean).join("\n\n");
+      setNotes(combinedNotes);
+      setConvertedBookingId(q.booking_id || q.converted_booking_id || null);
+      setIsDirty(false);
+    } else if (!prefillAppliedRef.current) {
+      prefillAppliedRef.current = true;
       const prefill = (location.state as { prefill?: Partial<QuotationInput> })?.prefill;
       if (prefill) {
-        if (prefill.client_name) setClientName(prefill.client_name);
-        if (prefill.client_phone) setClientPhone(prefill.client_phone);
-        if (prefill.client_email) setClientEmail(prefill.client_email);
-        if (prefill.service_type) setServiceType(prefill.service_type);
-        if (prefill.title) setTitle(prefill.title);
-        if (prefill.description) setDescription(prefill.description);
+        if (prefill.service_type) {
+          setServiceType(normalizeServiceType(prefill.service_type));
+        }
+        if (prefill.client_name) {
+          setClientName(prefill.client_name);
+        }
+        if (prefill.client_phone) {
+          setClientPhone(prefill.client_phone);
+        }
         if (prefill.currency) setCurrency(prefill.currency);
         if (prefill.notes) setNotes(prefill.notes);
         if (prefill.items && Array.isArray(prefill.items) && prefill.items.length > 0) {
           setItems(prefill.items);
         }
+        setIsDirty(true);
       }
     }
-  }, [id, isEdit, quotations, navigate, location.state]);
+  }, [id, isEdit, quotations, parties, navigate, location.state]);
 
-  // Recalculate totals
+  // Match prefilled client name to party once parties load
+  useEffect(() => {
+    if (!isEdit && !partyId && clientName.trim() && clientsList.length > 0) {
+      const normalized = clientName.trim().toLowerCase();
+      const matched = clientsList.find((c) => c.name.trim().toLowerCase() === normalized);
+      if (matched) {
+        setPartyId(matched.id);
+        if (!clientPhone && matched.phone) {
+          setClientPhone(matched.phone);
+        }
+      }
+    }
+  }, [isEdit, partyId, clientName, clientPhone, clientsList]);
+
+  const markDirty = useCallback(() => setIsDirty(true), []);
+
+  const handleServiceDetailChange = useCallback(
+    <K extends keyof ServiceDetailsState>(field: K, value: ServiceDetailsState[K]) => {
+      setServiceDetails((prev) => ({ ...prev, [field]: value }));
+      setIsDirty(true);
+    },
+    []
+  );
+
+  const handleServiceTypeChange = useCallback((nextService: ServiceType) => {
+    setServiceType(nextService);
+    setIsDirty(true);
+  }, []);
+
+  const handleClientSelect = useCallback(
+    (selectedId: string) => {
+      if (selectedId === CUSTOM_RECIPIENT_ID) return;
+      const matched = clientsList.find((c) => c.id === selectedId);
+      setPartyId(selectedId);
+      if (matched) {
+        setClientName(matched.name);
+        setClientPhone(matched.phone || "");
+      }
+      setIsDirty(true);
+    },
+    [clientsList]
+  );
+
+  const handleQuickClientSaved = useCallback((newParty: Party) => {
+    setPartyId(newParty.id);
+    setClientName(newParty.name);
+    setClientPhone(newParty.phone || "");
+    setIsDirty(true);
+  }, []);
+
+  // Financial Calculations (preserved identically)
   const subtotal = useMemo(() => {
-    return items.reduce((acc, it) => acc + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
+    return items.reduce(
+      (acc, it) => acc + (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
+      0
+    );
   }, [items]);
 
   const total = useMemo(() => {
     return Math.max(0, subtotal - (Number(discount) || 0) + (Number(tax) || 0));
   }, [subtotal, discount, tax]);
 
-  // Item row operations
-  const updateItem = (index: number, patch: Partial<QuotationItem>) => {
+  // Line Item handlers
+  const handleItemChange = (
+    idx: number,
+    field: keyof QuotationItem,
+    val: string | number
+  ) => {
     setItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-        const updated = { ...item, ...patch };
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const updated = { ...it, [field]: val };
         updated.amount = (Number(updated.qty) || 0) * (Number(updated.unit_price) || 0);
         return updated;
       })
     );
+    setIsDirty(true);
   };
 
-  const addItem = (focusNew: boolean = false) => {
-    setItems((prev) => {
-      const nextIndex = prev.length;
-      if (focusNew) {
-        window.requestAnimationFrame(() => {
-          window.setTimeout(() => {
-            itemDescRefs.current[nextIndex]?.focus();
-          }, 15);
-        });
-      }
-      return [...prev, { description: "", qty: 1, unit_price: 0, amount: 0 }];
-    });
-  };
+  const focusNewItemRef = useRef(false);
 
-  const removeItem = (index: number) => {
-    if (items.length <= 1) return;
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Check unique quotation number per agency
-  const checkQuotationNumberUniqueness = (number: string): boolean => {
-    const trimmed = number.trim();
-    if (!trimmed) return true;
-    const clash = quotations.find(
-      (q) =>
-        q.quotation_number.trim().toLowerCase() === trimmed.toLowerCase() &&
-        q.id !== id
+  useEffect(() => {
+    if (!focusNewItemRef.current) return;
+    focusNewItemRef.current = false;
+    const targetIdx = items.length - 1;
+    const descInput = itemsSectionRef.current?.querySelector<HTMLInputElement>(
+      `[data-repeatable-row="${targetIdx}"] input[data-line-field="description"]`
     );
-    if (clash) {
-      setErrors((prev) => ({
-        ...prev,
-        quotationNumber: "This quotation number already exists for your agency",
-      }));
-      return false;
-    }
-    setErrors((prev) => ({ ...prev, quotationNumber: undefined }));
-    return true;
+    descInput?.focus();
+  }, [items.length]);
+
+  const handleAddItem = () => {
+    focusNewItemRef.current = true;
+    setItems((prev) => [
+      ...prev,
+      { description: "", qty: 1, unit_price: 0, amount: 0 },
+    ]);
+    setIsDirty(true);
   };
 
-  // Client suggestions
-  const filteredClientSuggestions = useMemo(() => {
-    if (!clientName.trim() || clientName.length < 2) return [];
-    const term = clientName.toLowerCase();
-    return clients
-      .filter((c: any) => c.name?.toLowerCase().includes(term) || c.contact_number?.includes(term))
-      .slice(0, 5);
-  }, [clients, clientName]);
-
-  const handleSelectClient = (c: any) => {
-    setClientId(c.id);
-    setClientName(c.name || "");
-    if (c.email) setClientEmail(c.email);
-    if (c.contact_number) setClientPhone(c.contact_number);
-    setShowClientSuggestions(false);
+  const handleRemoveItem = (idx: number) => {
+    if (items.length === 1) return;
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setIsDirty(true);
   };
-
-  // Valid Until quick chips
-  const applyValidUntilChip = (days: number) => {
-    const base = quotationDate ? parseISO(quotationDate) : new Date();
-    setValidUntil(format(addDays(base, days), "yyyy-MM-dd"));
-  };
-
-  const hasUnsavedChanges = Boolean(
-    quotationNumber.trim() || clientName.trim() || items.some((i) => i.description.trim())
-  );
-
-  const handleClose = useCallback(() => {
-    if (hasUnsavedChanges && !convertedBookingId) {
-      const confirmLeave = window.confirm("You have unsaved changes. Discard and close?");
-      if (!confirmLeave) return;
-    }
-    navigate("/app/leads-quotes?tab=quotations");
-  }, [hasUnsavedChanges, convertedBookingId, navigate]);
 
   const validate = (): boolean => {
-    const nextErrors: typeof errors = {};
-
-    if (!quotationNumber.trim()) {
-      nextErrors.quotationNumber = "Quotation # is required";
-    } else {
-      const unique = checkQuotationNumberUniqueness(quotationNumber);
-      if (!unique) return false;
-    }
-
     if (!clientName.trim()) {
-      nextErrors.clientName = "Client Name is required";
-    }
-
-    const hasValidItem = items.some((i) => i.description.trim());
-    if (!hasValidItem) {
-      nextErrors.items = "Add at least one item with a description";
-    }
-
-    setErrors(nextErrors);
-
-    if (nextErrors.quotationNumber) {
-      quotationNumberRef.current?.focus();
+      toast.error("Please select a Client");
+      const clientTrigger = formContainerRef.current?.querySelector<HTMLElement>(
+        '[data-client-select="true"]'
+      );
+      clientTrigger?.focus();
       return false;
     }
-    if (nextErrors.clientName) {
-      clientNameRef.current?.focus();
-      return false;
-    }
-    if (nextErrors.items) {
-      firstItemDescRef.current?.focus();
+
+    const nonEmptyItems = items.filter((i) => i.description.trim());
+    if (nonEmptyItems.length === 0) {
+      toast.error("Please add at least one line item description");
+      const firstDesc = itemsSectionRef.current?.querySelector<HTMLInputElement>(
+        '[data-repeatable-row="0"] input[data-line-field="description"]'
+      );
+      firstDesc?.focus();
       return false;
     }
 
@@ -313,18 +404,26 @@ export default function QuotationFormPage() {
         amount: (Number(i.qty) || 1) * (Number(i.unit_price) || 0),
       }));
 
+    const derivedTitle = buildServiceTitle(serviceType, serviceDetails);
+    const derivedSummary = buildServiceSummaryLines(
+      serviceType,
+      serviceDetails,
+      serviceType === "Ticket" ? passengers : undefined
+    ).join(" · ");
+
     return {
-      quotation_number: quotationNumber.trim(),
+      // Leave quotation_number blank on create so the DB sequence trigger assigns the unique formatted number atomically
+      quotation_number: isEdit ? quotationNumber.trim() : "",
       quotation_date: quotationDate,
       valid_until: validUntil || null,
       service_type: serviceType,
       client_name: clientName.trim(),
-      client_email: clientEmail.trim() || null,
+      client_email: isEdit ? legacyClientEmail : null,
       client_phone: clientPhone.trim() || null,
-      client_id: clientId,
-      agent_id: agentId,
-      title: title.trim() || null,
-      description: description.trim() || null,
+      client_id: partyId || null,
+      agent_id: isEdit ? legacyAgentId : null,
+      title: derivedTitle,
+      description: derivedSummary || null,
       items: normalizedItems,
       subtotal,
       discount: Number(discount) || 0,
@@ -333,13 +432,17 @@ export default function QuotationFormPage() {
       currency,
       status,
       notes: notes.trim() || null,
-      terms: terms.trim() || null,
+      terms: null,
       source: "web-app",
-      source_ref: null,
+      source_ref: {
+        version: 2,
+        serviceDetails,
+        passengers: serviceType === "Ticket" ? passengers : [],
+      },
     };
   };
 
-  const handleSave = async (andDownloadPdf: boolean = false) => {
+  const handleSave = async (andDownloadPdf = false) => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       toast.error("You are offline, not saved");
       return;
@@ -364,6 +467,7 @@ export default function QuotationFormPage() {
           id: savedQuote?.id || id || "temp",
           agency_id: savedQuote?.agency_id || "",
           ...payload,
+          quotation_number: savedQuote?.quotation_number || quotationNumber,
           created_by: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -376,15 +480,25 @@ export default function QuotationFormPage() {
         toast.success("PDF generated & downloaded");
       }
 
+      setIsDirty(false);
       navigate("/app/leads-quotes?tab=quotations");
     } catch (e: any) {
-      toast.error(`Could not save: ${e?.message || "Failed to save quotation"}`);
+      console.error("Failed to save quotation:", e);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Convert to Booking action
+  const handleCancel = useCallback(() => {
+    if (
+      isDirty &&
+      !window.confirm("You have unsaved changes in this quotation. Discard and go back?")
+    ) {
+      return;
+    }
+    navigate("/app/leads-quotes?tab=quotations");
+  }, [isDirty, navigate]);
+
   const handleConvertToBooking = () => {
     navigate("/app/bookings?tab=clients", {
       state: {
@@ -392,10 +506,12 @@ export default function QuotationFormPage() {
         prefill: {
           name: clientName,
           contact_number: clientPhone,
-          email: clientEmail,
-          travel_type: serviceType === "umrah" ? "Umrah" : "Ticket",
+          travel_type: serviceType === "Umrah" ? "Umrah" : serviceType,
           selling_price: total,
-          notes: `Converted from Quotation #${quotationNumber}${title ? ` — ${title}` : ""}\nQuotation Total: ${currency} ${total.toLocaleString()}`,
+          notes: `Converted from Quotation #${quotationNumber} — ${buildServiceTitle(
+            serviceType,
+            serviceDetails
+          )}\nQuotation Total: ${currency} ${total.toLocaleString()}`,
           converted_from_quote_id: id,
         },
       },
@@ -404,584 +520,45 @@ export default function QuotationFormPage() {
 
   useFormKeyboardNav({
     containerRef: formContainerRef,
-    isDirty: Boolean(hasUnsavedChanges && !convertedBookingId),
-    onSave: () => handleSave(false),
-    onSaveAndAddNext: () => handleSave(true),
-    onCancel: () => navigate("/app/leads-quotes?tab=quotations"),
+    enabled: !isAddClientOpen,
     autoFocusFirst: true,
+    onSave: () => handleSave(false),
+    onCancel: handleCancel,
   });
 
+  const derivedHeading = useMemo(
+    () => buildServiceTitle(serviceType, serviceDetails),
+    [serviceType, serviceDetails]
+  );
+
   return (
-    <div
-      ref={formContainerRef}
-      className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-7xl mx-auto overflow-hidden bg-background"
-    >
-      {/* 1. Global Header Bar: ONLY Back arrow + Title on left, and X (close icon) on far right */}
-      <div className="h-11 md:h-12 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-30">
+    <div className="max-w-5xl mx-auto px-3 sm:px-5 py-4 space-y-4">
+      {/* Compact Top Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             tabIndex={-1}
-            onClick={handleClose}
-            className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Go back (Esc)"
+            onClick={handleCancel}
+            className="h-8 w-8 p-0 shrink-0"
+            title="Back (Esc)"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-sm sm:text-base font-bold text-foreground truncate">
-            {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
-          </h1>
-        </div>
-
-        {/* Far Right: ONLY compact X (close/cancel) button */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          tabIndex={-1}
-          onClick={handleClose}
-          aria-label="Cancel and close"
-          className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-          title="Cancel and close (Esc)"
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Main Content: Scrollable flex layout with proper bottom padding */}
-      <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 flex flex-col gap-3 min-w-0 pb-6">
-
-        {/* 2. COMPACT 12-COLUMN DETAILS CARD (Rows 1 to 4 with explicit CSS Grid) */}
-        <div
-          className="bg-card rounded-2xl border border-border/70 shadow-sm p-3 sm:p-3.5 shrink-0 min-w-0"
-          style={{ width: "100%", gap: "10px", display: "flex", flexDirection: "column" }}
-        >
-          {/* ROW 1 (3 Columns on SAME line): Quotation # * | Date * | Valid Until (with +7d, +14d, +30d buttons) */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1.2fr",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            {/* Column 1: Quotation # * */}
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label htmlFor="quote_num" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Quotation # <span className="text-destructive">*</span></span>
-                {errors.quotationNumber && (
-                  <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.quotationNumber}</span>
-                )}
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <Hash className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="quote_num"
-                  ref={quotationNumberRef}
-                  required
-                  data-required-message="Quotation # is required"
-                  value={quotationNumber}
-                  onChange={(e) => {
-                    setQuotationNumber(e.target.value);
-                    if (errors.quotationNumber) setErrors((prev) => ({ ...prev, quotationNumber: undefined }));
-                  }}
-                  onBlur={(e) => checkQuotationNumberUniqueness(e.target.value)}
-                  placeholder="e.g. QT-2026-089"
-                  className={cn(
-                    "pl-9 h-8 sm:h-8.5 text-sm font-semibold rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
-                    errors.quotationNumber && "border-destructive focus-visible:ring-destructive"
-                  )}
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
-              {mostRecentQuotationNumber && !quotationNumber && (
-                <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                  Last used:{" "}
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => {
-                      setQuotationNumber(mostRecentQuotationNumber);
-                      validUntilRef.current?.focus();
-                    }}
-                    className="underline hover:text-foreground font-mono focus-visible:ring-1 focus-visible:ring-primary"
-                  >
-                    {mostRecentQuotationNumber}
-                  </button>
-                </p>
-              )}
-            </div>
-
-            {/* Column 2: Date * (Standardized Locked System Date) */}
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <LockedDateField
-                label="Date"
-                value={quotationDate}
-                onChange={setQuotationDate}
-                required
-              />
-            </div>
-
-            {/* Column 3: Valid Until (with +7d, +14d, +30d quick buttons in header) */}
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <div className="flex items-center justify-between mb-1">
-                <Label htmlFor="valid_until" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Valid Until
-                </Label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => applyValidUntilChip(7)}
-                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                  >
-                    +7d
-                  </button>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => applyValidUntilChip(14)}
-                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                  >
-                    +14d
-                  </button>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => applyValidUntilChip(30)}
-                    className="text-[10px] px-1.5 py-0.2 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                  >
-                    +30d
-                  </button>
-                </div>
-              </div>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <CalendarDays className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="valid_until"
-                  ref={validUntilRef}
-                  type="date"
-                  value={validUntil}
-                  onChange={(e) => setValidUntil(e.target.value)}
-                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ROW 2 (2 Equal 50%/50% Columns on SAME line): Service Type * & Status */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Service Type <span className="text-destructive">*</span>
-              </Label>
-              <Select value={serviceType} onValueChange={(v: ServiceType) => setServiceType(v)}>
-                <SelectTrigger
-                  className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                >
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Briefcase className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <SelectValue />
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="z-50 text-xs">
-                  {SERVICE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Status
-              </Label>
-              <Select value={status} onValueChange={(v: Status) => setStatus(v)}>
-                <SelectTrigger
-                  className="h-8 sm:h-8.5 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                >
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <SelectValue />
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="z-50 text-xs">
-                  {STATUS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* ROW 3 (2 Equal 50%/50% Columns on SAME line): Client / Recipient Name * & Email Address */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ width: "100%", minWidth: 0, position: "relative" }}>
-              <Label htmlFor="client_name" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Client / Recipient Name <span className="text-destructive">*</span></span>
-                {errors.clientName && (
-                  <span className="text-[10px] text-destructive truncate font-normal normal-case">{errors.clientName}</span>
-                )}
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="client_name"
-                  ref={clientNameRef}
-                  required
-                  data-required-message="Client Name is required"
-                  value={clientName}
-                  onChange={(e) => {
-                    setClientName(e.target.value);
-                    setShowClientSuggestions(true);
-                    if (errors.clientName) setErrors((prev) => ({ ...prev, clientName: undefined }));
-                  }}
-                  onFocus={() => setShowClientSuggestions(true)}
-                  placeholder="Client name (type to search)..."
-                  className={cn(
-                    "pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none",
-                    errors.clientName && "border-destructive focus-visible:ring-destructive"
-                  )}
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
-
-              {/* Autocomplete Suggestions */}
-              {showClientSuggestions && filteredClientSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden text-xs">
-                  <div className="p-1.5 bg-muted/50 border-b text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                    Matching Existing Clients
-                  </div>
-                  {filteredClientSuggestions.map((c: any) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => handleSelectClient(c)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-muted/70 flex items-center justify-between transition-colors border-b last:border-b-0 focus-visible:bg-muted focus-visible:outline-none"
-                    >
-                      <div>
-                        <p className="font-semibold text-foreground">{c.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{c.contact_number || c.email || "No contact"}</p>
-                      </div>
-                      <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Select</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label htmlFor="client_email" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Email Address
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="client_email"
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="client@example.com (for PDF sending)"
-                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ROW 4 (2 Equal 50%/50% Columns on SAME line): Phone Number & Quotation Title / Subject */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label htmlFor="client_phone" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Phone Number
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="client_phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="+92 300 1234567"
-                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
-            </div>
-
-            <div style={{ width: "100%", minWidth: 0 }}>
-              <Label htmlFor="quote_title" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-                Quotation Title / Subject
-              </Label>
-              <div className="relative" style={{ width: "100%", minWidth: 0 }}>
-                <FileText className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="quote_title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. 14-Day Umrah Package / Executive Flight"
-                  className="pl-9 h-8 sm:h-8.5 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                  style={{ width: "100%", minWidth: 0 }}
-                />
-              </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <FileText className="w-4 h-4 text-teal-600 shrink-0" />
+              <h1 className="text-lg font-bold tracking-tight truncate">
+                {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
+              </h1>
+              <span className="text-xs font-medium text-muted-foreground truncate">
+                · {derivedHeading}
+              </span>
             </div>
           </div>
         </div>
-
-        {/* 2 ZONES: MIDDLE LINE ITEMS (~65% -> 8 cols) & RIGHT TOTALS/TERMS (~35% -> 4 cols) */}
-        <div
-          className="flex-1 min-h-0"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 1.2fr)",
-            gap: "12px",
-            width: "100%",
-          }}
-        >
-          {/* LEFT: Quotation Line Items Table */}
-          <div className="flex flex-col min-h-0 bg-card rounded-2xl border border-border/70 overflow-hidden shadow-sm" style={{ minWidth: 0 }}>
-            <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-xs uppercase tracking-wider text-foreground">Line Items</span>
-                <span className="text-[11px] text-muted-foreground">({items.length} {items.length === 1 ? "line" : "lines"})</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                tabIndex={-1}
-                onClick={() => addItem(true)}
-                className="h-6 px-2 text-xs gap-1 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Add line</span>
-              </Button>
-            </div>
-
-            {/* Table Header */}
-            <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-1 bg-muted/60 text-[11px] font-semibold text-muted-foreground border-b shrink-0">
-              <div className="col-span-6">Description *</div>
-              <div className="col-span-2 text-center">Qty</div>
-              <div className="col-span-2 text-right">Unit Price ({currency})</div>
-              <div className="col-span-2 text-right">Amount</div>
-            </div>
-
-            {/* Internal Scroll Rows Container */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-              {items.map((it, idx) => {
-                const isLast = idx === items.length - 1;
-                return (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-12 gap-1.5 sm:gap-2 items-center bg-muted/10 p-1.5 sm:p-0 rounded-lg sm:rounded-none border sm:border-0"
-                  >
-                    <div className="col-span-12 sm:col-span-6">
-                      <Input
-                        ref={(el) => {
-                          itemDescRefs.current[idx] = el;
-                          if (idx === 0) {
-                            (firstItemDescRef as React.MutableRefObject<HTMLInputElement | null>).current = el;
-                          }
-                        }}
-                        required={idx === 0 && items.length === 1}
-                        data-required-message="Add at least one item with a description"
-                        placeholder="Item or service description..."
-                        value={it.description}
-                        onChange={(e) => updateItem(idx, { description: e.target.value })}
-                        className="h-7 sm:h-8 text-sm rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        inputMode="decimal"
-                        placeholder="Qty"
-                        value={it.qty}
-                        onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })}
-                        className="h-7 sm:h-8 text-sm rounded-md text-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        inputMode="decimal"
-                        placeholder="Rate"
-                        value={it.unit_price}
-                        onChange={(e) => updateItem(idx, { unit_price: Number(e.target.value) })}
-                        onKeyDown={(e) => {
-                          if (isLast && e.key === "Tab" && !e.shiftKey) {
-                            e.preventDefault();
-                            addItem(true);
-                          }
-                        }}
-                        className="h-7 sm:h-8 text-sm rounded-md text-right font-mono focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                      />
-                    </div>
-                    <div className="col-span-3 sm:col-span-1 text-right text-xs font-bold font-mono truncate">
-                      {(Number(it.qty || 0) * Number(it.unit_price || 0)).toLocaleString()}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        tabIndex={-1}
-                        disabled={items.length <= 1}
-                        onClick={() => removeItem(idx)}
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                        title="Delete line"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* RIGHT: Totals Card, Notes & Terms */}
-          <div className="flex flex-col justify-between gap-1.5 bg-card rounded-2xl border border-border/70 p-2.5 overflow-y-auto shadow-sm" style={{ minWidth: 0 }}>
-            <div className="space-y-1.5">
-              {/* Currency & Subtotal */}
-              <div className="flex items-center justify-between pb-1 border-b">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase">Currency</span>
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-6.5 w-20 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-50 text-xs">
-                    <SelectItem value="PKR">PKR</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="SAR">SAR</SelectItem>
-                    <SelectItem value="AED">AED</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-semibold font-mono">{currency} {subtotal.toLocaleString()}</span>
-              </div>
-
-              {/* Discount */}
-              <div className="flex justify-between items-center gap-2 text-xs">
-                <span className="text-muted-foreground">Discount (-)</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={discount}
-                  onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="h-6.5 w-24 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                />
-              </div>
-
-              {/* Tax */}
-              <div className="flex justify-between items-center gap-2 text-xs">
-                <span className="text-muted-foreground">Tax / Fee (+)</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={tax}
-                  onChange={(e) => setTax(Number(e.target.value))}
-                  className="h-6.5 w-24 text-right text-xs font-mono rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                />
-              </div>
-
-              {/* TOTAL (large bold) */}
-              <div className="pt-1.5 border-t flex items-baseline justify-between bg-primary/5 p-1.5 rounded-xl border border-primary/20">
-                <span className="font-bold text-[11px] uppercase tracking-wide text-foreground">TOTAL:</span>
-                <span className="text-lg sm:text-xl font-black text-primary font-mono tracking-tight">
-                  {currency} {total.toLocaleString()}
-                </span>
-              </div>
-
-              {/* Notes */}
-              <div className="space-y-0.5 pt-0.5">
-                <Label htmlFor="notes" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Notes (Client facing)
-                </Label>
-                <Textarea
-                  id="notes"
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Included baggage, flight transit notes, payment terms..."
-                  className="min-h-[38px] text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                />
-              </div>
-
-              {/* Terms */}
-              <div className="space-y-0.5">
-                <Label htmlFor="terms" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Terms & Conditions
-                </Label>
-                <Textarea
-                  id="terms"
-                  rows={2}
-                  value={terms}
-                  onChange={(e) => setTerms(e.target.value)}
-                  placeholder="Terms of quotation..."
-                  className="min-h-[38px] text-xs rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Footer Bar: Always visible sticky/fixed footer */}
-      <div
-        className="shrink-0 bg-background/95 backdrop-blur-sm py-2.5 px-3 sm:px-4 border-t border-border/70 flex items-center justify-between gap-3 z-30 shadow-md"
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          tabIndex={-1}
-          onClick={handleClose}
-          className="h-8.5 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          Cancel
-        </Button>
 
         <div className="flex items-center gap-2">
           {isEdit && !convertedBookingId && (
@@ -991,40 +568,484 @@ export default function QuotationFormPage() {
               size="sm"
               tabIndex={-1}
               onClick={handleConvertToBooking}
-              className="h-8.5 px-2.5 text-xs gap-1 text-primary hover:bg-primary/10 border-primary/40 font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+              className="h-8 text-xs gap-1.5"
             >
-              <ArrowRightCircle className="w-3.5 h-3.5" />
-              <span>Convert to Booking</span>
+              <ArrowRightCircle className="w-3.5 h-3.5 text-emerald-600" />
+              Convert to Booking
             </Button>
           )}
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+            Enter = next · Ctrl+S = save · Esc = back
+          </span>
+        </div>
+      </div>
 
+      {/* Single Clean Form Surface */}
+      <form
+        ref={formContainerRef}
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSave(false);
+        }}
+        className="bg-card border rounded-xl p-4 sm:p-5 shadow-xs space-y-5"
+      >
+        {/* 1. HEADER FIELDS */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+            {/* Quotation # (Auto read-only, skipped) */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                Quotation #
+                <Lock className="w-3 h-3 text-slate-400" />
+              </Label>
+              <Input
+                value={quotationNumber}
+                readOnly
+                tabIndex={-1}
+                aria-readonly="true"
+                className="h-8 text-xs font-mono font-semibold bg-muted/60 text-muted-foreground cursor-not-allowed"
+              />
+            </div>
+
+            {/* Date (Shared Locked Date component, skipped) */}
+            <div>
+              <LockedDateField
+                label="Date"
+                value={quotationDate}
+              />
+            </div>
+
+            {/* Service Type (Same shared component & list as Booking Invoice) */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Service Type <span className="text-red-500">*</span>
+              </Label>
+              <ServiceTypeSelect
+                value={serviceType}
+                onChange={handleServiceTypeChange}
+                className="h-8 text-xs font-medium bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+              />
+            </div>
+
+            {/* Client / Recipient Name (Same shared SearchableSelect + Quick Add as Booking Invoice) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Client / Recipient Name <span className="text-red-500">*</span>
+                </Label>
+                <button
+                  type="button"
+                  data-quick-add-btn="true"
+                  onClick={() => setIsAddClientOpen(true)}
+                  className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                >
+                  <Plus className="w-2.5 h-2.5" /> Quick Add
+                </button>
+              </div>
+              <SearchableSelect
+                value={partyId || (clientName.trim() ? CUSTOM_RECIPIENT_ID : "")}
+                onChange={handleClientSelect}
+                items={clientSelectItems}
+                placeholder="Select Client"
+                searchPlaceholder="Search clients by name, code, phone..."
+                emptyText="No clients found"
+                allowClear={false}
+                required={!clientName.trim()}
+                requiredMessage="Please select a Client or Recipient"
+                onQuickAdd={() => setIsAddClientOpen(true)}
+                quickAddLabel="Add New Client"
+                triggerProps={{ "data-client-select": "true" }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+            {/* Phone Number (Auto-filled on client select, remains editable) */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Phone Number
+              </Label>
+              <Input
+                type="tel"
+                value={clientPhone}
+                onChange={(e) => {
+                  setClientPhone(e.target.value);
+                  markDirty();
+                }}
+                placeholder="e.g. +92 300 1234567"
+                className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+              />
+            </div>
+
+            {/* Valid Until (+7 / +15 / +30 quick chips) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Valid Until
+                </Label>
+                <div className="flex items-center gap-1">
+                  {[7, 15, 30].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => {
+                        setValidUntil(format(addDays(new Date(), days), "yyyy-MM-dd"));
+                        markDirty();
+                      }}
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                    >
+                      +{days}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Input
+                type="date"
+                value={validUntil}
+                onChange={(e) => {
+                  setValidUntil(e.target.value);
+                  markDirty();
+                }}
+                className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Status
+              </Label>
+              <Select
+                value={status}
+                onValueChange={(val) => {
+                  setStatus(val as Status);
+                  markDirty();
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. SERVICE-SPECIFIC FIELDS (Shared with Booking Invoice) */}
+        <div className="pt-3 border-t space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {getServiceDisplayLabel(serviceType)} Details
+            </h2>
+          </div>
+
+          <ServiceSpecificFields
+            service={serviceType}
+            details={serviceDetails}
+            onDetailChange={handleServiceDetailChange}
+            showInlineTripType={true}
+            showInlineZiyarat={true}
+            showIssuanceFields={false}
+            containerClassName="space-y-3"
+          />
+
+          {serviceType === "Ticket" && (
+            <PassengersSection
+              passengers={passengers}
+              onChangePassengers={(updater) => {
+                setPassengers(updater);
+                setIsDirty(true);
+              }}
+              requireFirstPassenger={false}
+            />
+          )}
+        </div>
+
+        {/* 3. LINE ITEMS */}
+        <div
+          ref={itemsSectionRef}
+          className="pt-3 border-t space-y-2.5"
+          data-repeatable-group="line-items"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Line Items
+            </h2>
+            <span className="text-[11px] text-muted-foreground">
+              Enter = next field · Ctrl+Enter = add line
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b text-[11px] font-semibold text-muted-foreground">
+                  <th className="py-1.5 px-1.5 text-center w-8">#</th>
+                  <th className="py-1.5 px-1.5 text-left min-w-[220px]">Description</th>
+                  <th className="py-1.5 px-1.5 text-right w-20">Qty</th>
+                  <th className="py-1.5 px-1.5 text-right w-32">Unit Price</th>
+                  <th className="py-1.5 px-1.5 text-right w-32">Amount</th>
+                  <th className="py-1.5 px-1 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {items.map((item, idx) => (
+                  <tr key={idx} data-repeatable-row={idx}>
+                    <td className="py-1.5 px-1.5 text-center font-mono text-[11px] text-muted-foreground">
+                      {idx + 1}
+                    </td>
+                    <td className="py-1.5 px-1.5">
+                      <Input
+                        data-line-field="description"
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(idx, "description", e.target.value)
+                        }
+                        placeholder="Service item description..."
+                        data-required={
+                          idx === 0 && items.every((i) => !i.description.trim())
+                            ? "true"
+                            : undefined
+                        }
+                        data-required-message="Please enter at least one line item description"
+                        className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                      />
+                    </td>
+                    <td className="py-1.5 px-1.5">
+                      <Input
+                        type="number"
+                        min={1}
+                        step="1"
+                        value={item.qty}
+                        onChange={(e) =>
+                          handleItemChange(idx, "qty", Number(e.target.value) || 0)
+                        }
+                        className="h-8 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                      />
+                    </td>
+                    <td className="py-1.5 px-1.5">
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={item.unit_price || ""}
+                        onChange={(e) =>
+                          handleItemChange(
+                            idx,
+                            "unit_price",
+                            Number(e.target.value) || 0
+                          )
+                        }
+                        placeholder="0"
+                        className="h-8 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                      />
+                    </td>
+                    <td className="py-1.5 px-1.5">
+                      <Input
+                        value={((Number(item.qty) || 0) * (Number(item.unit_price) || 0)).toLocaleString()}
+                        readOnly
+                        tabIndex={-1}
+                        aria-readonly="true"
+                        className="h-8 text-xs font-mono text-right bg-muted/50 text-foreground cursor-default"
+                      />
+                    </td>
+                    <td className="py-1.5 px-1 text-center">
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => handleRemoveItem(idx)}
+                          className="p-1 text-muted-foreground hover:text-red-500 cursor-pointer rounded"
+                          aria-label={`Remove line ${idx + 1}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              data-add-row-btn="true"
+              onClick={handleAddItem}
+              className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add line
+            </button>
+          </div>
+        </div>
+
+        {/* 4. TOTALS & NOTES (TWO COLUMNS) */}
+        <div className="pt-3 border-t grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+          {/* Right Column visually on desktop, ordered before Notes in keyboard flow */}
+          <div
+            data-nav-order="1"
+            className="md:col-span-5 md:order-2 bg-muted/30 rounded-lg border p-3.5 space-y-2.5"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Currency
+              </Label>
+              <Select
+                value={currency}
+                onValueChange={(val) => {
+                  setCurrency(val);
+                  markDirty();
+                }}
+              >
+                <SelectTrigger className="h-8 w-28 text-xs font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((curr) => (
+                    <SelectItem key={curr} value={curr}>
+                      {curr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 text-xs pt-1 border-t">
+              <span className="text-muted-foreground font-medium">Subtotal</span>
+              <span className="font-mono font-semibold text-foreground">
+                {currency} {subtotal.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Discount (−)
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                step="any"
+                value={discount || ""}
+                onChange={(e) => {
+                  setDiscount(Math.max(0, Number(e.target.value) || 0));
+                  markDirty();
+                }}
+                placeholder="0"
+                className="h-8 w-36 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Tax / Fee (+)
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                step="any"
+                value={tax || ""}
+                onChange={(e) => {
+                  setTax(Math.max(0, Number(e.target.value) || 0));
+                  markDirty();
+                }}
+                placeholder="0"
+                className="h-8 w-36 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t">
+              <span className="text-sm font-bold text-foreground">Total</span>
+              <span className="text-base font-extrabold font-mono text-teal-700 dark:text-teal-400">
+                {currency} {total.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Left Column: Notes / Terms */}
+          <div
+            data-nav-order="2"
+            className="md:col-span-7 md:order-1 space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Notes / Terms
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                Enter = new line · Ctrl+Enter = Save
+              </span>
+            </div>
+            <Textarea
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                markDirty();
+              }}
+              rows={6}
+              placeholder="Terms, inclusions, validity remarks, cancellation rules..."
+              className={cn(
+                "text-xs resize-y bg-background focus-visible:ring-2 focus-visible:ring-teal-500",
+                "min-h-[146px]"
+              )}
+            />
+          </div>
+        </div>
+
+        {/* 5. ACTION BUTTONS */}
+        <div
+          data-nav-order="3"
+          className="pt-3 border-t flex flex-wrap items-center justify-end gap-2.5"
+        >
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => handleSave(true)}
+            onClick={handleCancel}
             disabled={isSubmitting}
-            className="h-8.5 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
-            title="Save and download PDF (Ctrl+Shift+Enter)"
+            className="h-9 px-4 text-xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Save & PDF</span>
+            Cancel
           </Button>
-
           <Button
             type="button"
+            variant="outline"
+            size="sm"
+            data-nav-skip="true"
+            onClick={() => handleSave(true)}
+            disabled={isSubmitting}
+            className="h-9 px-4 text-xs font-semibold gap-1.5 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Save & PDF
+          </Button>
+          <Button
+            type="submit"
             size="sm"
             data-save-button="true"
-            onClick={() => handleSave(false)}
             disabled={isSubmitting}
-            className="h-8.5 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
-            title="Save Quotation (Ctrl+S)"
+            className="h-9 px-5 text-xs font-semibold bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Quotation" : "Save Quotation"}</span>
+            {isSubmitting ? "Saving..." : "Save Quotation"}
           </Button>
         </div>
-      </div>
+      </form>
+
+      {/* Quick Add Client Dialog (same shared modal as Booking Invoice) */}
+      <AddPartyDialog
+        open={isAddClientOpen}
+        onOpenChange={setIsAddClientOpen}
+        initialType="client"
+        lockType={true}
+        onSaved={handleQuickClientSaved}
+      />
     </div>
   );
 }

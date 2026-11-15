@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DateRange } from "react-day-picker";
 import { useClients } from "@/hooks/useStorage";
@@ -24,6 +25,14 @@ export default function Reports() {
   const [filterPreset, setFilterPreset] = useState<string>("current_month");
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const customDialogRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: customDialogRef,
+    enabled: showCustomDialog,
+    autoFocusFirst: true,
+    onCancel: () => setShowCustomDialog(false),
+  });
 
   const { clients } = useClients();
   const { expenses } = useExpenses();
@@ -437,7 +446,7 @@ export default function Reports() {
 
       {/* Custom Range Dialog */}
       <Dialog open={showCustomDialog} onOpenChange={setShowCustomDialog}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent ref={customDialogRef} className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Custom Date Range</DialogTitle>
           </DialogHeader>

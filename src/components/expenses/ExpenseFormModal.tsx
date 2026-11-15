@@ -352,9 +352,9 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   </Label>
                   <button
                     type="button"
-                    tabIndex={-1}
+                    data-quick-add-btn="true"
                     onClick={() => setIsAddCategoryOpen(true)}
-                    className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-0.5 cursor-pointer"
+                    className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-0.5 cursor-pointer rounded px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                   >
                     <Plus className="w-2.5 h-2.5" /> Quick Add
                   </button>

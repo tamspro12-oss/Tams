@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,16 @@ export function PaymentModeSelect({
     }
   };
 
+  const quickAddRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: quickAddRef,
+    enabled: showQuickAdd,
+    autoFocusFirst: true,
+    onSave: handleQuickAddBank,
+    onCancel: () => setShowQuickAdd(false),
+  });
+
   return (
     <>
       <div className={`space-y-3 ${className}`}>
@@ -133,7 +144,7 @@ export function PaymentModeSelect({
 
       {/* Quick Add Bank Dialog */}
       <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent ref={quickAddRef} className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
@@ -161,7 +172,7 @@ export function PaymentModeSelect({
             <Button type="button" variant="outline" onClick={() => setShowQuickAdd(false)}>
               Cancel
             </Button>
-            <Button onClick={handleQuickAddBank} disabled={isAdding || !newBankName.trim()}>
+            <Button data-save-button="true" onClick={handleQuickAddBank} disabled={isAdding || !newBankName.trim()}>
               {isAdding ? "Adding..." : "Add Bank"}
             </Button>
           </DialogFooter>

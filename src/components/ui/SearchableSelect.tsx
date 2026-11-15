@@ -78,6 +78,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const pendingSeedSearchRef = useRef<string | null>(null);
+  const advanceAfterCloseRef = useRef(false);
+  const restoreTriggerFocusOnCloseRef = useRef(false);
 
   const selectedItem = useMemo(() => {
     if (!value || value === "none") return null;
@@ -109,11 +111,6 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return list;
   }, [showClearRow, clearValue, filteredItems]);
 
-  const selectableOptionsRef = useRef(selectableOptions);
-  selectableOptionsRef.current = selectableOptions;
-  const valueRef = useRef(value);
-  valueRef.current = value;
-
   useEffect(() => {
     if (open) {
       const initialSearch = pendingSeedSearchRef.current;
@@ -122,15 +119,15 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         setSearch(initialSearch);
         setHighlightedIndex(0);
       } else {
-        const currentIdx = selectableOptionsRef.current.findIndex(
-          (opt) => opt.type === "item" && opt.id === valueRef.current
+        const currentIdx = selectableOptions.findIndex(
+          (opt) => opt.type === "item" && opt.id === value
         );
         setHighlightedIndex(currentIdx >= 0 ? currentIdx : 0);
       }
 
-      const timer = window.setTimeout(() => {
+      const raf = window.requestAnimationFrame(() => {
         const input = inputRef.current;
-        if (input) {
+        if (input && document.activeElement !== input) {
           input.focus();
           const len = input.value.length;
           try {
@@ -139,10 +136,27 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             // ignore
           }
         }
-      }, 20);
-      return () => window.clearTimeout(timer);
+      });
+      return () => window.cancelAnimationFrame(raf);
     } else {
       setSearch("");
+      if (advanceAfterCloseRef.current) {
+        const fallbackTimer = window.setTimeout(() => {
+          const trigger = triggerRef.current;
+          if (advanceAfterCloseRef.current && trigger) {
+            advanceAfterCloseRef.current = false;
+            restoreTriggerFocusOnCloseRef.current = false;
+            trigger.focus({ preventScroll: true });
+            trigger.dispatchEvent(
+              new CustomEvent("tams:field-advance", {
+                bubbles: true,
+                detail: { sourceEl: trigger },
+              })
+            );
+          }
+        }, 16);
+        return () => window.clearTimeout(fallbackTimer);
+      }
     }
   }, [open]);
 
@@ -168,34 +182,32 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const commitSelection = useCallback(
     (selectedId: string, advanceFocus: boolean) => {
-      if (triggerRef.current && selectedId && selectedId !== clearValue) {
-        triggerRef.current.removeAttribute("data-field-error");
-        triggerRef.current.removeAttribute("aria-invalid");
+      const isCleared = !selectedId || (clearValue !== undefined && selectedId === clearValue);
+      if (triggerRef.current) {
+        if (!isCleared) {
+          triggerRef.current.removeAttribute("data-field-error");
+          triggerRef.current.removeAttribute("aria-invalid");
+        }
       }
+      if (required && isCleared) {
+        advanceAfterCloseRef.current = false;
+        restoreTriggerFocusOnCloseRef.current = true;
+        onChange(selectedId);
+        setOpen(false);
+        return;
+      }
+      advanceAfterCloseRef.current = advanceFocus;
+      restoreTriggerFocusOnCloseRef.current = !advanceFocus;
       onChange(selectedId);
       setOpen(false);
-      window.requestAnimationFrame(() => {
-        const trigger = triggerRef.current;
-        if (!trigger) return;
-        trigger.focus();
-        if (advanceFocus) {
-          trigger.dispatchEvent(
-            new CustomEvent("tams:field-advance", {
-              bubbles: true,
-              detail: { sourceEl: trigger },
-            })
-          );
-        }
-      });
     },
-    [onChange, clearValue]
+    [onChange, clearValue, required]
   );
 
   const handleCloseOnly = useCallback(() => {
+    advanceAfterCloseRef.current = false;
+    restoreTriggerFocusOnCloseRef.current = true;
     setOpen(false);
-    window.requestAnimationFrame(() => {
-      triggerRef.current?.focus();
-    });
   }, []);
 
   const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -256,15 +268,18 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         return;
       }
 
-      if (selectableOptions.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (filteredItems.length > 0 && selectableOptions.length > 0) {
         const safeIdx = Math.min(Math.max(highlightedIndex, 0), selectableOptions.length - 1);
         const chosen = selectableOptions[safeIdx];
         if (chosen) {
           commitSelection(chosen.id, true);
         }
       }
+      // If no match is visible, Enter stays open and keeps focus in search input
+      return;
     }
   };
 
@@ -322,6 +337,47 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
       <PopoverContent
         data-searchable-select-content="true"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          const input = inputRef.current;
+          if (input) {
+            input.focus();
+            const len = input.value.length;
+            try {
+              input.setSelectionRange(len, len);
+            } catch {
+              // ignore
+            }
+          }
+        }}
+        onPointerDownOutside={() => {
+          advanceAfterCloseRef.current = false;
+          restoreTriggerFocusOnCloseRef.current = false;
+        }}
+        onCloseAutoFocus={(e) => {
+          const shouldAdvance = advanceAfterCloseRef.current;
+          const shouldRestoreTrigger = restoreTriggerFocusOnCloseRef.current;
+          advanceAfterCloseRef.current = false;
+          restoreTriggerFocusOnCloseRef.current = false;
+
+          const trigger = triggerRef.current;
+          if (shouldAdvance && trigger) {
+            e.preventDefault();
+            trigger.focus({ preventScroll: true });
+            trigger.dispatchEvent(
+              new CustomEvent("tams:field-advance", {
+                bubbles: true,
+                detail: { sourceEl: trigger },
+              })
+            );
+            return;
+          }
+
+          if (shouldRestoreTrigger && trigger) {
+            e.preventDefault();
+            trigger.focus();
+          }
+        }}
         onKeyDown={handlePopoverKeyDown}
         onEscapeKeyDown={(e) => {
           e.preventDefault();
@@ -341,7 +397,14 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             <Input
               ref={inputRef}
               value={search}
-              onChange={(e) => setSearch(cleanPastedSearch(e.target.value))}
+              onChange={(e) => setSearch(e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (pasted) {
+                  e.preventDefault();
+                  setSearch(cleanPastedSearch(pasted));
+                }
+              }}
               placeholder={searchPlaceholder}
               data-search-box="true"
               className="h-8 pl-8 pr-7 text-xs customer-search-box rounded-none bg-white dark:bg-slate-950"
@@ -441,8 +504,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     isHighlighted
                       ? "bg-teal-50 dark:bg-teal-950/60 text-teal-950 dark:text-teal-50 ring-1 ring-inset ring-teal-500/40"
                       : isSelected
-                      ? "bg-slate-100 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200"
+                        ? "bg-slate-100 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200"
                   )}
                 >
                   {renderItem ? (

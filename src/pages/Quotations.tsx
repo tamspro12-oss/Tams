@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,16 +57,13 @@ import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import { cn } from "@/lib/utils";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
+import {
+  SERVICE_TYPE_OPTIONS,
+  getServiceDisplayLabel,
+  normalizeServiceType,
+} from "@/lib/serviceDefinitions";
 
-type ServiceType = "client_booking" | "b2b" | "umrah" | "custom";
 type Status = "draft" | "sent" | "accepted" | "rejected";
-
-const serviceLabels: Record<string, string> = {
-  client_booking: "Client Booking",
-  b2b: "B2B Service",
-  umrah: "Umrah Package",
-  custom: "Custom",
-};
 
 const statusColors: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-muted-foreground/30",
@@ -174,10 +172,24 @@ export default function Quotations() {
     return counts;
   }, [dateFilteredQuotations, isQuotationExpired]);
 
+  const filterBarRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: filterBarRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
   // Full filtered list
   const filtered = useMemo(() => {
     return dateFilteredQuotations.filter((q) => {
-      if (filterService !== "all" && q.service_type !== filterService) return false;
+      if (
+        filterService !== "all" &&
+        q.service_type !== filterService &&
+        normalizeServiceType(q.service_type) !== filterService
+      ) {
+        return false;
+      }
 
       if (filterStatus === "expired") {
         if (!isQuotationExpired(q)) return false;
@@ -215,10 +227,8 @@ export default function Quotations() {
       });
       return;
     }
-    if (!agency?.email) {
-      toast.error("Sender email not configured", {
-        description: "Configure email sender in Settings > Agency Branding.",
-      });
+    if (!agency?.email || !agency?.smtp_configured) {
+      toast.error("Add your Gmail App Password in Settings → Email Integration to send emails.");
       return;
     }
 
@@ -233,7 +243,7 @@ export default function Quotations() {
         <div style="font-family:Arial,sans-serif;color:#0a2540;">
           <h2>Quotation ${q.quotation_number}</h2>
           <p>Dear ${q.client_name},</p>
-          <p>Please find attached your requested quotation for <strong>${serviceLabels[q.service_type] || q.service_type}</strong>${q.title ? ` — ${q.title}` : ""}.</p>
+          <p>Please find attached your requested quotation for <strong>${getServiceDisplayLabel(q.service_type)}</strong>${q.title ? ` — ${q.title}` : ""}.</p>
           <p><strong>Total Amount: ${q.currency} ${Number(q.total).toLocaleString()}</strong></p>
           ${q.valid_until ? `<p>Valid until: ${format(new Date(q.valid_until), "dd MMM yyyy")}</p>` : ""}
           <p>Best regards,<br/>${agency?.name || ""}</p>
@@ -282,7 +292,7 @@ export default function Quotations() {
           name: q.client_name,
           contact_number: q.client_phone || "",
           email: q.client_email || "",
-          travel_type: q.service_type === "umrah" ? "Umrah" : "Ticket",
+          travel_type: normalizeServiceType(q.service_type),
           selling_price: q.total,
           notes: `Converted from Quotation #${q.quotation_number}${q.title ? ` — ${q.title}` : ""}\nQuotation Total: ${q.currency} ${Number(q.total).toLocaleString()}`,
           converted_from_quote_id: q.id,
@@ -365,7 +375,7 @@ export default function Quotations() {
       </div>
 
       {/* Filter Row: ONE LINE (Search | DATE FILTER | All Services | All Status) */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
+      <div ref={filterBarRef} className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
         <div className="relative flex-1">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -406,10 +416,11 @@ export default function Quotations() {
             </SelectTrigger>
             <SelectContent className="z-50 text-xs">
               <SelectItem value="all">All Services</SelectItem>
-              <SelectItem value="client_booking">Client Booking</SelectItem>
-              <SelectItem value="b2b">B2B Service</SelectItem>
-              <SelectItem value="umrah">Umrah Package</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
+              {SERVICE_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -522,7 +533,9 @@ export default function Quotations() {
                             <CopyValue value={q.quotation_number} label="quotation number" />
                             {renderBookingReference(q)}
                           </div>
-                          {q.title && <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[180px]">{q.title}</p>}
+                          <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[180px]">
+                            {q.title || getServiceDisplayLabel(q.service_type)}
+                          </p>
                         </td>
 
                         {/* Date */}
@@ -550,7 +563,7 @@ export default function Quotations() {
                         {/* Service Type */}
                         <td className="py-2.5 px-3">
                           <Badge variant="outline" className="text-[10px] font-medium py-0 px-1.5 h-4.5">
-                            {serviceLabels[q.service_type] || q.service_type}
+                            {getServiceDisplayLabel(q.service_type)}
                           </Badge>
                         </td>
 
@@ -702,7 +715,9 @@ export default function Quotations() {
                           )}
                         </div>
                         <p className="font-semibold text-xs text-foreground mt-0.5 truncate">{q.client_name}</p>
-                        {q.title && <p className="text-[11px] text-muted-foreground truncate">{q.title}</p>}
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {q.title || getServiceDisplayLabel(q.service_type)}
+                        </p>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="text-[10px] text-muted-foreground block">Total</span>
@@ -715,7 +730,7 @@ export default function Quotations() {
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t">
                       <span>{format(parseISO(q.quotation_date), "dd MMM yyyy")}</span>
                       <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">
-                        {serviceLabels[q.service_type] || q.service_type}
+                        {getServiceDisplayLabel(q.service_type)}
                       </Badge>
                     </div>
 
@@ -815,7 +830,7 @@ export default function Quotations() {
                     {previewQ.status}
                   </Badge>
                   <Badge variant="outline" className="text-[10px]">
-                    {serviceLabels[previewQ.service_type] || previewQ.service_type}
+                    {getServiceDisplayLabel(previewQ.service_type)}
                   </Badge>
                 </div>
               </div>
@@ -827,13 +842,13 @@ export default function Quotations() {
                   {previewQ.client_phone && <p className="text-muted-foreground">{previewQ.client_phone}</p>}
                   {previewQ.client_email && <p className="text-muted-foreground">{previewQ.client_email}</p>}
                 </div>
-                {previewQ.title && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Subject / Package</p>
-                    <p className="font-semibold text-foreground text-xs">{previewQ.title}</p>
-                    {previewQ.description && <p className="text-muted-foreground line-clamp-2">{previewQ.description}</p>}
-                  </div>
-                )}
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Service</p>
+                  <p className="font-semibold text-foreground text-xs">
+                    {previewQ.title || getServiceDisplayLabel(previewQ.service_type)}
+                  </p>
+                  {previewQ.description && <p className="text-muted-foreground line-clamp-2">{previewQ.description}</p>}
+                </div>
               </div>
 
               {/* Items List */}

@@ -617,7 +617,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                   type="checkbox"
                   checked={isAdjustment}
                   onChange={(e) => setIsAdjustment(e.target.checked)}
-                  className="rounded w-3 h-3 text-teal-600"
+                  className="rounded w-3 h-3 text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
                 />
                 <span>Discount / Write-off Adjustment</span>
               </label>

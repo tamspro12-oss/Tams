@@ -3,9 +3,13 @@ import { Link } from "react-router-dom";
 import { Plane } from "lucide-react";
 import { MARKETING_NAVIGATION } from "@/config/marketingContent";
 
-export const PublicFooter: React.FC = () => {
+export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   return (
-    <footer className="w-full border-t border-[#E6E2D8] dark:border-[#1A294E] bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-600 dark:text-slate-400 py-6 transition-colors">
+    <footer
+      className={`w-full border-t border-[#E6E2D8] dark:border-[#1A294E] bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-600 dark:text-slate-400 ${
+        compact ? "py-2.5 lg:py-3" : "py-6"
+      } transition-colors`}
+    >
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
         {/* Brand */}
         <Link

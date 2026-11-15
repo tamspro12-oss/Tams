@@ -217,6 +217,7 @@ export default function SignupPage() {
                 name: agencyName,
                 phone_number: phone,
                 contact_info: phone,
+                email: email.trim(),
               })
               .eq("id", profile.agency_id);
           }

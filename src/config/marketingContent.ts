@@ -26,36 +26,29 @@ export const MARKETING_NAVIGATION = {
   ] as NavLink[],
 };
 
-// 8 Equal Items for Homepage Section B Strip
+// 7 Equal Items for Homepage Strip
 export const HOME_STRIP_ITEMS = [
   { id: "bookings", title: "Bookings", iconName: "CalendarCheck" },
-  { id: "b2b-agents", title: "B2B Agents", iconName: "Users" },
+  { id: "invoicing", title: "Invoicing", iconName: "FileCheck" },
   { id: "vouchers", title: "Vouchers", iconName: "Ticket" },
   { id: "ledger", title: "Ledger", iconName: "Receipt" },
-  { id: "bank-cash", title: "Bank & Cash", iconName: "Landmark" },
-  { id: "quotes", title: "Quotes", iconName: "FileText" },
   { id: "umrah-calc", title: "Umrah Calculator", iconName: "Calculator" },
+  { id: "quotations", title: "Quotations", iconName: "FileText" },
   { id: "reports", title: "Reports", iconName: "BarChart3" },
 ] as const;
 
-// 16 Real Features for Features Page (Exact Copy)
+// 10 Real Features for Features Page (2x5 Desktop Grid)
 export const FEATURES_LIST = [
   { id: "1", title: "Dashboard", caption: "Business overview", iconName: "LayoutDashboard" },
-  { id: "2", title: "Client Bookings", caption: "Direct and B2B together", iconName: "CalendarCheck" },
-  { id: "3", title: "B2B Agents", caption: "Ledger per agent", iconName: "Users" },
-  { id: "4", title: "Vendors", caption: "Payables tracking", iconName: "Building2" },
-  { id: "5", title: "Vouchers", caption: "Umrah, hotel, ticket", iconName: "Ticket" },
-  { id: "6", title: "Agency Ledger", caption: "Every transaction logged", iconName: "Receipt" },
-  { id: "7", title: "Bank & Cash", caption: "Banks and cash drawer", iconName: "Landmark" },
-  { id: "8", title: "Expenses", caption: "Linked to accounts", iconName: "Wallet" },
-  { id: "9", title: "Queries & Quotes", caption: "Convert to booking", iconName: "FileText" },
-  { id: "10", title: "Umrah Calculator", caption: "SAR to PKR costing", iconName: "Calculator" },
-  { id: "11", title: "PDF Invoices", caption: "Branded documents", iconName: "FileCheck" },
-  { id: "12", title: "Notifications", caption: "Reminders and alerts", iconName: "Bell" },
-  { id: "13", title: "Reports", caption: "Business insights", iconName: "BarChart3" },
-  { id: "14", title: "Sub-user Roles", caption: "Staff permissions", iconName: "ShieldCheck" },
-  { id: "15", title: "Offline + Cloud", caption: "Sync and backup", iconName: "Cloud" },
-  { id: "16", title: "Data Isolation", caption: "Private per agency", iconName: "Lock" },
+  { id: "2", title: "Bookings", caption: "Tickets, Umrah and more", iconName: "CalendarCheck" },
+  { id: "3", title: "Visas", caption: "Visa applications and tracking", iconName: "Stamp" },
+  { id: "4", title: "Vouchers", caption: "Umrah, hotel, ticket", iconName: "Ticket" },
+  { id: "5", title: "Parties", caption: "Clients, agents and vendors", iconName: "Users" },
+  { id: "6", title: "Expenses", caption: "Linked to accounts", iconName: "Wallet" },
+  { id: "7", title: "Queries & Quotes", caption: "Convert to booking", iconName: "FileText" },
+  { id: "8", title: "Umrah Calculator", caption: "SAR to PKR costing", iconName: "Calculator" },
+  { id: "9", title: "PDF Invoices", caption: "Branded documents", iconName: "FileCheck" },
+  { id: "10", title: "Notifications", caption: "Reminders and alerts", iconName: "Bell" },
 ] as const;
 
 export const CONTACT_CHANNELS = {

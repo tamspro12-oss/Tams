@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ interface CreateSubUserDialogProps {
 }
 
 export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogProps) => {
+  const formRef = useRef<HTMLFormElement>(null);
   const { createSubUser } = useSubUsers();
   const { data: agencyId } = useCurrentAgencyId();
   const [formData, setFormData] = useState({
@@ -109,6 +111,13 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
     }
   };
 
+  useFormKeyboardNav({
+    containerRef: formRef,
+    enabled: open,
+    autoFocusFirst: true,
+    onCancel: () => onOpenChange(false),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
@@ -119,7 +128,7 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
             <div>
               <Label htmlFor="full_name">Full Name</Label>
@@ -364,7 +373,7 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createSubUser.isPending}>
+            <Button type="submit" data-save-button="true" disabled={createSubUser.isPending}>
               {createSubUser.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Sub User
             </Button>

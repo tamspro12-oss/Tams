@@ -52,9 +52,9 @@ export const AgencyBankSelect: React.FC<AgencyBankSelectProps> = ({
         </Label>
         <button
           type="button"
-          tabIndex={-1}
+          data-quick-add-btn="true"
           onClick={() => setIsAddBankOpen(true)}
-          className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer hover:underline"
+          className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer hover:underline rounded px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <Plus className="w-2.5 h-2.5" /> Quick Add
         </button>

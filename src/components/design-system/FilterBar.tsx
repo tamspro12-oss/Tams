@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Search, X, Calendar as CalendarIcon, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -69,8 +70,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     filters.status !== "all" ||
     Boolean(filters.searchQuery);
 
+  const filterBarRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: filterBarRef,
+    enabled: true,
+    autoFocusFirst: false,
+  });
+
   return (
     <div
+      ref={filterBarRef}
       className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2.5 ${className}`}
     >
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2">

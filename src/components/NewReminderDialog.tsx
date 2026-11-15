@@ -435,14 +435,14 @@ export function NewReminderDialog({
                 {linkTo === "client" && (
                   <Button
                     type="button"
+                    data-quick-add-btn="true"
                     variant="outline"
                     size="sm"
-                    tabIndex={-1}
                     onClick={() => {
                       setAddPartyType("client");
                       setIsAddPartyOpen(true);
                     }}
-                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0"
+                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0 focus-visible:ring-2 focus-visible:ring-teal-500"
                     title="Quick Add Client"
                   >
                     + Client
@@ -451,14 +451,14 @@ export function NewReminderDialog({
                 {linkTo === "vendor" && (
                   <Button
                     type="button"
+                    data-quick-add-btn="true"
                     variant="outline"
                     size="sm"
-                    tabIndex={-1}
                     onClick={() => {
                       setAddPartyType("vendor");
                       setIsAddPartyOpen(true);
                     }}
-                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0"
+                    className="h-8 text-[11px] px-2 mt-4.5 shrink-0 focus-visible:ring-2 focus-visible:ring-teal-500"
                     title="Quick Add Vendor"
                   >
                     + Vendor

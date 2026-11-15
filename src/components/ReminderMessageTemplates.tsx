@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -123,8 +124,17 @@ ${name}`;
     });
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useFormKeyboardNav({
+    containerRef: cardRef,
+    enabled: true,
+    autoFocusFirst: false,
+    onSave: handleSaveTemplates,
+  });
+
   return (
-    <Card className="border shadow-xs">
+    <Card ref={cardRef} className="border shadow-xs">
       <CardHeader className="py-3 px-4 sm:px-5 border-b">
         <div className="flex items-center justify-between">
           <div>
@@ -148,6 +158,7 @@ ${name}`;
             </Button>
             <Button
               size="sm"
+              data-save-button="true"
               onClick={handleSaveTemplates}
               disabled={isSaving}
               className="h-8 text-xs font-semibold gap-1.5"
