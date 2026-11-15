@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { invalidateAllFinancialQueries, getKarachiYmd } from "@/lib/accountingEngine";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import { toast } from "sonner";
 
 export interface AccountItem {
@@ -198,8 +199,8 @@ export function useAccounts() {
       invalidateAllFinancialQueries(queryClient, agencyId);
       toast.success("Account added successfully");
     },
-    onError: (err: any) => {
-      toast.error("Failed to add account", { description: err.message });
+    onError: (err: unknown) => {
+      handleSupabaseError(err, "Failed to add account", "useAccounts.createAccount");
     },
   });
 
@@ -219,8 +220,8 @@ export function useAccounts() {
       invalidateAllFinancialQueries(queryClient, agencyId);
       toast.success("Account updated");
     },
-    onError: (err: any) => {
-      toast.error("Failed to update account", { description: err.message });
+    onError: (err: unknown) => {
+      handleSupabaseError(err, "Failed to update account", "useAccounts.updateAccount");
     },
   });
 
@@ -377,31 +378,37 @@ export function useTransactionMutations() {
   const recordPayment = useMutation({
     mutationFn: async (payload: RecordPaymentPayload) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline — connect to the internet to record payments.");
+        throw new Error("Network connection issue — you are offline.");
       }
-      const { data, error } = await (supabase.rpc as any)("record_payment", {
-        p_direction: payload.direction,
-        p_amount: payload.amount,
-        p_account_id: payload.accountId,
-        p_party_id: payload.partyId || null,
-        p_party_type: payload.partyType || null,
-        p_booking_id: payload.bookingId || null,
-        p_date: payload.date || getKarachiYmd(),
-        p_method: payload.method || "cash",
-        p_reference_no: payload.referenceNo || null,
-        p_category: payload.category || null,
-        p_notes: payload.notes || null,
-      });
-
-      if (error) throw error;
-      return data;
+      const isManual = Boolean(payload.referenceNo?.trim());
+      return await withDuplicateRetry(
+        async () => {
+          const { data, error } = await (supabase.rpc as any)("record_payment", {
+            p_direction: payload.direction,
+            p_amount: payload.amount,
+            p_account_id: payload.accountId,
+            p_party_id: payload.partyId || null,
+            p_party_type: payload.partyType || null,
+            p_booking_id: payload.bookingId || null,
+            p_date: payload.date || getKarachiYmd(),
+            p_method: payload.method || "cash",
+            p_reference_no: payload.referenceNo || null,
+            p_category: payload.category || null,
+            p_notes: payload.notes || null,
+            p_is_manual: isManual,
+          });
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: !isManual }
+      );
     },
     onSuccess: () => {
       invalidateAllFinance();
       toast.success("Payment recorded successfully");
     },
     onError: (err: any) => {
-      toast.error("Failed to record payment", { description: err.message });
+      handleSupabaseError(err, "Failed to record payment", "useUnifiedTransactions.recordPayment");
     },
   });
 
@@ -409,29 +416,35 @@ export function useTransactionMutations() {
   const recordExpense = useMutation({
     mutationFn: async (payload: RecordExpensePayload) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline — connect to the internet to record expenses.");
+        throw new Error("Network connection issue — you are offline.");
       }
-      const { data, error } = await (supabase.rpc as any)("record_expense", {
-        p_amount: payload.amount,
-        p_account_id: payload.accountId,
-        p_category: payload.category,
-        p_date: payload.date || getKarachiYmd(),
-        p_method: payload.method || "cash",
-        p_reference_no: payload.referenceNo || null,
-        p_notes: payload.notes || null,
-        p_party_id: payload.partyId || null,
-        p_party_type: payload.partyType || null,
-      });
-
-      if (error) throw error;
-      return data;
+      const isManual = Boolean(payload.referenceNo?.trim());
+      return await withDuplicateRetry(
+        async () => {
+          const { data, error } = await (supabase.rpc as any)("record_expense", {
+            p_amount: payload.amount,
+            p_account_id: payload.accountId,
+            p_category: payload.category,
+            p_date: payload.date || getKarachiYmd(),
+            p_method: payload.method || "cash",
+            p_reference_no: payload.referenceNo || null,
+            p_notes: payload.notes || null,
+            p_party_id: payload.partyId || null,
+            p_party_type: payload.partyType || null,
+            p_is_manual: isManual,
+          });
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: !isManual }
+      );
     },
     onSuccess: () => {
       invalidateAllFinance();
       toast.success("Expense recorded successfully");
     },
     onError: (err: any) => {
-      toast.error("Failed to record expense", { description: err.message });
+      handleSupabaseError(err, "Failed to record expense", "useUnifiedTransactions.recordExpense");
     },
   });
 
@@ -439,30 +452,36 @@ export function useTransactionMutations() {
   const recordRefund = useMutation({
     mutationFn: async (payload: RecordRefundPayload) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline — connect to the internet to record refunds.");
+        throw new Error("Network connection issue — you are offline.");
       }
-      const { data, error } = await (supabase.rpc as any)("record_refund", {
-        p_amount: payload.amount,
-        p_account_id: payload.accountId,
-        p_party_id: payload.partyId || null,
-        p_party_type: payload.partyType || "client",
-        p_booking_id: payload.bookingId || null,
-        p_date: payload.date || getKarachiYmd(),
-        p_method: payload.method || "cash",
-        p_reference_no: payload.referenceNo || null,
-        p_reason: payload.reason || null,
-        p_notes: payload.notes || null,
-      });
-
-      if (error) throw error;
-      return data;
+      const isManual = Boolean(payload.referenceNo?.trim());
+      return await withDuplicateRetry(
+        async () => {
+          const { data, error } = await (supabase.rpc as any)("record_refund", {
+            p_amount: payload.amount,
+            p_account_id: payload.accountId,
+            p_party_id: payload.partyId || null,
+            p_party_type: payload.partyType || "client",
+            p_booking_id: payload.bookingId || null,
+            p_date: payload.date || getKarachiYmd(),
+            p_method: payload.method || "cash",
+            p_reference_no: payload.referenceNo || null,
+            p_reason: payload.reason || null,
+            p_notes: payload.notes || null,
+            p_is_manual: isManual,
+          });
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: !isManual }
+      );
     },
     onSuccess: () => {
       invalidateAllFinance();
       toast.success("Refund recorded successfully");
     },
     onError: (err: any) => {
-      toast.error("Failed to record refund", { description: err.message });
+      handleSupabaseError(err, "Failed to record refund", "useUnifiedTransactions.recordRefund");
     },
   });
 
@@ -470,26 +489,32 @@ export function useTransactionMutations() {
   const recordTransfer = useMutation({
     mutationFn: async (payload: RecordTransferPayload) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline — connect to the internet to record transfers.");
+        throw new Error("Network connection issue — you are offline.");
       }
-      const { data, error } = await (supabase.rpc as any)("record_transfer", {
-        p_from_account_id: payload.fromAccountId,
-        p_to_account_id: payload.toAccountId,
-        p_amount: payload.amount,
-        p_date: payload.date || getKarachiYmd(),
-        p_reference_no: payload.referenceNo || null,
-        p_notes: payload.notes || null,
-      });
-
-      if (error) throw error;
-      return data;
+      const isManual = Boolean(payload.referenceNo?.trim());
+      return await withDuplicateRetry(
+        async () => {
+          const { data, error } = await (supabase.rpc as any)("record_transfer", {
+            p_from_account_id: payload.fromAccountId,
+            p_to_account_id: payload.toAccountId,
+            p_amount: payload.amount,
+            p_date: payload.date || getKarachiYmd(),
+            p_reference_no: payload.referenceNo || null,
+            p_notes: payload.notes || null,
+            p_is_manual: isManual,
+          });
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: !isManual }
+      );
     },
     onSuccess: () => {
       invalidateAllFinance();
       toast.success("Transfer completed successfully");
     },
     onError: (err: any) => {
-      toast.error("Failed to record transfer", { description: err.message });
+      handleSupabaseError(err, "Failed to record transfer", "useUnifiedTransactions.recordTransfer");
     },
   });
 
@@ -497,7 +522,7 @@ export function useTransactionMutations() {
   const reverseTransaction = useMutation({
     mutationFn: async ({ transactionId, reason }: { transactionId: string; reason?: string }) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline — connect to the internet to reverse transactions.");
+        throw new Error("Network connection issue — you are offline.");
       }
       const { data, error } = await (supabase.rpc as any)("reverse_transaction", {
         p_transaction_id: transactionId,
@@ -512,7 +537,7 @@ export function useTransactionMutations() {
       toast.success("Transaction reversed successfully");
     },
     onError: (err: any) => {
-      toast.error("Failed to reverse transaction", { description: err.message });
+      handleSupabaseError(err, "Failed to reverse transaction", "useUnifiedTransactions.reverseTransaction");
     },
   });
 

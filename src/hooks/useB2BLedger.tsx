@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface B2BLedgerEntry {
   id: string;
@@ -126,8 +127,8 @@ export function useB2BLedger(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
       toast.success('Ledger entry added successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to add ledger entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to add ledger entry', 'useB2BLedger.addLedgerEntry');
     },
   });
 
@@ -191,8 +192,8 @@ export function useB2BLedger(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
       toast.success(`Split payment recorded (${data.entriesCreated} entries created)`);
     },
-    onError: (error: any) => {
-      toast.error('Failed to record split payment', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to record split payment', 'useB2BLedger.addSplitPayment');
     },
   });
 
@@ -225,8 +226,8 @@ export function useB2BLedger(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
       toast.success('Ledger entry updated successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to update ledger entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to update ledger entry', 'useB2BLedger.updateLedgerEntry');
     },
   });
 
@@ -259,8 +260,8 @@ export function useB2BLedger(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
       toast.success('Ledger entry deleted successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to delete ledger entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete ledger entry', 'useB2BLedger.deleteLedgerEntry');
     },
   });
 

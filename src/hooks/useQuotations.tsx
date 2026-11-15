@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 
 export interface QuotationItem {
   description: string;
@@ -45,9 +46,6 @@ export interface Quotation {
 
 export type QuotationInput = Omit<Quotation, "id" | "agency_id" | "created_at" | "updated_at" | "created_by">;
 
-const describeError = (e: any) =>
-  [e?.message, e?.details, e?.hint, e?.code].filter(Boolean).join(" — ");
-
 export function useQuotations() {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
@@ -80,21 +78,27 @@ export function useQuotations() {
 
   const addQuotation = useMutation({
     mutationFn: async (q: QuotationInput) => {
-      if (!agencyId) throw new Error("No agency");
+      if (!agencyId) throw new Error("No active agency assigned");
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("quotations" as any)
-        .insert({ ...q, agency_id: agencyId, created_by: user?.id })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const isAuto = !q.quotation_number || !q.quotation_number.trim();
+      return await withDuplicateRetry(
+        async () => {
+          const { data, error } = await supabase
+            .from("quotations" as any)
+            .insert({ ...q, agency_id: agencyId, created_by: user?.id })
+            .select()
+            .single();
+          if (error) throw error;
+          return data;
+        },
+        { isAutoMode: isAuto }
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       toast.success("Quotation created");
     },
-    onError: (e: any) => toast.error("Failed to create quotation", { description: describeError(e) }),
+    onError: (e: any) => handleSupabaseError(e, "Failed to create quotation", "useQuotations.add"),
   });
 
   const updateQuotation = useMutation({
@@ -112,7 +116,7 @@ export function useQuotations() {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       toast.success("Quotation updated");
     },
-    onError: (e: any) => toast.error("Failed to update", { description: describeError(e) }),
+    onError: (e: any) => handleSupabaseError(e, "Failed to update quotation", "useQuotations.update"),
   });
 
   const deleteQuotation = useMutation({
@@ -124,7 +128,7 @@ export function useQuotations() {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       toast.success("Quotation deleted");
     },
-    onError: (e: any) => toast.error("Failed to delete", { description: describeError(e) }),
+    onError: (e: any) => handleSupabaseError(e, "Failed to delete quotation", "useQuotations.delete"),
   });
 
   return { quotations, isLoading, isFetching, refetch, addQuotation, updateQuotation, deleteQuotation };

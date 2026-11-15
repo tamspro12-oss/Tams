@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useMemo } from "react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import type { Reminder, ReminderSettings, DynamicTravelAlert } from "@/types/reminder";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export function useReminders() {
   const queryClient = useQueryClient();
@@ -165,7 +166,7 @@ export function useReminders() {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast.success("Reminder added");
     },
-    onError: (e: any) => toast.error("Failed to add reminder", { description: e.message }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to add reminder", "useReminders.add"),
   });
 
   const updateReminder = useMutation({
@@ -184,7 +185,7 @@ export function useReminders() {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast.success("Reminder updated");
     },
-    onError: (e: any) => toast.error("Failed to update reminder", { description: e.message }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to update reminder", "useReminders.update"),
   });
 
   const toggleReminderComplete = useMutation({
@@ -199,6 +200,7 @@ export function useReminders() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
     },
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to update reminder status", "useReminders.toggle"),
   });
 
   const deleteReminder = useMutation({
@@ -210,6 +212,7 @@ export function useReminders() {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast.success("Reminder deleted");
     },
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to delete reminder", "useReminders.delete"),
   });
 
   const updateSettings = useMutation({
@@ -233,6 +236,7 @@ export function useReminders() {
       queryClient.invalidateQueries({ queryKey: ["reminder_settings"] });
       toast.success("Reminder settings saved");
     },
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to save reminder settings", "useReminders.updateSettings"),
   });
 
   return {

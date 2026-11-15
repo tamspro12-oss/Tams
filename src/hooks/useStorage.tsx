@@ -5,6 +5,7 @@ import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useCurrentAgencyId } from '@/hooks/useCurrentAgencyId';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { invalidateAllFinancialQueries } from '@/lib/accountingEngine';
+import { parseSupabaseError } from '@/lib/supabaseErrorHandler';
 
 export function useClients() {
   const { toast } = useToast();
@@ -73,9 +74,10 @@ export function useClients() {
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
     onError: (err) => {
+      console.error('[useClients.addClient]', err);
       toast({
         title: 'Error adding client',
-        description: err instanceof Error ? err.message : 'Please try again',
+        description: parseSupabaseError(err, 'Failed to add client. Please try again.').userMessage,
         variant: 'destructive',
       });
     },
@@ -107,12 +109,13 @@ export function useClients() {
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
     onError: (err, _vars, context: any) => {
+      console.error('[useClients.updateClient]', err);
       if (context?.previousClients) {
         queryClient.setQueryData(['clients', userAgencyId], context.previousClients);
       }
       toast({
         title: 'Error updating client',
-        description: err instanceof Error ? err.message : 'Please try again',
+        description: parseSupabaseError(err, 'Failed to update client. Please try again.').userMessage,
         variant: 'destructive',
       });
     },
@@ -144,12 +147,13 @@ export function useClients() {
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
     onError: (err, _id, context: any) => {
+      console.error('[useClients.deleteClient]', err);
       if (context?.previousClients) {
         queryClient.setQueryData(['clients', userAgencyId], context.previousClients);
       }
       toast({
         title: 'Error deleting client',
-        description: err instanceof Error ? err.message : 'Please try again',
+        description: parseSupabaseError(err, 'Failed to delete client. Please try again.').userMessage,
         variant: 'destructive',
       });
     },
@@ -203,10 +207,11 @@ export function useBookings() {
       toast({ title: 'Booking added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useBookings.addBooking]', err);
       toast({
         title: 'Failed to add booking',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to add booking').userMessage,
         variant: 'destructive',
       });
     },
@@ -225,10 +230,11 @@ export function useBookings() {
       toast({ title: 'Booking updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useBookings.updateBooking]', err);
       toast({
         title: 'Failed to update booking',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to update booking').userMessage,
         variant: 'destructive',
       });
     },
@@ -247,10 +253,11 @@ export function useBookings() {
       toast({ title: 'Booking deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useBookings.deleteBooking]', err);
       toast({
         title: 'Failed to delete booking',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to delete booking').userMessage,
         variant: 'destructive',
       });
     },
@@ -325,10 +332,11 @@ export function useExpenses() {
       toast({ title: 'Expense added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useExpenses.addExpense]', err);
       toast({
         title: 'Failed to add expense',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to add expense').userMessage,
         variant: 'destructive',
       });
     },
@@ -346,10 +354,11 @@ export function useExpenses() {
       toast({ title: 'Expense updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useExpenses.updateExpense]', err);
       toast({
         title: 'Failed to update expense',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to update expense').userMessage,
         variant: 'destructive',
       });
     },
@@ -367,10 +376,11 @@ export function useExpenses() {
       toast({ title: 'Expense deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useExpenses.deleteExpense]', err);
       toast({
         title: 'Failed to delete expense',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to delete expense').userMessage,
         variant: 'destructive',
       });
     },
@@ -445,10 +455,11 @@ export function useVendors() {
       toast({ title: 'Vendor added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useVendors.addVendor]', err);
       toast({
         title: 'Error adding vendor',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to add vendor').userMessage,
         variant: 'destructive',
       });
     },
@@ -466,10 +477,11 @@ export function useVendors() {
       toast({ title: 'Vendor updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error('[useVendors.updateVendor]', err);
       toast({
         title: 'Error updating vendor',
-        description: err?.message || 'An error occurred',
+        description: parseSupabaseError(err, 'Failed to update vendor').userMessage,
         variant: 'destructive',
       });
     },
@@ -487,20 +499,13 @@ export function useVendors() {
       toast({ title: 'Vendor deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (error: Error) => {
-      if (error.message.includes('foreign key constraint') || error.message.includes('still referenced')) {
-        toast({
-          title: 'Cannot Delete Vendor',
-          description: 'This vendor has linked bookings or clients. Please remove those first before deleting the vendor.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Failed to delete vendor',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
+    onError: (error: unknown) => {
+      console.error('[useVendors.deleteVendor]', error);
+      toast({
+        title: 'Cannot Delete Vendor',
+        description: parseSupabaseError(error, 'Failed to delete vendor').userMessage,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -554,10 +559,11 @@ export function useQueries() {
       toast({ title: 'Query added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      console.error('[useQueries.addQuery]', error);
       toast({
         title: 'Failed to add query',
-        description: error?.message || 'An error occurred',
+        description: parseSupabaseError(error, 'Failed to add query').userMessage,
         variant: 'destructive',
       });
     },
@@ -575,10 +581,11 @@ export function useQueries() {
       toast({ title: 'Query updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      console.error('[useQueries.updateQuery]', error);
       toast({
         title: 'Failed to update query',
-        description: error?.message || 'An error occurred',
+        description: parseSupabaseError(error, 'Failed to update query').userMessage,
         variant: 'destructive',
       });
     },
@@ -596,10 +603,11 @@ export function useQueries() {
       toast({ title: 'Query deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      console.error('[useQueries.deleteQuery]', error);
       toast({
         title: 'Failed to delete query',
-        description: error?.message || 'An error occurred',
+        description: parseSupabaseError(error, 'Failed to delete query').userMessage,
         variant: 'destructive',
       });
     },

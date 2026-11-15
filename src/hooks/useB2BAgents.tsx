@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface B2BAgent {
   id: string;
@@ -57,8 +58,8 @@ export function useB2BAgents() {
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
       toast.success('B2B Agent added successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to add agent', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to add agent', 'useB2BAgents.addAgent');
     },
   });
 
@@ -78,8 +79,8 @@ export function useB2BAgents() {
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
       toast.success('B2B Agent updated successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to update agent', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to update agent', 'useB2BAgents.updateAgent');
     },
   });
 
@@ -96,8 +97,8 @@ export function useB2BAgents() {
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
       toast.success('B2B Agent deleted successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to delete agent', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete agent', 'useB2BAgents.deleteAgent');
     },
   });
 

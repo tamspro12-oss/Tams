@@ -5,6 +5,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 
 export interface Party {
   id: string;
@@ -141,15 +142,20 @@ export function useParties() {
         agency_id: activeAgencyId,
       };
 
-      const { data, error } = await (supabase as any)
-        .from("parties")
-        .insert([partyPayload])
-        .select()
-        .single();
+      const isAutoCode = !partyPayload.code || !String(partyPayload.code).trim();
+      const data = await withDuplicateRetry(
+        async () => {
+          const { data: inserted, error } = await (supabase as any)
+            .from("parties")
+            .insert([partyPayload])
+            .select()
+            .single();
 
-      if (error) {
-        throw new Error(`Failed to save party: ${error.message}`);
-      }
+          if (error) throw error;
+          return inserted;
+        },
+        { isAutoMode: isAutoCode }
+      );
       return data;
     },
     onSuccess: () => {
@@ -157,14 +163,14 @@ export function useParties() {
       toast.success("Party saved successfully");
     },
     onError: (err: any) => {
-      toast.error(`Could not save: ${err.message || "Failed to save party"}`);
+      handleSupabaseError(err, "Failed to save party", "useParties.addParty");
     },
   });
 
   const updatePartyMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Party> }) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("You are offline. Connect to the internet to save.");
+        throw new Error("Network connection issue. You are offline.");
       }
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) {
@@ -177,7 +183,7 @@ export function useParties() {
         .eq("agency_id", activeAgencyId)
         .select()
         .single();
-      if (error) throw new Error(`Failed to update party: ${error.message}`);
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
@@ -185,7 +191,7 @@ export function useParties() {
       toast.success("Party updated successfully");
     },
     onError: (err: any) => {
-      toast.error(`Could not save: ${err.message || "Failed to update party"}`);
+      handleSupabaseError(err, "Failed to update party", "useParties.updateParty");
     },
   });
 

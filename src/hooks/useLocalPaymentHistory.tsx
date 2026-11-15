@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cloudStorage } from '@/lib/storage/cloudStorageProvider';
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 
 // Client Payment History (Supabase cloud storage, agency-scoped)
 export function useClientPaymentHistoryLocal(clientId?: string) {
@@ -40,10 +41,12 @@ export function useClientPaymentHistoryLocal(clientId?: string) {
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error("[TAMS Error] addClientPaymentHistory:", err);
+      const parsed = parseSupabaseError(err, "Failed to record payment history");
       toast({
         title: "Error",
-        description: err?.message || "Failed to record payment history",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     },
@@ -92,10 +95,12 @@ export function useVendorPaymentHistoryLocal(vendorId?: string) {
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      console.error("[TAMS Error] addClientPaymentHistory:", err);
+      const parsed = parseSupabaseError(err, "Failed to record payment history");
       toast({
         title: "Error",
-        description: err?.message || "Failed to record payment history",
+        description: parsed.userMessage,
         variant: "destructive",
       });
     },

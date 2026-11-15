@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface B2BBooking {
   id: string;
@@ -138,8 +139,8 @@ export function useB2BBookings(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_ledger'] });
       toast.success('B2B Booking added successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to add booking', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to add B2B booking', 'useB2BBookings.addBooking');
     },
   });
 
@@ -159,8 +160,8 @@ export function useB2BBookings(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
       toast.success('B2B Booking updated successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to update booking', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to update B2B booking', 'useB2BBookings.updateBooking');
     },
   });
 
@@ -210,8 +211,8 @@ export function useB2BBookings(agentId?: string) {
       queryClient.invalidateQueries({ queryKey: ['b2b_ledger'] });
       toast.success('B2B Booking deleted with reversal entry created');
     },
-    onError: (error: any) => {
-      toast.error('Failed to delete booking', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete B2B booking', 'useB2BBookings.deleteBooking');
     },
   });
 

@@ -375,3 +375,104 @@ export function buildServiceSummaryLines(
 
   return lines;
 }
+
+/**
+ * Format an ISO YYYY-MM-DD date string to dd/mm/yyyy for UI/PDF consistency.
+ */
+export function formatDateDmy(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const match = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+  return dateStr;
+}
+
+/**
+ * Shared validation for service dates (Air Ticket Return/Multicity, Umrah, Hotel, Insurance)
+ * and passenger rows (passport format, DOB bounds, type, gender). Returns an error string or null.
+ */
+export function validateServiceAndPassengers(
+  serviceType: ServiceType,
+  details: ServiceDetailsState,
+  passengers: Passenger[]
+): string | null {
+  const today = getTodayDateString();
+
+  if (serviceType === "Ticket") {
+    if (
+      details.tripType === "Return" &&
+      details.returnDate &&
+      details.flightDate &&
+      details.returnDate < details.flightDate
+    ) {
+      return "Return flight date cannot be earlier than departure flight date.";
+    }
+    if (details.tripType === "Multicity" && Array.isArray(details.multicityLegs)) {
+      for (let i = 0; i < details.multicityLegs.length; i += 1) {
+        const leg = details.multicityLegs[i];
+        if (leg.date && details.flightDate && leg.date < details.flightDate) {
+          return `Multicity segment #${i + 1} date cannot be earlier than departure flight date.`;
+        }
+      }
+    }
+  } else if (serviceType === "Umrah") {
+    if (
+      details.umrahReturnDate &&
+      details.umrahFlightDate &&
+      details.umrahReturnDate < details.umrahFlightDate
+    ) {
+      return "Umrah return date cannot be earlier than departure date.";
+    }
+    const makkahN = details.makkahNights ? Number(details.makkahNights) : 0;
+    const madinahN = details.madinahNights ? Number(details.madinahNights) : 0;
+    if (Number.isNaN(makkahN) || makkahN < 0 || Number.isNaN(madinahN) || madinahN < 0) {
+      return "Umrah hotel nights cannot be negative.";
+    }
+  } else if (serviceType === "Hotel") {
+    if (
+      details.hotelCheckOut &&
+      details.hotelCheckIn &&
+      details.hotelCheckOut < details.hotelCheckIn
+    ) {
+      return "Hotel check-out date cannot be earlier than check-in date.";
+    }
+  } else if (serviceType === "Insurance") {
+    const dur = details.insuranceDuration ? Number(details.insuranceDuration) : 0;
+    if (Number.isNaN(dur) || dur < 0) {
+      return "Insurance duration cannot be negative.";
+    }
+  }
+
+  for (let i = 0; i < passengers.length; i += 1) {
+    const pax = passengers[i];
+    const hasAny = Boolean(pax.name?.trim() || pax.passport?.trim() || pax.dob?.trim());
+    if (!hasAny) continue;
+
+    if (pax.passport?.trim() && !/^[A-Z0-9\-/]{3,20}$/i.test(pax.passport.trim())) {
+      return `Passenger #${i + 1}: Passport # must be 3–20 alphanumeric characters.`;
+    }
+    if (pax.dob?.trim()) {
+      const m = pax.dob.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) {
+        return `Passenger #${i + 1}: Date of birth must be a valid date.`;
+      }
+      const parsed = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`);
+      if (
+        Number.isNaN(parsed.getTime()) ||
+        pax.dob.trim() < "1900-01-01" ||
+        pax.dob.trim() > today
+      ) {
+        return `Passenger #${i + 1}: Date of birth cannot be in the future.`;
+      }
+    }
+    if (pax.type && !["Adult", "Child", "Infant"].includes(pax.type)) {
+      return `Passenger #${i + 1}: Invalid passenger type.`;
+    }
+    if (pax.gender && !["Male", "Female"].includes(pax.gender)) {
+      return `Passenger #${i + 1}: Invalid gender selection.`;
+    }
+  }
+
+  return null;
+}

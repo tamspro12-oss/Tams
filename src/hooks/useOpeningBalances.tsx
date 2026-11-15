@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export type PartyType = "client" | "vendor" | "b2b_agent";
 export type BalanceType = "receivable" | "payable";
@@ -83,7 +84,7 @@ export function useOpeningBalances() {
       queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
       toast.success("Opening balance saved");
     },
-    onError: (e: any) => toast.error("Failed to save", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to save opening balance", "useOpeningBalances.upsert"),
   });
 
   const updateBalance = useMutation({
@@ -101,7 +102,7 @@ export function useOpeningBalances() {
       queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
       toast.success("Opening balance updated");
     },
-    onError: (e: any) => toast.error("Failed to update", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to update opening balance", "useOpeningBalances.update"),
   });
 
   const deleteBalance = useMutation({
@@ -113,7 +114,7 @@ export function useOpeningBalances() {
       queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
       toast.success("Removed");
     },
-    onError: (e: any) => toast.error("Failed to delete", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to delete opening balance", "useOpeningBalances.delete"),
   });
 
   return { balances, isLoading, isFetching, refetch, upsertBalance, updateBalance, deleteBalance };

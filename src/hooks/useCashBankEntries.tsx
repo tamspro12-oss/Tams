@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface CashBankEntry {
   id: string;
@@ -56,8 +57,8 @@ export function useCashBankEntries() {
       queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
       toast.success('Entry recorded successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to add entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to add entry', 'useCashBankEntries.addEntry');
     },
   });
 
@@ -77,8 +78,8 @@ export function useCashBankEntries() {
       queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
       toast.success('Entry updated successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to update entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to update entry', 'useCashBankEntries.updateEntry');
     },
   });
 
@@ -95,8 +96,8 @@ export function useCashBankEntries() {
       queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
       toast.success('Entry deleted successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to delete entry', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete entry', 'useCashBankEntries.deleteEntry');
     },
   });
 

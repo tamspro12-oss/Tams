@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface AgencyBank {
   id: string;
@@ -78,12 +79,8 @@ export function useAgencyBanks() {
       queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
       toast.success('Bank account added successfully');
     },
-    onError: (error: any) => {
-      if (error.message?.includes('duplicate')) {
-        toast.error('Bank already exists', { description: 'This bank account is already added.' });
-      } else {
-        toast.error('Failed to add bank', { description: error.message });
-      }
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to add bank account', 'useAgencyBanks.addBank');
     },
   });
 
@@ -103,8 +100,8 @@ export function useAgencyBanks() {
       queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
       toast.success('Bank account updated successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to update bank', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to update bank account', 'useAgencyBanks.updateBank');
     },
   });
 
@@ -121,8 +118,8 @@ export function useAgencyBanks() {
       queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
       toast.success('Bank account deleted successfully');
     },
-    onError: (error: any) => {
-      toast.error('Failed to delete bank', { description: error.message });
+    onError: (error: unknown) => {
+      handleSupabaseError(error, 'Failed to delete bank account', 'useAgencyBanks.deleteBank');
     },
   });
 

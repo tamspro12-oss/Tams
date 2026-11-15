@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface Refund {
   id: string;
@@ -75,7 +76,7 @@ export function useRefunds() {
       queryClient.invalidateQueries({ queryKey: ["refunds"] });
       toast.success("Refund recorded");
     },
-    onError: (e: any) => toast.error("Failed to record refund", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to record refund", "useRefunds.add"),
   });
 
   const updateRefund = useMutation({
@@ -93,7 +94,7 @@ export function useRefunds() {
       queryClient.invalidateQueries({ queryKey: ["refunds"] });
       toast.success("Refund updated");
     },
-    onError: (e: any) => toast.error("Failed to update", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to update refund", "useRefunds.update"),
   });
 
   const deleteRefund = useMutation({
@@ -105,7 +106,7 @@ export function useRefunds() {
       queryClient.invalidateQueries({ queryKey: ["refunds"] });
       toast.success("Refund deleted");
     },
-    onError: (e: any) => toast.error("Failed to delete", { description: [e.message, e.details, e.hint, e.code].filter(Boolean).join(" — ") }),
+    onError: (e: unknown) => handleSupabaseError(e, "Failed to delete refund", "useRefunds.delete"),
   });
 
   return { refunds, isLoading, isFetching, refetch, addRefund, updateRefund, deleteRefund };

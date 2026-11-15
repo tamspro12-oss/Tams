@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
 export interface SubUserPermissions {
   dashboard: boolean;
@@ -76,8 +77,8 @@ export function useSubUsers() {
       queryClient.invalidateQueries({ queryKey: ["sub-user-count"] });
       toast.success("Sub user created successfully");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to create sub user");
+    onError: (error: unknown) => {
+      handleSupabaseError(error, "Failed to create sub user", "useSubUsers.createSubUser");
     },
   });
 
@@ -106,8 +107,8 @@ export function useSubUsers() {
       queryClient.invalidateQueries({ queryKey: ["sub-users"] });
       toast.success("Sub user updated successfully");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update sub user");
+    onError: (error: unknown) => {
+      handleSupabaseError(error, "Failed to update sub user", "useSubUsers.updateSubUser");
     },
   });
 
@@ -124,8 +125,8 @@ export function useSubUsers() {
       queryClient.invalidateQueries({ queryKey: ["sub-user-count"] });
       toast.success("Sub user deleted successfully");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to delete sub user");
+    onError: (error: unknown) => {
+      handleSupabaseError(error, "Failed to delete sub user", "useSubUsers.deleteSubUser");
     },
   });
 
