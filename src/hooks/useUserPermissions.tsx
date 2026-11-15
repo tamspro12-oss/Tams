@@ -31,7 +31,8 @@ export function useUserPermissions() {
   const permissions = subUserData?.permissions;
 
   const hasModuleAccess = (module: string): boolean => {
-    if (!isSubUser || !isActive) return true; // Main ID has full access
+    if (!isSubUser) return true; // Main ID has full access
+    if (!isActive) return false; // Deactivated sub-users have no access
     if (!permissions) return false;
 
     const modulePerms = permissions[module];
@@ -41,7 +42,8 @@ export function useUserPermissions() {
   };
 
   const hasActionPermission = (module: string, action: "read" | "write" | "delete"): boolean => {
-    if (!isSubUser || !isActive) return true; // Main ID has full access
+    if (!isSubUser) return true; // Main ID has full access
+    if (!isActive) return false; // Deactivated sub-users have no access
     if (!permissions) return false;
 
     const modulePerms = permissions[module];

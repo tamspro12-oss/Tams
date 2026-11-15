@@ -15,7 +15,7 @@ const ToastViewport = React.forwardRef<
     ref={ref}
     style={{ top: "calc(env(safe-area-inset-top, 0px) + 8px)", ...style }}
     className={cn(
-      "fixed z-[100] pointer-events-none flex max-h-screen w-full flex-col-reverse p-4 sm:top-auto sm:bottom-0 sm:right-0 sm:flex-col md:max-w-[420px]",
+      "fixed top-0 right-0 z-[110] pointer-events-none flex max-h-screen w-full flex-col p-3 sm:top-4 sm:right-4 sm:bottom-auto md:max-w-[420px]",
       className,
     )}
     {...props}
