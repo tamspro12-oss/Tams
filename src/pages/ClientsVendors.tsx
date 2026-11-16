@@ -9,9 +9,12 @@ import {
   GridColumn,
   PageHeader,
   TotalsBar,
-  StatusChip,
 } from "@/components/design-system";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
+import { PartyLedgerDrawer } from "@/components/parties/PartyLedgerDrawer";
+import { openPaymentVoucher } from "@/lib/openPaymentVoucher";
+import { hasPaymentPermission } from "@/lib/paymentVoucherHelpers";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,19 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   Search,
-  FileText,
-  CreditCard,
-  Send,
   Users,
   Phone,
   Mail,
@@ -66,10 +60,32 @@ import {
 
 export default function ClientsVendors() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { parties, updateParty } = useParties();
+  const { parties, updateParty, isSaving } = useParties();
+  const {
+    isSubUser,
+    isActive,
+    permissions,
+    isLoading: isLoadingPerms,
+  } = useUserPermissions();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [partyToEdit, setPartyToEdit] = useState<Party | null>(null);
-  const [selectedParty, setSelectedParty] = useState<Party | null>(null);
+  const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
+
+  const selectedParty = useMemo(
+    () => (selectedPartyId ? parties.find((p) => p.id === selectedPartyId) || null : null),
+    [selectedPartyId, parties]
+  );
+
+  const canPayParty = (partyType?: string | null) =>
+    hasPaymentPermission(
+      {
+        isSubUser,
+        isActive,
+        permissions,
+        isLoading: isLoadingPerms,
+      },
+      partyType
+    );
 
   // Filters from URL
   const urlType = searchParams.get("type") as "client" | "vendor" | "both" | "all" | null;
@@ -345,15 +361,17 @@ export default function ClientsVendors() {
     }
   }, [urlType, urlBalance, searchParams]);
 
-  // Open deep-linked party drawer when navigating from Global Search (?partyId=...)
-  const urlPartyId = searchParams.get("partyId");
+  // Open deep-linked ledger drawer when navigating from Global Search or Reports (?partyId=... or ?party=...)
+  const urlPartyId = searchParams.get("partyId") || searchParams.get("party");
   useEffect(() => {
     if (!urlPartyId || parties.length === 0) return;
     const found = parties.find((p) => p.id === urlPartyId);
     if (found) {
-      setSelectedParty(found);
+      setActiveTab("parties");
+      setSelectedPartyId(found.id);
       const next = new URLSearchParams(searchParams);
       next.delete("partyId");
+      next.delete("party");
       setSearchParams(next, { replace: true });
     }
   }, [urlPartyId, parties, searchParams, setSearchParams]);
@@ -485,12 +503,25 @@ export default function ClientsVendors() {
     {
       key: "actions",
       header: "Actions",
-      width: 160,
+      width: 245,
       align: "center",
       sortable: false,
       filterable: false,
       render: (p) => (
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+          {canPayParty(p.type) && !p.isLegacyRecord && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                openPaymentVoucher({ partyId: p.id });
+              }}
+              className="h-7 px-2 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+            >
+              New Payment
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -508,7 +539,7 @@ export default function ClientsVendors() {
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              setSelectedParty(p);
+              setSelectedPartyId(p.id);
             }}
             className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
@@ -734,6 +765,69 @@ export default function ClientsVendors() {
             columns={columns}
             keyExtractor={(p) => p.id}
             renderExpandedRow={renderExpandedRow}
+            renderMobileCard={(p) => {
+              const bal = p.current_balance;
+              const drCr = bal > 0 ? "DR" : bal < 0 ? "CR" : "";
+              return (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-[11px] text-muted-foreground block">
+                        {p.code || "PARTY"} · {p.type === "vendor" ? "Vendor" : p.type === "both" ? "Both" : "Client"}
+                      </span>
+                      <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
+                    </div>
+                    <span
+                      className={`font-mono font-bold shrink-0 ${
+                        bal === 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      PKR {Math.abs(bal).toLocaleString()} {drCr}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1 border-t border-border/60">
+                    {canPayParty(p.type) && !p.isLegacyRecord && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPaymentVoucher({ partyId: p.id });
+                        }}
+                        className="h-7 px-2 text-xs text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                      >
+                        New Payment
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPartyToEdit(p);
+                        setIsAddOpen(true);
+                      }}
+                      className="h-7 px-2 text-xs text-blue-600 cursor-pointer"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPartyId(p.id);
+                      }}
+                      className="h-7 px-2 text-xs cursor-pointer"
+                    >
+                      View Ledger
+                    </Button>
+                  </div>
+                </div>
+              );
+            }}
             title="Parties & Accounts Ledger"
             filename="TAMS_Parties_Master"
             hideColumnsButton={true}
@@ -858,7 +952,7 @@ export default function ClientsVendors() {
         }}
         partyToEdit={partyToEdit}
         onSaved={() => {
-          setSelectedParty(null);
+          setSelectedPartyId(null);
           setPartyToEdit(null);
         }}
       />
@@ -907,158 +1001,18 @@ export default function ClientsVendors() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Party Profile Drawer / Modal */}
-      <Sheet open={Boolean(selectedParty)} onOpenChange={(open) => !open && setSelectedParty(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selectedParty && (
-            <div className="space-y-4 pt-2">
-              <SheetHeader>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-mono font-semibold text-slate-500">
-                    {selectedParty.code || "PARTY"}
-                  </span>
-                  <StatusChip status={selectedParty.type} label={selectedParty.type.toUpperCase()} size="sm" />
-                </div>
-                <SheetTitle className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {selectedParty.name}
-                </SheetTitle>
-              </SheetHeader>
-
-              {/* Quick Net Position Card */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border space-y-2">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Current Net Balance
-                </span>
-                <div className="flex items-baseline justify-between">
-                  <span
-                    className={`text-2xl font-bold font-mono ${selectedParty.current_balance > 0
-                      ? "text-red-600 dark:text-red-400"
-                      : selectedParty.current_balance < 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-slate-700"
-                      }`}
-                  >
-                    PKR {Math.abs(selectedParty.current_balance).toLocaleString()}
-                  </span>
-                  <span className="text-xs font-bold text-slate-500">
-                    {selectedParty.current_balance > 0
-                      ? "Receivable (DR)"
-                      : selectedParty.current_balance < 0
-                        ? "Payable (CR)"
-                        : "Settled"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 3 Quick Action Buttons */}
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  size="sm"
-                  className="text-xs bg-[#0B192C] text-white hover:bg-[#1E3E62] cursor-pointer"
-                  onClick={() => {
-                    toast.info("Opening Booking Invoice form...");
-                  }}
-                >
-                  <FileText className="w-3 h-3 mr-1" />
-                  New Invoice
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs cursor-pointer"
-                  onClick={() => {
-                    toast.info("Opening Payment Voucher form...");
-                  }}
-                >
-                  <CreditCard className="w-3 h-3 mr-1" />
-                  New Payment
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs text-emerald-700 border-emerald-200 cursor-pointer"
-                  onClick={() => {
-                    const text = `Dear ${selectedParty.name}, your current account balance with our agency is PKR ${Math.abs(selectedParty.current_balance).toLocaleString()} ${selectedParty.current_balance > 0 ? "due" : "advance"}.`;
-                    window.open(`https://wa.me/${selectedParty.phone || ""}?text=${encodeURIComponent(text)}`, "_blank");
-                  }}
-                >
-                  <Send className="w-3 h-3 mr-1" />
-                  Statement
-                </Button>
-              </div>
-
-              {/* Profile Tabs: Overview, Bookings, Payments, Statement */}
-              <Tabs defaultValue="overview" className="w-full pt-2">
-                <TabsList className="w-full grid grid-cols-4 h-9">
-                  <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-                  <TabsTrigger value="bookings" className="text-xs">Bookings</TabsTrigger>
-                  <TabsTrigger value="payments" className="text-xs">Payments</TabsTrigger>
-                  <TabsTrigger value="statement" className="text-xs">Statement</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="space-y-3 pt-3 text-xs">
-                  <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">Phone</span>
-                      <span className="font-semibold">{selectedParty.phone || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">City</span>
-                      <span className="font-semibold">{selectedParty.city || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">Credit Limit</span>
-                      <span className="font-semibold">PKR {selectedParty.credit_limit.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">Opening Balance</span>
-                      <span className="font-semibold">PKR {selectedParty.opening_balance.toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  {selectedParty.notes && (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
-                      <span className="text-muted-foreground block text-[11px] mb-1">Remarks</span>
-                      <p>{selectedParty.notes}</p>
-                    </div>
-                  )}
-
-                  {/* Deactivate Option */}
-                  <div className="pt-4 border-t flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Account Status</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        updateParty({
-                          id: selectedParty.id,
-                          updates: { active: !selectedParty.active },
-                        });
-                        setSelectedParty({ ...selectedParty, active: !selectedParty.active });
-                      }}
-                      className="text-xs h-8 text-red-600 hover:text-red-700 cursor-pointer"
-                    >
-                      {selectedParty.active ? "Deactivate Party" : "Activate Party"}
-                    </Button>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="bookings" className="py-6 text-center text-xs text-muted-foreground">
-                  <p>All invoices linked to {selectedParty.name} appear in this ledger.</p>
-                </TabsContent>
-
-                <TabsContent value="payments" className="py-6 text-center text-xs text-muted-foreground">
-                  <p>All receipts and vouchers allocated to {selectedParty.name}.</p>
-                </TabsContent>
-
-                <TabsContent value="statement" className="py-6 text-center text-xs text-muted-foreground">
-                  <p>Live running debit, credit, and net balance statement.</p>
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Single Party Ledger View */}
+      <PartyLedgerDrawer
+        party={selectedParty}
+        onClose={() => setSelectedPartyId(null)}
+        isUpdatingStatus={isSaving}
+        onToggleActive={async (p) => {
+          await updateParty({
+            id: p.id,
+            updates: { active: p.active === false },
+          });
+        }}
+      />
     </div>
   );
 }

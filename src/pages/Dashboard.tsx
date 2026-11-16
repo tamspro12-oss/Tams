@@ -22,6 +22,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useParties } from "@/hooks/useParties";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import { useUnifiedAlerts } from "@/hooks/useUnifiedAlerts";
+import { openPaymentVoucher } from "@/lib/openPaymentVoucher";
+import { normalizeVoucherDirection } from "@/lib/paymentVoucherHelpers";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
@@ -506,7 +508,7 @@ export default function Dashboard() {
           {/* Action 3: Add Payment - Purple Accent */}
           <button
             type="button"
-            onClick={() => navigate("/app/sales-expenses?tab=payment-vouchers&new=1")}
+            onClick={() => openPaymentVoucher({})}
             className="h-20 p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500/50 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-3.5 group cursor-pointer text-left w-full"
           >
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-500/25 transition-transform duration-200 group-hover:scale-105">
@@ -694,7 +696,12 @@ export default function Dashboard() {
                           if (alert.mainAction?.url) {
                             navigate(alert.mainAction.url);
                           } else if (alert.mainAction?.modalType === "payment_voucher") {
-                            navigate("/app/sales-expenses?tab=payment-vouchers&new=1");
+                            openPaymentVoucher({
+                              partyId: alert.mainAction.modalProps?.partyId,
+                              direction: normalizeVoucherDirection(alert.mainAction.modalProps?.direction),
+                              invoiceNo: alert.mainAction.modalProps?.invoiceNo,
+                              amount: alert.mainAction.modalProps?.amount,
+                            });
                           } else if (alert.mainAction?.modalType === "booking_invoice") {
                             navigate("/app/sales-expenses?tab=booking-invoice&new=1");
                           } else if (alert.mainAction?.modalType === "expense") {

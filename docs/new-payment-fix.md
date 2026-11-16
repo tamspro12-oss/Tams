@@ -1,0 +1,21 @@
+# Why "New Payment" Was Broken & How It Was Fixed
+
+## What Was Happening
+
+When you clicked **New Payment** on the **Clients & Vendors** page (`/app/clients-vendors`), the Payment Voucher form did not open and the selected client or vendor was not filled in.
+
+## The Real Causes Found in the Code
+
+1. **No button in the main table:** In [ClientsVendors.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/pages/ClientsVendors.tsx), the main party table's **Actions** column only had **Edit** and **View Ledger** — there was no **New Payment** button at all.
+2. **Placeholder toast inside the party drawer:** The **New Payment** button inside the party side drawer in [ClientsVendors.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/pages/ClientsVendors.tsx) only ran `toast.info("Opening Payment Voucher form...")`. It never opened `<PaymentVoucherForm />`, never passed the selected party ID or direction, and never navigated to `/app/sales-expenses?tab=payment-vouchers`.
+3. **Payment Voucher form only mounted on Sales & Expenses:** `<PaymentVoucherForm />` ([PaymentVoucherForm.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/components/vouchers/PaymentVoucherForm.tsx)) was only mounted inside [SalesExpensesHub.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/pages/SalesExpensesHub.tsx), not inside the shared layout or Clients & Vendors screen.
+4. **URL parameters were ignored and left in the address bar:** Even when alerts in [NotificationBell.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/components/NotificationBell.tsx) or [NotificationsHub.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/pages/NotificationsHub.tsx) navigated to `/app/sales-expenses?tab=payment-vouchers&new=1&party=...`, `SalesExpensesHub.tsx` only checked `new=1` to open the empty form. `PaymentVoucherForm` did not accept `initialPartyId` or `initialDirection` props, did not read `party` or `direction` from the URL, and `SalesExpensesHub.tsx` only cleared `new` on close (not on open), so refreshing could reopen the dialog.
+5. **Missing pre-fill, permission guard, and Amount focus:** The form did not set Direction automatically (`Received (CRV)` for clients, `Paid (CPV)` for vendors), did not show the party's current balance near the Party selector, did not focus the Amount box so the user could type immediately, and did not block opening by URL when a sub-user lacked payment permission.
+
+## How the Fix Works
+
+1. **One shared function (`openPaymentVoucher`):** Created [openPaymentVoucher.ts](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/lib/openPaymentVoucher.ts) and [paymentVoucherHelpers.ts](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/lib/paymentVoucherHelpers.ts), backed by a global `<PaymentVoucherHost />` mounted in [DashboardLayout.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/components/DashboardLayout.tsx).
+2. **Opens right on top of your current screen (with URL fallback):** Clicking **New Payment** anywhere in the app calls `openPaymentVoucher({ partyId, direction? })`, opening the Payment Voucher dialog immediately over your current page (or navigating to `/app/sales-expenses?tab=payment-vouchers&new=1&party=<id>&direction=<received|paid>` when no overlay host is mounted).
+3. **Reads & clears URL parameters:** [SalesExpensesHub.tsx](file:///Users/muhammadusman/Downloads/travelagencymanagement-main/src/pages/SalesExpensesHub.tsx) reads `new=1`, `party`, and `direction`, opens the form pre-filled, and clears those URL parameters right away so refreshing the browser will not reopen the form.
+4. **Auto-fills, checks permissions, and focuses Amount:** Pre-fills the exact party (name + code), shows current balance below the party selector, sets `Received (CRV)` for clients and `Paid (CPV)` for vendors, waits gracefully if parties are still loading, opens empty with a friendly message if a party ID is unknown or outside the agency, enforces payment permissions in both UI and URL navigation, focuses Amount so you can type straight away, closes immediately on Save while refreshing the party balance in the background, and returns you right where you were on Cancel/Close.
+

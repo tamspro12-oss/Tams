@@ -23,6 +23,7 @@ import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useAgency } from "@/hooks/useAgency";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
+import { PartyLedgerDrawer } from "@/components/parties/PartyLedgerDrawer";
 import { PermissionGate } from "@/components/PermissionGate";
 import { Lock } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -182,9 +183,22 @@ export default function ReportsHub() {
   const [overdueBucket, setOverdueBucket] = useState<"none" | "all" | "0-30" | "31-60" | "61-90" | "90+">(
     searchParams.get("overdue") === "all" ? "all" : "none"
   );
+  const [ledgerPartyId, setLedgerPartyId] = useState<string | null>(null);
 
   // Sync searchParams on mount or change
   useEffect(() => {
+    const urlParty = searchParams.get("party");
+    const urlTab = searchParams.get("tab");
+    if (urlParty) {
+      if (urlTab === "party-ledger") {
+        navigate(`/app/clients-vendors?tab=parties&partyId=${urlParty}`, { replace: true });
+        return;
+      }
+      if (urlTab === "account-statement") {
+        setFilters((prev) => ({ ...prev, partyId: urlParty }));
+      }
+    }
+
     const monthParam = searchParams.get("month");
     if (monthParam) {
       try {
@@ -206,12 +220,21 @@ export default function ReportsHub() {
       setOverdueBucket("all");
       setOnlyUnpaid(true);
     }
-  }, [searchParams]);
+  }, [searchParams, navigate]);
 
   // Toggle for Daily Report (Cash / Bank switch)
   const [dailyAccountType, setDailyAccountType] = useState<"all" | "cash" | "bank">("all");
 
-  const { parties = [], isLoading: loadingParties } = useParties();
+  const {
+    parties = [],
+    isLoading: loadingParties,
+    updateParty,
+    isSaving: isSavingParty,
+  } = useParties();
+  const selectedLedgerParty = useMemo(
+    () => (ledgerPartyId ? parties.find((p) => p.id === ledgerPartyId) || null : null),
+    [ledgerPartyId, parties]
+  );
   const { accounts = [], isLoading: loadingAccounts } = useAccounts();
   const { data: agency } = useAgency();
   const queryClient = useQueryClient();
@@ -2235,9 +2258,7 @@ export default function ReportsHub() {
                             return (
                               <tr
                                 key={p.id}
-                                onClick={() =>
-                                  navigate(`/app/reports?tab=account-statement&party=${p.id}`)
-                                }
+                                onClick={() => setLedgerPartyId(p.id)}
                                 className="hover:bg-muted/50 cursor-pointer transition-colors"
                               >
                                 <td className="py-2.5 px-3 font-semibold text-foreground flex items-center gap-2">
@@ -2296,10 +2317,10 @@ export default function ReportsHub() {
                                     className="h-6 px-2 text-[10px] font-semibold text-primary"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/app/reports?tab=account-statement&party=${p.id}`);
+                                      setLedgerPartyId(p.id);
                                     }}
                                   >
-                                    Statement →
+                                    View Ledger →
                                   </Button>
                                 </td>
                               </tr>
@@ -2760,6 +2781,19 @@ export default function ReportsHub() {
         initialOnlyUnpaid={onlyUnpaid}
         initialOverdueBucket={overdueBucket}
         quotationSummary={quoteStats}
+      />
+
+      {/* Shared Single Party Ledger View */}
+      <PartyLedgerDrawer
+        party={selectedLedgerParty}
+        onClose={() => setLedgerPartyId(null)}
+        isUpdatingStatus={isSavingParty}
+        onToggleActive={async (p) => {
+          await updateParty({
+            id: p.id,
+            updates: { active: p.active === false },
+          });
+        }}
       />
       </div>
     </PermissionGate>

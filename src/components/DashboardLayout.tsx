@@ -18,6 +18,7 @@ import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalSearchBar } from "@/components/GlobalSearchBar";
+import { PaymentVoucherHost } from "@/components/vouchers/PaymentVoucherHost";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LayoutDashboard,
@@ -364,6 +365,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <MobileBottomNav />
         </main>
       </div>
+      <PaymentVoucherHost />
     </SidebarProvider>
   );
 }
