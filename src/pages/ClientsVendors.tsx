@@ -333,7 +333,30 @@ export default function ClientsVendors() {
   useEffect(() => {
     if (urlType) setTypeFilter(urlType);
     if (urlBalance) setBalanceFilter(urlBalance);
-  }, [urlType, urlBalance]);
+
+    const urlSearch = searchParams.get("search");
+    if (urlSearch) {
+      setSearchQuery(cleanPastedSearch(urlSearch));
+    }
+
+    const urlTabParam = searchParams.get("tab");
+    if (urlTabParam === "parties" || urlTabParam === "banks") {
+      setActiveTab(urlTabParam);
+    }
+  }, [urlType, urlBalance, searchParams]);
+
+  // Open deep-linked party drawer when navigating from Global Search (?partyId=...)
+  const urlPartyId = searchParams.get("partyId");
+  useEffect(() => {
+    if (!urlPartyId || parties.length === 0) return;
+    const found = parties.find((p) => p.id === urlPartyId);
+    if (found) {
+      setSelectedParty(found);
+      const next = new URLSearchParams(searchParams);
+      next.delete("partyId");
+      setSearchParams(next, { replace: true });
+    }
+  }, [urlPartyId, parties, searchParams, setSearchParams]);
 
   // Filtered dataset
   const filteredParties = useMemo(() => {
@@ -349,16 +372,18 @@ export default function ClientsVendors() {
       }
       if (balanceFilter === "zero" && p.current_balance !== 0) return false;
 
-      // Search live-filters by party code, name, phone, email, city and address
+      // Search live-filters by party code, name, phone, whatsapp, passport, email, city and address
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = p.name ? p.name.toLowerCase().includes(q) : false;
         const matchesCode = p.code ? p.code.toLowerCase().includes(q) : false;
         const matchesPhone = p.phone ? p.phone.toLowerCase().includes(q) : false;
+        const matchesWhatsapp = (p as any).whatsapp ? String((p as any).whatsapp).toLowerCase().includes(q) : false;
+        const matchesPassport = (p as any).passport ? String((p as any).passport).toLowerCase().includes(q) : false;
         const matchesEmail = p.email ? p.email.toLowerCase().includes(q) : false;
         const matchesCity = p.city ? p.city.toLowerCase().includes(q) : false;
         const matchesAddress = p.address ? p.address.toLowerCase().includes(q) : false;
-        if (!matchesName && !matchesCode && !matchesPhone && !matchesEmail && !matchesCity && !matchesAddress) {
+        if (!matchesName && !matchesCode && !matchesPhone && !matchesWhatsapp && !matchesPassport && !matchesEmail && !matchesCity && !matchesAddress) {
           return false;
         }
       }

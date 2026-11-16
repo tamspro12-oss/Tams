@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sliders } from "lucide-react";
 import { useReminders } from "@/hooks/useReminders";
+import { toast } from "sonner";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 export function NotificationPreferences() {
   const { settings, updateSettings } = useReminders();
@@ -40,16 +43,35 @@ export function NotificationPreferences() {
   const safeOpening = typeof openingTime === "string" && openingTime.length >= 5 ? openingTime.slice(0, 5) : "09:00";
   const safeClosing = typeof closingTime === "string" && closingTime.length >= 5 ? closingTime.slice(0, 5) : "20:00";
 
+  const isSavingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isSavingLocal, setIsSavingLocal] = useState(false);
+
   const handleSave = async () => {
     const finalOpening = typeof openingTime === "string" && openingTime.length === 5 ? `${openingTime}:00` : (openingTime || "09:00:00");
     const finalClosing = typeof closingTime === "string" && closingTime.length === 5 ? `${closingTime}:00` : (closingTime || "20:00:00");
 
-    await updateSettings.mutateAsync({
-      flight_alerts_enabled: Boolean(flightAlerts),
-      umrah_alerts_enabled: Boolean(umrahAlerts),
-      daily_expense_reminder_enabled: Boolean(expenseAlerts),
-      opening_time: finalOpening,
-      closing_time: finalClosing,
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSavingRef,
+      setIsSubmitting: setIsSavingLocal,
+      contextLabel: "NotificationPreferences.handleSave",
+      fallbackErrorMessage: "Failed to save notification preferences",
+      execute: async () => {
+        return await updateSettings.mutateAsync({
+          flight_alerts_enabled: Boolean(flightAlerts),
+          umrah_alerts_enabled: Boolean(umrahAlerts),
+          daily_expense_reminder_enabled: Boolean(expenseAlerts),
+          opening_time: finalOpening,
+          closing_time: finalClosing,
+        });
+      },
+      onSuccess: () => {},
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
     });
   };
 
@@ -133,10 +155,10 @@ export function NotificationPreferences() {
             size="sm"
             data-save-button="true"
             onClick={handleSave}
-            disabled={updateSettings.isPending}
+            disabled={isSavingLocal || updateSettings.isPending}
             className="font-semibold text-xs h-9 px-5 shadow-xs"
           >
-            {updateSettings.isPending ? "Saving..." : "Save Preferences"}
+            {isSavingLocal || updateSettings.isPending ? "Saving..." : "Save Preferences"}
           </Button>
         </div>
       </CardContent>

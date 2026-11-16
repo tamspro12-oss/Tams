@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Party, useParties } from "@/hooks/useParties";
 import { supabase } from "@/integrations/supabase/client";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { Info, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +52,8 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
   const [isManualCode, setIsManualCode] = useState<boolean>(false);
   const [manualCode, setManualCode] = useState<string>("");
   const isSubmittingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isLocalSubmitting, setIsLocalSubmitting] = useState(false);
   const [phone, setPhone] = useState(partyToEdit?.phone || "");
   const [email, setEmail] = useState(partyToEdit?.email || "");
   const [city, setCity] = useState(partyToEdit?.city || "");
@@ -150,44 +154,41 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
       return;
     }
 
-    const docType = type === "vendor" ? "vendor" : "client";
-    if (!partyToEdit && isManualCode) {
-      const customCode = manualCode.trim();
-      if (!customCode) {
-        toast.error("Please enter a custom party code or switch back to Auto");
-        return;
-      }
-      const available = await checkDocumentNumberAvailable(docType, customCode);
-      if (!available) {
-        toast.error("This party code is already in use. Please use Auto or choose another code.");
-        return;
-      }
+    if (!partyToEdit && isManualCode && !manualCode.trim()) {
+      toast.error("Please enter a custom party code or switch back to Auto");
+      return;
     }
 
-    isSubmittingRef.current = true;
-    try {
-      let saved: Party | undefined;
-
-      if (partyToEdit) {
-        saved = await updateParty({
-          id: partyToEdit.id,
-          updates: {
-            type,
-            name: name.trim(),
-            phone: phone.trim() || undefined,
-            whatsapp: phone.trim() || partyToEdit.whatsapp || undefined,
-            email: email.trim() || undefined,
-            city: city.trim() || undefined,
-            address: address.trim() || undefined,
-            credit_limit: parsedCredit,
-            opening_balance: parsedOpening,
-            notes: notes.trim() || undefined,
-          },
-        });
-      } else {
-        saved = await addParty({
+    await runUiAtomicSave<Party | undefined>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsLocalSubmitting,
+      contextLabel: "AddPartyDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save party. Please try again.",
+      execute: async (requestId) => {
+        if (partyToEdit) {
+          return await updateParty({
+            id: partyToEdit.id,
+            updates: {
+              type,
+              name: name.trim(),
+              phone: phone.trim() || undefined,
+              whatsapp: phone.trim() || partyToEdit.whatsapp || undefined,
+              email: email.trim() || undefined,
+              city: city.trim() || undefined,
+              address: address.trim() || undefined,
+              credit_limit: parsedCredit,
+              opening_balance: parsedOpening,
+              notes: notes.trim() || undefined,
+            },
+            requestId,
+          });
+        }
+        return await addParty({
           type,
           ...(isManualCode ? { code: manualCode.trim() } : {}),
+          isManual: isManualCode,
+          requestId,
           name: name.trim(),
           phone: phone.trim() || undefined,
           whatsapp: phone.trim() || undefined,
@@ -200,26 +201,28 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
           notes: notes.trim() || undefined,
           active: true,
         });
-      }
-
-      onOpenChange(false);
-      if (onSaved && saved) {
-        onSaved(saved);
-      }
-    } catch {
-      // Error handled by mutation
-    } finally {
-      isSubmittingRef.current = false;
-    }
+      },
+      onSuccess: (saved) => {
+        onOpenChange(false);
+        if (onSaved && saved) {
+          onSaved(saved);
+        }
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const isDirty = Boolean(
     name.trim() !== (partyToEdit?.name || "") ||
-      phone.trim() !== (partyToEdit?.phone || "") ||
-      email.trim() !== (partyToEdit?.email || "") ||
-      city.trim() !== (partyToEdit?.city || "") ||
-      address.trim() !== (partyToEdit?.address || "") ||
-      notes.trim() !== (partyToEdit?.notes || "")
+    phone.trim() !== (partyToEdit?.phone || "") ||
+    email.trim() !== (partyToEdit?.email || "") ||
+    city.trim() !== (partyToEdit?.city || "") ||
+    address.trim() !== (partyToEdit?.address || "") ||
+    notes.trim() !== (partyToEdit?.notes || "")
   );
 
   useFormKeyboardNav({
@@ -420,10 +423,10 @@ export const AddPartyDialog: React.FC<AddPartyDialogProps> = ({
               type="submit"
               size="sm"
               data-save-button="true"
-              disabled={isSaving}
+              disabled={isSaving || isLocalSubmitting}
               className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px]"
             >
-              {isSaving ? "Saving..." : partyToEdit ? "Update Party" : "Save Party"}
+              {(isSaving || isLocalSubmitting) ? "Saving..." : partyToEdit ? "Update Party" : "Save Party"}
             </Button>
           </div>
         </form>

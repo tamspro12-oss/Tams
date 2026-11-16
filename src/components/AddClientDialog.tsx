@@ -28,6 +28,11 @@ import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 const SECTIONS = [
   { id: 'contact-info', label: 'Contact Information', color: 'blue' },
@@ -48,6 +53,10 @@ interface AddClientDialogProps {
 export function AddClientDialog({ open, onOpenChange, editClient, prefillClient }: AddClientDialogProps) {
   const initialData = editClient || prefillClient;
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const { addVoucher } = useVouchers();
@@ -332,9 +341,10 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmittingRef.current || loading) return;
     setMissingFields([]); // Clear previous missing fields
-    setLoading(true);
-    const formData = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const formData = new FormData(formEl);
 
     // Check required fields and collect missing ones
     const missing: string[] = [];
@@ -534,90 +544,129 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
       converted_from_quote_id: prefillClient?.converted_from_quote_id || editClient?.converted_from_quote_id || null,
     };
 
-    if (editClient) {
-      updateClient.mutate({ id: editClient.id, client: finalClientData }, {
-        onSuccess: async () => {
-          const opBalNum = parseFloat(openingBalanceAmount);
-          if (editClient.id && !isNaN(opBalNum) && opBalNum > 0) {
-            await upsertBalance.mutateAsync({
-              party_type: "client",
-              party_id: editClient.id,
-              balance_type: openingBalanceType,
-              amount: opBalNum,
-              as_of_date: new Date().toISOString().split("T")[0],
-              notes: "Client opening balance brought forward",
-            });
+    const opBalRaw = parseFloat(openingBalanceAmount);
+    const opBalVal = !isNaN(opBalRaw) && opBalRaw > 0 ? opBalRaw : 0;
+
+    await runUiAtomicSave<{ isEdit: boolean; usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setLoading,
+      contextLabel: "AddClientDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save client booking. Please try again.",
+      execute: async (requestId) => {
+        const isEdit = Boolean(editClient);
+        let usedFallbackToast = false;
+
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_client_booking_atomic",
+          {
+            p_client_data: finalClientData,
+            p_id: isEdit ? editClient.id : null,
+            p_opening_balance_amount: opBalVal,
+            p_opening_balance_type: openingBalanceType,
+            p_payment_mode: paymentMode,
+            p_bank_name: paymentMode === "bank" ? bankName : null,
+            p_convert_query_id: !isEdit ? prefillClient?.converted_from_query_id || null : null,
+            p_convert_quote_id: !isEdit ? prefillClient?.converted_from_quote_id || null : null,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              if (isEdit) {
+                await updateClient.mutateAsync({ id: editClient.id, client: finalClientData });
+                if (editClient.id && opBalVal > 0) {
+                  await upsertBalance.mutateAsync({
+                    party_type: "client",
+                    party_id: editClient.id,
+                    balance_type: openingBalanceType,
+                    amount: opBalVal,
+                    as_of_date: new Date().toISOString().split("T")[0],
+                    notes: "Client opening balance brought forward",
+                  });
+                }
+                return { isEdit: true };
+              }
+
+              const newClient = await addClient.mutateAsync(finalClientData);
+
+              if (amountPaid > 0) {
+                const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
+                await addPaymentHistory.mutateAsync({
+                  client_id: newClient.id,
+                  payment_amount: amountPaid,
+                  payment_type: paymentType,
+                  payment_date: getTodayDateString(),
+                  notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
+                  payment_mode: paymentMode,
+                  bank_name: paymentMode === "bank" ? bankName : null,
+                });
+              }
+
+              if (newClient?.id && opBalVal > 0) {
+                await upsertBalance.mutateAsync({
+                  party_type: "client",
+                  party_id: newClient.id,
+                  balance_type: openingBalanceType,
+                  amount: opBalVal,
+                  as_of_date: getTodayDateString(),
+                  notes: "Client opening balance brought forward",
+                });
+              }
+
+              if (prefillClient?.converted_from_query_id) {
+                try {
+                  await (supabase as any)
+                    .from("queries")
+                    .update({
+                      status: "completed",
+                      converted_booking_id: newClient.id,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", prefillClient.converted_from_query_id);
+                } catch (err) {
+                  console.warn("Failed to update source query status", err);
+                }
+              }
+
+              if (prefillClient?.converted_from_quote_id) {
+                try {
+                  await (supabase as any)
+                    .from("quotations")
+                    .update({
+                      status: "accepted",
+                      converted_booking_id: newClient.id,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", prefillClient.converted_from_quote_id);
+                } catch (err) {
+                  console.warn("Failed to update source quotation status", err);
+                }
+              }
+
+              return { isEdit: false };
+            },
           }
-          setLoading(false);
-          onOpenChange(false);
-        },
-        onError: () => setLoading(false)
-      });
-    } else {
-      try {
-        const newClient = await addClient.mutateAsync(finalClientData);
+        );
 
-        // Record initial payment history if amount was paid
-        if (amountPaid > 0) {
-          const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
-          await addPaymentHistory.mutateAsync({
-            client_id: newClient.id,
-            payment_amount: amountPaid,
-            payment_type: paymentType,
-            payment_date: getTodayDateString(),
-            notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
-            payment_mode: paymentMode,
-            bank_name: paymentMode === 'bank' ? bankName : null,
-          });
+        return { isEdit, usedFallbackToast };
+      },
+      onSuccess: ({ isEdit, usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(isEdit ? "Client updated successfully!" : "Client booking saved successfully!");
         }
-
-        // Record optional Opening Balance
-        const opBalNum = parseFloat(openingBalanceAmount);
-        if (newClient?.id && !isNaN(opBalNum) && opBalNum > 0) {
-          await upsertBalance.mutateAsync({
-            party_type: "client",
-            party_id: newClient.id,
-            balance_type: openingBalanceType,
-            amount: opBalNum,
-            as_of_date: getTodayDateString(),
-            notes: "Client opening balance brought forward",
-          });
-        }
-
-        // If converted from a Query, mark query completed
-        if (prefillClient?.converted_from_query_id) {
-          try {
-            await (supabase as any)
-              .from('queries')
-              .update({ status: 'completed', converted_booking_id: newClient.id, updated_at: new Date().toISOString() })
-              .eq('id', prefillClient.converted_from_query_id);
-          } catch (e) {
-            console.warn("Failed to update source query status", e);
-          }
-        }
-
-        // If converted from a Quotation, mark quotation accepted
-        if (prefillClient?.converted_from_quote_id) {
-          try {
-            await (supabase as any)
-              .from('quotations')
-              .update({ status: 'accepted', converted_booking_id: newClient.id, updated_at: new Date().toISOString() })
-              .eq('id', prefillClient.converted_from_quote_id);
-          } catch (e) {
-            console.warn("Failed to update source quotation status", e);
-          }
-        }
-
-        setLoading(false);
         onOpenChange(false);
-        e.currentTarget.reset();
-        setGroupBookingType("individual");
-        setGroupSize(1);
-      } catch (error) {
-        console.error("[AddClientDialog.handleSubmit]", error);
-        setLoading(false);
-      }
-    }
+        if (!isEdit) {
+          formEl.reset();
+          setGroupBookingType("individual");
+          setGroupSize(1);
+        }
+        runBackgroundTask("AddClientDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+    });
   };
 
   // Get existing passenger data for editing

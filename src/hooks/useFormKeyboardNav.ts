@@ -1,5 +1,10 @@
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import {
+  classifyFormKeyAction,
+  sortVisualEntries,
+  resolveAdjacentIndex,
+} from "@/lib/formKeyboardNavCore";
 
 export interface UseFormKeyboardNavOptions {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -95,34 +100,20 @@ export function getVisualFocusableFields(
     return true;
   });
 
-  const withRects = filtered.map((el, domIndex) => ({
-    el,
-    domIndex,
-    rect: el.getBoundingClientRect(),
-  }));
-
-  withRects.sort((a, b) => {
-    const orderA = Number(
-      a.el.closest("[data-nav-order]")?.getAttribute("data-nav-order") || "0"
-    );
-    const orderB = Number(
-      b.el.closest("[data-nav-order]")?.getAttribute("data-nav-order") || "0"
-    );
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
-    const verticalDiff = a.rect.top - b.rect.top;
-    if (Math.abs(verticalDiff) > 8) {
-      return verticalDiff;
-    }
-    const leftDiff = a.rect.left - b.rect.left;
-    if (Math.abs(leftDiff) > 4) {
-      return leftDiff;
-    }
-    return a.domIndex - b.domIndex;
+  const withRects = filtered.map((el, domIndex) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      item: el,
+      domIndex,
+      top: rect.top,
+      left: rect.left,
+      navOrder: Number(
+        el.closest("[data-nav-order]")?.getAttribute("data-nav-order") || "0"
+      ),
+    };
   });
 
-  return withRects.map((item) => item.el);
+  return sortVisualEntries(withRects);
 }
 
 function focusControl(el: HTMLElement) {
@@ -272,13 +263,9 @@ export function useFormKeyboardNav({
 
       const source = fromEl || (document.activeElement as HTMLElement | null);
       const currentIdx = source ? fields.indexOf(source) : -1;
-      if (currentIdx !== -1 && currentIdx < fields.length - 1) {
-        focusControl(fields[currentIdx + 1]);
-        return true;
-      }
-
-      if (currentIdx === -1) {
-        focusControl(fields[0]);
+      const nextIdx = resolveAdjacentIndex(currentIdx, fields.length, "next");
+      if (nextIdx !== -1) {
+        focusControl(fields[nextIdx]);
         return true;
       }
 
@@ -296,9 +283,21 @@ export function useFormKeyboardNav({
 
       const source = fromEl || (document.activeElement as HTMLElement | null);
       const currentIdx = source ? fields.indexOf(source) : -1;
-      if (currentIdx > 0) {
-        focusControl(fields[currentIdx - 1]);
+      const prevIdx = resolveAdjacentIndex(currentIdx, fields.length, "prev");
+      if (prevIdx !== -1) {
+        focusControl(fields[prevIdx]);
         return true;
+      }
+      // If focus is currently on an excluded auxiliary button (e.g. Cancel), walk to nearest preceding visual field
+      if (source && currentIdx === -1) {
+        const srcRect = source.getBoundingClientRect();
+        for (let i = fields.length - 1; i >= 0; i -= 1) {
+          const r = fields[i].getBoundingClientRect();
+          if (r.top < srcRect.top - 8 || (Math.abs(r.top - srcRect.top) <= 8 && r.left < srcRect.left)) {
+            focusControl(fields[i]);
+            return true;
+          }
+        }
       }
       return false;
     },
@@ -415,8 +414,30 @@ export function useFormKeyboardNav({
 
       const target = e.target as HTMLElement | null;
 
-      // 1. Ctrl+S / Cmd+S -> Save
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      // Never intercept or preventDefault on Tab / Shift+Tab so browser native
+      // forward/backward tab navigation always works across every control.
+      if (e.key === "Tab") {
+        return;
+      }
+
+      const inOpenPopup = Boolean(
+        hasOpenPopup() ||
+          target?.closest('[data-searchable-select-content="true"], [role="listbox"]')
+      );
+      const repeatableRow = target?.closest('[data-pax-row], [data-repeatable-row]') as HTMLElement | null;
+
+      const decision = classifyFormKeyAction(e, {
+        tagName: target?.tagName || "",
+        role: target?.getAttribute("role"),
+        isInsideOpenPopup: inOpenPopup,
+        isSkipEnterButton: Boolean(
+          target?.tagName === "BUTTON" && target.matches(SKIP_ENTER_ON_BUTTON_SELECTOR)
+        ),
+        hasRepeatableRow: Boolean(repeatableRow),
+        hasSaveAndAddNext: Boolean(onSaveAndAddNextRef.current),
+      });
+
+      if (decision.action === "save") {
         if (!target || container.contains(target) || document.activeElement === document.body || myDialogContains(container, target)) {
           e.preventDefault();
           e.stopPropagation();
@@ -425,22 +446,16 @@ export function useFormKeyboardNav({
         return;
       }
 
-      // 2. Ctrl/Cmd+Shift+Enter -> Save & Add Next (if provided)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Enter") {
-        if (onSaveAndAddNextRef.current && target && container.contains(target)) {
+      if (decision.action === "save_and_next") {
+        if (target && container.contains(target)) {
           e.preventDefault();
           e.stopPropagation();
-          onSaveAndAddNextRef.current();
+          onSaveAndAddNextRef.current?.();
         }
         return;
       }
 
-      // 3. Escape -> close popup first if one is open; otherwise confirm discard if dirty and close modal
-      if (e.key === "Escape") {
-        if (hasOpenPopup()) {
-          // Let Radix Select/Popover/SearchableSelect handle Escape to close only itself
-          return;
-        }
+      if (decision.action === "cancel") {
         if (onCancelRef.current) {
           e.preventDefault();
           e.stopPropagation();
@@ -454,143 +469,94 @@ export function useFormKeyboardNav({
       }
 
       // Remaining shortcuts only handle active elements inside this form container
-      if (!target || !container.contains(target)) return;
-
-      // Ignore if inside an open listbox / popper inside container
-      if (target.closest('[data-searchable-select-content="true"], [role="listbox"]')) {
+      if (!target || !container.contains(target) || decision.action === "passthrough" || decision.action === "native") {
         return;
       }
 
-      // 4. Ctrl/Cmd + Enter:
-      //    - Inside TEXTAREA: move focus to next control (e.g. Save button), or save if no next control
-      //    - Inside a repeatable row ([data-pax-row] / [data-repeatable-row]): add a new row and focus its first field
-      //    - Elsewhere: trigger Save
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "Enter") {
+      if (decision.action === "next_or_save") {
         e.preventDefault();
         e.stopPropagation();
-        if (target.tagName === "TEXTAREA") {
-          const fields = getVisualFocusableFields(container);
-          const idx = fields.indexOf(target);
-          const next = idx !== -1 && idx < fields.length - 1 ? fields[idx + 1] : null;
-          if (next) {
-            focusControl(next);
-          } else {
-            onSaveRef.current?.();
-          }
+        const fields = getVisualFocusableFields(container);
+        const idx = fields.indexOf(target);
+        const next = idx !== -1 && idx < fields.length - 1 ? fields[idx + 1] : null;
+        if (next) {
+          focusControl(next);
+        } else {
+          onSaveRef.current?.();
+        }
+        return;
+      }
+
+      if (decision.action === "add_passenger" && repeatableRow) {
+        e.preventDefault();
+        e.stopPropagation();
+        const group = (repeatableRow.closest('[data-repeatable-group]') as HTMLElement | null) || container;
+        const addBtn = group.querySelector<HTMLButtonElement>(
+          'button[data-add-row-btn="true"]:not([disabled]), button[data-add-passenger-btn="true"]:not([disabled])'
+        );
+        if (addBtn) {
+          const prevCount = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]').length;
+          const focusNewAddedRow = () => {
+            const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
+            if (rows.length <= prevCount) return false;
+            const lastRow = rows[rows.length - 1];
+            const active = document.activeElement as HTMLElement | null;
+            if (active && lastRow.contains(active)) return true;
+            const rowFields = getVisualFocusableFields(lastRow);
+            if (rowFields.length > 0) {
+              focusControl(rowFields[0]);
+              return true;
+            }
+            return false;
+          };
+
+          let settled = false;
+          let fallbackTimer: number | null = null;
+          const observer = new MutationObserver(() => {
+            if (settled) return;
+            const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
+            if (rows.length > prevCount) {
+              settled = true;
+              observer.disconnect();
+              if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+              window.setTimeout(() => {
+                focusNewAddedRow();
+              }, 0);
+            }
+          });
+          observer.observe(group, { childList: true, subtree: true });
+          fallbackTimer = window.setTimeout(() => {
+            observer.disconnect();
+            if (!settled) {
+              settled = true;
+              focusNewAddedRow();
+            }
+          }, 600);
+
+          addBtn.click();
           return;
         }
-
-        const repeatableRow = target.closest('[data-pax-row], [data-repeatable-row]') as HTMLElement | null;
-        if (repeatableRow) {
-          const group = (repeatableRow.closest('[data-repeatable-group]') as HTMLElement | null) || container;
-          const addBtn = group.querySelector<HTMLButtonElement>(
-            'button[data-add-row-btn="true"]:not([disabled]), button[data-add-passenger-btn="true"]:not([disabled])'
-          );
-          if (addBtn) {
-            const prevCount = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]').length;
-            const focusNewAddedRow = () => {
-              const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
-              if (rows.length <= prevCount) return false;
-              const lastRow = rows[rows.length - 1];
-              const active = document.activeElement as HTMLElement | null;
-              if (active && lastRow.contains(active)) return true;
-              const rowFields = getVisualFocusableFields(lastRow);
-              if (rowFields.length > 0) {
-                focusControl(rowFields[0]);
-                return true;
-              }
-              return false;
-            };
-
-            let settled = false;
-            let fallbackTimer: number | null = null;
-            const observer = new MutationObserver(() => {
-              if (settled) return;
-              const rows = group.querySelectorAll<HTMLElement>('[data-pax-row], [data-repeatable-row]');
-              if (rows.length > prevCount) {
-                settled = true;
-                observer.disconnect();
-                if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
-                window.setTimeout(() => {
-                  focusNewAddedRow();
-                }, 0);
-              }
-            });
-            observer.observe(group, { childList: true, subtree: true });
-            fallbackTimer = window.setTimeout(() => {
-              observer.disconnect();
-              if (!settled) {
-                settled = true;
-                focusNewAddedRow();
-              }
-            }, 600);
-
-            addBtn.click();
-            return;
-          }
-        }
-
         onSaveRef.current?.();
         return;
       }
 
-      // 4b. Shift + Tab navigates backward in visual order (mirroring Shift + Enter, e.g. Purchasing Cost -> last passenger)
-      if (e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const fields = getVisualFocusableFields(container);
-        const currentIdx = fields.indexOf(target);
-        if (currentIdx > 0) {
-          e.preventDefault();
-          e.stopPropagation();
-          focusControl(fields[currentIdx - 1]);
-        }
-        return;
-      }
-
-      if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey) {
-        return;
-      }
-
-      // 5. Textarea plain Enter adds newline natively; Shift+Enter goes back
-      if (target.tagName === "TEXTAREA") {
-        if (e.shiftKey) {
-          e.preventDefault();
-          e.stopPropagation();
-          focusPrevField(target);
-        }
-        return;
-      }
-
-      // 6. Shift + Enter goes back to previous field (on any control including comboboxes/buttons)
-      if (e.shiftKey) {
+      if (decision.action === "prev") {
         e.preventDefault();
         e.stopPropagation();
         focusPrevField(target);
         return;
       }
 
-      // 7. Closed Select / Combobox trigger: let component open on Enter (do not jump ahead)
-      const isCombobox = target.getAttribute("role") === "combobox";
-      if (isCombobox) {
+      // Role switch / checkbox / radio buttons toggle on Space cleanly, Enter advances
+      const role = target.getAttribute("role");
+      if (target.tagName === "BUTTON" && (role === "switch" || role === "checkbox" || role === "radio")) {
+        e.preventDefault();
+        e.stopPropagation();
+        focusNextField(target);
         return;
       }
 
-      // 8. Non-combobox buttons
-      if (target.tagName === "BUTTON") {
-        if (target.matches(SKIP_ENTER_ON_BUTTON_SELECTOR)) {
-          // Buttons like Save / Add Passenger / Cancel perform their native click on Enter
-          return;
-        }
-        // Role switch / checkbox / radio buttons toggle on Space cleanly, Enter advances
-        const role = target.getAttribute("role");
-        if (role === "switch" || role === "checkbox" || role === "radio") {
-          e.preventDefault();
-          e.stopPropagation();
-          focusNextField(target);
-          return;
-        }
-      }
-
-      // 9. Optional beforeAdvance hook (e.g., Search inputs triggering invoice lookup)
+      // Optional beforeAdvance hook (e.g., Search inputs triggering invoice lookup)
       if (onBeforeAdvanceRef.current) {
         const handled = onBeforeAdvanceRef.current(target);
         if (handled === false) {
@@ -599,7 +565,7 @@ export function useFormKeyboardNav({
         }
       }
 
-      // 10. Required-field validation gate: do not jump ahead if required field is empty
+      // Required-field validation gate: do not jump ahead if required field is empty
       const customErr = validateFieldRef.current?.(target);
       const errMsg = customErr || checkDefaultRequired(target);
       if (errMsg) {
@@ -617,7 +583,7 @@ export function useFormKeyboardNav({
         target.removeAttribute("aria-invalid");
       }
 
-      // 11. Move to next visual field (which includes Save button at end)
+      // Move to next visual field (which includes Save button at end)
       e.preventDefault();
       e.stopPropagation();
       focusNextField(target);

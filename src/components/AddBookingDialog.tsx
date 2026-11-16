@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { BulkScanAutofillButton } from "@/components/ai/BulkScanAutofillButton";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 
 interface AddBookingDialogProps {
@@ -23,6 +25,8 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
   const [selectedClientId, setSelectedClientId] = useState(editBooking?.client_id || "");
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const { clients } = useClients();
   const { addBooking, updateBooking } = useBookings();
 
@@ -57,12 +61,8 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
     e.preventDefault();
     if (isSubmittingRef.current || addBooking.isPending || updateBooking.isPending) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
-
-    const formData = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const formData = new FormData(formEl);
     const discountRaw = Number(formData.get("discountAmount") || 0);
     if (!Number.isFinite(discountRaw) || discountRaw < 0) {
       toast.error("Discount amount must be zero or positive");
@@ -80,9 +80,7 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
       discount_amount: discountRaw,
     };
 
-    // Validate booking data
     const validation = validateData(bookingSchema, bookingData);
-    
     if (!validation.success) {
       toast.error((validation as { success: false; error: string }).error);
       return;
@@ -90,21 +88,29 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
 
     const validatedData = validation.data;
 
-    isSubmittingRef.current = true;
-    try {
-      if (editBooking) {
-        await updateBooking.mutateAsync({ id: editBooking.id, booking: validatedData });
-      } else {
-        await addBooking.mutateAsync(validatedData);
-        e.currentTarget.reset();
-      }
-      onOpenChange(false);
-      setSelectedClientId("");
-    } catch (error) {
-      console.error("[AddBookingDialog.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-    }
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsSubmittingLocal,
+      contextLabel: "AddBookingDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save booking",
+      execute: async () => {
+        if (editBooking) {
+          return await updateBooking.mutateAsync({ id: editBooking.id, booking: validatedData });
+        }
+        return await addBooking.mutateAsync(validatedData);
+      },
+      onSuccess: () => {
+        if (!editBooking) formEl.reset();
+        onOpenChange(false);
+        setSelectedClientId("");
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   return (
@@ -245,8 +251,8 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
             <Button type="button" variant="outline" size="sm" tabIndex={-1} onClick={() => onOpenChange(false)} className="text-xs">
               Cancel
             </Button>
-            <Button type="submit" size="sm" data-save-button="true" disabled={addBooking.isPending || updateBooking.isPending || !selectedClientId} className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white">
-              {addBooking.isPending || updateBooking.isPending ? (editBooking ? "Updating..." : "Adding...") : (editBooking ? "Update Booking" : "Add Booking")}
+            <Button type="submit" size="sm" data-save-button="true" disabled={isSubmittingLocal || addBooking.isPending || updateBooking.isPending || !selectedClientId} className="text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white">
+              {isSubmittingLocal || addBooking.isPending || updateBooking.isPending ? (editBooking ? "Updating..." : "Adding...") : (editBooking ? "Update Booking" : "Add Booking")}
             </Button>
           </div>
         </form>

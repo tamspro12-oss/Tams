@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export interface B2BAgent {
   id: string;
@@ -43,16 +44,38 @@ export function useB2BAgents() {
   });
 
   const addAgent = useMutation({
-    mutationFn: async (agent: Omit<B2BAgent, 'id' | 'agency_id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (
+      agent: Omit<B2BAgent, 'id' | 'agency_id' | 'created_at' | 'updated_at'> & {
+        requestId?: string;
+        openingBalanceAmount?: number;
+        openingBalanceType?: 'receivable' | 'payable';
+      }
+    ) => {
       if (!agencyId) throw new Error('No agency ID');
-      const { data, error } = await supabase
-        .from('b2b_agents')
-        .insert({ ...agent, agency_id: agencyId } as any)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+      const { requestId, openingBalanceAmount, openingBalanceType, ...agentFields } = agent;
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        'save_b2b_agent_atomic',
+        {
+          p_agent_data: agentFields,
+          p_id: null,
+          p_opening_balance_amount: openingBalanceAmount ?? 0,
+          p_opening_balance_type: openingBalanceType ?? 'receivable',
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data, error } = await supabase
+              .from('b2b_agents')
+              .insert({ ...agentFields, agency_id: agencyId } as any)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      );
+      return rpcRes?.agent ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });
@@ -64,16 +87,43 @@ export function useB2BAgents() {
   });
 
   const updateAgent = useMutation({
-    mutationFn: async ({ id, agent }: { id: string; agent: Partial<B2BAgent> }) => {
-      const { data, error } = await supabase
-        .from('b2b_agents')
-        .update(agent as any)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+    mutationFn: async ({
+      id,
+      agent,
+      requestId,
+      openingBalanceAmount,
+      openingBalanceType,
+    }: {
+      id: string;
+      agent: Partial<B2BAgent>;
+      requestId?: string;
+      openingBalanceAmount?: number;
+      openingBalanceType?: 'receivable' | 'payable';
+    }) => {
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        'save_b2b_agent_atomic',
+        {
+          p_agent_data: agent,
+          p_id: id,
+          p_opening_balance_amount: openingBalanceAmount ?? 0,
+          p_opening_balance_type: openingBalanceType ?? 'receivable',
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data, error } = await supabase
+              .from('b2b_agents')
+              .update(agent as any)
+              .eq('id', id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      );
+      return rpcRes?.agent ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2b_agents'] });

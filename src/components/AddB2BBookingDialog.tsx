@@ -18,6 +18,11 @@ import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
 import { BulkScanAutofillButton } from "@/components/ai/BulkScanAutofillButton";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 
 interface AddB2BBookingDialogProps {
   open: boolean;
@@ -48,6 +53,9 @@ const parsePackageData = (notes: string | null) => {
 export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: AddB2BBookingDialogProps) {
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showQuickVendorAdd, setShowQuickVendorAdd] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState(editBooking?.vendor_id || "none");
@@ -336,131 +344,136 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
       return;
     }
 
-    isSubmittingRef.current = true;
-    setLoading(true);
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setLoading,
+      contextLabel: "AddB2BBookingDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save B2B booking. Please try again.",
+      execute: async (requestId) => {
+        // Build structured notes based on service type inside save
+        let structuredNotes = "";
+        const userNotes = (formData.get("notes") as string) || "";
 
-    // Build structured notes based on service type
-    let structuredNotes = "";
-    const userNotes = (formData.get("notes") as string) || "";
+        if (isUmrah) {
+          const umrahPackage = {
+            type: 'umrah_package',
+            flights: {
+              departure_city: formData.get("umrah_departure_city") as string || "",
+              arrival_city: formData.get("umrah_arrival_city") as string || "",
+              departure_date: formData.get("flight_date") as string || "",
+              return_date: formData.get("umrah_return_date") as string || "",
+              airline: formData.get("airline") as string || "",
+              departure_flight_time: outboundFlightTime || "",
+              return_flight_time: returnFlightTime || "",
+            },
+            transport: {
+              included: transportIncluded,
+              details: formData.get("transport_details") as string || "",
+            },
+            hotels: {
+              makkah: {
+                name: formData.get("makkah_hotel") as string || "",
+                nights: parseInt(formData.get("makkah_nights") as string) || 0,
+              },
+              madinah: {
+                name: formData.get("madinah_hotel") as string || "",
+                nights: parseInt(formData.get("madinah_nights") as string) || 0,
+              },
+            },
+          };
+          structuredNotes = JSON.stringify(umrahPackage);
+        } else if (isReturnTicket) {
+          const returnFlight = {
+            type: 'return_flight',
+            outbound_flight_time: outboundFlightTime || "",
+            return_from: formData.get("return_from") as string || "",
+            return_to: formData.get("return_to") as string || "",
+            return_date: formData.get("return_date") as string || "",
+            return_pnr: formData.get("return_pnr") as string || "",
+            return_flight_time: returnFlightTime || "",
+          };
+          structuredNotes = JSON.stringify(returnFlight);
+        } else if (isMultiCity) {
+          const multiCityData = {
+            type: 'multi_city',
+            segments: multiCitySegments.filter(s => s.departure_city || s.arrival_city),
+          };
+          structuredNotes = JSON.stringify(multiCityData);
+        } else if (isCustomService) {
+          const customService = {
+            type: 'custom_service',
+            service_name: customServiceName || "Custom",
+            service_location: formData.get("custom_service_location") as string || "",
+            start_date: formData.get("custom_start_date") as string || "",
+            end_date: formData.get("custom_end_date") as string || "",
+            provider: formData.get("custom_provider") as string || "",
+            reference_number: formData.get("custom_reference") as string || "",
+          };
+          structuredNotes = JSON.stringify(customService);
+        } else if (outboundFlightTime) {
+          structuredNotes = JSON.stringify({ type: 'ticket_one_way', outbound_flight_time: outboundFlightTime });
+        }
 
-    if (isUmrah) {
-      const umrahPackage = {
-        type: 'umrah_package',
-        flights: {
-          departure_city: formData.get("umrah_departure_city") as string || "",
-          arrival_city: formData.get("umrah_arrival_city") as string || "",
-          departure_date: formData.get("flight_date") as string || "",
-          return_date: formData.get("umrah_return_date") as string || "",
-          airline: formData.get("airline") as string || "",
-          departure_flight_time: outboundFlightTime || "",
-          return_flight_time: returnFlightTime || "",
-        },
-        transport: {
-          included: transportIncluded,
-          details: formData.get("transport_details") as string || "",
-        },
-        hotels: {
-          makkah: {
-            name: formData.get("makkah_hotel") as string || "",
-            nights: parseInt(formData.get("makkah_nights") as string) || 0,
-          },
-          madinah: {
-            name: formData.get("madinah_hotel") as string || "",
-            nights: parseInt(formData.get("madinah_nights") as string) || 0,
-          },
-        },
-      };
-      structuredNotes = JSON.stringify(umrahPackage);
-    } else if (isReturnTicket) {
-      const returnFlight = {
-        type: 'return_flight',
-        outbound_flight_time: outboundFlightTime || "",
-        return_from: formData.get("return_from") as string || "",
-        return_to: formData.get("return_to") as string || "",
-        return_date: formData.get("return_date") as string || "",
-        return_pnr: formData.get("return_pnr") as string || "",
-        return_flight_time: returnFlightTime || "",
-      };
-      structuredNotes = JSON.stringify(returnFlight);
-    } else if (isMultiCity) {
-      const multiCityData = {
-        type: 'multi_city',
-        segments: multiCitySegments.filter(s => s.departure_city || s.arrival_city),
-      };
-      structuredNotes = JSON.stringify(multiCityData);
-    } else if (isCustomService) {
-      const customService = {
-        type: 'custom_service',
-        service_name: customServiceName || "Custom",
-        service_location: formData.get("custom_service_location") as string || "",
-        start_date: formData.get("custom_start_date") as string || "",
-        end_date: formData.get("custom_end_date") as string || "",
-        provider: formData.get("custom_provider") as string || "",
-        reference_number: formData.get("custom_reference") as string || "",
-      };
-      structuredNotes = JSON.stringify(customService);
-    } else if (outboundFlightTime) {
-      // One-way ticket with flight time
-      structuredNotes = JSON.stringify({ type: 'ticket_one_way', outbound_flight_time: outboundFlightTime });
-    }
+        const finalNotes = structuredNotes
+          ? (userNotes ? `${structuredNotes}\n\nNotes: ${userNotes}` : structuredNotes)
+          : userNotes || null;
 
-    const finalNotes = structuredNotes
-      ? (userNotes ? `${structuredNotes}\n\nNotes: ${userNotes}` : structuredNotes)
-      : userNotes || null;
+        let destination = isMultiCity
+          ? (multiCitySegments.map(s => s.arrival_city).filter(Boolean).join(' → ') || null)
+          : (formData.get("destination") as string || null);
+        if (isUmrah) {
+          destination = formData.get("umrah_arrival_city") as string || "Jeddah";
+        } else if (isCustomService) {
+          destination = formData.get("custom_service_location") as string || customServiceName || null;
+        }
 
-    // Determine destination based on service type
-    let destination = isMultiCity
-      ? (multiCitySegments.map(s => s.arrival_city).filter(Boolean).join(' → ') || null)
-      : (formData.get("destination") as string || null);
-    if (isUmrah) {
-      destination = formData.get("umrah_arrival_city") as string || "Jeddah";
-    } else if (isCustomService) {
-      destination = formData.get("custom_service_location") as string || customServiceName || null;
-    }
+        let flightDate = isMultiCity
+          ? (multiCitySegments[0]?.flight_date || null)
+          : (formData.get("flight_date") as string || null);
+        if (isCustomService) {
+          flightDate = formData.get("custom_start_date") as string || null;
+        }
 
-    // Determine flight_date based on service type
-    let flightDate = isMultiCity
-      ? (multiCitySegments[0]?.flight_date || null)
-      : (formData.get("flight_date") as string || null);
-    if (isCustomService) {
-      flightDate = formData.get("custom_start_date") as string || null;
-    }
+        const bookingData = {
+          agent_id: agent.id,
+          vendor_id: (selectedVendorId === "none" || !selectedVendorId) ? null : selectedVendorId,
+          pnr: isMultiCity ? (multiCitySegments[0]?.flight_number || null) : isCustomService ? (formData.get("custom_reference") as string) || null : (formData.get("pnr") as string) || null,
+          passenger_name: passengerName,
+          passenger_passport: (formData.get("passenger_passport") as string) || null,
+          passenger_contact: (formData.get("passenger_contact") as string) || null,
+          destination: destination,
+          airline: isMultiCity ? (multiCitySegments[0]?.airline || null) : isCustomService ? (formData.get("custom_provider") as string) || null : (formData.get("airline") as string) || null,
+          flight_date: flightDate,
+          purchasing_price: purchasingPrice || null,
+          selling_price: sellingPriceVal || null,
+          commission_amount: commissionAmount || null,
+          profit: profit || null,
+          booking_status: isMultiCity ? "confirmed" : (formData.get("booking_status") as string) || "confirmed",
+          payment_status: (formData.get("payment_status") as string) || "pending",
+          notes: finalNotes,
+          amount_received: amountReceived,
+          payment_mode: amountReceived > 0 ? paymentMode : null,
+          bank_name: amountReceived > 0 && paymentMode === 'bank' ? bankName : null,
+        };
 
-    const bookingData = {
-      agent_id: agent.id,
-      vendor_id: (selectedVendorId === "none" || !selectedVendorId) ? null : selectedVendorId,
-      pnr: isMultiCity ? (multiCitySegments[0]?.flight_number || null) : isCustomService ? (formData.get("custom_reference") as string) || null : (formData.get("pnr") as string) || null,
-      passenger_name: formData.get("passenger_name") as string,
-      passenger_passport: (formData.get("passenger_passport") as string) || null,
-      passenger_contact: (formData.get("passenger_contact") as string) || null,
-      destination: destination,
-      airline: isMultiCity ? (multiCitySegments[0]?.airline || null) : isCustomService ? (formData.get("custom_provider") as string) || null : (formData.get("airline") as string) || null,
-      flight_date: flightDate,
-      purchasing_price: purchasingPrice || null,
-      selling_price: sellingPriceVal || null,
-      commission_amount: commissionAmount || null,
-      profit: profit || null,
-      booking_status: isMultiCity ? "confirmed" : (formData.get("booking_status") as string) || "confirmed",
-      payment_status: (formData.get("payment_status") as string) || "pending",
-      notes: finalNotes,
-      amount_received: amountReceived,
-      payment_mode: amountReceived > 0 ? paymentMode : null,
-      bank_name: amountReceived > 0 && paymentMode === 'bank' ? bankName : null,
-    };
-
-    try {
-      if (editBooking) {
-        await updateBooking.mutateAsync({ id: editBooking.id, booking: bookingData });
-      } else {
-        await addBooking.mutateAsync(bookingData);
-      }
-      onOpenChange(false);
-    } catch (error) {
-      console.error("[AddB2BBookingDialog.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setLoading(false);
-    }
+        if (editBooking) {
+          return await updateBooking.mutateAsync({ id: editBooking.id, booking: bookingData, requestId });
+        }
+        return await addBooking.mutateAsync({ ...bookingData, requestId });
+      },
+      onSuccess: () => {
+        onOpenChange(false);
+        runBackgroundTask("AddB2BBookingDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   return (

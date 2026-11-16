@@ -35,7 +35,7 @@ import {
   computeFinancialMetrics,
   getKarachiTodayNoon,
   getKarachiYmd,
-  invalidateAllFinancialQueries,
+  scheduleCoalescedFinancialRefresh,
 } from "@/lib/accountingEngine";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -216,6 +216,9 @@ export default function ReportsHub() {
   const { data: agency } = useAgency();
   const queryClient = useQueryClient();
 
+  const triggerReportsSync = () =>
+    scheduleCoalescedFinancialRefresh(queryClient, "reports-hub-rt", "all", 350);
+
   useRealtimeMultiTable({
     channelPrefix: "reports-hub-realtime",
     enabled: !!agency?.id,
@@ -223,37 +226,37 @@ export default function ReportsHub() {
       {
         table: "booking_invoices",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "payment_vouchers",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "expenses",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "refunds",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "transactions",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "accounts",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
       {
         table: "parties",
         filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, agency?.id),
+        callback: triggerReportsSync,
       },
     ],
   });

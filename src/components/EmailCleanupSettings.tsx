@@ -11,7 +11,8 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { handleSupabaseError } from '@/lib/supabaseErrorHandler';
+import { createRequestId, runBackgroundTask } from '@/lib/atomicSave';
+import { runUiAtomicSave } from '@/lib/atomicSaveUi';
 
 export function EmailCleanupSettings() {
   const { data: agency } = useAgency();
@@ -22,6 +23,7 @@ export function EmailCleanupSettings() {
   const [keepDays, setKeepDays] = useState('30');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   useEffect(() => {
     if (agency) {
@@ -33,33 +35,32 @@ export function EmailCleanupSettings() {
 
   const handleSave = async () => {
     if (isSavingRef.current || isSaving || !agency?.id) return;
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      toast.error('Network connection issue. You are offline, not saved.');
-      return;
-    }
 
-    isSavingRef.current = true;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('agencies')
-        .update({
-          email_cleanup_enabled: cleanupEnabled,
-          email_cleanup_frequency: cleanupFrequency,
-          email_cleanup_keep_days: parseInt(keepDays, 10) || 30,
-        })
-        .eq('id', agency.id);
-
-      if (error) throw error;
-
-      toast.success('Email cleanup settings saved');
-      queryClient.invalidateQueries({ queryKey: ['agency'] });
-    } catch (error: unknown) {
-      handleSupabaseError(error, 'Failed to save cleanup settings', 'EmailCleanupSettings.handleSave');
-    } finally {
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSavingRef,
+      setIsSubmitting: setIsSaving,
+      contextLabel: 'EmailCleanupSettings.handleSave',
+      fallbackErrorMessage: 'Failed to save cleanup settings',
+      execute: async () => {
+        const { error } = await supabase
+          .from('agencies')
+          .update({
+            email_cleanup_enabled: cleanupEnabled,
+            email_cleanup_frequency: cleanupFrequency,
+            email_cleanup_keep_days: parseInt(keepDays, 10) || 30,
+          })
+          .eq('id', agency.id);
+        if (error) throw error;
+        return { ok: true };
+      },
+      onSuccess: () => {
+        toast.success('Email cleanup settings saved');
+        runBackgroundTask('EmailCleanupSettings.refresh', () => {
+          queryClient.invalidateQueries({ queryKey: ['agency'] });
+        });
+      },
+    });
   };
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -165,7 +166,7 @@ export function EmailCleanupSettings() {
                 <div className="text-xs text-muted-foreground">
                   <p className="font-medium text-foreground mb-1">Cleanup Preview:</p>
                   <p>
-                    Logs will be deleted {cleanupFrequency === 'weekly' ? 'every Sunday' : 'on the 1st of each month'}, 
+                    Logs will be deleted {cleanupFrequency === 'weekly' ? 'every Sunday' : 'on the 1st of each month'},
                     removing all emails older than {keepDays} days.
                   </p>
                 </div>
@@ -174,7 +175,7 @@ export function EmailCleanupSettings() {
           )}
         </div>
 
-        <Button 
+        <Button
           data-save-button="true"
           onClick={handleSave}
           disabled={isSaving}

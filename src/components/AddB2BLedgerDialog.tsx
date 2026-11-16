@@ -17,6 +17,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 
 interface AddB2BLedgerDialogProps {
   open: boolean;
@@ -39,6 +44,9 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
   const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [entryType, setEntryType] = useState<string>("credit");
   const [amount, setAmount] = useState("");
   const [entryDate, setEntryDate] = useState(() => getTodayDateString());
@@ -274,36 +282,38 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
       return;
     }
 
-    isSubmittingRef.current = true;
-    setLoading(true);
+    if (paymentMode !== 'split' && paymentExceedsOutstanding && !isEditMode) {
+      return;
+    }
 
-    try {
-      if (paymentMode === 'split' && !isEditMode) {
-        // Split payment mode
-        const validAllocations = allocations
-          .filter(a => a.selected && a.amount > 0)
-          .map(a => ({
-            bookingId: a.bookingId,
-            bookingRef: a.bookingRef,
-            amount: a.amount
-          }));
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setLoading,
+      contextLabel: "AddB2BLedgerDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save B2B ledger entry. Please try again.",
+      execute: async (requestId) => {
+        if (paymentMode === 'split' && !isEditMode) {
+          const validAllocations = allocations
+            .filter(a => a.selected && a.amount > 0)
+            .map(a => ({
+              bookingId: a.bookingId,
+              bookingRef: a.bookingRef,
+              amount: a.amount,
+            }));
 
-        await addSplitPayment.mutateAsync({
-          agent_id: agent.id,
-          entry_date: entryDate,
-          total_amount: parseFloat(amount) || 0,
-          remarks: remarks.trim(),
-          allocations: validAllocations
-        });
-      } else {
-        // Single booking mode (original logic)
-        // Prevent overpayment for linked bookings
-        if (paymentExceedsOutstanding && !isEditMode) {
-          setLoading(false);
-          return;
+          return await addSplitPayment.mutateAsync({
+            agent_id: agent.id,
+            entry_date: entryDate,
+            total_amount: parsedAmount,
+            remarks: remarks.trim(),
+            payment_mode: cashBankMode,
+            bank_name: cashBankMode === 'bank' ? bankName : null,
+            requestId,
+            allocations: validAllocations,
+          });
         }
 
-        // Build remarks with optional booking link
         let finalRemarks = remarks.trim();
         if (linkedBookingId !== "none") {
           const linkedBooking = bookings.find(b => b.id === linkedBookingId);
@@ -319,27 +329,31 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
           agent_id: agent.id,
           entry_date: entryDate,
           entry_type: entryType,
-          amount: parseFloat(amount) || 0,
+          amount: parsedAmount,
           remarks: finalRemarks || null,
           linked_booking_id: linkedBookingId !== "none" ? linkedBookingId : null,
           payment_mode: entryType === 'credit' ? cashBankMode : null,
-          bank_name: entryType === 'credit' && cashBankMode === 'bank' ? bankName : null
+          bank_name: entryType === 'credit' && cashBankMode === 'bank' ? bankName : null,
+          requestId,
         };
 
         if (isEditMode && editEntry) {
-          await updateLedgerEntry.mutateAsync({ id: editEntry.id, ...entryData });
-        } else {
-          await addLedgerEntry.mutateAsync(entryData);
+          return await updateLedgerEntry.mutateAsync({ id: editEntry.id, ...entryData });
         }
-      }
-
-      onOpenChange(false);
-    } catch (error) {
-      console.error("[AddB2BLedgerDialog.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setLoading(false);
-    }
+        return await addLedgerEntry.mutateAsync(entryData);
+      },
+      onSuccess: () => {
+        onOpenChange(false);
+        runBackgroundTask("AddB2BLedgerDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const canSubmit = useMemo(() => {

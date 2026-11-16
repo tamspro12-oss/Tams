@@ -14,7 +14,10 @@ import { Separator } from "@/components/ui/separator";
 import { PaymentModeSelect } from "./PaymentModeSelect";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { getTodayDateString } from "@/components/ui/LockedDateField";
-import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface VendorPaymentDialogProps {
   vendor: any;
@@ -33,6 +36,8 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -111,89 +116,108 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
       return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const todayYmd = getTodayDateString();
+    const newTotalPaid = Math.max(0, currentPaid + additionalPayment);
 
-    try {
-      const todayYmd = getTodayDateString();
-      const newTotalPaid = Math.max(0, currentPaid + additionalPayment);
+    let paymentStatus = "Pending";
+    let paymentType: "partial" | "full" = "partial";
 
-      // Calculate payment status based on amounts
-      let paymentStatus = "Pending";
-      let paymentType: "partial" | "full" = "partial";
+    if (newTotalPaid >= totalPayable && totalPayable > 0) {
+      paymentStatus = "Paid";
+      paymentType = "full";
+    } else if (newTotalPaid > 0) {
+      paymentStatus = "Partial";
+    }
 
-      if (newTotalPaid >= totalPayable && totalPayable > 0) {
-        paymentStatus = "Paid";
-        paymentType = "full";
-      } else if (newTotalPaid > 0) {
-        paymentStatus = "Partial";
-      }
-
-      // Determine note based on positive or negative amount
-      const noteText = additionalPayment >= 0
+    const noteText =
+      additionalPayment >= 0
         ? `Payment of ₨${additionalPayment.toLocaleString()}`
         : `Adjustment: ₨${additionalPayment.toLocaleString()} (correction/reversal)`;
 
-      // First record payment history (stores both positive and negative)
-      await addPaymentHistory.mutateAsync({
-        vendor_id: vendor.id,
-        agency_id: agency.id,
-        payment_amount: additionalPayment,
-        payment_type: paymentType,
-        payment_date: todayYmd,
-        notes: noteText,
-        payment_mode: paymentMode,
-        bank_name: paymentMode === "bank" ? bankName : null,
-      });
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "VendorPaymentDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to record payment. Please try again.",
+      execute: async (requestId) => {
+        return await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "record_vendor_payout_atomic",
+          {
+            p_vendor_id: vendor.id,
+            p_amount: additionalPayment,
+            p_payment_mode: paymentMode,
+            p_bank_name: paymentMode === "bank" ? bankName : null,
+            p_payment_date: todayYmd,
+            p_notes: noteText,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              await addPaymentHistory.mutateAsync({
+                vendor_id: vendor.id,
+                agency_id: agency.id,
+                payment_amount: additionalPayment,
+                payment_type: paymentType,
+                payment_date: todayYmd,
+                notes: noteText,
+                payment_mode: paymentMode,
+                bank_name: paymentMode === "bank" ? bankName : null,
+              });
 
-      // Then update vendor totals
-      await updateVendor.mutateAsync({
-        id: vendor.id,
-        vendor: {
-          amount_paid: newTotalPaid,
-          payment_status: paymentStatus,
-        }
-      });
+              await updateVendor.mutateAsync({
+                id: vendor.id,
+                vendor: {
+                  amount_paid: newTotalPaid,
+                  payment_status: paymentStatus,
+                },
+              });
 
-      // Sync into master transactions table
-      try {
-        await supabase.from("transactions").insert({
-          agency_id: agency.id,
-          date: todayYmd,
-          type: "payment_out",
-          party_id: vendor.id,
-          party_type: "vendor",
-          debit: 0,
-          credit: additionalPayment,
-          method: paymentMode || "cash",
-          notes: noteText,
+              try {
+                await supabase.from("transactions").insert({
+                  agency_id: agency.id,
+                  date: todayYmd,
+                  type: "payment_out",
+                  party_id: vendor.id,
+                  party_type: "vendor",
+                  debit: 0,
+                  credit: additionalPayment,
+                  method: paymentMode || "cash",
+                  notes: noteText,
+                });
+              } catch (err) {
+                console.warn("Unified transactions sync notice:", err);
+              }
+              return { ok: true };
+            },
+          }
+        );
+      },
+      onSuccess: () => {
+        toast({
+          title: "Success",
+          description:
+            additionalPayment >= 0
+              ? "Vendor payment recorded successfully"
+              : "Payment adjustment recorded successfully",
         });
-      } catch (e) {
-        console.warn("Unified transactions sync notice:", e);
-      }
-
-      toast({
-        title: "Success",
-        description: additionalPayment >= 0
-          ? "Vendor payment recorded successfully"
-          : "Payment adjustment recorded successfully",
-      });
-
-      setPaymentAmount("");
-      setPaymentMode("cash");
-      setBankName("");
-      onOpenChange(false);
-    } catch (error: unknown) {
-      console.error('Vendor payment error:', error);
-      toast({
-        title: "Error",
-        description: parseSupabaseError(error, "Failed to record payment. Please try again.").userMessage,
-        variant: "destructive",
-      });
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        setPaymentAmount("");
+        setPaymentMode("cash");
+        setBankName("");
+        onOpenChange(false);
+        runBackgroundTask("VendorPaymentDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", agency.id);
+        });
+      },
+      onErrorToast: (friendlyMessage) => {
+        toast({
+          title: "Error",
+          description: friendlyMessage,
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   const handlePayFull = () => {

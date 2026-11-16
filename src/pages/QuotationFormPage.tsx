@@ -39,8 +39,12 @@ import {
 } from "@/components/ui/LockedDateField";
 import {
   DocumentNumberControl,
-  checkDocumentNumberAvailable,
 } from "@/components/ui/DocumentNumberControl";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 import {
   SearchableSelect,
   type SearchableSelectItem,
@@ -101,6 +105,9 @@ export default function QuotationFormPage() {
   const [isManualQuotationNo, setIsManualQuotationNo] = useState(false);
   const [manualQuotationNo, setManualQuotationNo] = useState("");
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [quotationDate, setQuotationDate] = useState(() => getTodayDateString());
   const [validUntil, setValidUntil] = useState(() =>
     format(addDays(new Date(), 14), "yyyy-MM-dd")
@@ -487,57 +494,64 @@ export default function QuotationFormPage() {
     }
     if (!validate()) return;
 
-    if (!isEdit && isManualQuotationNo) {
-      const customNo = manualQuotationNo.trim();
-      if (!customNo) {
-        toast.error("Please enter a custom quotation number or switch back to Auto");
-        return;
-      }
-      const available = await checkDocumentNumberAvailable("quotation", customNo);
-      if (!available) {
-        toast.error("This quotation number already exists. Please use Auto or choose another number.");
-        return;
-      }
+    if (!isEdit && isManualQuotationNo && !manualQuotationNo.trim()) {
+      toast.error("Please enter a custom quotation number or switch back to Auto");
+      return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
     const payload = buildPayload();
 
-    try {
-      let savedQuote: any;
-      if (isEdit && id) {
-        savedQuote = await updateQuotation.mutateAsync({ id, ...payload });
-      } else {
-        savedQuote = await addQuotation.mutateAsync(payload);
-      }
-
-      if (andDownloadPdf) {
-        const quoteForPdf: Quotation = {
-          id: savedQuote?.id || id || "temp",
-          agency_id: savedQuote?.agency_id || "",
+    await runUiAtomicSave<any>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "QuotationFormPage.handleSave",
+      fallbackErrorMessage: "Failed to save quotation. Please try again.",
+      execute: async (requestId) => {
+        if (isEdit && id) {
+          return await updateQuotation.mutateAsync({ id, requestId, ...payload });
+        }
+        return await addQuotation.mutateAsync({
           ...payload,
-          quotation_number: savedQuote?.quotation_number || quotationNumber,
-          created_by: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        downloadQuotationPdf(quoteForPdf, {
-          agencyName: agency?.name,
-          agencyEmail: agency?.contact_email || agency?.email,
-          agencyPhone: agency?.phone_number,
+          isManual: isManualQuotationNo,
+          requestId,
         });
-        toast.success("PDF generated & downloaded");
-      }
+      },
+      onSuccess: (savedQuote) => {
+        setIsDirty(false);
+        navigate("/app/leads-quotes?tab=quotations");
 
-      setIsDirty(false);
-      navigate("/app/leads-quotes?tab=quotations");
-    } catch (e: any) {
-      console.error("Failed to save quotation:", e);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        runBackgroundTask("QuotationFormPage.pdfAndRefresh", () => {
+          if (andDownloadPdf) {
+            try {
+              const quoteForPdf: Quotation = {
+                id: savedQuote?.id || id || "temp",
+                agency_id: savedQuote?.agency_id || "",
+                ...payload,
+                quotation_number: savedQuote?.quotation_number || quotationNumber,
+                created_by: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              downloadQuotationPdf(quoteForPdf, {
+                agencyName: agency?.name,
+                agencyEmail: agency?.contact_email || agency?.email,
+                agencyPhone: agency?.phone_number,
+              });
+              toast.success("PDF generated & downloaded");
+            } catch (pdfErr) {
+              console.warn("Quotation PDF error:", pdfErr);
+            }
+          }
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const handleCancel = useCallback(() => {

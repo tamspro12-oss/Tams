@@ -4,7 +4,8 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { isMissingFunctionError } from "@/lib/friendlyError";
-import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { isMissingRpcOrParamError } from "@/lib/atomicSave";
 
 export interface AgencyBank {
   id: string;
@@ -73,21 +74,32 @@ export function useAgencyBanks() {
   });
 
   const addBank = useMutation({
-    mutationFn: async (bank: Omit<AgencyBank, 'id' | 'agency_id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (
+      bank: Omit<AgencyBank, 'id' | 'agency_id' | 'created_at' | 'updated_at'> & { requestId?: string }
+    ) => {
       if (!agencyId) throw new Error('No agency ID');
 
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+      const { requestId, ...bankFields } = bank;
+      const baseParams = {
+        p_id: null,
+        p_bank_name: bankFields.bank_name,
+        p_account_title: bankFields.account_title ?? null,
+        p_account_number: bankFields.account_number ?? null,
+        p_branch_name: bankFields.branch_name ?? null,
+        p_opening_balance: bankFields.opening_balance ?? 0,
+        p_is_active: bankFields.is_active ?? true,
+      };
+
+      let { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
         'upsert_agency_bank_atomic',
-        {
-          p_id: null,
-          p_bank_name: bank.bank_name,
-          p_account_title: bank.account_title ?? null,
-          p_account_number: bank.account_number ?? null,
-          p_branch_name: bank.branch_name ?? null,
-          p_opening_balance: bank.opening_balance ?? 0,
-          p_is_active: bank.is_active ?? true,
-        }
+        requestId ? { ...baseParams, p_request_id: requestId } : baseParams
       );
+
+      if (rpcErr && requestId && isMissingRpcOrParamError(rpcErr)) {
+        const retry = await (supabase as any).rpc('upsert_agency_bank_atomic', baseParams);
+        rpcData = retry.data;
+        rpcErr = retry.error;
+      }
 
       if (!rpcErr) {
         return rpcData?.bank ?? rpcData;
@@ -99,7 +111,7 @@ export function useAgencyBanks() {
 
       const { data, error } = await supabase
         .from('agency_banks')
-        .insert({ ...bank, agency_id: agencyId })
+        .insert({ ...bankFields, agency_id: agencyId })
         .select()
         .single();
 
@@ -123,9 +135,8 @@ export function useAgencyBanks() {
 
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'bank', agencyId);
       toast.success('Bank account added successfully');
     },
     onError: (error: unknown) => {
@@ -134,21 +145,35 @@ export function useAgencyBanks() {
   });
 
   const updateBank = useMutation({
-    mutationFn: async ({ id, ...bank }: { id: string } & Partial<Omit<AgencyBank, 'id' | 'agency_id' | 'created_at' | 'updated_at'>>) => {
+    mutationFn: async ({
+      id,
+      requestId,
+      ...bank
+    }: { id: string; requestId?: string } & Partial<
+      Omit<AgencyBank, 'id' | 'agency_id' | 'created_at' | 'updated_at'>
+    >) => {
       if (!agencyId) throw new Error('No agency ID');
 
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+      const baseParams = {
+        p_id: id,
+        p_bank_name: bank.bank_name ?? null,
+        p_account_title: bank.account_title ?? null,
+        p_account_number: bank.account_number ?? null,
+        p_branch_name: bank.branch_name ?? null,
+        p_opening_balance: bank.opening_balance ?? null,
+        p_is_active: bank.is_active ?? null,
+      };
+
+      let { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
         'upsert_agency_bank_atomic',
-        {
-          p_id: id,
-          p_bank_name: bank.bank_name ?? null,
-          p_account_title: bank.account_title ?? null,
-          p_account_number: bank.account_number ?? null,
-          p_branch_name: bank.branch_name ?? null,
-          p_opening_balance: bank.opening_balance ?? null,
-          p_is_active: bank.is_active ?? null,
-        }
+        requestId ? { ...baseParams, p_request_id: requestId } : baseParams
       );
+
+      if (rpcErr && requestId && isMissingRpcOrParamError(rpcErr)) {
+        const retry = await (supabase as any).rpc('upsert_agency_bank_atomic', baseParams);
+        rpcData = retry.data;
+        rpcErr = retry.error;
+      }
 
       if (!rpcErr) {
         return rpcData?.bank ?? rpcData;
@@ -195,9 +220,8 @@ export function useAgencyBanks() {
 
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'bank', agencyId);
       toast.success('Bank account updated successfully');
     },
     onError: (error: unknown) => {
@@ -243,9 +267,8 @@ export function useAgencyBanks() {
 
       if (error) throw error;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['agency_banks'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'bank', agencyId);
       toast.success('Bank account deleted successfully');
     },
     onError: (error: unknown) => {

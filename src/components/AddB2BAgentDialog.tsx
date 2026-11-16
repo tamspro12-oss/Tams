@@ -22,8 +22,14 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useEnterToNext } from "@/hooks/useEnterToNext";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { getTodayDateString } from "@/components/ui/LockedDateField";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 export interface AddB2BAgentDialogProps {
   open: boolean;
@@ -42,6 +48,9 @@ export function AddB2BAgentDialog({
 }: AddB2BAgentDialogProps) {
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const { addAgent, updateAgent } = useB2BAgents();
   const { balances, upsertBalance } = useOpeningBalances();
 
@@ -155,8 +164,6 @@ export function AddB2BAgentDialog({
       return;
     }
 
-    isSubmittingRef.current = true;
-    setLoading(true);
     const agentData = {
       agent_name: trimmedName,
       business_name: businessName.trim() || null,
@@ -170,50 +177,76 @@ export function AddB2BAgentDialog({
       notes: notes.trim() || null,
     };
 
-    try {
-      let savedResult: B2BAgent | null = null;
-      if (editAgent) {
-        await updateAgent.mutateAsync({ id: editAgent.id, agent: agentData });
-        savedResult = { ...editAgent, ...agentData } as B2BAgent;
-      } else {
-        savedResult = await addAgent.mutateAsync(agentData);
-      }
+    await runUiAtomicSave<{ saved: B2BAgent | null; usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setLoading,
+      contextLabel: "AddB2BAgentDialog.handleSaveInternal",
+      fallbackErrorMessage: "Failed to save B2B agent. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        const rpcRes = await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_b2b_agent_atomic",
+          {
+            p_agent_data: agentData,
+            p_id: editAgent?.id ?? null,
+            p_opening_balance_amount: parsedOpBal,
+            p_opening_balance_type: openingBalanceType,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              let savedResult: B2BAgent | null = null;
+              if (editAgent) {
+                await updateAgent.mutateAsync({ id: editAgent.id, agent: agentData });
+                savedResult = { ...editAgent, ...agentData } as B2BAgent;
+              } else {
+                savedResult = await addAgent.mutateAsync(agentData);
+              }
+              if (savedResult?.id && parsedOpBal > 0) {
+                await upsertBalance.mutateAsync({
+                  party_type: "b2b_agent",
+                  party_id: savedResult.id,
+                  balance_type: openingBalanceType,
+                  amount: parsedOpBal,
+                  as_of_date: getTodayDateString(),
+                  notes: "Initial brought-forward opening balance",
+                });
+              }
+              return { agent: savedResult };
+            },
+          }
+        );
 
-      // Record optional Opening Balance
-      if (savedResult?.id && parsedOpBal > 0) {
-        await upsertBalance.mutateAsync({
-          party_type: "b2b_agent",
-          party_id: savedResult.id,
-          balance_type: openingBalanceType,
-          amount: parsedOpBal,
-          as_of_date: getTodayDateString(),
-          notes: "Initial brought-forward opening balance",
+        return { saved: (rpcRes?.agent ?? rpcRes) as B2BAgent | null, usedFallbackToast };
+      },
+      onSuccess: ({ saved, usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editAgent ? "B2B Agent updated successfully" : "B2B Agent added successfully");
+        }
+        if (saved) {
+          onSaved?.(saved);
+        }
+        if (isSaveAndAddNext) {
+          resetForm("");
+          toast.info("Ready for next agent");
+          setTimeout(() => {
+            agentNameRef.current?.focus();
+          }, 60);
+        } else {
+          onOpenChange(false);
+        }
+        runBackgroundTask("AddB2BAgentDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
         });
-      }
-
-      if (savedResult) {
-        onSaved?.(savedResult);
-      }
-
-      if (isSaveAndAddNext) {
-        resetForm("");
-        toast.info("Ready for next agent");
-        setTimeout(() => {
-          agentNameRef.current?.focus();
-        }, 60);
-      } else {
-        onOpenChange(false);
-      }
-    } catch (error) {
-      console.error("[AddB2BAgentDialog.handleSaveInternal]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setLoading(false);
-    }
+      },
+    });
   };
 
   // Keyboard navigation hook (covers both form inputs and pinned footer Save button)
-  useEnterToNext({
+  useFormKeyboardNav({
     containerRef: dialogRef,
     enabled: open,
     isDirty: Boolean(agentName.trim() || businessName.trim() || phone.trim()),

@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import {
   resolveAccountIdForPayment,
-  invalidateAllFinancialQueries,
+  refreshAffectedFinancialQueries,
 } from "@/lib/accountingEngine";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
@@ -23,8 +23,13 @@ import { SearchableSelect, SearchableSelectItem } from "@/components/ui/Searchab
 import { AgencyBankSelect } from "@/components/banks/AgencyBankSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import {
+  createRequestId,
+  rpcWithPreSqlFallback,
+  runBackgroundTask,
+} from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import {
   ServiceType,
   TripType,
@@ -72,6 +77,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [manualInvoiceNo, setManualInvoiceNo] = useState<string>("");
   const formRef = useRef<HTMLDivElement>(null);
   const isSubmittingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   // Top Row: Date, Service Type, Client, Vendor
   const [invoiceDate, setInvoiceDate] = useState<string>(
@@ -176,6 +182,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     }
 
     if (open) {
+      requestIdRef.current = createRequestId();
       setInvoiceDate(getTodayDateString());
       setIsManualInvoiceNo(false);
       setManualInvoiceNo("");
@@ -303,107 +310,109 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         toast.error("Please enter a custom invoice number or switch back to Auto");
         return;
       }
-      const available = await checkDocumentNumberAvailable("invoice", customNo);
-      if (!available) {
-        toast.error("This invoice number already exists. Please use Auto or choose another number.");
-        return;
-      }
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const resolvedAccountId =
+      amountPaidNum > 0
+        ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
+        : null;
 
-    try {
-      const resolvedAccountId =
-        amountPaidNum > 0
-          ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
-          : null;
+    // Build composite notes summarizing service details
+    const serviceDetailsSummary = [
+      service === "Ticket"
+        ? `[Air Ticket - ${tripType}] ${origin}->${destination} | Date: ${flightDate} ${flightTime} | PNR: ${pnr} | Airline: ${airline}`
+        : null,
+      service === "Umrah"
+        ? `[Umrah Package] Route: ${umrahDepartureCity}->${umrahArrivalCity} | Dates: ${umrahFlightDate} to ${umrahReturnDate} | Transport: ${umrahTransport} | Makkah: ${makkahHotel} (${makkahNights}N) | Madinah: ${madinahHotel} (${madinahNights}N) | Ziyarat: ${ziyaratIncluded ? "Yes" : "No"}`
+        : null,
+      service === "Visa"
+        ? `[Visa] Country: ${visaCountry} | Type: ${visaType} | Validity: ${visaValidity}`
+        : null,
+      service === "Hotel"
+        ? `[Hotel] ${hotelName} (${hotelCity}) | In: ${hotelCheckIn} Out: ${hotelCheckOut} | Room: ${hotelRoomType}`
+        : null,
+      service === "Insurance"
+        ? `[Insurance] ${insurancePlan} (${insuranceDuration} Days)`
+        : null,
+      service === "Other" && generalDescription ? `[Other Service] ${generalDescription}` : null,
+      notes ? `Remarks: ${notes}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-      // Build composite notes summarizing service details
-      const serviceDetailsSummary = [
-        service === "Ticket"
-          ? `[Air Ticket - ${tripType}] ${origin}->${destination} | Date: ${flightDate} ${flightTime} | PNR: ${pnr} | Airline: ${airline}`
-          : null,
-        service === "Umrah"
-          ? `[Umrah Package] Route: ${umrahDepartureCity}->${umrahArrivalCity} | Dates: ${umrahFlightDate} to ${umrahReturnDate} | Transport: ${umrahTransport} | Makkah: ${makkahHotel} (${makkahNights}N) | Madinah: ${madinahHotel} (${madinahNights}N) | Ziyarat: ${ziyaratIncluded ? "Yes" : "No"}`
-          : null,
-        service === "Visa"
-          ? `[Visa] Country: ${visaCountry} | Type: ${visaType} | Validity: ${visaValidity}`
-          : null,
-        service === "Hotel"
-          ? `[Hotel] ${hotelName} (${hotelCity}) | In: ${hotelCheckIn} Out: ${hotelCheckOut} | Room: ${hotelRoomType}`
-          : null,
-        service === "Insurance"
-          ? `[Insurance] ${insurancePlan} (${insuranceDuration} Days)`
-          : null,
-        service === "Other" && generalDescription ? `[Other Service] ${generalDescription}` : null,
-        notes ? `Remarks: ${notes}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
+    const legacyParams = {
+      p_invoice_no: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
+      p_service: service,
+      p_party_id: partyId || null,
+      p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
+      p_client_amount: clientAmtNum,
+      p_vendor_payable: vendorPayNum,
+      p_amount_paid: amountPaidNum,
+      p_payment_mode: paymentMode,
+      p_account_id: resolvedAccountId,
+      p_invoice_date: invoiceDate,
+      p_due_date: remainingAmountNum > 0 ? remainingDueDate || invoiceDate : invoiceDate,
+      p_pnr: pnr || null,
+      p_ticket_no: ticketNo || null,
+      p_passport_no: passengers[0]?.passport || null,
+      p_passengers: passengers,
+      p_currency: "PKR",
+      p_more_details: {
+        remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
+        selected_bank: paymentMode === "bank" ? selectedBank || null : null,
+        client_name: selectedParty?.name || passengers[0]?.name || null,
+        trip_type: service === "Ticket" ? tripType : null,
+        origin: service === "Ticket" ? origin : null,
+        destination: service === "Ticket" ? destination : null,
+        airline: service === "Ticket" ? airline : null,
+      },
+      p_notes: serviceDetailsSummary || null,
+      p_is_manual: isManualInvoiceNo,
+    };
 
-      // Single atomic RPC saves booking invoice, ledger entries, initial payment voucher & account transaction together
-      const data = await withDuplicateRetry(
-        async () => {
-          const { data: rpcData, error } = await (supabase as any).rpc("save_booking_invoice", {
-            p_invoice_no: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
-            p_service: service,
-            p_party_id: partyId || null,
-            p_vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-            p_client_amount: clientAmtNum,
-            p_vendor_payable: vendorPayNum,
-            p_amount_paid: amountPaidNum,
-            p_payment_mode: paymentMode,
-            p_account_id: resolvedAccountId,
-            p_invoice_date: invoiceDate,
-            p_due_date: remainingAmountNum > 0 ? remainingDueDate || invoiceDate : invoiceDate,
-            p_pnr: pnr || null,
-            p_ticket_no: ticketNo || null,
-            p_passport_no: passengers[0]?.passport || null,
-            p_passengers: passengers,
-            p_currency: "PKR",
-            p_more_details: {
-              remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
-              selected_bank: paymentMode === "bank" ? selectedBank || null : null,
-              client_name: selectedParty?.name || passengers[0]?.name || null,
-              trip_type: service === "Ticket" ? tripType : null,
-              origin: service === "Ticket" ? origin : null,
-              destination: service === "Ticket" ? destination : null,
-              airline: service === "Ticket" ? airline : null,
-            },
-            p_notes: serviceDetailsSummary || null,
-            p_is_manual: isManualInvoiceNo,
-          });
+    const agencyIdForRefresh = currentAgencyId || agency?.id;
 
-          if (error) throw error;
-          if (rpcData && rpcData.success === false) {
-            throw new Error(rpcData.error || "Failed to save booking invoice");
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "BookingInvoiceForm.handleSave",
+      fallbackErrorMessage: "Failed to save booking invoice. Please try again.",
+      execute: async (requestId) => {
+        const rpcData = await rpcWithPreSqlFallback(
+          supabase as any,
+          "save_booking_invoice",
+          { ...legacyParams, p_request_id: requestId },
+          { legacyParams, isAutoMode: !isManualInvoiceNo }
+        );
+        if (rpcData && rpcData.success === false) {
+          throw new Error(rpcData.error || "Failed to save booking invoice");
+        }
+        return rpcData;
+      },
+      onSuccess: (data) => {
+        const assignedInvoiceNo =
+          data?.invoice_no || (isManualInvoiceNo ? manualInvoiceNo.trim() : autoInvoiceNo);
+        const confirmationSnapshot = downloadConfirmation ? getPdfData(assignedInvoiceNo) : null;
+        const invoiceSnapshot = downloadInvoice ? getPdfData(assignedInvoiceNo) : null;
+
+        // Close modal IMMEDIATELY after save confirmation
+        onOpenChange(false);
+        toast.success(`Booking Invoice ${assignedInvoiceNo} saved`);
+
+        // Refresh only affected queries and generate optional PDFs in background
+        runBackgroundTask("booking-invoice-post-save", () => {
+          refreshAffectedFinancialQueries(queryClient, "invoice", agencyIdForRefresh);
+          if (confirmationSnapshot) {
+            generateBookingConfirmationPdf(confirmationSnapshot);
           }
-          return rpcData;
-        },
-        { isAutoMode: !isManualInvoiceNo }
-      );
-
-      await invalidateAllFinancialQueries(queryClient, currentAgencyId || agency?.id);
-
-      const assignedInvoiceNo = data?.invoice_no || (isManualInvoiceNo ? manualInvoiceNo.trim() : autoInvoiceNo);
-      toast.success(`Booking Invoice ${assignedInvoiceNo} created successfully`);
-
-      if (downloadConfirmation) {
-        generateBookingConfirmationPdf(getPdfData(assignedInvoiceNo));
-      }
-      if (downloadInvoice) {
-        generateBookingInvoicePdf(getPdfData(assignedInvoiceNo));
-      }
-
-      onOpenChange(false);
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      handleSupabaseError(err, "Failed to save booking invoice", "BookingInvoiceForm.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+          if (invoiceSnapshot) {
+            generateBookingInvoicePdf(invoiceSnapshot);
+          }
+          if (onSuccess) onSuccess();
+        });
+      },
+    });
   };
 
   const isDirty = useMemo(() => {

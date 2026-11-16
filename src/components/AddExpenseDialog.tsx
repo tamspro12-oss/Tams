@@ -14,6 +14,12 @@ import { PaymentModeSelect } from "@/components/PaymentModeSelect";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { toast } from "sonner";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddExpenseDialogProps {
   open: boolean;
@@ -28,6 +34,10 @@ const SECTIONS = [
 export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpenseDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [paymentMode, setPaymentMode] = useState(editExpense?.payment_mode || "cash");
   const [bankName, setBankName] = useState(editExpense?.bank_name || "");
@@ -61,12 +71,8 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
     e.preventDefault();
     if (isSubmittingRef.current || addExpense.isPending || updateExpense.isPending) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
-
-    const formData = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const formData = new FormData(formEl);
     const expenseType = (formData.get("expenseType") as string || "").trim();
     const amountVal = parseFloat(formData.get("amount") as string);
 
@@ -94,23 +100,61 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
       bank_name: paymentMode === "bank" ? bankName : null,
     };
 
-    isSubmittingRef.current = true;
-    try {
-      if (editExpense) {
-        await updateExpense.mutateAsync({ id: editExpense.id, expense: expenseData });
+    await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsSubmittingLocal,
+      contextLabel: "AddExpenseDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save expense. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        if (editExpense) {
+          usedFallbackToast = true;
+          await updateExpense.mutateAsync({ id: editExpense.id, expense: expenseData });
+          return { usedFallbackToast };
+        }
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "record_expense",
+          {
+            p_amount: amountVal,
+            p_account_id: null,
+            p_category: expenseType,
+            p_date: expenseData.expense_date,
+            p_method: paymentMode || "cash",
+            p_reference_no: null,
+            p_notes: expenseData.notes || null,
+            p_party_id: null,
+            p_party_type: null,
+            p_bank_name: expenseData.bank_name,
+            p_is_manual: false,
+            p_request_id: requestId,
+          },
+          {
+            isAutoMode: true,
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              return await addExpense.mutateAsync(expenseData);
+            },
+          }
+        );
+        return { usedFallbackToast };
+      },
+      onSuccess: ({ usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editExpense ? "Expense updated successfully" : "Expense recorded successfully");
+        }
         onOpenChange(false);
-      } else {
-        await addExpense.mutateAsync(expenseData);
-        onOpenChange(false);
-        e.currentTarget.reset();
-        setPaymentMode("cash");
-        setBankName("");
-      }
-    } catch (error) {
-      console.error("[AddExpenseDialog.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-    }
+        if (!editExpense) {
+          formEl.reset();
+          setPaymentMode("cash");
+          setBankName("");
+        }
+        runBackgroundTask("AddExpenseDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "expense", userAgencyId);
+        });
+      },
+    });
   };
 
   return (
@@ -273,10 +317,10 @@ export function AddExpenseDialog({ open, onOpenChange, editExpense }: AddExpense
               <Button
                 type="submit"
                 data-save-button="true"
-                disabled={addExpense.isPending || updateExpense.isPending}
+                disabled={isSubmittingLocal || addExpense.isPending || updateExpense.isPending}
                 className="px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25"
               >
-                {addExpense.isPending || updateExpense.isPending
+                {isSubmittingLocal || addExpense.isPending || updateExpense.isPending
                   ? (editExpense ? "Updating..." : "Adding...")
                   : (editExpense ? "Update Expense" : "Add Expense")}
               </Button>

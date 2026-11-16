@@ -16,8 +16,10 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useParties, type Party } from "@/hooks/useParties";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import { withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { cn } from "@/lib/utils";
@@ -67,6 +69,7 @@ export function NewReminderDialog({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
   const [isAddPartyOpen, setIsAddPartyOpen] = useState(false);
   const [addPartyType, setAddPartyType] = useState<"client" | "vendor">("client");
 
@@ -191,78 +194,101 @@ export function NewReminderDialog({
       return;
     }
 
-    if (isManualReminderNo) {
-      const customNo = manualReminderNo.trim();
-      if (!customNo) {
-        toast.error("Please enter a custom reminder number or switch back to Auto");
-        return;
-      }
-      const available = await checkDocumentNumberAvailable("reminder", customNo);
-      if (!available) {
-        toast.error("This reminder number already exists. Please use Auto or choose another number.");
-        return;
-      }
+    if (isManualReminderNo && !manualReminderNo.trim()) {
+      toast.error("Please enter a custom reminder number or switch back to Auto");
+      return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      const payload: any = {
-        agency_id: agencyId,
-        reminder_no: isManualReminderNo ? manualReminderNo.trim() : null,
-        title: title.trim(),
-        type: remType.toLowerCase().includes("flight") ? "flight" : remType.toLowerCase().includes("umrah") ? "umrah" : remType.toLowerCase().includes("expense") ? "daily_expense" : "manual",
-        remind_date: remDate,
-        remind_time: remTime ? `${remTime}:00` : "09:00:00",
-        notes: [
-          `Type: ${remType}`,
-          `Priority: ${priority.toUpperCase()}`,
-          linkTo !== "none" ? `Linked To: ${linkTo.toUpperCase()} (${selectedRecordLabel || selectedRecordId})` : null,
-          repeat !== "none" ? `Repeat: ${repeat}` : null,
-          remindBefore !== "at_time" ? `Remind Before: ${remindBefore}` : null,
-          remarks ? `Remarks: ${remarks}` : null,
-        ]
-          .filter(Boolean)
-          .join(" | "),
-        is_completed: false,
-        is_recurring_daily: repeat === "daily",
-      };
+    const mappedType = remType.toLowerCase().includes("flight")
+      ? "flight"
+      : remType.toLowerCase().includes("umrah")
+      ? "umrah"
+      : remType.toLowerCase().includes("expense")
+      ? "daily_expense"
+      : "manual";
+    const mappedTime = remTime ? `${remTime}:00` : "09:00:00";
+    const builtNotes = [
+      `Type: ${remType}`,
+      `Priority: ${priority.toUpperCase()}`,
+      linkTo !== "none" ? `Linked To: ${linkTo.toUpperCase()} (${selectedRecordLabel || selectedRecordId})` : null,
+      repeat !== "none" ? `Repeat: ${repeat}` : null,
+      remindBefore !== "at_time" ? `Remind Before: ${remindBefore}` : null,
+      remarks ? `Remarks: ${remarks}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
 
-      const savedRow = await withDuplicateRetry(
-        async () => {
-          const { data, error } = await (supabase as any)
-            .from("reminders")
-            .insert(payload)
-            .select("reminder_no")
-            .single();
-          if (error) throw error;
-          return data;
-        },
-        { isAutoMode: !isManualReminderNo }
-      );
-
-      toast.success(`Reminder ${savedRow?.reminder_no || ""} saved successfully`.replace(/\s+/g, " "));
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
-      queryClient.invalidateQueries({ queryKey: ["recent_reminders_sheet"] });
-      queryClient.invalidateQueries({ queryKey: ["alert_custom_reminders"] });
-      refetchRecent();
-
-      // Clear input fields (keep Date/Time)
-      setTitle("");
-      setRemarks("");
-      setLinkTo("none");
-      setSelectedRecordId("");
-      setSelectedRecordLabel("");
-      setIsManualReminderNo(false);
-      setManualReminderNo("");
-
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      handleSupabaseError(err, "Failed to save reminder", "NewReminderDialog.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+    await runUiAtomicSave<any>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "NewReminderDialog.handleSave",
+      fallbackErrorMessage: "Failed to save reminder",
+      execute: async (requestId) => {
+        const res = await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_reminder_atomic",
+          {
+            p_title: title.trim(),
+            p_type: mappedType,
+            p_remind_date: remDate,
+            p_remind_time: mappedTime,
+            p_notes: builtNotes || null,
+            p_is_recurring_daily: repeat === "daily",
+            p_reminder_no: isManualReminderNo ? manualReminderNo.trim() : null,
+            p_is_manual: isManualReminderNo,
+            p_request_id: requestId,
+          },
+          {
+            isAutoMode: !isManualReminderNo,
+            legacyFallback: async () => {
+              const payload: any = {
+                agency_id: agencyId,
+                reminder_no: isManualReminderNo ? manualReminderNo.trim() : null,
+                title: title.trim(),
+                type: mappedType,
+                remind_date: remDate,
+                remind_time: mappedTime,
+                notes: builtNotes,
+                is_completed: false,
+                is_recurring_daily: repeat === "daily",
+              };
+              return await withDuplicateRetry(
+                async () => {
+                  const { data, error } = await (supabase as any)
+                    .from("reminders")
+                    .insert(payload)
+                    .select("reminder_no")
+                    .single();
+                  if (error) throw error;
+                  return data;
+                },
+                { isAutoMode: !isManualReminderNo }
+              );
+            },
+          }
+        );
+        return res?.reminder ?? res;
+      },
+      onSuccess: (savedRow) => {
+        toast.success(`Reminder ${savedRow?.reminder_no || ""} saved successfully`.replace(/\s+/g, " "));
+        setTitle("");
+        setRemarks("");
+        setLinkTo("none");
+        setSelectedRecordId("");
+        setSelectedRecordLabel("");
+        setIsManualReminderNo(false);
+        setManualReminderNo("");
+        onOpenChange(false);
+        if (onSuccess) onSuccess();
+        runBackgroundTask("NewReminderDialog.refresh", () => {
+          queryClient.invalidateQueries({ queryKey: ["reminders"] });
+          queryClient.invalidateQueries({ queryKey: ["recent_reminders_sheet"] });
+          queryClient.invalidateQueries({ queryKey: ["alert_custom_reminders"] });
+          refetchRecent();
+        });
+      },
+    });
   };
 
   useFormKeyboardNav({
@@ -611,7 +637,6 @@ export function NewReminderDialog({
             type="button"
             variant="ghost"
             size="sm"
-            tabIndex={-1}
             onClick={() => onOpenChange(false)}
             className="h-8 text-xs font-semibold"
           >

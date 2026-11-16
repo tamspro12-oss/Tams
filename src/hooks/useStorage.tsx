@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useCurrentAgencyId } from '@/hooks/useCurrentAgencyId';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { invalidateAllFinancialQueries } from '@/lib/accountingEngine';
+import { refreshAffectedFinancialQueries } from '@/lib/accountingEngine';
 import { parseSupabaseError } from '@/lib/supabaseErrorHandler';
 
 export function useClients() {
@@ -69,7 +69,7 @@ export function useClients() {
       return cloudStorage.addClient(client);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Client added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -104,7 +104,7 @@ export function useClients() {
       return { previousClients };
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Client updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -142,7 +142,7 @@ export function useClients() {
       return { previousClients };
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Client deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -202,7 +202,7 @@ export function useBookings() {
       return cloudStorage.addBooking(booking);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'invoice', userAgencyId);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast({ title: 'Booking added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
@@ -225,7 +225,7 @@ export function useBookings() {
       return cloudStorage.updateBooking(id, booking);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'invoice', userAgencyId);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast({ title: 'Booking updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
@@ -248,7 +248,7 @@ export function useBookings() {
       return cloudStorage.deleteBooking(id);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'invoice', userAgencyId);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast({ title: 'Booking deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
@@ -328,7 +328,7 @@ export function useExpenses() {
       return cloudStorage.addExpense(expense);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'expense', userAgencyId);
       toast({ title: 'Expense added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -350,7 +350,7 @@ export function useExpenses() {
       return cloudStorage.updateExpense(id, expense);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'expense', userAgencyId);
       toast({ title: 'Expense updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -372,7 +372,7 @@ export function useExpenses() {
       return cloudStorage.deleteExpense(id);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'expense', userAgencyId);
       toast({ title: 'Expense deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -451,7 +451,7 @@ export function useVendors() {
       return cloudStorage.addVendor(vendor);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Vendor added successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -473,7 +473,7 @@ export function useVendors() {
       return cloudStorage.updateVendor(id, vendor);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Vendor updated successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },
@@ -495,7 +495,7 @@ export function useVendors() {
       return cloudStorage.deleteVendor(id);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
       toast({ title: 'Vendor deleted successfully' });
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
     },

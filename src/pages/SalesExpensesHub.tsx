@@ -20,7 +20,7 @@ import { DateFilter, DatePresetFilterValue } from "@/components/DateFilter";
 import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import {
   isInvoiceVoidedOrRefunded,
-  invalidateAllFinancialQueries,
+  scheduleCoalescedFinancialRefresh,
   getKarachiYmd,
 } from "@/lib/accountingEngine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,7 @@ import {
 } from "@/lib/pdf/bookingInvoicePdf";
 import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
 import { CopyValue } from "@/components/ui/CopyValue";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { matchesMultipleFields, cleanPastedSearch } from "@/lib/searchUtils";
 import { cn } from "@/lib/utils";
 import {
@@ -61,6 +62,8 @@ export default function SalesExpensesHub() {
   const [isVoucherOpen, setIsVoucherOpen] = useState(false);
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+  const [inspectedInvoice, setInspectedInvoice] = useState<any | null>(null);
+  const [inspectedVoucher, setInspectedVoucher] = useState<any | null>(null);
 
   // Filters state for Booking Invoices (Default This Month)
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -87,6 +90,9 @@ export default function SalesExpensesHub() {
   });
 
   // Real-time live sync across devices for all sales and financial operations
+  const triggerSalesHubSync = () =>
+    scheduleCoalescedFinancialRefresh(queryClient, "sales-hub-rt", "all", 350);
+
   useRealtimeMultiTable({
     channelPrefix: "sales-hub-live-sync",
     enabled: !!userAgencyId,
@@ -94,37 +100,37 @@ export default function SalesExpensesHub() {
       {
         table: "booking_invoices",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "payment_vouchers",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "expenses",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "refunds",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "parties",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "accounts",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
       {
         table: "transactions",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-        callback: () => invalidateAllFinancialQueries(queryClient, userAgencyId),
+        callback: triggerSalesHubSync,
       },
     ],
   });
@@ -133,7 +139,7 @@ export default function SalesExpensesHub() {
     setSearchParams({ tab: val }, { replace: true });
   };
 
-  // Sync URL search parameters for ?new=1 and ?date=today
+  // Sync URL search parameters for ?new=1, ?date=today/all, ?search=...
   useEffect(() => {
     const isNew = searchParams.get("new") === "1" || searchParams.get("action") === "new";
     if (isNew) {
@@ -143,8 +149,19 @@ export default function SalesExpensesHub() {
       else if (currentTab === "expenses") setIsExpenseOpen(true);
     }
 
-    if (searchParams.get("date") === "today") {
+    const urlDate = searchParams.get("date");
+    if (urlDate === "today") {
       setInvoiceDateFilter({ preset: "today" });
+    } else if (urlDate === "all") {
+      if (currentTab === "booking-invoice") setInvoiceDateFilter({ preset: "all" });
+      else if (currentTab === "payment-vouchers") setVoucherDateFilter({ preset: "all" });
+    }
+
+    const urlSearch = searchParams.get("search");
+    if (urlSearch) {
+      const cleaned = cleanPastedSearch(urlSearch);
+      if (currentTab === "booking-invoice") setInvoiceSearch(cleaned);
+      else if (currentTab === "payment-vouchers") setVoucherSearch(cleaned);
     }
   }, [searchParams, currentTab]);
 
@@ -168,8 +185,9 @@ export default function SalesExpensesHub() {
 
       let query = (supabase as any)
         .from("booking_invoices")
-        .select("*, party:parties!party_id(name), vendor:parties!vendor_id(name)")
-        .order("invoice_date", { ascending: false });
+        .select("*, party:parties!party_id(name, phone), vendor:parties!vendor_id(name)")
+        .order("invoice_date", { ascending: false })
+        .order("created_at", { ascending: false });
 
       if (activeAgencyId) {
         query = query.eq("agency_id", activeAgencyId);
@@ -221,8 +239,9 @@ export default function SalesExpensesHub() {
 
       let query = (supabase as any)
         .from("payment_vouchers")
-        .select("*, party:parties!party_id(name)")
-        .order("voucher_date", { ascending: false });
+        .select("*, party:parties!party_id(name, phone)")
+        .order("voucher_date", { ascending: false })
+        .order("created_at", { ascending: false });
 
       if (activeAgencyId) {
         query = query.eq("agency_id", activeAgencyId);
@@ -258,6 +277,29 @@ export default function SalesExpensesHub() {
       }));
     },
   });
+
+  // Open deep-linked record when navigated from Global Search (?highlightId=...)
+  const highlightId = searchParams.get("highlightId");
+  useEffect(() => {
+    if (!highlightId) return;
+    if (currentTab === "booking-invoice" && invoices.length > 0) {
+      const matched = invoices.find((inv: any) => inv.id === highlightId);
+      if (matched) {
+        setInspectedInvoice(matched);
+        const next = new URLSearchParams(searchParams);
+        next.delete("highlightId");
+        setSearchParams(next, { replace: true });
+      }
+    } else if (currentTab === "payment-vouchers" && vouchers.length > 0) {
+      const matched = vouchers.find((v: any) => v.id === highlightId);
+      if (matched) {
+        setInspectedVoucher(matched);
+        const next = new URLSearchParams(searchParams);
+        next.delete("highlightId");
+        setSearchParams(next, { replace: true });
+      }
+    }
+  }, [highlightId, currentTab, invoices, vouchers, searchParams, setSearchParams]);
 
   // 3. Fetch Expenses (Strictly scoped by agency_id)
   const { data: expenses = [], refetch: refetchExpenses } = useQuery({
@@ -391,15 +433,18 @@ export default function SalesExpensesHub() {
           return false;
         }
 
-        // 2. Search query live-filter: invoice number, client name, PNR, ticket number, service, status
+        // 2. Search query live-filter: invoice number, client/vendor name, phone, PNR, ticket/passport number, service, status
         if (invoiceSearch.trim()) {
           const clientName = inv.party?.name || inv.client_name || "";
           const matches = matchesMultipleFields(
             [
               inv.invoice_no,
               clientName,
+              inv.vendor?.name,
+              inv.party?.phone,
               inv.pnr,
               inv.ticket_no,
+              inv.passport_no,
               inv.service,
               inv.payment_status,
             ],
@@ -455,6 +500,7 @@ export default function SalesExpensesHub() {
           [
             v.voucher_no,
             v.party?.name,
+            v.party?.phone,
             v.reference_no,
             v.notes,
             v.payment_mode,
@@ -1624,6 +1670,211 @@ export default function SalesExpensesHub() {
         onOpenChange={handleModalClose(setIsExpenseOpen)}
         onSuccess={refetchExpenses}
       />
+
+      {/* Global Search Deep-Link Quick View: Invoice */}
+      <Dialog open={Boolean(inspectedInvoice)} onOpenChange={(o) => !o && setInspectedInvoice(null)}>
+        <DialogContent className="max-w-lg">
+          {inspectedInvoice && (() => {
+            const total = Number(inspectedInvoice.client_amount) || 0;
+            const paid = Number(inspectedInvoice.paid_amount) || 0;
+            const remaining = isInvoiceVoidedOrRefunded(inspectedInvoice) ? 0 : Math.max(0, total - paid);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between gap-2 text-base pr-6">
+                    <span className="font-mono font-bold text-primary">
+                      {inspectedInvoice.invoice_no}
+                    </span>
+                    <StatusChip
+                      status={inspectedInvoice.payment_status || "pending"}
+                      label={String(inspectedInvoice.payment_status || "pending").toUpperCase()}
+                      size="sm"
+                    />
+                  </DialogTitle>
+                  <DialogDescription className="text-xs">
+                    Booking Invoice Record · {inspectedInvoice.invoice_date || "—"}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-xs pt-1">
+                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
+                    <div>
+                      <span className="text-muted-foreground block">Client / Party</span>
+                      <span className="font-semibold">{inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Service</span>
+                      <span className="font-semibold">{inspectedInvoice.service || "Booking"}</span>
+                    </div>
+                    {inspectedInvoice.vendor?.name && (
+                      <div>
+                        <span className="text-muted-foreground block">Vendor</span>
+                        <span className="font-medium">{inspectedInvoice.vendor.name}</span>
+                      </div>
+                    )}
+                    {(inspectedInvoice.pnr || inspectedInvoice.ticket_no) && (
+                      <div>
+                        <span className="text-muted-foreground block">PNR / Ticket</span>
+                        <span className="font-mono font-medium">
+                          {[inspectedInvoice.pnr, inspectedInvoice.ticket_no].filter(Boolean).join(" / ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-lg border bg-card font-mono">
+                    <div>
+                      <span className="text-[11px] text-muted-foreground block font-sans">Total</span>
+                      <span className="font-bold">PKR {total.toLocaleString()}</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-muted-foreground block font-sans">Paid</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">PKR {paid.toLocaleString()}</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-muted-foreground block font-sans">Remaining</span>
+                      <span className="font-bold text-amber-600 dark:text-amber-400">PKR {remaining.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2 pt-2 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() =>
+                        generateBookingConfirmationPdf({
+                          invoiceNo: inspectedInvoice.invoice_no,
+                          invoiceDate: inspectedInvoice.invoice_date,
+                          clientName: inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer",
+                          service: inspectedInvoice.service || "Ticket",
+                          pnr: inspectedInvoice.pnr,
+                          ticketNo: inspectedInvoice.ticket_no,
+                          passportNo: inspectedInvoice.passport_no,
+                          clientAmount: total,
+                          paidAmount: paid,
+                          balanceDue: remaining,
+                          passengers: inspectedInvoice.passengers || [],
+                          currency: inspectedInvoice.currency,
+                        })
+                      }
+                    >
+                      <FileCheck className="w-3.5 h-3.5" />
+                      Confirmation PDF
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() =>
+                        generateBookingInvoicePdf({
+                          invoiceNo: inspectedInvoice.invoice_no,
+                          invoiceDate: inspectedInvoice.invoice_date,
+                          clientName: inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer",
+                          service: inspectedInvoice.service || "Ticket",
+                          clientAmount: total,
+                          paidAmount: paid,
+                          balanceDue: remaining,
+                          pnr: inspectedInvoice.pnr,
+                          ticketNo: inspectedInvoice.ticket_no,
+                          passportNo: inspectedInvoice.passport_no,
+                          passengers: inspectedInvoice.passengers || [],
+                          currency: inspectedInvoice.currency,
+                        })
+                      }
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Invoice PDF
+                    </Button>
+                    <Button type="button" size="sm" className="h-8 text-xs" onClick={() => setInspectedInvoice(null)}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Global Search Deep-Link Quick View: Voucher */}
+      <Dialog open={Boolean(inspectedVoucher)} onOpenChange={(o) => !o && setInspectedVoucher(null)}>
+        <DialogContent className="max-w-md">
+          {inspectedVoucher && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between gap-2 text-base pr-6">
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                    {inspectedVoucher.voucher_no}
+                  </span>
+                  <StatusChip
+                    status={inspectedVoucher.direction === "received" || inspectedVoucher.direction === "in" ? "paid" : "pending"}
+                    label={inspectedVoucher.direction === "out" || inspectedVoucher.direction === "paid" ? "PAID OUT" : "RECEIVED"}
+                    size="sm"
+                  />
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Payment Voucher Record · {inspectedVoucher.voucher_date || "—"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-xs pt-1">
+                <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
+                  <div>
+                    <span className="text-muted-foreground block">Party</span>
+                    <span className="font-semibold">{inspectedVoucher.party?.name || "Customer"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Mode</span>
+                    <span className="font-semibold uppercase">{inspectedVoucher.payment_mode || "cash"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Amount</span>
+                    <span className="font-mono font-bold">
+                      PKR {(Number(inspectedVoucher.amount) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  {inspectedVoucher.reference_no && (
+                    <div>
+                      <span className="text-muted-foreground block">Ref / Cheque #</span>
+                      <span className="font-mono">{inspectedVoucher.reference_no}</span>
+                    </div>
+                  )}
+                </div>
+                {inspectedVoucher.notes && (
+                  <p className="text-xs text-muted-foreground bg-card p-2.5 rounded border">
+                    {inspectedVoucher.notes}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={() =>
+                      generateVoucherPdf({
+                        voucherNo: inspectedVoucher.voucher_no,
+                        voucherDate: inspectedVoucher.voucher_date,
+                        direction: inspectedVoucher.direction,
+                        paymentMode: inspectedVoucher.payment_mode,
+                        partyName: inspectedVoucher.party?.name || "Customer",
+                        amount: inspectedVoucher.amount,
+                        accountName: `${String(inspectedVoucher.payment_mode || "cash").toUpperCase()} Account`,
+                        notes: inspectedVoucher.notes,
+                      })
+                    }
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print Receipt
+                  </Button>
+                  <Button type="button" size="sm" className="h-8 text-xs" onClick={() => setInspectedVoucher(null)}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

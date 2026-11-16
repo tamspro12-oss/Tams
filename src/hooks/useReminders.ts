@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import type { Reminder, ReminderSettings, DynamicTravelAlert } from "@/types/reminder";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export function useReminders() {
   const queryClient = useQueryClient();
@@ -145,22 +146,51 @@ export function useReminders() {
 
   // Mutations
   const addReminder = useMutation({
-    mutationFn: async (data: Omit<Reminder, "id" | "agency_id" | "created_at" | "updated_at">) => {
+    mutationFn: async (
+      data: Omit<Reminder, "id" | "agency_id" | "created_at" | "updated_at"> & {
+        requestId?: string;
+        isManual?: boolean;
+      }
+    ) => {
       if (!agencyId) throw new Error("No agency ID");
-      const { data: { user } } = await supabase.auth.getUser();
+      const { requestId, isManual, ...fields } = data;
+      const manualNo = String((fields as any).reminder_no || "").trim();
+      const isAuto = !isManual && !manualNo;
 
-      const { data: inserted, error } = await supabase
-        .from("reminders" as any)
-        .insert({
-          ...data,
-          agency_id: agencyId,
-          user_id: user?.id,
-        })
-        .select()
-        .single();
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        "save_reminder_atomic",
+        {
+          p_title: fields.title,
+          p_type: fields.type || "manual",
+          p_remind_date: fields.remind_date,
+          p_remind_time: fields.remind_time || "09:00:00",
+          p_notes: fields.notes ?? null,
+          p_is_recurring_daily: Boolean(fields.is_recurring_daily),
+          p_reminder_no: isAuto ? null : manualNo,
+          p_is_manual: !isAuto,
+          p_request_id: requestId ?? null,
+        },
+        {
+          isAutoMode: isAuto,
+          legacyFallback: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            const { data: inserted, error } = await supabase
+              .from("reminders" as any)
+              .insert({
+                ...fields,
+                agency_id: agencyId,
+                user_id: user?.id,
+              })
+              .select()
+              .single();
+            if (error) throw error;
+            return inserted;
+          },
+        }
+      );
 
-      if (error) throw error;
-      return inserted;
+      return rpcRes?.reminder ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });

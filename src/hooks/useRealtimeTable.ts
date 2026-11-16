@@ -9,6 +9,7 @@ export interface UseRealtimeTableOptions<T = any> {
   filter?: string;
   enabled?: boolean;
   channelPrefix?: string;
+  debounceMs?: number;
   onInsert?: (payload: RealtimePostgresChangesPayload<T>) => void;
   onUpdate?: (payload: RealtimePostgresChangesPayload<T>) => void;
   onDelete?: (payload: RealtimePostgresChangesPayload<T>) => void;
@@ -26,6 +27,7 @@ export interface RealtimeTableSubConfig {
 export interface UseRealtimeMultiTableOptions {
   channelPrefix?: string;
   enabled?: boolean;
+  debounceMs?: number;
   subscriptions: RealtimeTableSubConfig[];
 }
 
@@ -53,6 +55,7 @@ export function useRealtimeTable<T = any>({
   filter,
   enabled = true,
   channelPrefix,
+  debounceMs = 350,
   onInsert,
   onUpdate,
   onDelete,
@@ -67,6 +70,23 @@ export function useRealtimeTable<T = any>({
     const prefix = channelPrefix || `rt-${table}`;
     const channelName = generateUniqueChannelName(prefix);
     const channel = supabase.channel(channelName);
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+    const invokeDebounced = (key: string, fn: () => void) => {
+      if (!debounceMs || debounceMs <= 0) {
+        fn();
+        return;
+      }
+      const existing = timers.get(key);
+      if (existing) clearTimeout(existing);
+      timers.set(
+        key,
+        setTimeout(() => {
+          timers.delete(key);
+          fn();
+        }, debounceMs)
+      );
+    };
 
     try {
       if (onInsert || onUpdate || onDelete) {
@@ -74,21 +94,21 @@ export function useRealtimeTable<T = any>({
           channel.on(
             "postgres_changes",
             { event: "INSERT", schema, table, filter },
-            (payload) => callbacksRef.current.onInsert?.(payload as any)
+            (payload) => invokeDebounced("insert", () => callbacksRef.current.onInsert?.(payload as any))
           );
         }
         if (onUpdate) {
           channel.on(
             "postgres_changes",
             { event: "UPDATE", schema, table, filter },
-            (payload) => callbacksRef.current.onUpdate?.(payload as any)
+            (payload) => invokeDebounced("update", () => callbacksRef.current.onUpdate?.(payload as any))
           );
         }
         if (onDelete) {
           channel.on(
             "postgres_changes",
             { event: "DELETE", schema, table, filter },
-            (payload) => callbacksRef.current.onDelete?.(payload as any)
+            (payload) => invokeDebounced("delete", () => callbacksRef.current.onDelete?.(payload as any))
           );
         }
       }
@@ -97,7 +117,7 @@ export function useRealtimeTable<T = any>({
         channel.on(
           "postgres_changes",
           { event, schema, table, filter },
-          (payload) => callbacksRef.current.onChange?.(payload as any)
+          (payload) => invokeDebounced("change", () => callbacksRef.current.onChange?.(payload as any))
         );
       }
 
@@ -111,20 +131,23 @@ export function useRealtimeTable<T = any>({
     }
 
     return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
       supabase.removeChannel(channel).catch((err) => {
         console.warn(`[useRealtimeTable] Error removing channel (${channelName}):`, err);
       });
     };
-  }, [table, schema, event, filter, enabled, channelPrefix]);
+  }, [table, schema, event, filter, enabled, channelPrefix, debounceMs]);
 }
 
 /**
  * Reusable hook for multi-table Supabase Realtime subscriptions (e.g., Dashboard).
- * Configures all .on(...) handlers on a single unique channel before subscribing.
+ * Coalesces multi-table event bursts within `debounceMs` (default 350ms) to avoid refetch storms.
  */
 export function useRealtimeMultiTable({
   channelPrefix = "rt-multi",
   enabled = true,
+  debounceMs = 350,
   subscriptions,
 }: UseRealtimeMultiTableOptions) {
   const subsRef = useRef(subscriptions);
@@ -140,6 +163,34 @@ export function useRealtimeMultiTable({
 
     const channelName = generateUniqueChannelName(channelPrefix);
     const channel = supabase.channel(channelName);
+    let burstTimer: ReturnType<typeof setTimeout> | null = null;
+    const pendingByIndex = new Map<number, RealtimePostgresChangesPayload<any>>();
+
+    const scheduleFlush = () => {
+      if (!debounceMs || debounceMs <= 0) {
+        const entries = Array.from(pendingByIndex.entries());
+        pendingByIndex.clear();
+        entries.forEach(([idx, payload]) => subsRef.current[idx]?.callback?.(payload));
+        return;
+      }
+      if (burstTimer) clearTimeout(burstTimer);
+      burstTimer = setTimeout(() => {
+        burstTimer = null;
+        // Deduplicate identical callbacks triggered by multi-table atomic RPC writes
+        const entries = Array.from(pendingByIndex.entries());
+        pendingByIndex.clear();
+        if (entries.length > 0) {
+          const seenCallbacks = new Set<(payload: RealtimePostgresChangesPayload<any>) => void>();
+          for (const [idx, payload] of entries) {
+            const cb = subsRef.current[idx]?.callback;
+            if (cb && !seenCallbacks.has(cb)) {
+              seenCallbacks.add(cb);
+              cb(payload);
+            }
+          }
+        }
+      }, debounceMs);
+    };
 
     try {
       subsRef.current.forEach((sub, index) => {
@@ -152,10 +203,8 @@ export function useRealtimeMultiTable({
             filter: sub.filter,
           },
           (payload) => {
-            const currentSub = subsRef.current[index];
-            if (currentSub?.callback) {
-              currentSub.callback(payload);
-            }
+            pendingByIndex.set(index, payload);
+            scheduleFlush();
           }
         );
       });
@@ -170,10 +219,12 @@ export function useRealtimeMultiTable({
     }
 
     return () => {
+      if (burstTimer) clearTimeout(burstTimer);
+      pendingByIndex.clear();
       supabase.removeChannel(channel).catch((err) => {
         console.warn(`[useRealtimeMultiTable] Error removing channel (${channelName}):`, err);
       });
     };
-  }, [channelPrefix, enabled, subKey]);
+  }, [channelPrefix, enabled, debounceMs, subKey]);
 }
 
