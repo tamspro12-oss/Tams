@@ -43,7 +43,7 @@ const FEATURES_DATA: FeatureDef[] = [
 
 function FeaturesPageContent() {
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Features — TAMS Pro Travel Agency Management System"
         description="Explore core operational modules: bookings, visas, vouchers, parties, expenses, Umrah calculator, and branded invoices."
@@ -52,16 +52,16 @@ function FeaturesPageContent() {
 
       <PublicHeader currentPath="/features" />
 
-      <main className="flex-1 min-h-0 py-6 lg:py-4 xl:py-6 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between lg:justify-evenly">
+      <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between gap-10">
         {/* Top Heading */}
-        <div className="text-center mb-5 lg:mb-3 xl:mb-4">
-          <h1 className="font-serif text-3xl sm:text-4xl lg:text-[clamp(2rem,3.1vw,2.85rem)] font-normal text-slate-900 dark:text-slate-100 tracking-tight">
+        <div className="text-center">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#0F172A] tracking-tight">
             Everything your agency needs
           </h1>
         </div>
 
-        {/* 10 Equal Tiles Grid: 5 cols desktop (2x5), 3 tablet, 2 mobile */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-3.5 xl:gap-4">
+        {/* 10 Equal Tiles Grid: grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 */}
+        <div className="tams-features-grid tams-grid-gap grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {FEATURES_DATA.map((feature) => (
             <Tile
               key={feature.id}
@@ -69,20 +69,20 @@ function FeaturesPageContent() {
               title={feature.title}
               caption={feature.caption}
               noTruncate
-              className="!h-[132px] lg:!h-[130px] xl:!h-[148px] !p-4"
+              className="h-[144px] sm:h-[152px] p-5"
             />
           ))}
         </div>
 
         {/* Centered CTA Row below grid */}
-        <div className="mt-6 lg:mt-3 xl:mt-5 text-center flex items-center justify-center gap-3">
+        <div className="pt-2 text-center flex flex-wrap items-center justify-center gap-3.5">
           <Link to="/login">
             <Button
               size="lg"
-              className="h-10 lg:h-10 xl:h-11 px-6 text-sm font-semibold gap-2 bg-[#0B1530] text-white hover:bg-[#122146] border border-[#1A294E] shadow-sm transition-all"
+              className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
             >
               <span>Login</span>
-              <ArrowRight className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+              <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
             </Button>
           </Link>
 
@@ -90,7 +90,7 @@ function FeaturesPageContent() {
             <Button
               variant="outline"
               size="lg"
-              className="h-10 lg:h-10 xl:h-11 px-6 text-sm font-semibold border-[#E6E2D8] dark:border-[#1A294E] text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
             >
               Sign Up Free
             </Button>

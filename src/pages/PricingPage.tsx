@@ -10,7 +10,7 @@ import { PRICING_PLANS } from "@/config/pricingPlans";
 
 function PricingPageContent() {
   return (
-    <div className="min-h-screen bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Pricing — TAMS Pro Travel Agency Management System"
         description="Simple and transparent pricing for travel agencies. Monthly and yearly subscription plans."
@@ -22,68 +22,68 @@ function PricingPageContent() {
       <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between">
         {/* Header */}
         <div className="text-center mb-10 sm:mb-12">
-          <span className="text-[11px] font-semibold tracking-wider uppercase text-[#C9A961] block mb-2">
+          <span className="text-xs font-semibold tracking-widest uppercase text-[#0F5E63] block mb-2.5">
             PRICING
           </span>
-          <h1 className="font-serif text-3xl sm:text-5xl font-normal text-slate-900 dark:text-slate-100 tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-bold text-[#0F172A] tracking-tight">
             Choose your plan
           </h1>
         </div>
 
-        {/* 2 Plan Cards Side-by-Side (Equal height, scaled token skin) */}
-        <div className="max-w-[820px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch my-auto">
+        {/* 2 Plan Cards Side-by-Side */}
+        <div className="tams-pricing-grid tams-pricing-gap max-w-[840px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch my-auto">
           {PRICING_PLANS.map((plan) => {
             const isPopular = plan.popular;
 
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-2xl p-6 sm:p-8 flex flex-col justify-between bg-white dark:bg-[#0E1B3B] shadow-sm transition-all duration-200 hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 ${
+                className={`tams-pricing-card relative rounded-2xl p-8 flex flex-col justify-between bg-white transition-all duration-200 ${
                   isPopular
-                    ? "border-2 border-[#C9A961] shadow-md shadow-[#C9A961]/5"
-                    : "border border-[#E6E2D8] dark:border-[#1A294E] hover:border-[#C9A961] dark:hover:border-[#C9A961]"
+                    ? "tams-card-featured border-2 border-teal-600/80 shadow-xl shadow-teal-900/5"
+                    : "tams-card tams-card-interactive"
                 }`}
               >
-                {/* Popular Pill */}
+                {/* Floating Popular Pill on top border */}
                 {isPopular && (
-                  <div className="absolute -top-3 right-6">
-                    <span className="bg-[#C9A961] text-[#0B1530] text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-sm">
+                  <div className="absolute -top-3.5 right-6">
+                    <span className="bg-[#0F5E63] text-white text-[10px] font-bold tracking-wider uppercase px-3 py-1 rounded-full shadow-sm border border-teal-700/30">
                       Most Popular
                     </span>
                   </div>
                 )}
 
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-lg font-bold text-[#0F172A] tracking-tight">
                       {plan.name}
                     </h2>
-                    <span className="text-[11px] font-semibold text-[#C9A961] bg-[#C9A961]/10 px-2 py-0.5 rounded">
+                    <span className="bg-teal-50 text-teal-700 border border-teal-200/60 text-xs font-semibold px-2.5 py-0.5 rounded-full">
                       {plan.discountBadge}
                     </span>
                   </div>
 
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  <div className="mt-5 flex items-baseline gap-2">
+                    <span className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0F172A] tabular-nums">
                       {plan.priceFormatted}
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-sm font-medium text-[#64748B]">
                       {plan.period}
                     </span>
                   </div>
 
-                  <div className="mt-1 text-xs text-slate-400 line-through">
+                  <div className="mt-1.5 text-xs font-medium text-[#64748B] line-through tabular-nums">
                     was {plan.originalPriceFormatted}
                   </div>
 
-                  {/* Bullets with gold check icon */}
-                  <ul className="mt-6 space-y-2.5 border-t border-[#E6E2D8] dark:border-[#1A294E] pt-6 text-sm text-slate-700 dark:text-slate-300">
+                  {/* Bullets with circular teal-tinted check icons */}
+                  <ul className="mt-6 space-y-3 border-t border-slate-200/80 pt-6 text-sm text-[#475569]">
                     {plan.bullets.map((bullet, idx) => (
-                      <li key={idx} className="flex items-center gap-2.5">
-                        <div className="w-4 h-4 rounded-full bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0">
-                          <Check className="w-2.5 h-2.5 text-[#C9A961]" strokeWidth={2} />
+                      <li key={idx} className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-teal-50 border border-teal-200/60 text-teal-700 flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 text-teal-700" strokeWidth={2.25} />
                         </div>
-                        <span className="text-xs sm:text-sm">{bullet}</span>
+                        <span className="text-sm text-[#475569]">{bullet}</span>
                       </li>
                     ))}
                   </ul>
@@ -93,14 +93,19 @@ function PricingPageContent() {
                   <Link to={plan.ctaLink} className="block w-full">
                     <Button
                       size="lg"
-                      className={`w-full h-11 text-xs sm:text-sm font-semibold justify-center gap-2 transition-all ${
+                      className={`group w-full h-11 rounded-xl text-sm font-semibold justify-center gap-2 transition-all ${
                         isPopular
-                          ? "bg-[#0B1530] text-white hover:bg-[#122146] border border-[#C9A961]/40 shadow-sm"
-                          : "border border-[#E6E2D8] dark:border-[#1A294E] bg-transparent text-slate-900 dark:text-slate-100 hover:bg-black/5 dark:hover:bg-white/5"
+                          ? "tams-btn-primary bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md"
+                          : "tams-btn-secondary bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9]"
                       }`}
                     >
                       <span>{plan.ctaText}</span>
-                      <ArrowRight className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+                      <ArrowRight
+                        className={`w-4 h-4 transition-transform duration-200 group-hover:translate-x-1 ${
+                          isPopular ? "text-teal-100" : "text-[#0F5E63]"
+                        }`}
+                        strokeWidth={1.75}
+                      />
                     </Button>
                   </Link>
                 </div>

@@ -1,0 +1,220 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ==========================================================================
+   TAMS PRO — Scoped Public Marketing Design System (.tams-public-landing)
+   Strictly isolated to /, /features, /pricing, /contact and PublicHeader/Footer.
+   Does not affect /app/* or any logged-in dashboard view.
+   ========================================================================== */
+
+.tams-public-landing,
+.tams-public-landing.min-h-screen {
+  background-color: #F8FAFC !important;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -5%, rgba(13, 148, 136, 0.08), transparent 65%) !important;
+  background-repeat: no-repeat !important;
+  color: #0F172A !important;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  min-height: 100vh !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tams-public-landing main {
+  background-color: transparent !important;
+  background: transparent !important;
+  height: auto !important;
+}
+
+.tams-public-landing h1,
+.tams-public-landing h2,
+.tams-public-landing h3,
+.tams-public-landing h4,
+.tams-public-landing h5,
+.tams-public-landing h6 {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  color: #0F172A;
+  letter-spacing: -0.025em;
+}
+
+/* Restore Tailwind border-radius utilities inside public pages only */
+.tams-public-landing .rounded-sm {
+  border-radius: 0.125rem !important;
+}
+.tams-public-landing .rounded {
+  border-radius: 0.25rem !important;
+}
+.tams-public-landing .rounded-md {
+  border-radius: 0.375rem !important;
+}
+.tams-public-landing .rounded-lg {
+  border-radius: 0.5rem !important;
+}
+.tams-public-landing .rounded-xl {
+  border-radius: 0.75rem !important;
+}
+.tams-public-landing .rounded-2xl {
+  border-radius: 1rem !important;
+}
+.tams-public-landing .rounded-3xl {
+  border-radius: 1.5rem !important;
+}
+.tams-public-landing .rounded-full {
+  border-radius: 9999px !important;
+}
+
+/* Luxury Card Surface */
+.tams-public-landing .tams-card {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tams-public-landing .tams-card-interactive:hover {
+  transform: translateY(-4px);
+  border-color: rgba(20, 184, 166, 0.35) !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(13, 148, 136, 0.06);
+}
+
+/* Featured Pricing Card */
+.tams-public-landing .tams-card-featured {
+  background-color: #FFFFFF !important;
+  border: 2px solid rgba(13, 148, 136, 0.8) !important;
+  box-shadow: 0 20px 25px -5px rgba(19, 78, 74, 0.06), 0 8px 10px -6px rgba(19, 78, 74, 0.04);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tams-public-landing .tams-card-featured:hover {
+  transform: translateY(-4px);
+  border-color: #0D9488 !important;
+  box-shadow: 0 24px 32px -6px rgba(19, 78, 74, 0.1), 0 10px 14px -6px rgba(19, 78, 74, 0.06);
+}
+
+/* Primary & Secondary Buttons */
+.tams-public-landing .tams-btn-primary {
+  background-color: #0F5E63 !important;
+  color: #FFFFFF !important;
+  border: 1px solid #0F5E63 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 94, 99, 0.18);
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tams-public-landing .tams-btn-primary:hover {
+  background-color: #0B4A4E !important;
+  border-color: #0B4A4E !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(15, 94, 99, 0.25);
+}
+
+.tams-public-landing .tams-btn-secondary {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tams-public-landing .tams-btn-secondary:hover {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  border-color: #94A3B8 !important;
+}
+
+/* Protect public pages from global mobile table/dashboard overrides in index.css */
+@media (max-width: 768px) {
+  .tams-public-landing main {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .tams-public-landing .tams-pricing-card {
+    padding: 1.75rem !important;
+  }
+
+  .tams-public-landing .tams-banner-card {
+    padding: 1.5rem !important;
+  }
+
+  .tams-public-landing .tams-grid-gap {
+    gap: 0.875rem !important;
+  }
+
+  .tams-public-landing .tams-pricing-gap {
+    gap: 1.5rem !important;
+  }
+
+  .tams-public-landing a,
+  .tams-public-landing button {
+    min-height: unset;
+    min-width: unset;
+  }
+}
+
+@media (min-width: 640px) {
+  .tams-public-landing main {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+  .tams-public-landing .tams-pricing-card {
+    padding: 2rem !important;
+  }
+  .tams-public-landing .tams-grid-gap {
+    gap: 1rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tams-public-landing main {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+  }
+}
+
+/* Preserve responsive multi-column grids on touch devices inside public landing */
+@media (hover: none) and (pointer: coarse) {
+  .tams-public-landing main .tams-home-strip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-features-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-pricing-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-contact-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (min-width: 640px) {
+  .tams-public-landing main .tams-home-strip-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-features-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-contact-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (min-width: 768px) {
+  .tams-public-landing main .tams-pricing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (min-width: 1024px) {
+  .tams-public-landing main .tams-home-strip-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-features-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+

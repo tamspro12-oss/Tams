@@ -24,27 +24,27 @@ export const Tile: React.FC<TileProps> = ({
   noTruncate = false,
 }) => {
   const iconBoxClasses = compact
-    ? "w-9 h-9 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0 transition-colors group-hover:bg-[#C9A961]/20"
-    : "w-11 h-11 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center shrink-0 transition-colors group-hover:bg-[#C9A961]/20";
+    ? "w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center shrink-0 transition-all duration-200 group-hover:bg-teal-100/80 group-hover:border-teal-200/80 group-hover:text-[#0F5E63]"
+    : "w-11 h-11 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center shrink-0 transition-all duration-200 group-hover:bg-teal-100/80 group-hover:border-teal-200/80 group-hover:text-[#0F5E63]";
 
-  const iconClasses = compact ? "w-[18px] h-[18px]" : "w-[22px] h-[22px]";
+  const iconClasses = compact ? "w-[18px] h-[18px]" : "w-5 h-5";
 
   const content = (
     <div
-      className={`group relative flex flex-col justify-between h-[132px] sm:h-[148px] rounded-2xl p-5 border border-[#E6E2D8] dark:border-[#1A294E] bg-white dark:bg-[#0E1B3B] shadow-sm hover:shadow-md hover:border-[#C9A961] dark:hover:border-[#C9A961] transition-all duration-200 motion-reduce:transition-none hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
+      className={`tams-card tams-card-interactive group relative flex flex-col justify-between h-[136px] sm:h-[148px] rounded-2xl p-5 bg-white hover:-translate-y-1 hover:border-teal-500/30 hover:shadow-lg transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
     >
       <div className={iconBoxClasses}>
-        <Icon className={iconClasses} strokeWidth={1.5} />
+        <Icon className={iconClasses} strokeWidth={1.75} />
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto pt-3">
         <h3
           className={
             noTruncate
               ? compact
-                ? "text-[13px] xl:text-sm font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-tight whitespace-normal"
-                : "text-[15px] font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-snug whitespace-normal"
-              : "text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-snug truncate"
+                ? "text-[13.5px] xl:text-sm font-semibold text-[#0F172A] tracking-tight leading-snug whitespace-normal"
+                : "text-[15px] font-semibold text-[#0F172A] tracking-tight leading-snug whitespace-normal"
+              : "text-[15px] sm:text-base font-semibold text-[#0F172A] tracking-tight leading-snug truncate"
           }
         >
           {title}
@@ -53,8 +53,8 @@ export const Tile: React.FC<TileProps> = ({
           <p
             className={
               noTruncate
-                ? "text-[12px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5 font-normal"
-                : "text-[13px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal"
+                ? "text-[12.5px] text-[#64748B] leading-snug mt-1 font-normal"
+                : "text-[13px] text-[#64748B] line-clamp-1 mt-1 font-normal"
             }
           >
             {caption}
@@ -66,20 +66,24 @@ export const Tile: React.FC<TileProps> = ({
 
   if (to) {
     return (
-      <Link to={to} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A961] rounded-2xl">
+      <Link
+        to={to}
+        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-2xl"
+      >
         {content}
       </Link>
     );
   }
 
   if (href) {
-    const isExternal = href.startsWith("http") || href.startsWith("mailto:") || href.startsWith("tel:");
+    const isExternal =
+      href.startsWith("http") || href.startsWith("mailto:") || href.startsWith("tel:");
     return (
       <a
         href={href}
         target={isExternal && href.startsWith("http") ? "_blank" : undefined}
         rel={isExternal && href.startsWith("http") ? "noopener noreferrer" : undefined}
-        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A961] rounded-2xl"
+        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-2xl"
       >
         {content}
       </a>
@@ -88,4 +92,3 @@ export const Tile: React.FC<TileProps> = ({
 
   return content;
 };
-

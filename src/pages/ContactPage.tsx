@@ -11,7 +11,7 @@ import { CONTACT_CHANNELS } from "@/config/marketingContent";
 
 function ContactPageContent() {
   return (
-    <div className="min-h-screen bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Contact — TAMS Pro Travel Agency Management System"
         description="Get in touch with TAMS Pro support, sales, and account onboarding."
@@ -23,17 +23,17 @@ function ContactPageContent() {
       <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between">
         {/* Header */}
         <div className="text-center mb-10 sm:mb-12">
-          <span className="text-[11px] font-semibold tracking-wider uppercase text-[#C9A961] block mb-2">
+          <span className="text-xs font-semibold tracking-widest uppercase text-[#0F5E63] block mb-2.5">
             CONTACT
           </span>
-          <h1 className="font-serif text-3xl sm:text-5xl font-normal text-slate-900 dark:text-slate-100 tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-bold text-[#0F172A] tracking-tight">
             Get in touch
           </h1>
         </div>
 
-        <div className="max-w-[820px] mx-auto w-full my-auto space-y-4">
+        <div className="max-w-[840px] mx-auto w-full my-auto space-y-5">
           {/* Row of 3 equal Tile boxes */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="tams-contact-grid tams-grid-gap grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Tile
               icon={Mail}
               title={CONTACT_CHANNELS.email.label}
@@ -54,16 +54,16 @@ function ContactPageContent() {
             />
           </div>
 
-          {/* Under it: One wide tile in the same skin */}
-          <div className="rounded-2xl p-6 sm:p-7 border border-[#E6E2D8] dark:border-[#1A294E] bg-white dark:bg-[#0E1B3B] shadow-sm hover:border-[#C9A961] dark:hover:border-[#C9A961] transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          {/* Under it: Full-width rounded-2xl horizontal banner */}
+          <div className="tams-card tams-banner-card rounded-2xl p-6 sm:p-8 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
+              <h2 className="text-base sm:text-lg font-bold text-[#0F172A] tracking-tight">
                 Request account access
               </h2>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs sm:text-sm text-[#475569] mt-1">
                 Create your agency account to get started immediately.
               </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 font-normal">
+              <p className="text-xs text-[#64748B] mt-1.5 font-normal">
                 Replies within 24 hours.
               </p>
             </div>
@@ -71,10 +71,10 @@ function ContactPageContent() {
             <Link to="/signup" className="shrink-0">
               <Button
                 size="lg"
-                className="w-full sm:w-auto h-11 px-6 text-xs sm:text-sm font-semibold gap-2 bg-[#0B1530] text-white hover:bg-[#122146] border border-[#1A294E] shadow-sm"
+                className="tams-btn-primary group w-full sm:w-auto h-11 px-6 rounded-xl text-xs sm:text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all"
               >
                 <span>Sign Up Free</span>
-                <ArrowRight className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+                <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
               </Button>
             </Link>
           </div>

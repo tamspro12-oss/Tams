@@ -37,7 +37,7 @@ const STRIP_ITEMS: StripItem[] = [
 
 function HomepageContent() {
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F8F6F1] dark:bg-[#070D1E] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="TAMS Pro — Travel Agency Management System"
         description="Bookings, visas, accounts and vouchers, everything in one place."
@@ -46,29 +46,29 @@ function HomepageContent() {
 
       <PublicHeader currentPath="/" />
 
-      <main className="flex-1 min-h-0 flex flex-col justify-between">
+      <main className="flex-1 flex flex-col justify-between max-w-[1200px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-16 gap-10 sm:gap-12">
         {/* Section A: Hero */}
-        <section className="flex-1 flex flex-col justify-center py-6 lg:py-3 xl:py-6 px-4 sm:px-6 lg:px-8 text-center max-w-[1200px] mx-auto w-full">
-          <div className="w-9 h-9 rounded-xl bg-[#C9A961]/10 dark:bg-[#C9A961]/15 text-[#C9A961] flex items-center justify-center mx-auto mb-3 lg:mb-3 xl:mb-4 border border-[#C9A961]/30">
-            <Plane className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+        <section className="flex flex-col items-center justify-center text-center max-w-4xl mx-auto w-full pt-2 sm:pt-4">
+          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center mx-auto mb-6 shadow-xs">
+            <Plane className="w-5 h-5 text-teal-700" strokeWidth={1.75} />
           </div>
 
-          <h1 className="font-serif text-3xl sm:text-4xl lg:text-[clamp(2rem,3.3vw,3.4rem)] lg:whitespace-nowrap font-normal text-slate-900 dark:text-slate-100 tracking-tight leading-[1.15] max-w-6xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-bold text-[#0F172A] tracking-tight leading-[1.12] max-w-4xl mx-auto">
             Travel Agency Management System
           </h1>
 
-          <p className="mt-2.5 lg:mt-2 xl:mt-3 text-sm sm:text-base lg:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          <p className="mt-4 sm:mt-5 text-base sm:text-lg lg:text-xl text-[#475569] max-w-2xl mx-auto leading-relaxed font-normal">
             Bookings, visas, accounts and vouchers, everything in one place.
           </p>
 
-          <div className="mt-5 lg:mt-4 xl:mt-6 flex items-center justify-center gap-3">
+          <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5">
             <Link to="/login">
               <Button
                 size="lg"
-                className="h-10 lg:h-10 xl:h-11 px-6 text-sm font-semibold gap-2 bg-[#0B1530] text-white hover:bg-[#122146] border border-[#1A294E] shadow-sm transition-all"
+                className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
               >
                 <span>Login</span>
-                <ArrowRight className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+                <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
               </Button>
             </Link>
 
@@ -76,7 +76,7 @@ function HomepageContent() {
               <Button
                 variant="outline"
                 size="lg"
-                className="h-10 lg:h-10 xl:h-11 px-6 text-sm font-semibold border-[#E6E2D8] dark:border-[#1A294E] text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
               >
                 Sign Up Free
               </Button>
@@ -85,8 +85,8 @@ function HomepageContent() {
         </section>
 
         {/* Section B: 7 Equal Tiles Strip */}
-        <section className="py-4 lg:py-2.5 xl:py-5 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full text-center">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3.5">
+        <section className="w-full text-center">
+          <div className="tams-home-strip-grid tams-grid-gap grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3.5 lg:gap-4">
             {STRIP_ITEMS.map((item) => (
               <Tile
                 key={item.id}
@@ -95,37 +95,37 @@ function HomepageContent() {
                 compact
                 noTruncate
                 to="/features"
-                className="!h-[104px] sm:!h-[110px] xl:!h-[126px] !p-3.5 xl:!p-4"
+                className="h-[118px] sm:h-[124px] lg:h-[132px] p-4"
               />
             ))}
           </div>
 
-          <div className="mt-3 lg:mt-3 xl:mt-4">
+          <div className="mt-6">
             <Link
               to="/features"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-[#C9A961] dark:hover:text-[#C9A961] transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5E63] hover:text-[#0B4A4E] transition-colors group"
             >
               <span>View all features</span>
-              <ArrowRight className="w-4 h-4 text-[#C9A961]" strokeWidth={1.5} />
+              <ArrowRight className="w-4 h-4 text-[#0F5E63] transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
             </Link>
           </div>
         </section>
 
-        {/* Section C: Final CTA Thin Band */}
-        <section className="border-t border-[#E6E2D8] dark:border-[#1A294E] py-4 lg:py-3 xl:py-4 px-4 sm:px-6 lg:px-8 text-center bg-white/40 dark:bg-[#070D1E]/40">
-          <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-5">
-            <h2 className="font-serif text-lg sm:text-xl text-slate-900 dark:text-slate-100">
+        {/* Section C: Final CTA Clean Rounded-2xl Banner */}
+        <section className="w-full">
+          <div className="tams-banner-card rounded-2xl bg-white border border-slate-200/80 shadow-sm px-6 py-6 sm:px-8 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <h2 className="text-lg sm:text-xl font-semibold text-[#0F172A] tracking-tight">
               Ready to get started?
             </h2>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <Link to="/login">
                 <Button
                   size="sm"
-                  className="h-8 px-4 text-xs font-semibold gap-1.5 bg-[#0B1530] text-white hover:bg-[#122146] border border-[#1A294E]"
+                  className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
                 >
                   <span>Login</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#C9A961]" strokeWidth={1.5} />
+                  <ArrowRight className="w-3.5 h-3.5 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
                 </Button>
               </Link>
 
@@ -133,7 +133,7 @@ function HomepageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-4 text-xs font-semibold border-[#E6E2D8] dark:border-[#1A294E] text-slate-800 dark:text-slate-200"
+                  className="tams-btn-secondary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
                 >
                   Sign Up Free
                 </Button>
