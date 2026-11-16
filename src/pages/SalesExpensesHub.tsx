@@ -34,7 +34,16 @@ import {
 } from "@/lib/pdf/bookingInvoicePdf";
 import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
 import { CopyValue } from "@/components/ui/CopyValue";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { InvoiceQuickViewDialog } from "@/components/vouchers/InvoiceQuickViewDialog";
+import { VoucherQuickViewDialog } from "@/components/vouchers/VoucherQuickViewDialog";
+import {
+  clearPaymentVoucherUrlParams,
+  hasPaymentPermission,
+  parsePaymentVoucherUrlParams,
+  type VoucherDirection,
+} from "@/lib/paymentVoucherHelpers";
 import { matchesMultipleFields, cleanPastedSearch } from "@/lib/searchUtils";
 import { cn } from "@/lib/utils";
 import {
@@ -64,6 +73,24 @@ export default function SalesExpensesHub() {
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
   const [inspectedInvoice, setInspectedInvoice] = useState<any | null>(null);
   const [inspectedVoucher, setInspectedVoucher] = useState<any | null>(null);
+  const {
+    isSubUser,
+    isActive,
+    permissions,
+    isLoading: isLoadingPerms,
+  } = useUserPermissions();
+  const canRecordPayments = hasPaymentPermission({
+    isSubUser,
+    isActive,
+    permissions,
+    isLoading: isLoadingPerms,
+  });
+  const [voucherPrefill, setVoucherPrefill] = useState<{
+    partyId?: string;
+    direction?: VoucherDirection;
+    invoiceNo?: string;
+    amount?: number;
+  }>({});
 
   // Filters state for Booking Invoices (Default This Month)
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -139,16 +166,8 @@ export default function SalesExpensesHub() {
     setSearchParams({ tab: val }, { replace: true });
   };
 
-  // Sync URL search parameters for ?new=1, ?date=today/all, ?search=...
+  // Sync URL search parameters for ?new=1&party=...&direction=..., ?date=today/all, ?search=...
   useEffect(() => {
-    const isNew = searchParams.get("new") === "1" || searchParams.get("action") === "new";
-    if (isNew) {
-      if (currentTab === "booking-invoice") setIsInvoiceOpen(true);
-      else if (currentTab === "payment-vouchers") setIsVoucherOpen(true);
-      else if (currentTab === "refunds-voids") setIsRefundOpen(true);
-      else if (currentTab === "expenses") setIsExpenseOpen(true);
-    }
-
     const urlDate = searchParams.get("date");
     if (urlDate === "today") {
       setInvoiceDateFilter({ preset: "today" });
@@ -163,7 +182,49 @@ export default function SalesExpensesHub() {
       if (currentTab === "booking-invoice") setInvoiceSearch(cleaned);
       else if (currentTab === "payment-vouchers") setVoucherSearch(cleaned);
     }
-  }, [searchParams, currentTab]);
+
+    const isNew = searchParams.get("new") === "1" || searchParams.get("action") === "new";
+    if (isNew) {
+      if (currentTab === "booking-invoice") {
+        setIsInvoiceOpen(true);
+      } else if (currentTab === "payment-vouchers") {
+        if (isLoadingPerms) return;
+        const parsed = parsePaymentVoucherUrlParams(searchParams);
+        if (!canRecordPayments) {
+          toast.error("You do not have permission to record payments.");
+          if (parsed.hasTransientParams) {
+            setSearchParams(clearPaymentVoucherUrlParams(searchParams), { replace: true });
+          }
+          return;
+        }
+        setVoucherPrefill({
+          partyId: parsed.partyId || undefined,
+          direction: parsed.direction,
+          invoiceNo: parsed.invoiceNo || undefined,
+          amount: parsed.amount,
+        });
+        setIsVoucherOpen(true);
+        if (parsed.hasTransientParams) {
+          setSearchParams(clearPaymentVoucherUrlParams(searchParams), { replace: true });
+        }
+      } else if (currentTab === "refunds-voids") {
+        setIsRefundOpen(true);
+      } else if (currentTab === "expenses") {
+        setIsExpenseOpen(true);
+      }
+    }
+  }, [searchParams, currentTab, isLoadingPerms, canRecordPayments, setSearchParams]);
+
+  const handleVoucherClose = (open: boolean) => {
+    setIsVoucherOpen(open);
+    if (!open) {
+      setVoucherPrefill({});
+      const parsed = parsePaymentVoucherUrlParams(searchParams);
+      if (parsed.hasTransientParams) {
+        setSearchParams(clearPaymentVoucherUrlParams(searchParams), { replace: true });
+      }
+    }
+  };
 
   const handleModalClose = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (open: boolean) => {
     setter(open);
@@ -1266,9 +1327,12 @@ export default function SalesExpensesHub() {
                 New Booking Invoice
               </Button>
             )}
-            {currentTab === "payment-vouchers" && (
+            {currentTab === "payment-vouchers" && canRecordPayments && (
               <Button
-                onClick={() => setIsVoucherOpen(true)}
+                onClick={() => {
+                  setVoucherPrefill({});
+                  setIsVoucherOpen(true);
+                }}
                 size="sm"
                 className="bg-[#0B192C] hover:bg-[#1E3E62] text-white text-xs gap-1.5 cursor-pointer"
               >
@@ -1491,8 +1555,15 @@ export default function SalesExpensesHub() {
             emptyState={
               <EmptyState
                 type="empty"
-                actionLabel="Create Payment Voucher"
-                onAction={() => setIsVoucherOpen(true)}
+                actionLabel={canRecordPayments ? "Create Payment Voucher" : undefined}
+                onAction={
+                  canRecordPayments
+                    ? () => {
+                        setVoucherPrefill({});
+                        setIsVoucherOpen(true);
+                      }
+                    : undefined
+                }
               />
             }
           />
@@ -1657,8 +1728,12 @@ export default function SalesExpensesHub() {
       />
       <PaymentVoucherForm
         open={isVoucherOpen}
-        onOpenChange={handleModalClose(setIsVoucherOpen)}
+        onOpenChange={handleVoucherClose}
         onSuccess={refetchVouchers}
+        initialPartyId={voucherPrefill.partyId}
+        initialDirection={voucherPrefill.direction}
+        initialInvoiceNo={voucherPrefill.invoiceNo}
+        initialAmount={voucherPrefill.amount}
       />
       <RefundVoidForm
         open={isRefundOpen}
@@ -1672,209 +1747,16 @@ export default function SalesExpensesHub() {
       />
 
       {/* Global Search Deep-Link Quick View: Invoice */}
-      <Dialog open={Boolean(inspectedInvoice)} onOpenChange={(o) => !o && setInspectedInvoice(null)}>
-        <DialogContent className="max-w-lg">
-          {inspectedInvoice && (() => {
-            const total = Number(inspectedInvoice.client_amount) || 0;
-            const paid = Number(inspectedInvoice.paid_amount) || 0;
-            const remaining = isInvoiceVoidedOrRefunded(inspectedInvoice) ? 0 : Math.max(0, total - paid);
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center justify-between gap-2 text-base pr-6">
-                    <span className="font-mono font-bold text-primary">
-                      {inspectedInvoice.invoice_no}
-                    </span>
-                    <StatusChip
-                      status={inspectedInvoice.payment_status || "pending"}
-                      label={String(inspectedInvoice.payment_status || "pending").toUpperCase()}
-                      size="sm"
-                    />
-                  </DialogTitle>
-                  <DialogDescription className="text-xs">
-                    Booking Invoice Record · {inspectedInvoice.invoice_date || "—"}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 text-xs pt-1">
-                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
-                    <div>
-                      <span className="text-muted-foreground block">Client / Party</span>
-                      <span className="font-semibold">{inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block">Service</span>
-                      <span className="font-semibold">{inspectedInvoice.service || "Booking"}</span>
-                    </div>
-                    {inspectedInvoice.vendor?.name && (
-                      <div>
-                        <span className="text-muted-foreground block">Vendor</span>
-                        <span className="font-medium">{inspectedInvoice.vendor.name}</span>
-                      </div>
-                    )}
-                    {(inspectedInvoice.pnr || inspectedInvoice.ticket_no) && (
-                      <div>
-                        <span className="text-muted-foreground block">PNR / Ticket</span>
-                        <span className="font-mono font-medium">
-                          {[inspectedInvoice.pnr, inspectedInvoice.ticket_no].filter(Boolean).join(" / ")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-lg border bg-card font-mono">
-                    <div>
-                      <span className="text-[11px] text-muted-foreground block font-sans">Total</span>
-                      <span className="font-bold">PKR {total.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-muted-foreground block font-sans">Paid</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">PKR {paid.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-muted-foreground block font-sans">Remaining</span>
-                      <span className="font-bold text-amber-600 dark:text-amber-400">PKR {remaining.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2 pt-2 border-t">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1.5"
-                      onClick={() =>
-                        generateBookingConfirmationPdf({
-                          invoiceNo: inspectedInvoice.invoice_no,
-                          invoiceDate: inspectedInvoice.invoice_date,
-                          clientName: inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer",
-                          service: inspectedInvoice.service || "Ticket",
-                          pnr: inspectedInvoice.pnr,
-                          ticketNo: inspectedInvoice.ticket_no,
-                          passportNo: inspectedInvoice.passport_no,
-                          clientAmount: total,
-                          paidAmount: paid,
-                          balanceDue: remaining,
-                          passengers: inspectedInvoice.passengers || [],
-                          currency: inspectedInvoice.currency,
-                        })
-                      }
-                    >
-                      <FileCheck className="w-3.5 h-3.5" />
-                      Confirmation PDF
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1.5"
-                      onClick={() =>
-                        generateBookingInvoicePdf({
-                          invoiceNo: inspectedInvoice.invoice_no,
-                          invoiceDate: inspectedInvoice.invoice_date,
-                          clientName: inspectedInvoice.party?.name || inspectedInvoice.client_name || "Customer",
-                          service: inspectedInvoice.service || "Ticket",
-                          clientAmount: total,
-                          paidAmount: paid,
-                          balanceDue: remaining,
-                          pnr: inspectedInvoice.pnr,
-                          ticketNo: inspectedInvoice.ticket_no,
-                          passportNo: inspectedInvoice.passport_no,
-                          passengers: inspectedInvoice.passengers || [],
-                          currency: inspectedInvoice.currency,
-                        })
-                      }
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      Invoice PDF
-                    </Button>
-                    <Button type="button" size="sm" className="h-8 text-xs" onClick={() => setInspectedInvoice(null)}>
-                      Close
-                    </Button>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      <InvoiceQuickViewDialog
+        invoice={inspectedInvoice}
+        onClose={() => setInspectedInvoice(null)}
+      />
 
       {/* Global Search Deep-Link Quick View: Voucher */}
-      <Dialog open={Boolean(inspectedVoucher)} onOpenChange={(o) => !o && setInspectedVoucher(null)}>
-        <DialogContent className="max-w-md">
-          {inspectedVoucher && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center justify-between gap-2 text-base pr-6">
-                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                    {inspectedVoucher.voucher_no}
-                  </span>
-                  <StatusChip
-                    status={inspectedVoucher.direction === "received" || inspectedVoucher.direction === "in" ? "paid" : "pending"}
-                    label={inspectedVoucher.direction === "out" || inspectedVoucher.direction === "paid" ? "PAID OUT" : "RECEIVED"}
-                    size="sm"
-                  />
-                </DialogTitle>
-                <DialogDescription className="text-xs">
-                  Payment Voucher Record · {inspectedVoucher.voucher_date || "—"}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 text-xs pt-1">
-                <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
-                  <div>
-                    <span className="text-muted-foreground block">Party</span>
-                    <span className="font-semibold">{inspectedVoucher.party?.name || "Customer"}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block">Mode</span>
-                    <span className="font-semibold uppercase">{inspectedVoucher.payment_mode || "cash"}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block">Amount</span>
-                    <span className="font-mono font-bold">
-                      PKR {(Number(inspectedVoucher.amount) || 0).toLocaleString()}
-                    </span>
-                  </div>
-                  {inspectedVoucher.reference_no && (
-                    <div>
-                      <span className="text-muted-foreground block">Ref / Cheque #</span>
-                      <span className="font-mono">{inspectedVoucher.reference_no}</span>
-                    </div>
-                  )}
-                </div>
-                {inspectedVoucher.notes && (
-                  <p className="text-xs text-muted-foreground bg-card p-2.5 rounded border">
-                    {inspectedVoucher.notes}
-                  </p>
-                )}
-                <div className="flex justify-end gap-2 pt-2 border-t">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs gap-1.5"
-                    onClick={() =>
-                      generateVoucherPdf({
-                        voucherNo: inspectedVoucher.voucher_no,
-                        voucherDate: inspectedVoucher.voucher_date,
-                        direction: inspectedVoucher.direction,
-                        paymentMode: inspectedVoucher.payment_mode,
-                        partyName: inspectedVoucher.party?.name || "Customer",
-                        amount: inspectedVoucher.amount,
-                        accountName: `${String(inspectedVoucher.payment_mode || "cash").toUpperCase()} Account`,
-                        notes: inspectedVoucher.notes,
-                      })
-                    }
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Print Receipt
-                  </Button>
-                  <Button type="button" size="sm" className="h-8 text-xs" onClick={() => setInspectedVoucher(null)}>
-                    Close
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <VoucherQuickViewDialog
+        voucher={inspectedVoucher}
+        onClose={() => setInspectedVoucher(null)}
+      />
     </div>
   );
 }

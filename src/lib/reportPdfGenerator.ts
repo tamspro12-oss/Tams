@@ -10,6 +10,7 @@ export interface AgencyInfo {
   contact_email?: string;
   address?: string;
   city?: string;
+  logo?: string | null;
 }
 
 export interface StatementRow {
@@ -106,12 +107,23 @@ function drawHeader(
   doc.setFillColor(15, 23, 42); // Navy Slate
   doc.rect(0, 0, pageWidth, 5, "F");
 
+  let leftTextX = 14;
+  if (agency?.logo && typeof agency.logo === "string" && agency.logo.startsWith("data:image/")) {
+    try {
+      const imgType = agency.logo.includes("image/png") ? "PNG" : "JPEG";
+      doc.addImage(agency.logo, imgType, 14, 8.5, 13, 13);
+      leftTextX = 30;
+    } catch {
+      leftTextX = 14;
+    }
+  }
+
   // Agency Name
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
   const agencyName = agency?.name || "TAMS PRO ENTERPRISE";
-  doc.text(agencyName.toUpperCase(), 14, 15);
+  doc.text(agencyName.toUpperCase(), leftTextX, 15);
 
   // Agency Contact Details
   doc.setFont("helvetica", "normal");
@@ -123,7 +135,7 @@ function drawHeader(
     agency?.address || agency?.city,
   ].filter(Boolean).join("  •  ");
   if (contacts) {
-    doc.text(contacts, 14, 20);
+    doc.text(contacts, leftTextX, 20);
   }
 
   // Report Title Badge (Right-aligned)
@@ -186,10 +198,20 @@ export interface ExportStatementOptions {
   fromIso: string;
   toIso: string;
   rows: StatementRow[];
-  selectedParties: { id: string; name: string; phone?: string; type?: string; opening_balance?: number }[];
+  selectedParties: {
+    id: string;
+    name: string;
+    code?: string;
+    phone?: string;
+    type?: string;
+    opening_balance?: number;
+  }[];
   separateParties?: boolean;
   detailedJournalLines?: boolean;
   onlyUnpaid?: boolean;
+  broughtForward?: number;
+  broughtForwardLabel?: string;
+  isEmptyPeriod?: boolean;
 }
 
 export function generateAccountStatementPdf(opts: ExportStatementOptions): jsPDF {
@@ -200,8 +222,7 @@ export function generateAccountStatementPdf(opts: ExportStatementOptions): jsPDF
     format: "a4",
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const partyNames = opts.selectedParties.map((p) => p.name).join(", ");
+  const partyNames = opts.selectedParties.map((p) => (p.code ? `${p.name} (${p.code})` : p.name)).join(", ");
   const isMultiParty = opts.selectedParties.length > 1;
 
   if (opts.separateParties && isMultiParty) {
@@ -209,13 +230,37 @@ export function generateAccountStatementPdf(opts: ExportStatementOptions): jsPDF
     opts.selectedParties.forEach((party, idx) => {
       if (idx > 0) doc.addPage();
       const partyRows = opts.rows.filter((r) => r.party_id === party.id || r.party_name === party.name);
-      buildSinglePartyStatement(doc, opts.agency, opts.periodText, party.name, party.opening_balance || 0, partyRows, party.type);
+      const subtitle = party.code ? `${party.name} (${party.code})` : party.name;
+      buildSinglePartyStatement(doc, opts.agency, opts.periodText, subtitle, party.opening_balance || 0, partyRows, party.type);
     });
   } else {
     // Combined statement or single party
-    const subtitle = opts.selectedParties.length === 1 ? opts.selectedParties[0].name : partyNames || "All Parties";
-    const initialOpening = opts.selectedParties.length === 1 ? opts.selectedParties[0].opening_balance || 0 : 0;
-    buildSinglePartyStatement(doc, opts.agency, opts.periodText, subtitle, initialOpening, opts.rows);
+    const singleParty = opts.selectedParties.length === 1 ? opts.selectedParties[0] : null;
+    const subtitle = singleParty
+      ? singleParty.code
+        ? `${singleParty.name} (${singleParty.code})`
+        : singleParty.name
+      : partyNames || "All Parties";
+    const initialOpening =
+      opts.broughtForward !== undefined
+        ? opts.broughtForward
+        : singleParty
+        ? singleParty.opening_balance || 0
+        : 0;
+    buildSinglePartyStatement(
+      doc,
+      opts.agency,
+      opts.periodText,
+      subtitle,
+      initialOpening,
+      opts.rows,
+      singleParty?.type,
+      {
+        broughtForwardLabel: opts.broughtForwardLabel,
+        isPeriodStatement: opts.broughtForward !== undefined || Boolean(opts.broughtForwardLabel),
+        isEmptyPeriod: opts.isEmptyPeriod,
+      }
+    );
   }
 
   drawFooter(doc);
@@ -229,10 +274,16 @@ function buildSinglePartyStatement(
   partySubtitle: string,
   openingBalance: number,
   rows: StatementRow[],
-  partyType?: string
+  _partyType?: string,
+  statementOpts?: {
+    broughtForwardLabel?: string;
+    isPeriodStatement?: boolean;
+    isEmptyPeriod?: boolean;
+  }
 ) {
   drawHeader(doc, agency, "Account Statement & Ledger", periodText, partySubtitle);
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
   let totalDebit = 0;
   let totalCredit = 0;
@@ -260,15 +311,33 @@ function buildSinglePartyStatement(
     ];
   });
 
-  // Opening Balance Row at top of table if opening balance exists
+  if ((statementOpts?.isEmptyPeriod || rows.length === 0) && statementOpts?.isPeriodStatement) {
+    tableBody.push([
+      "—",
+      "—",
+      "—",
+      "No transactions in this period",
+      "Notice",
+      "—",
+      "—",
+      `${Math.abs(runningBalance).toLocaleString()} ${runningBalance >= 0 ? "DR" : "CR"}`,
+      "—",
+    ]);
+  }
+
+  const bfLabel =
+    statementOpts?.broughtForwardLabel ||
+    (statementOpts?.isPeriodStatement ? "Balance brought forward" : "OPENING BALANCE AS OF PERIOD START");
+
+  // Opening / Balance brought forward row at top of table
   const openingRow = [
     "—",
     "—",
     "—",
-    `OPENING BALANCE AS OF PERIOD START`,
+    bfLabel,
     "Balance B/F",
-    openingBalance > 0 ? openingBalance.toLocaleString() : "—",
-    openingBalance < 0 ? Math.abs(openingBalance).toLocaleString() : "—",
+    statementOpts?.isPeriodStatement ? "—" : openingBalance > 0 ? openingBalance.toLocaleString() : "—",
+    statementOpts?.isPeriodStatement ? "—" : openingBalance < 0 ? Math.abs(openingBalance).toLocaleString() : "—",
     `${Math.abs(openingBalance).toLocaleString()} ${openingBalance >= 0 ? "DR" : "CR"}`,
     "—",
   ];
@@ -329,7 +398,12 @@ function buildSinglePartyStatement(
   });
 
   // Totals & Summary Box
-  const finalY = (doc as any).lastAutoTable.finalY + 6;
+  let finalY = (doc as any).lastAutoTable.finalY + 6;
+  if (finalY + 24 > pageHeight - 14) {
+    doc.addPage();
+    drawHeader(doc, agency, "Account Statement & Ledger", periodText, partySubtitle);
+    finalY = 34;
+  }
   const closingBalance = runningBalance;
   const isReceivable = closingBalance > 0;
   const balanceLabel = isReceivable ? "RECEIVABLE FROM PARTY" : closingBalance < 0 ? "PAYABLE TO PARTY" : "SETTLED (NIL)";

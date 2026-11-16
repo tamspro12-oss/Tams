@@ -31,6 +31,8 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useUnifiedAlerts, type PortalAlertItem, type AlertPreferences } from "@/hooks/useUnifiedAlerts";
+import { openPaymentVoucher } from "@/lib/openPaymentVoucher";
+import { normalizeVoucherDirection } from "@/lib/paymentVoucherHelpers";
 import { DatePresetFilter, type DatePresetFilterValue } from "@/components/leads-quotes/DatePresetFilter";
 import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import { NewReminderDialog } from "@/components/NewReminderDialog";
@@ -184,9 +186,12 @@ export default function NotificationsHub() {
     if (alert.mainAction.url) {
       navigate(alert.mainAction.url);
     } else if (alert.mainAction.modalType === "payment_voucher") {
-      navigate(
-        `/app/sales-expenses?tab=payment-vouchers&new=1&party=${alert.mainAction.modalProps?.partyId || ""}&invoice=${alert.mainAction.modalProps?.invoiceNo || ""}`
-      );
+      openPaymentVoucher({
+        partyId: alert.mainAction.modalProps?.partyId,
+        direction: normalizeVoucherDirection(alert.mainAction.modalProps?.direction),
+        invoiceNo: alert.mainAction.modalProps?.invoiceNo,
+        amount: alert.mainAction.modalProps?.amount,
+      });
     } else if (alert.mainAction.modalType === "expense") {
       navigate("/app/sales-expenses?tab=expenses&new=1");
     } else if (alert.mainAction.modalType === "refund") {

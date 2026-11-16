@@ -31,6 +31,7 @@ export interface Party {
   notes?: string;
   active: boolean;
   created_at: string;
+  isLegacyRecord?: boolean;
 }
 
 export function useParties() {
@@ -90,6 +91,7 @@ export function useParties() {
           current_balance: Math.max(0, (c.selling_price || 0) - (c.amount_paid || 0)),
           active: true,
           created_at: c.created_at || new Date().toISOString(),
+          isLegacyRecord: true,
         }));
 
       const vendorParties: Party[] = (vendorsRes.data || [])
@@ -108,6 +110,7 @@ export function useParties() {
           current_balance: -Math.max(0, (Number(v.payment_amount) || 0) - (Number(v.amount_paid) || 0)),
           active: true,
           created_at: v.created_at || new Date().toISOString(),
+          isLegacyRecord: true,
         }));
 
       const combined = [...directParties, ...clientParties, ...vendorParties];

@@ -17,6 +17,8 @@ import {
   Check,
 } from "lucide-react";
 import { useUnifiedAlerts, type PortalAlertItem } from "@/hooks/useUnifiedAlerts";
+import { openPaymentVoucher } from "@/lib/openPaymentVoucher";
+import { normalizeVoucherDirection } from "@/lib/paymentVoucherHelpers";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +49,12 @@ export function NotificationBell() {
     if (alert.mainAction.url) {
       navigate(alert.mainAction.url);
     } else if (alert.mainAction.modalType === "payment_voucher") {
-      navigate(`/app/sales-expenses?tab=payment-vouchers&new=1&party=${alert.mainAction.modalProps?.partyId || ""}`);
+      openPaymentVoucher({
+        partyId: alert.mainAction.modalProps?.partyId,
+        direction: normalizeVoucherDirection(alert.mainAction.modalProps?.direction),
+        invoiceNo: alert.mainAction.modalProps?.invoiceNo,
+        amount: alert.mainAction.modalProps?.amount,
+      });
     } else if (alert.mainAction.modalType === "expense") {
       navigate("/app/sales-expenses?tab=expenses&new=1");
     } else if (alert.mainAction.modalType === "refund") {

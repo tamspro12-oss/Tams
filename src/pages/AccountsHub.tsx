@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { SeoHead } from "@/components/SeoHead";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,7 +28,9 @@ import OpeningBalances from "@/pages/OpeningBalances";
 // Party Modals for 1-click opening from ledger
 import { DirectBookingDetailModal } from "@/components/bookings/DirectBookingDetailModal";
 import { AgentDetailModal } from "@/components/bookings/AgentDetailModal";
+import { PartyLedgerDrawer } from "@/components/parties/PartyLedgerDrawer";
 import { useClients } from "@/hooks/useStorage";
+import { useParties } from "@/hooks/useParties";
 import { useB2BAgents, B2BAgent } from "@/hooks/useB2BAgents";
 
 type AccountsTab =
@@ -51,15 +53,28 @@ export default function AccountsHub() {
   // Party Card Modal states (opens on clicking party in ledger)
   const [selectedClientForModal, setSelectedClientForModal] = useState<any | null>(null);
   const [selectedAgentForModal, setSelectedAgentForModal] = useState<B2BAgent | null>(null);
+  const [ledgerPartyId, setLedgerPartyId] = useState<string | null>(null);
 
   const { clients } = useClients();
+  const { parties, updateParty, isSaving: isSavingParty } = useParties();
   const { agents } = useB2BAgents();
+
+  const selectedLedgerParty = useMemo(
+    () => (ledgerPartyId ? parties.find((p) => p.id === ledgerPartyId) || null : null),
+    [ledgerPartyId, parties]
+  );
 
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
   };
 
   const handleOpenPartyCard = (partyId: string, partyType: "client" | "agent" | "vendor") => {
+    const matchedUnifiedParty = parties.find((p) => p.id === partyId);
+    if (matchedUnifiedParty) {
+      setLedgerPartyId(matchedUnifiedParty.id);
+      return;
+    }
+
     if (partyType === "client") {
       const foundClient = clients.find((c) => c.id === partyId);
       if (foundClient) {
@@ -71,7 +86,7 @@ export default function AccountsHub() {
         setSelectedAgentForModal(foundAgent);
       }
     } else if (partyType === "vendor") {
-      // Navigate to vendor page or tab
+      // Navigate to legacy vendor page if not in unified parties
       window.location.href = `/app/vendors/${partyId}`;
     }
   };
@@ -190,6 +205,19 @@ export default function AccountsHub() {
           onAddBookingForAgent={() => {}}
         />
       )}
+
+      {/* Shared Single Party Ledger View */}
+      <PartyLedgerDrawer
+        party={selectedLedgerParty}
+        onClose={() => setLedgerPartyId(null)}
+        isUpdatingStatus={isSavingParty}
+        onToggleActive={async (p) => {
+          await updateParty({
+            id: p.id,
+            updates: { active: p.active === false },
+          });
+        }}
+      />
     </div>
   );
 }

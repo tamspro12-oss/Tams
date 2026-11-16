@@ -12,9 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useParties, Party } from "@/hooks/useParties";
+import { useParties } from "@/hooks/useParties";
 import { useAgency } from "@/hooks/useAgency";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import {
   resolveAccountIdForPayment,
@@ -36,15 +37,27 @@ import {
 } from "@/lib/atomicSave";
 import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import {
+  hasPaymentPermission,
+  resolveVoucherOpenState,
+  type VoucherDirection,
+} from "@/lib/paymentVoucherHelpers";
+import { getDrCrLabelForParty } from "@/lib/partyLedger";
+import {
   Search,
   CheckCircle2,
   CreditCard,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 interface PaymentVoucherFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialPartyId?: string;
+  initialDirection?: VoucherDirection;
+  initialInvoiceNo?: string;
+  initialAmount?: number;
 }
 
 interface MatchedInvoice {
@@ -63,15 +76,24 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   open,
   onOpenChange,
   onSuccess,
+  initialPartyId,
+  initialDirection,
+  initialInvoiceNo,
+  initialAmount,
 }) => {
   const queryClient = useQueryClient();
-  const { parties } = useParties();
+  const { parties, isLoading: isLoadingParties } = useParties();
   const { data: agency } = useAgency();
   const { data: currentAgencyId } = useCurrentAgencyId();
+  const { isSubUser, isActive, permissions, isLoading: isLoadingPerms } = useUserPermissions();
   const { accounts = [] } = useAccounts();
 
   const formRef = useRef<HTMLDivElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
   const lastSearchedQueryRef = useRef<string>("");
+  const appliedOpenSessionRef = useRef<string | null>(null);
+  const notFoundHandledRef = useRef<boolean>(false);
+  const permissionHandledRef = useRef<boolean>(false);
 
   // Line 1: Voucher Date | Payment Mode | Direction | Amount (PKR) * | Cheque / Reference No
   const [voucherDate, setVoucherDate] = useState<string>(
@@ -79,7 +101,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   );
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
   const [direction, setDirection] = useState<"received" | "paid">("received");
-  const [amount, setAmount] = useState<string>("0");
+  const [amount, setAmount] = useState<string>("");
   const [referenceNo, setReferenceNo] = useState<string>("");
 
   // Bank selection (strictly agency bank)
@@ -90,6 +112,8 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [matchedInvoice, setMatchedInvoice] = useState<MatchedInvoice | null>(null);
   const [partyId, setPartyId] = useState<string>("");
+  const [isResolvingInitialParty, setIsResolvingInitialParty] = useState(false);
+  const [partyNotice, setPartyNotice] = useState<string | null>(null);
 
   // Remarks & Write-off
   const [notes, setNotes] = useState<string>("");
@@ -121,15 +145,144 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     setAutoVoucherNo(`${direction === "received" ? "CRV" : "CPV"}-Auto`);
   }, [direction]);
 
+  const focusAmountField = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const el = amountInputRef.current;
+      if (el) {
+        el.focus({ preventScroll: false });
+        try {
+          el.select();
+        } catch {
+          // Ignore selection errors on number inputs
+        }
+      }
+    });
+  }, []);
+
+  const canRecordPayments = hasPaymentPermission({
+    isSubUser,
+    isActive,
+    permissions,
+    isLoading: isLoadingPerms,
+  });
+
+  useEffect(() => {
+    if (!open) {
+      appliedOpenSessionRef.current = null;
+      notFoundHandledRef.current = false;
+      permissionHandledRef.current = false;
+      setIsResolvingInitialParty(false);
+      setPartyNotice(null);
+      setPartyId("");
+      setAmount("");
+      setReferenceNo("");
+      setNotes("");
+      setSearchQuery("");
+      setMatchedInvoice(null);
+      setIsAdjustment(false);
+      setAdjustmentReason("");
+      return;
+    }
+
+    if (!isLoadingPerms && !canRecordPayments) {
+      if (!permissionHandledRef.current) {
+        permissionHandledRef.current = true;
+        toast.error("You do not have permission to record payments.");
+        onOpenChange(false);
+      }
+      return;
+    }
+
+    requestIdRef.current = createRequestId();
+    setVoucherDate(getTodayDateString());
+    setIsManualVoucherNo(false);
+    setManualVoucherNo("");
+  }, [open, isLoadingPerms, canRecordPayments, onOpenChange]);
+
+  // Apply pre-fill (party, direction, invoice, amount) when opening, waiting cleanly if parties are loading
+  useEffect(() => {
+    if (!open || (!isLoadingPerms && !canRecordPayments)) return;
+
+    const sessionKey = `${initialPartyId || ""}|${initialDirection || ""}|${initialInvoiceNo || ""}|${initialAmount || ""}`;
+    const resolved = resolveVoucherOpenState({
+      partyId: initialPartyId,
+      direction: initialDirection,
+      parties,
+      isLoadingParties,
+      hasPermission: isLoadingPerms ? true : canRecordPayments,
+    });
+
+    if (resolved.status === "loading") {
+      setIsResolvingInitialParty(true);
+      setPartyNotice(null);
+      if (initialDirection) {
+        setDirection(resolved.direction);
+      }
+      return;
+    }
+
+    setIsResolvingInitialParty(false);
+
+    if (resolved.status === "not_found") {
+      setPartyId("");
+      setDirection(resolved.direction);
+      setPartyNotice(resolved.friendlyMessage);
+      if (!notFoundHandledRef.current) {
+        notFoundHandledRef.current = true;
+        toast.info(resolved.friendlyMessage || "Selected party was not found.");
+      }
+      if (appliedOpenSessionRef.current !== sessionKey) {
+        appliedOpenSessionRef.current = sessionKey;
+        setAmount(initialAmount && initialAmount > 0 ? String(initialAmount) : "");
+        focusAmountField();
+      }
+      return;
+    }
+
+    if (appliedOpenSessionRef.current !== sessionKey) {
+      appliedOpenSessionRef.current = sessionKey;
+      setPartyNotice(null);
+      setPartyId(resolved.partyId);
+      setDirection(resolved.direction);
+      setAmount(initialAmount && initialAmount > 0 ? String(initialAmount) : "");
+      if (initialInvoiceNo) {
+        setSearchQuery(initialInvoiceNo);
+      }
+      if (resolved.partyId) {
+        focusAmountField();
+      }
+    }
+  }, [
+    open,
+    initialPartyId,
+    initialDirection,
+    initialInvoiceNo,
+    initialAmount,
+    parties,
+    isLoadingParties,
+    isLoadingPerms,
+    canRecordPayments,
+    focusAmountField,
+  ]);
+
   useEffect(() => {
     if (open) {
-      requestIdRef.current = createRequestId();
-      setVoucherDate(getTodayDateString());
-      setIsManualVoucherNo(false);
-      setManualVoucherNo("");
       fetchNextNumber();
     }
   }, [open, direction, fetchNextNumber]);
+
+  const selectedPartyObj = useMemo(
+    () => (partyId ? parties.find((p) => p.id === partyId) || null : null),
+    [parties, partyId]
+  );
+
+  const selectedPartyBalanceInfo = useMemo(() => {
+    if (!selectedPartyObj) return null;
+    return getDrCrLabelForParty(
+      Number(selectedPartyObj.current_balance) || 0,
+      selectedPartyObj.type
+    );
+  }, [selectedPartyObj]);
 
   // Fetch recent vouchers for compact sheet below form
   const { data: recentVouchers = [], refetch: refetchRecentVouchers } = useQuery({
@@ -363,12 +516,13 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         toast.success(`${savedLabel} ${assignedNo} saved`);
 
         // Clear fields cleanly & refresh affected queries in background
-        setAmount("0");
+        setAmount("");
         setReferenceNo("");
         setNotes("");
         setSearchQuery("");
         setMatchedInvoice(null);
         setPartyId("");
+        setPartyNotice(null);
         setIsAdjustment(false);
         setAdjustmentReason("");
         setIsManualVoucherNo(false);
@@ -388,18 +542,30 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
     return Boolean(
       numericAmount > 0 ||
         referenceNo.trim() ||
-        searchQuery.trim() ||
+        searchQuery.trim() !== (initialInvoiceNo || "").trim() ||
         matchedInvoice ||
-        partyId ||
+        partyId !== (initialPartyId || "") ||
         notes.trim() ||
         isAdjustment ||
         adjustmentReason.trim()
     );
-  }, [numericAmount, referenceNo, searchQuery, matchedInvoice, partyId, notes, isAdjustment, adjustmentReason]);
+  }, [
+    numericAmount,
+    referenceNo,
+    searchQuery,
+    initialInvoiceNo,
+    matchedInvoice,
+    partyId,
+    initialPartyId,
+    notes,
+    isAdjustment,
+    adjustmentReason,
+  ]);
 
   useFormKeyboardNav({
     containerRef: formRef,
     enabled: open,
+    autoFocusFirst: !initialPartyId,
     isDirty,
     onSave: handleSave,
     onCancel: () => onOpenChange(false),
@@ -417,7 +583,15 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl">
+      <DialogContent
+        onOpenAutoFocus={(e) => {
+          if (initialPartyId) {
+            e.preventDefault();
+            focusAmountField();
+          }
+        }}
+        className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border rounded-xl shadow-2xl"
+      >
         {/* HEADER: Title, Auto/Manual Voucher # badge, Type Label, Close (X) */}
         <div className="px-4 sm:px-5 pr-10 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2.5">
@@ -454,7 +628,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
           {/* ROW 1: Voucher Date | Link to Invoice (with Search button) | Party (Client / Vendor) with Quick Add */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-start">
             {/* 1. Voucher Date (Locked System Date) */}
             <div className="lg:col-span-2">
               <LockedDateField
@@ -470,7 +644,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Link to Invoice
               </Label>
-              <div className="relative mt-0.5">
+              <div className="relative mt-1">
                 <Input
                   value={searchQuery}
                   onChange={(e) => {
@@ -514,12 +688,45 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             <div className="sm:col-span-2 lg:col-span-5">
               <UniversalPartySelect
                 value={partyId}
-                onChange={setPartyId}
+                onChange={(nextId, nextParty) => {
+                  setPartyId(nextId);
+                  setPartyNotice(null);
+                  if (nextParty && !initialDirection) {
+                    setDirection(nextParty.type === "vendor" ? "paid" : "received");
+                  }
+                }}
                 label="Party (Client / Vendor)"
                 placeholder="Search client or vendor..."
                 defaultQuickAddType={direction === "received" ? "client" : "vendor"}
                 required
               />
+              {isResolvingInitialParty ? (
+                <p className="mt-1 text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading party details...
+                </p>
+              ) : selectedPartyObj && selectedPartyBalanceInfo ? (
+                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                  <span>Current balance:</span>
+                  <span
+                    className={`font-mono font-semibold ${
+                      selectedPartyBalanceInfo.code === ""
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {selectedPartyBalanceInfo.formatted}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    ({selectedPartyBalanceInfo.statusLabel})
+                  </span>
+                </p>
+              ) : partyNotice ? (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{partyNotice}</span>
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -575,6 +782,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                 Amount (PKR) <span className="text-red-500">*</span>
               </Label>
               <Input
+                ref={amountInputRef}
                 type="number"
                 min="0"
                 step="any"

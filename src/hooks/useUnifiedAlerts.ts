@@ -345,7 +345,9 @@ export function useUnifiedAlerts() {
           },
           secondaryAction: {
             label: "View Statement",
-            url: `/app/reports?tab=account-statement&party=${inv.party_id || ""}`,
+            url: inv.party_id
+              ? `/app/clients-vendors?tab=parties&partyId=${inv.party_id}`
+              : "/app/reports?tab=account-statement",
           },
         });
       } else if ((isDueToday || isDueSoon) && (preferences.paymentDueSoon || preferences.pendingClientPayment)) {
@@ -380,7 +382,9 @@ export function useUnifiedAlerts() {
           },
           secondaryAction: {
             label: "View Statement",
-            url: `/app/reports?tab=account-statement&party=${inv.party_id || ""}`,
+            url: inv.party_id
+              ? `/app/clients-vendors?tab=parties&partyId=${inv.party_id}`
+              : "/app/reports?tab=account-statement",
           },
         });
       }
@@ -463,7 +467,7 @@ export function useUnifiedAlerts() {
             },
             secondaryAction: {
               label: "View Ledger",
-              url: `/app/reports?tab=party-ledger&party=${v.id}`,
+              url: `/app/clients-vendors?tab=parties&partyId=${v.id}`,
             },
           });
         });
