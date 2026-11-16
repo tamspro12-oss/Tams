@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
@@ -150,8 +151,22 @@ export function usePartyLedger(party: PartyLedgerPartyInput | null | undefined) 
     },
   });
 
+  const emptyLedger = useMemo<PartyLedgerResult>(
+    () =>
+      buildPartyLedger({
+        party: party || {
+          id: "",
+          name: "",
+          type: "client",
+          opening_balance: 0,
+          current_balance: 0,
+        },
+      }),
+    [party]
+  );
+
   return {
-    ledger: query.data,
+    ledger: query.data ?? emptyLedger,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

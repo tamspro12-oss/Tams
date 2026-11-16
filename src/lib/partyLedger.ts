@@ -695,7 +695,7 @@ export function resolveLedgerFilterDates(
 }
 
 export function filterPartyLedgerRows(
-  ledger: PartyLedgerResult,
+  ledger: PartyLedgerResult | null | undefined,
   options: PartyLedgerFilterOptions = {}
 ): FilteredPartyLedgerResult {
   const {
@@ -707,10 +707,15 @@ export function filterPartyLedgerRows(
     todayYmd = getKarachiYmd(),
   } = options;
 
+  const baseEntriesNewest = Array.isArray(ledger?.entriesNewestFirst)
+    ? ledger.entriesNewestFirst
+    : [];
+  const fallbackClosing = typeof ledger?.closingBalance === "number" ? ledger.closingBalance : 0;
+
   const { fromDate, toDate } = resolveLedgerFilterDates(datePreset, customFrom, customTo, todayYmd);
   const refQ = referenceSearch.trim().toLowerCase();
 
-  const rowsNewestFirst = ledger.entriesNewestFirst.filter((row) => {
+  const rowsNewestFirst = baseEntriesNewest.filter((row) => {
     if (fromDate && row.date < fromDate) return false;
     if (toDate && row.date > toDate) return false;
 
@@ -720,8 +725,8 @@ export function filterPartyLedgerRows(
     }
 
     if (refQ) {
-      const refMatch = row.reference.toLowerCase().includes(refQ);
-      const descMatch = row.description.toLowerCase().includes(refQ);
+      const refMatch = (row.reference || "").toLowerCase().includes(refQ);
+      const descMatch = (row.description || "").toLowerCase().includes(refQ);
       if (!refMatch && !descMatch) return false;
     }
 
@@ -738,7 +743,7 @@ export function filterPartyLedgerRows(
   const closingBalance =
     rowsNewestFirst.length > 0
       ? rowsNewestFirst[0].runningBalance
-      : ledger.closingBalance;
+      : fallbackClosing;
 
   return {
     rowsNewestFirst,
@@ -881,7 +886,7 @@ export function resolveStatementPeriod(
 
 export function buildPartyStatement(opts: {
   party: PartyLedgerPartyInput;
-  ledger: PartyLedgerResult;
+  ledger: PartyLedgerResult | null | undefined;
   preset: StatementPeriodPreset;
   customFrom?: string | null;
   customTo?: string | null;
@@ -891,9 +896,18 @@ export function buildPartyStatement(opts: {
   const validation = validateStatementPeriod(opts.preset, opts.customFrom, opts.customTo);
   const period = resolveStatementPeriod(opts.preset, opts.customFrom, opts.customTo, todayYmd);
 
-  const nonOpeningEntries = opts.ledger.entriesOldestFirst.filter((e) => !e.isOpening);
-  const openingBalance = opts.ledger.openingBalance;
-  const storedCurrentBalance = opts.ledger.storedCurrentBalance;
+  const safeOldestEntries = Array.isArray(opts.ledger?.entriesOldestFirst)
+    ? opts.ledger.entriesOldestFirst
+    : [];
+  const nonOpeningEntries = safeOldestEntries.filter((e) => !e.isOpening);
+  const openingBalance =
+    typeof opts.ledger?.openingBalance === "number"
+      ? opts.ledger.openingBalance
+      : roundMoney(Number(opts.party?.opening_balance) || 0);
+  const storedCurrentBalance =
+    typeof opts.ledger?.storedCurrentBalance === "number"
+      ? opts.ledger.storedCurrentBalance
+      : roundMoney(Number(opts.party?.current_balance) || 0);
 
   if (!validation.valid) {
     return {

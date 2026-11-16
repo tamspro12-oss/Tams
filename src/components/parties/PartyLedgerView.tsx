@@ -132,6 +132,7 @@ export const PartyLedgerView: React.FC<PartyLedgerViewProps> = ({
 
   const hasActiveFilters =
     datePreset !== "all" || typeFilter !== "all" || referenceSearch.trim().length > 0;
+  const totalLedgerEntriesCount = ledger?.entriesNewestFirst?.length ?? 0;
 
   const resetFilters = () => {
     setDatePreset("all");
@@ -236,7 +237,7 @@ export const PartyLedgerView: React.FC<PartyLedgerViewProps> = ({
           </span>
         </div>
 
-        {ledger.hasMismatch && !isLoading && !isError && (
+        {ledger?.hasMismatch && !isLoading && !isError && (
           <div className="rounded-md border border-amber-200 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-900 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-300">
             Note: The ledger entries total ({formatDrCrAmount(ledger.closingBalance)}) differs
             from the party current balance ({formatDrCrAmount(ledger.storedCurrentBalance)}) due
@@ -348,7 +349,7 @@ export const PartyLedgerView: React.FC<PartyLedgerViewProps> = ({
         <div className="border rounded-lg p-8 text-center bg-card space-y-2">
           <FileText className="w-7 h-7 text-muted-foreground/60 mx-auto" />
           <p className="text-xs font-medium text-foreground">
-            {ledger.entriesNewestFirst.length === 0
+            {totalLedgerEntriesCount === 0
               ? "No transactions yet"
               : "No matching entries found"}
           </p>
@@ -622,6 +623,7 @@ export const PartyLedgerView: React.FC<PartyLedgerViewProps> = ({
         onOpenChange={setIsStatementOpen}
         party={party}
         ledger={ledger}
+        isLedgerLoading={isLoading}
         initialCustomFrom={statementPrefillDates.from}
         initialCustomTo={statementPrefillDates.to}
       />
