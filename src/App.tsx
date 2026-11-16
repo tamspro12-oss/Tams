@@ -18,43 +18,79 @@ import { versionManager } from "@/lib/versionManager";
 import { errorLogger } from "@/lib/errorLogger";
 import { useAutoUpdate } from "@/hooks/useAutoUpdate";
 
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await importer();
+    } catch (firstErr) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      try {
+        return await importer();
+      } catch (secondErr) {
+        try {
+          const key = "tams_chunk_reload_at";
+          const last = Number(sessionStorage.getItem(key) || "0");
+          if (Date.now() - last > 15000) {
+            sessionStorage.setItem(key, String(Date.now()));
+            window.location.reload();
+          }
+        } catch {
+          // Ignore storage errors
+        }
+        throw secondErr || firstErr;
+      }
+    }
+  });
+}
+
+const RouteLoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <p className="text-xs text-muted-foreground">Loading...</p>
+    </div>
+  </div>
+);
+
 // Lazy-loaded Public Pages
-const PublicHomepage = lazy(() => import("./pages/PublicHomepage"));
-const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
-const PricingPage = lazy(() => import("./pages/PricingPage"));
-const ContactPage = lazy(() => import("./pages/ContactPage"));
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const SignupPage = lazy(() => import("./pages/SignupPage"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const TermsOfService = lazy(() => import("./pages/TermsOfService"));
-const Install = lazy(() => import("./pages/Install"));
-const SubscriptionExpired = lazy(() => import("./pages/SubscriptionExpired"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const PublicHomepage = lazyWithRetry(() => import("./pages/PublicHomepage"));
+const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
+const PricingPage = lazyWithRetry(() => import("./pages/PricingPage"));
+const ContactPage = lazyWithRetry(() => import("./pages/ContactPage"));
+const LoginPage = lazyWithRetry(() => import("./pages/LoginPage"));
+const SignupPage = lazyWithRetry(() => import("./pages/SignupPage"));
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazyWithRetry(() => import("./pages/TermsOfService"));
+const Install = lazyWithRetry(() => import("./pages/Install"));
+const SubscriptionExpired = lazyWithRetry(() => import("./pages/SubscriptionExpired"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
+const AuthCallbackPage = lazyWithRetry(() => import("./pages/AuthCallbackPage"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 
 // Lazy-loaded App Pages (Protected)
-const Index = lazy(() => import("./pages/Index"));
-const Admin = lazy(() => import("./pages/Admin"));
-const SalesExpensesHub = lazy(() => import("./pages/SalesExpensesHub"));
-const ClientsVendors = lazy(() => import("./pages/ClientsVendors"));
-const ReportsHub = lazy(() => import("./pages/ReportsHub"));
-const BookingsHub = lazy(() => import("./pages/BookingsHub"));
-const LeadsQuotesHub = lazy(() => import("./pages/LeadsQuotesHub"));
-const QueryFormPage = lazy(() => import("./pages/QueryFormPage"));
-const QuotationFormPage = lazy(() => import("./pages/QuotationFormPage"));
-const AccountsHub = lazy(() => import("./pages/AccountsHub"));
-const NotificationsHub = lazy(() => import("./pages/NotificationsHub"));
-const SettingsHub = lazy(() => import("./pages/SettingsHub"));
-const UmrahCalculator = lazy(() => import("./pages/UmrahCalculator"));
-const B2BAgentDashboard = lazy(() => import("./pages/B2BAgentDashboard"));
-const VendorDashboard = lazy(() => import("./pages/VendorDashboard"));
+const Index = lazyWithRetry(() => import("./pages/Index"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
+const SalesExpensesHub = lazyWithRetry(() => import("./pages/SalesExpensesHub"));
+const ClientsVendors = lazyWithRetry(() => import("./pages/ClientsVendors"));
+const ReportsHub = lazyWithRetry(() => import("./pages/ReportsHub"));
+const BookingsHub = lazyWithRetry(() => import("./pages/BookingsHub"));
+const LeadsQuotesHub = lazyWithRetry(() => import("./pages/LeadsQuotesHub"));
+const QueryFormPage = lazyWithRetry(() => import("./pages/QueryFormPage"));
+const QuotationFormPage = lazyWithRetry(() => import("./pages/QuotationFormPage"));
+const AccountsHub = lazyWithRetry(() => import("./pages/AccountsHub"));
+const NotificationsHub = lazyWithRetry(() => import("./pages/NotificationsHub"));
+const SettingsHub = lazyWithRetry(() => import("./pages/SettingsHub"));
+const UmrahCalculator = lazyWithRetry(() => import("./pages/UmrahCalculator"));
+const B2BAgentDashboard = lazyWithRetry(() => import("./pages/B2BAgentDashboard"));
+const VendorDashboard = lazyWithRetry(() => import("./pages/VendorDashboard"));
 
 // Lazy non-critical overlays (kept out of the initial bundle)
-const UpdateNotification = lazy(() =>
+const UpdateNotification = lazyWithRetry(() =>
   import("@/components/UpdateNotification").then((m) => ({ default: m.UpdateNotification }))
 );
-const PwaOnboardModal = lazy(() =>
+const PwaOnboardModal = lazyWithRetry(() =>
   import("@/components/PwaOnboardModal").then((m) => ({ default: m.PwaOnboardModal }))
 );
 
@@ -110,12 +146,27 @@ const App = () => {
         if (!lastSync || (Date.now() - lastSync) > fiveMinutes) {
           preloadEssentialData(queryClient);
         }
-        versionManager.checkVersionAPI().catch(() => {});
+        versionManager.checkVersionAPI().catch(() => { });
       });
     };
 
+    const handleVitePreloadError = () => {
+      try {
+        const key = "tams_chunk_reload_at";
+        const last = Number(sessionStorage.getItem(key) || "0");
+        if (Date.now() - last > 15000) {
+          sessionStorage.setItem(key, String(Date.now()));
+          window.location.reload();
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    };
+
+    window.addEventListener("vite:preloadError", handleVitePreloadError as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      window.removeEventListener("vite:preloadError", handleVitePreloadError as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -132,7 +183,7 @@ const App = () => {
               <PwaOnboardModal />
             </Suspense>
             <BrowserRouter>
-              <Suspense fallback={null}>
+              <Suspense fallback={<RouteLoadingFallback />}>
 
                 <Routes>
                   {/* ========== PUBLIC ROUTES (No Login Required) ========== */}
@@ -149,7 +200,7 @@ const App = () => {
                   <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
                   <Route path="/auth/callback" element={<RouteErrorBoundary routeName="Auth Callback"><AuthCallbackPage /></RouteErrorBoundary>} />
                   <Route path="/verify-email" element={<RouteErrorBoundary routeName="Verify Email"><AuthCallbackPage /></RouteErrorBoundary>} />
-                  
+
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
                   <Route path="/public" element={<Navigate to="/" replace />} />
 
@@ -195,7 +246,7 @@ const App = () => {
                   <Route path="/app/reminders" element={<Navigate to="/app/notifications?tab=reminders" replace />} />
                   <Route path="/app/email-history" element={<Navigate to="/app/settings?tab=email-integration" replace />} />
                   <Route path="/app/user-manual" element={<Navigate to="/app/settings?tab=manual" replace />} />
-                  
+
                   <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

@@ -15,6 +15,16 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    modulePreload: {
+      resolveDependencies: (_filename, deps) =>
+        deps.filter(
+          (dep) =>
+            !dep.includes("vendor-pdf") &&
+            !dep.includes("vendor-charts") &&
+            !dep.includes("xlsx") &&
+            !dep.includes("html2canvas")
+        ),
+    },
     // Enable minification for smaller bundles
     minify: 'terser',
     terserOptions: {

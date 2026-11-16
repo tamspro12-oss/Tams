@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/design-system";
-import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
 import { Printer } from "lucide-react";
 
 interface VoucherQuickViewDialogProps {
@@ -85,7 +84,10 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
                   variant="outline"
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={() =>
+                  onClick={async () => {
+                    const { generateVoucherPdf } = await import(
+                      "@/lib/pdf/voucherReceiptPdf"
+                    );
                     generateVoucherPdf({
                       voucherNo: voucher.voucher_no,
                       voucherDate: voucher.voucher_date,
@@ -95,8 +97,8 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
                       amount: voucher.amount,
                       accountName: `${String(voucher.payment_mode || "cash").toUpperCase()} Account`,
                       notes: voucher.notes,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <Printer className="w-3.5 h-3.5" />
                   Print Receipt

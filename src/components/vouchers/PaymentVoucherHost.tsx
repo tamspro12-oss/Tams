@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PaymentVoucherForm } from "@/components/vouchers/PaymentVoucherForm";
 import { useParties } from "@/hooks/useParties";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { registerPaymentVoucherHost } from "@/lib/openPaymentVoucher";
@@ -12,8 +11,15 @@ import {
   type VoucherDirection,
 } from "@/lib/paymentVoucherHelpers";
 
+const LazyPaymentVoucherForm = lazy(() =>
+  import("@/components/vouchers/PaymentVoucherForm").then((m) => ({
+    default: m.PaymentVoucherForm,
+  }))
+);
+
 interface HostDialogState {
   open: boolean;
+  hasOpenedOnce: boolean;
   params: OpenPaymentVoucherParams;
 }
 
@@ -29,6 +35,7 @@ export const PaymentVoucherHost: React.FC = () => {
 
   const [dialogState, setDialogState] = useState<HostDialogState>({
     open: false,
+    hasOpenedOnce: false,
     params: {},
   });
 
@@ -49,7 +56,7 @@ export const PaymentVoucherHost: React.FC = () => {
   partiesRef.current = parties;
 
   const handleOpenDialog = useCallback((params: OpenPaymentVoucherParams) => {
-    setDialogState({ open: true, params });
+    setDialogState({ open: true, hasOpenedOnce: true, params });
   }, []);
 
   const handleOpenChange = useCallback((open: boolean) => {
@@ -74,16 +81,29 @@ export const PaymentVoucherHost: React.FC = () => {
     });
   }, [handleOpenDialog, navigate, resolvePartyDirection]);
 
+  // Warm the PaymentVoucherForm chunk during browser idle time so the first click opens immediately
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/components/vouchers/PaymentVoucherForm").catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!dialogState.open && !dialogState.hasOpenedOnce) {
+    return null;
+  }
+
   return (
-    <PaymentVoucherForm
-      open={dialogState.open}
-      onOpenChange={handleOpenChange}
-      onSuccess={dialogState.params.onSuccess}
-      initialPartyId={dialogState.params.partyId || undefined}
-      initialDirection={normalizeVoucherDirection(dialogState.params.direction)}
-      initialInvoiceNo={dialogState.params.invoiceNo || undefined}
-      initialAmount={dialogState.params.amount ?? undefined}
-    />
+    <Suspense fallback={null}>
+      <LazyPaymentVoucherForm
+        open={dialogState.open}
+        onOpenChange={handleOpenChange}
+        onSuccess={dialogState.params.onSuccess}
+        initialPartyId={dialogState.params.partyId || undefined}
+        initialDirection={normalizeVoucherDirection(dialogState.params.direction)}
+        initialInvoiceNo={dialogState.params.invoiceNo || undefined}
+        initialAmount={dialogState.params.amount ?? undefined}
+      />
+    </Suspense>
   );
 };
-
