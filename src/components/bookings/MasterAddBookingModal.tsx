@@ -18,6 +18,13 @@ import { useVendors } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
 import { useClientPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useOpeningBalances } from "@/hooks/useOpeningBalances";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import {
   X,
   Plus,
@@ -179,6 +186,9 @@ export function MasterAddBookingModal({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   // API Hooks
   const { addClient, updateClient } = useClients();
@@ -362,33 +372,7 @@ export function MasterAddBookingModal({
     });
   }, [paxCount]);
 
-  // Move focus to next form field
-  const focusNext = (currentEl: HTMLElement | null) => {
-    if (!formContainerRef.current) return;
-    const elements = Array.from(
-      formContainerRef.current.querySelectorAll<HTMLElement>(
-        '[data-booking-input="true"]:not([disabled]):not([aria-disabled="true"])'
-      )
-    ).filter((el) => {
-      return el.offsetParent !== null || el.getClientRects().length > 0;
-    });
-
-    if (!currentEl) {
-      elements[0]?.focus();
-      return;
-    }
-
-    const currentIndex = elements.indexOf(currentEl);
-    if (currentIndex !== -1 && currentIndex < elements.length - 1) {
-      const nextEl = elements[currentIndex + 1];
-      nextEl.focus();
-      if (nextEl instanceof HTMLInputElement && nextEl.type !== "file") {
-        nextEl.select?.();
-      }
-    } else if (currentIndex === elements.length - 1) {
-      saveButtonRef.current?.focus();
-    }
-  };
+  // Note: field navigation is now handled uniformly by useFormKeyboardNav (leaving Tab/Shift+Tab native).
 
   // Autofocus first field on open
   useEffect(() => {
@@ -469,7 +453,7 @@ export function MasterAddBookingModal({
     }
   }, [editBookingData, open, prefilledAgentId, initialMode]);
 
-  // Global Keyboard shortcut listener
+  // Global mode-switch shortcut listener (Ctrl+1 Direct, Ctrl+2 B2B)
   useEffect(() => {
     if (!open) return;
 
@@ -484,44 +468,12 @@ export function MasterAddBookingModal({
         e.preventDefault();
         setBookingMode("b2b");
         toast.info("Switched to B2B Agent mode");
-      } else if (isCtrlOrCmd && e.shiftKey && e.key === "Enter") {
-        e.preventDefault();
-        handleSave(true); // Save and Add Next
-      } else if ((isCtrlOrCmd && e.key === "Enter") || (isCtrlOrCmd && e.key.toLowerCase() === "s")) {
-        e.preventDefault();
-        handleSave(false); // Save Booking
-      } else if (e.key === "Escape") {
-        // If child search popovers are open, let them close themselves
-        if (agentSearchOpen || showQuickVendorAdd) {
-          return;
-        }
-        e.preventDefault();
-        handleCloseRequest();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    open,
-    agentSearchOpen,
-    showQuickVendorAdd,
-    isDirty,
-    bookingMode,
-    contactName,
-    contactNumber,
-    contactEmail,
-    airline,
-    destination,
-    flightDate,
-    pnr,
-    sellingPrice,
-    purchasingPrice,
-    amountPaid,
-    selectedAgentId,
-    selectedVendorId,
-    passengers,
-  ]);
+  }, [open]);
 
   const handleCloseRequest = () => {
     if (isDirty) {
@@ -530,6 +482,23 @@ export function MasterAddBookingModal({
       onOpenChange(false);
     }
   };
+
+  // Unified keyboard navigation across all fields (Tab/Shift+Tab native, Enter/Shift+Enter visual, Ctrl+Enter/Ctrl+S save)
+  useFormKeyboardNav({
+    containerRef: formContainerRef,
+    enabled:
+      open &&
+      !agentSearchOpen &&
+      !vendorSearchOpen &&
+      !isAddAgentOpen &&
+      !isAddVendorOpen &&
+      !showQuickVendorAdd &&
+      !showExitConfirm,
+    isDirty,
+    onSave: () => handleSave(false),
+    onSaveAndAddNext: () => handleSave(true),
+    onCancel: handleCloseRequest,
+  });
 
   // Helper for ddmmyyyy auto-format
   const handleDateInputBlurOrChange = (
@@ -718,107 +687,125 @@ export function MasterAddBookingModal({
       }
     }
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("No internet connection. Please check your network and try again.");
-      return;
-    }
+    const purchasePriceVal = parseFloat(purchasingPrice) || 0;
+    const paidVal = parseFloat(amountPaid) || 0;
+    const paymentStatus =
+      paidVal >= sellPrice ? "Paid" : paidVal > 0 ? "Partial" : "Pending";
+    const vendorIdVal =
+      selectedVendorId && selectedVendorId !== "none" ? selectedVendorId : null;
+    const opBalRaw = parseFloat(openingBalanceAmount);
+    const validOpBal = showOpeningBalance && !isNaN(opBalRaw) && opBalRaw > 0 ? opBalRaw : 0;
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    // Passengers payload
+    const passengersData = passengers.map((p, idx) => ({
+      passenger_number: idx + 1,
+      name: p.name || cleanContact,
+      passport_number: p.passport_number,
+      cnic: p.cnic,
+      date_of_birth: p.date_of_birth,
+      gender: p.gender,
+      nationality: p.nationality,
+      flight_time: flightTime || undefined,
+      trip_type: tripType,
+    }));
 
-    try {
-      const purchasePriceVal = parseFloat(purchasingPrice) || 0;
-      const paidVal = parseFloat(amountPaid) || 0;
-      const paymentStatus =
-        paidVal >= sellPrice ? "Paid" : paidVal > 0 ? "Partial" : "Pending";
-      const vendorIdVal =
-        selectedVendorId && selectedVendorId !== "none" ? selectedVendorId : null;
+    const modeUsed = bookingMode;
 
-      // Passengers payload
-      const passengersData = passengers.map((p, idx) => ({
-        passenger_number: idx + 1,
-        name: p.name || cleanContact,
-        passport_number: p.passport_number,
-        cnic: p.cnic,
-        date_of_birth: p.date_of_birth,
-        gender: p.gender,
-        nationality: p.nationality,
-        flight_time: flightTime || undefined,
-        trip_type: tripType,
-      }));
+    await runUiAtomicSave<{ saved: any; mode: "direct" | "b2b"; isEdit: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "MasterAddBookingModal.handleSave",
+      fallbackErrorMessage: "Failed to save booking. Please try again.",
+      execute: async (requestId) => {
+        if (modeUsed === "direct") {
+          const clientPayload: any = {
+            name: cleanContact,
+            contact_number: contactNumber || null,
+            email: contactEmail || null,
+            destination: destination || null,
+            airline: airline || null,
+            pnr: pnr || null,
+            flight_date: flightDate || null,
+            name_update_date: nameUpdateDate || null,
+            travel_type:
+              serviceType === "Ticket" && tripType === "return"
+                ? "Ticket – Return"
+                : serviceType === "Ticket" && tripType === "multi_city"
+                ? "Ticket – Multi-City"
+                : serviceType,
+            purchasing_price: purchasePriceVal || null,
+            selling_price: sellPrice || null,
+            payment_amount: sellPrice || null,
+            amount_paid: paidVal || 0,
+            payment_status: paymentStatus,
+            vendor_id: vendorIdVal,
+            group_size: paxCount,
+            group_booking_type: paxCount > 1 ? "group" : "individual",
+            passport_number: passengers[0]?.passport_number || null,
+            cnic: passengers[0]?.cnic || null,
+            passengers_data: passengersData,
+            notes: notes || null,
+          };
 
-      if (bookingMode === "direct") {
-        // DIRECT CLIENT BOOKING
-        const clientPayload: any = {
-          name: cleanContact,
-          contact_number: contactNumber || null,
-          email: contactEmail || null,
-          destination: destination || null,
-          airline: airline || null,
-          pnr: pnr || null,
-          flight_date: flightDate || null,
-          name_update_date: nameUpdateDate || null,
-          travel_type:
-            serviceType === "Ticket" && tripType === "return"
-              ? "Ticket – Return"
-              : serviceType === "Ticket" && tripType === "multi_city"
-              ? "Ticket – Multi-City"
-              : serviceType,
-          purchasing_price: purchasePriceVal || null,
-          selling_price: sellPrice || null,
-          payment_amount: sellPrice || null,
-          amount_paid: paidVal || 0,
-          payment_status: paymentStatus,
-          vendor_id: vendorIdVal,
-          group_size: paxCount,
-          group_booking_type: paxCount > 1 ? "group" : "individual",
-          passport_number: passengers[0]?.passport_number || null,
-          cnic: passengers[0]?.cnic || null,
-          passengers_data: passengersData,
-          notes: notes || null,
-        };
-
-        let savedResult: any = null;
-        if (editBookingData && !editBookingData.agent_id) {
-          await updateClient.mutateAsync({
-            id: editBookingData.id,
-            client: clientPayload,
-          });
-          savedResult = { ...editBookingData, ...clientPayload };
-          toast.success("Direct booking updated successfully!");
-        } else {
-          savedResult = await addClient.mutateAsync(clientPayload);
-          toast.success("Direct booking created successfully!");
-
-          // Add payment history if paid
-          if (paidVal > 0 && savedResult?.id) {
-            await addPaymentHistory.mutateAsync({
-              client_id: savedResult.id,
-              payment_amount: paidVal,
-              payment_type: paidVal >= sellPrice ? "full" : "partial",
-              payment_date: getTodayDateString(),
-              payment_mode: paymentMode,
-              bank_name: paymentMode === "bank" ? bankName : null,
-              notes: `Initial payment on booking`,
-            });
-          }
-
-          // Opening balance if toggled
-          const opBal = parseFloat(openingBalanceAmount);
-          if (showOpeningBalance && !isNaN(opBal) && opBal > 0 && savedResult?.id) {
-            await upsertBalance.mutateAsync({
-              party_type: "client",
-              party_id: savedResult.id,
-              balance_type: openingBalanceType,
-              amount: opBal,
-              as_of_date: getTodayDateString(),
-              notes: "Client opening balance brought forward",
-            });
-          }
+          const isEdit = Boolean(editBookingData && !editBookingData.agent_id);
+          const rpcRes = await rpcWithPreSqlFallback<any>(
+            supabase as any,
+            "save_client_booking_atomic",
+            {
+              p_client_data: clientPayload,
+              p_id: isEdit ? editBookingData.id : null,
+              p_opening_balance_amount: !isEdit ? validOpBal : 0,
+              p_opening_balance_type: openingBalanceType,
+              p_payment_mode: paymentMode,
+              p_bank_name: paymentMode === "bank" ? bankName : null,
+              p_convert_query_id: null,
+              p_convert_quote_id: null,
+              p_request_id: requestId,
+            },
+            {
+              legacyFallback: async () => {
+                if (isEdit) {
+                  await updateClient.mutateAsync({
+                    id: editBookingData.id,
+                    client: clientPayload,
+                  });
+                  return { client: { ...editBookingData, ...clientPayload } };
+                }
+                const savedResult = await addClient.mutateAsync(clientPayload);
+                if (paidVal > 0 && savedResult?.id) {
+                  await addPaymentHistory.mutateAsync({
+                    client_id: savedResult.id,
+                    payment_amount: paidVal,
+                    payment_type: paidVal >= sellPrice ? "full" : "partial",
+                    payment_date: getTodayDateString(),
+                    payment_mode: paymentMode,
+                    bank_name: paymentMode === "bank" ? bankName : null,
+                    notes: `Initial payment on booking`,
+                  });
+                }
+                if (validOpBal > 0 && savedResult?.id) {
+                  await upsertBalance.mutateAsync({
+                    party_type: "client",
+                    party_id: savedResult.id,
+                    balance_type: openingBalanceType,
+                    amount: validOpBal,
+                    as_of_date: getTodayDateString(),
+                    notes: "Client opening balance brought forward",
+                  });
+                }
+                return { client: savedResult, _alreadyToasted: true };
+              },
+            }
+          );
+          return {
+            saved: rpcRes?.client ?? rpcRes,
+            mode: "direct",
+            isEdit,
+            ...(rpcRes?._alreadyToasted ? { _alreadyToasted: true } : {}),
+          } as any;
         }
 
-        onSaved?.(savedResult, "direct");
-      } else {
         // B2B AGENT BOOKING
         const b2bPayload: any = {
           agent_id: selectedAgentId,
@@ -844,81 +831,54 @@ export function MasterAddBookingModal({
           bank_name: paidVal > 0 && paymentMode === "bank" ? bankName : null,
         };
 
+        const isEdit = Boolean(editBookingData && editBookingData.agent_id);
         let savedB2B: any = null;
-        if (editBookingData && editBookingData.agent_id) {
-          await updateB2BBooking.mutateAsync({
+        if (isEdit) {
+          savedB2B = await updateB2BBooking.mutateAsync({
             id: editBookingData.id,
             booking: b2bPayload,
+            requestId,
           });
-          savedB2B = { ...editBookingData, ...b2bPayload };
-          toast.success("B2B booking updated successfully!");
         } else {
-          savedB2B = await addB2BBooking.mutateAsync(b2bPayload);
-          toast.success("B2B booking created successfully!");
+          savedB2B = await addB2BBooking.mutateAsync({
+            ...b2bPayload,
+            requestId,
+          });
+        }
+        return { saved: savedB2B, mode: "b2b", isEdit, _alreadyToasted: true } as any;
+      },
+      onSuccess: (outcome: any) => {
+        if (!outcome?._alreadyToasted) {
+          toast.success(
+            outcome.mode === "direct"
+              ? outcome.isEdit
+                ? "Direct booking updated successfully!"
+                : "Direct booking created successfully!"
+              : outcome.isEdit
+              ? "B2B booking updated successfully!"
+              : "B2B booking created successfully!"
+          );
         }
 
-        onSaved?.(savedB2B, "b2b");
-      }
+        if (isSaveAndAddNext) {
+          resetFormForNext();
+          toast.info("Ready for next booking. Agent & details preserved.");
+        } else {
+          onOpenChange(false);
+        }
 
-      if (isSaveAndAddNext) {
-        resetFormForNext();
-        toast.info("Ready for next booking. Agent & details preserved.");
-      } else {
-        onOpenChange(false);
-      }
-    } catch (err: unknown) {
-      handleSupabaseError(err, "Failed to save booking", "MasterAddBookingModal.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
-  };
+        onSaved?.(outcome.saved, outcome.mode);
 
-  // Keyboard navigation handler for container
-  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
-    // Shortcuts with Ctrl / Cmd are handled globally
-    if (e.ctrlKey || e.metaKey) return;
-
-    if (e.key === "Enter") {
-      const target = e.target as HTMLElement;
-
-      // Let Radix Select popover / content listbox handle Enter
-      if (target.closest('[role="listbox"]') || target.closest('[data-radix-select-viewport]')) {
-        return;
-      }
-
-      // If inside agent command menu, let Command handle selection
-      if (target.closest('[cmdk-root]')) {
-        return;
-      }
-
-      // If target is a button other than a data-booking-input
-      if (target.tagName === "BUTTON" && !target.hasAttribute("data-booking-input")) {
-        return;
-      }
-
-      // If target is textarea and shiftKey is pressed, allow newline
-      if (target.tagName === "TEXTAREA" && e.shiftKey) {
-        return;
-      }
-
-      // If on Notes field (with data-field="notes") and plain Enter was pressed:
-      // Focus Save Booking button!
-      if (target.getAttribute("data-field") === "notes") {
-        e.preventDefault();
-        e.stopPropagation();
-        saveButtonRef.current?.focus();
-        return;
-      }
-
-      // For any field marked data-booking-input
-      const bookingInput = target.closest<HTMLElement>('[data-booking-input="true"]');
-      if (bookingInput) {
-        e.preventDefault();
-        e.stopPropagation();
-        focusNext(bookingInput);
-      }
-    }
+        runBackgroundTask("MasterAddBookingModal.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (modeUsed === "direct" || timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   if (!open) return null;
@@ -941,7 +901,6 @@ export function MasterAddBookingModal({
           aria-labelledby="booking-dialog-title"
           ref={formContainerRef}
           data-booking-form="true"
-          onKeyDown={handleContainerKeyDown}
           className="relative w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ======================= 1. HEADER (CENTERED TABS) ======================= */}
@@ -1922,12 +1881,13 @@ export function MasterAddBookingModal({
                 ref={saveButtonRef}
                 type="button"
                 size="sm"
+                data-save-button="true"
                 onClick={() => handleSave(false)}
                 disabled={isSubmitting}
                 className="text-xs h-8 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shadow-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
                 <Check className="w-4 h-4" />
-                Save Booking
+                {isSubmitting ? "Saving..." : "Save Booking"}
               </Button>
             </div>
           </div>

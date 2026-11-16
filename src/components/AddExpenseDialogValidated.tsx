@@ -10,6 +10,12 @@ import { expenseSchema, validateData } from "@/lib/validations/schemas";
 import { toast } from "sonner";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddExpenseDialogProps {
   open: boolean;
@@ -21,6 +27,9 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
   const { addExpense, updateExpense } = useExpenses();
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expenseDate, setExpenseDate] = useState(() => getTodayDateString());
@@ -43,12 +52,8 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
     e.preventDefault();
     if (isSubmittingRef.current || isSubmitting) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
-
-    const formData = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const formData = new FormData(formEl);
     const parsedAmount = parseFloat(formData.get("amount") as string);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       toast.error("Amount must be greater than 0");
@@ -62,9 +67,7 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
       notes: formData.get("notes") as string || undefined,
     };
 
-    // Validate data
     const validation = validateData(expenseSchema, expenseData);
-
     if (!validation.success) {
       toast.error((validation as { success: false; error: string }).error);
       return;
@@ -72,22 +75,57 @@ export function AddExpenseDialogValidated({ open, onOpenChange, editExpense }: A
 
     const validatedData = validation.data;
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      if (editExpense) {
-        await updateExpense.mutateAsync({ id: editExpense.id, expense: validatedData });
-      } else {
-        await addExpense.mutateAsync(validatedData);
-        e.currentTarget.reset();
-      }
-      onOpenChange(false);
-    } catch (error) {
-      console.error("[AddExpenseDialogValidated.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+    await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AddExpenseDialogValidated.handleSubmit",
+      fallbackErrorMessage: "Failed to save expense. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        if (editExpense) {
+          usedFallbackToast = true;
+          await updateExpense.mutateAsync({ id: editExpense.id, expense: validatedData });
+          return { usedFallbackToast };
+        }
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "record_expense",
+          {
+            p_amount: validatedData.amount,
+            p_account_id: null,
+            p_category: validatedData.expense_type,
+            p_date: validatedData.expense_date,
+            p_method: "cash",
+            p_reference_no: null,
+            p_notes: validatedData.notes || null,
+            p_party_id: null,
+            p_party_type: null,
+            p_bank_name: null,
+            p_is_manual: false,
+            p_request_id: requestId,
+          },
+          {
+            isAutoMode: true,
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              return await addExpense.mutateAsync(validatedData);
+            },
+          }
+        );
+        return { usedFallbackToast };
+      },
+      onSuccess: ({ usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editExpense ? "Expense updated successfully" : "Expense recorded successfully");
+        }
+        if (!editExpense) formEl.reset();
+        onOpenChange(false);
+        runBackgroundTask("AddExpenseDialogValidated.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "expense", userAgencyId);
+        });
+      },
+    });
   };
 
   return (

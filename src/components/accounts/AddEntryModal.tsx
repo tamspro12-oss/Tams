@@ -14,6 +14,8 @@ import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateF
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { cn } from "@/lib/utils";
 
 interface AddEntryModalProps {
@@ -61,6 +63,7 @@ export function AddEntryModal({
   const [notes, setNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   const { accounts, cashAccount, bankAccounts } = useAccounts();
   const { clients } = useClients();
@@ -133,74 +136,84 @@ export function AddEntryModal({
       return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      if (mode === "received") {
-        await recordPayment.mutateAsync({
-          direction: "in",
-          amount: numAmount,
-          accountId,
-          partyId: selectedPartyId || null,
-          partyType: selectedPartyId ? partyType : null,
-          date,
-          method,
-          referenceNo: referenceNo.trim() || undefined,
-          notes: notes.trim() || undefined,
-        });
-      } else if (mode === "paid") {
-        await recordPayment.mutateAsync({
-          direction: "out",
-          amount: numAmount,
-          accountId,
-          partyId: selectedPartyId || null,
-          partyType: selectedPartyId ? partyType : null,
-          date,
-          method,
-          referenceNo: referenceNo.trim() || undefined,
-          notes: notes.trim() || undefined,
-        });
-      } else if (mode === "expense") {
-        const finalCategory = category === "Other" ? (customCategory.trim() || "Miscellaneous") : category;
-        await recordExpense.mutateAsync({
-          amount: numAmount,
-          accountId,
-          category: finalCategory,
-          date,
-          method,
-          referenceNo: referenceNo.trim() || undefined,
-          notes: notes.trim() || undefined,
-          partyId: selectedPartyId || null,
-          partyType: selectedPartyId ? partyType : null,
-        });
-      } else if (mode === "transfer") {
-        if (!toAccountId || toAccountId === accountId) {
-          toast.error("Destination account must be different from source account");
-          setIsSubmitting(false);
-          return;
+    if (mode === "transfer" && (!toAccountId || toAccountId === accountId)) {
+      toast.error("Destination account must be different from source account");
+      return;
+    }
+
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AddEntryModal.handleSubmit",
+      fallbackErrorMessage: "Failed to post entry. Please try again.",
+      execute: async (requestId) => {
+        if (mode === "received") {
+          return await recordPayment.mutateAsync({
+            direction: "in",
+            amount: numAmount,
+            accountId,
+            partyId: selectedPartyId || null,
+            partyType: selectedPartyId ? partyType : null,
+            date,
+            method,
+            referenceNo: referenceNo.trim() || undefined,
+            notes: notes.trim() || undefined,
+            requestId,
+          });
         }
-        await recordTransfer.mutateAsync({
+        if (mode === "paid") {
+          return await recordPayment.mutateAsync({
+            direction: "out",
+            amount: numAmount,
+            accountId,
+            partyId: selectedPartyId || null,
+            partyType: selectedPartyId ? partyType : null,
+            date,
+            method,
+            referenceNo: referenceNo.trim() || undefined,
+            notes: notes.trim() || undefined,
+            requestId,
+          });
+        }
+        if (mode === "expense") {
+          const finalCategory = category === "Other" ? (customCategory.trim() || "Miscellaneous") : category;
+          return await recordExpense.mutateAsync({
+            amount: numAmount,
+            accountId,
+            category: finalCategory,
+            date,
+            method,
+            referenceNo: referenceNo.trim() || undefined,
+            notes: notes.trim() || undefined,
+            partyId: selectedPartyId || null,
+            partyType: selectedPartyId ? partyType : null,
+            requestId,
+          });
+        }
+        return await recordTransfer.mutateAsync({
           fromAccountId: accountId,
           toAccountId,
           amount: numAmount,
           date,
           referenceNo: referenceNo.trim() || undefined,
           notes: notes.trim() || undefined,
+          requestId,
         });
-      }
-
-      // Reset form
-      setAmount("");
-      setReferenceNo("");
-      setNotes("");
-      setSelectedPartyId("");
-      onOpenChange(false);
-    } catch (err: any) {
-      console.error(err);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+      },
+      onSuccess: () => {
+        setAmount("");
+        setReferenceNo("");
+        setNotes("");
+        setSelectedPartyId("");
+        onOpenChange(false);
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const isDirty = Boolean(amount.trim() || referenceNo.trim() || notes.trim() || selectedPartyId);

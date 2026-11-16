@@ -18,7 +18,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import {
   resolveAccountIdForPayment,
-  invalidateAllFinancialQueries,
+  refreshAffectedFinancialQueries,
 } from "@/lib/accountingEngine";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
@@ -28,8 +28,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cleanPastedSearch } from "@/lib/searchUtils";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import {
+  createRequestId,
+  rpcWithPreSqlFallback,
+  runBackgroundTask,
+} from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import {
   Search,
   CheckCircle2,
@@ -93,6 +98,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   // Auto Voucher Number preview + optional manual override
   const [autoVoucherNo, setAutoVoucherNo] = useState<string>("Auto-assigned");
@@ -117,6 +123,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
   useEffect(() => {
     if (open) {
+      requestIdRef.current = createRequestId();
       setVoucherDate(getTodayDateString());
       setIsManualVoucherNo(false);
       setManualVoucherNo("");
@@ -300,94 +307,81 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         toast.error("Please enter a custom voucher number or switch back to Auto");
         return;
       }
-      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
-      if (!available) {
-        toast.error("This voucher number already exists. Please use Auto or choose another number.");
-        return;
-      }
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const resolvedAccountId = isAdjustment
+      ? null
+      : resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
 
-    try {
-      // Ensure agency_id is resolved
-      let activeAgencyId = currentAgencyId;
-      if (!activeAgencyId) {
-        const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
-        activeAgencyId = await getAuthenticatedAgencyId();
-      }
-      if (!activeAgencyId) {
-        throw new Error("Unable to identify active agency account.");
-      }
+    const legacyParams = {
+      p_direction: direction,
+      p_amount: numericAmount,
+      p_payment_mode: paymentMode,
+      p_account_id: resolvedAccountId,
+      p_party_id: partyId || null,
+      p_voucher_no: isManualVoucherNo ? manualVoucherNo.trim() : null,
+      p_voucher_date: voucherDate,
+      p_reference_no: referenceNo || null,
+      p_is_adjustment: isAdjustment,
+      p_adjustment_reason: adjustmentReason || null,
+      p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+      p_invoice_id: matchedInvoice?.sourceTable === "booking_invoices" ? matchedInvoice.id : null,
+      p_notes: [
+        paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+        notes,
+      ]
+        .filter(Boolean)
+        .join(" — ") || null,
+      p_is_manual: isManualVoucherNo,
+    };
 
-      const resolvedAccountId = isAdjustment
-        ? null
-        : resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "PaymentVoucherForm.handleSave",
+      fallbackErrorMessage: "Failed to record payment voucher. Please try again.",
+      execute: async (requestId) => {
+        const rpcData = await rpcWithPreSqlFallback(
+          supabase as any,
+          "save_payment_voucher",
+          { ...legacyParams, p_request_id: requestId },
+          { legacyParams, isAutoMode: !isManualVoucherNo }
+        );
+        if (rpcData && rpcData.success === false) {
+          throw new Error(rpcData.error || "Failed to record payment voucher");
+        }
+        return rpcData;
+      },
+      onSuccess: (rpcData) => {
+        const assignedNo =
+          rpcData?.voucher_no || (isManualVoucherNo ? manualVoucherNo.trim() : autoVoucherNo);
+        const savedLabel = direction === "received" ? "Receipt (CRV)" : "Payment (CPV)";
 
-      const rpcData = await withDuplicateRetry(
-        async () => {
-          const { data, error: rpcError } = await (supabase as any).rpc("save_payment_voucher", {
-            p_direction: direction,
-            p_amount: numericAmount,
-            p_payment_mode: paymentMode,
-            p_account_id: resolvedAccountId,
-            p_party_id: partyId || null,
-            p_voucher_no: isManualVoucherNo ? manualVoucherNo.trim() : null,
-            p_voucher_date: voucherDate,
-            p_reference_no: referenceNo || null,
-            p_is_adjustment: isAdjustment,
-            p_adjustment_reason: adjustmentReason || null,
-            p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-            p_invoice_id: matchedInvoice?.sourceTable === "booking_invoices" ? matchedInvoice.id : null,
-            p_notes: [
-              paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
-              notes,
-            ]
-              .filter(Boolean)
-              .join(" — ") || null,
-            p_is_manual: isManualVoucherNo,
-          });
+        // Close modal IMMEDIATELY on successful save
+        onOpenChange(false);
+        toast.success(`${savedLabel} ${assignedNo} saved`);
 
-          if (rpcError) throw rpcError;
-          if (data && data.success === false) {
-            throw new Error(data.error || "Failed to record payment voucher");
-          }
-          return data;
-        },
-        { isAutoMode: !isManualVoucherNo }
-      );
+        // Clear fields cleanly & refresh affected queries in background
+        setAmount("0");
+        setReferenceNo("");
+        setNotes("");
+        setSearchQuery("");
+        setMatchedInvoice(null);
+        setPartyId("");
+        setIsAdjustment(false);
+        setAdjustmentReason("");
+        setIsManualVoucherNo(false);
+        setManualVoucherNo("");
 
-      const assignedNo = rpcData?.voucher_no || (isManualVoucherNo ? manualVoucherNo.trim() : autoVoucherNo);
-      toast.success(
-        `${direction === "received" ? "Receipt (CRV)" : "Payment (CPV)"} ${assignedNo} recorded successfully`
-      );
-
-      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
-      refetchRecentVouchers();
-
-      // Clear input fields
-      setAmount("0");
-      setReferenceNo("");
-      setNotes("");
-      setSearchQuery("");
-      setMatchedInvoice(null);
-      setPartyId("");
-      setIsAdjustment(false);
-      setAdjustmentReason("");
-      setIsManualVoucherNo(false);
-      setManualVoucherNo("");
-
-      // Regenerate sequence for next voucher
-      fetchNextNumber();
-
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      handleSupabaseError(err, "Failed to record payment voucher", "PaymentVoucherForm.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        runBackgroundTask("payment-voucher-post-save", () => {
+          refreshAffectedFinancialQueries(queryClient, "voucher", currentAgencyId);
+          refetchRecentVouchers();
+          fetchNextNumber();
+          if (onSuccess) onSuccess();
+        });
+      },
+    });
   };
 
   const isDirty = useMemo(() => {
@@ -459,8 +453,8 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         {/* BODY + FOOTER wrapped for unified keyboard nav */}
         <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
-          {/* LINE 1: Voucher Date | Direction | Payment Mode | (Bank if bank) | Amount (PKR) * | Cheque / Reference No */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
+          {/* ROW 1: Voucher Date | Link to Invoice (with Search button) | Party (Client / Vendor) with Quick Add */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end">
             {/* 1. Voucher Date (Locked System Date) */}
             <div className="lg:col-span-2">
               <LockedDateField
@@ -471,87 +465,8 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
               />
             </div>
 
-            {/* 2. Direction */}
-            <div className="lg:col-span-2 space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Direction <span className="text-red-500">*</span>
-              </Label>
-              <Select value={direction} onValueChange={(val: any) => setDirection(val)}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="received">Received (CRV)</SelectItem>
-                  <SelectItem value="paid">Paid (CPV)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 3. Payment Mode */}
-            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Payment Mode <span className="text-red-500">*</span>
-              </Label>
-              <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash in Hand</SelectItem>
-                  <SelectItem value="bank">Bank Account</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 4. Bank Account (Strictly Agency Banks with Quick Add) */}
-            {paymentMode === "bank" && (
-              <div className="lg:col-span-2">
-                <AgencyBankSelect
-                  value={selectedBank}
-                  onChange={setSelectedBank}
-                  label="Bank Account"
-                  required={true}
-                />
-              </div>
-            )}
-
-            {/* 5. Amount (PKR) * */}
-            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Amount (PKR) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="number"
-                min="0"
-                step="any"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
-                className="h-8 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
-                required
-                data-required-positive="true"
-                data-required-message="Amount must be greater than zero"
-              />
-            </div>
-
-            {/* 6. Cheque / Reference No */}
-            <div className="lg:col-span-2 space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Cheque / Reference No
-              </Label>
-              <Input
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                placeholder="Chq #, Trx ID..."
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-
-          {/* LINE 2: Link to Invoice | Party dropdown (Unified cross-search) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end">
-            {/* Link to Invoice (with search button inside input + auto-trim on paste) */}
-            <div className="lg:col-span-6">
+            {/* 2. Link to Invoice (with search button inside input + auto-trim on paste) */}
+            <div className="lg:col-span-5">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Link to Invoice
               </Label>
@@ -595,8 +510,8 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
               </div>
             </div>
 
-            {/* Party (Unified Client & Vendor Cross-Search with + Quick Add) */}
-            <div className="lg:col-span-6">
+            {/* 3. Party (Unified Client & Vendor Cross-Search with + Quick Add) */}
+            <div className="sm:col-span-2 lg:col-span-5">
               <UniversalPartySelect
                 value={partyId}
                 onChange={setPartyId}
@@ -604,6 +519,85 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                 placeholder="Search client or vendor..."
                 defaultQuickAddType={direction === "received" ? "client" : "vendor"}
                 required
+              />
+            </div>
+          </div>
+
+          {/* ROW 2: Direction | Payment Mode (+ Bank) | Amount (PKR) * | Cheque / Reference No */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-start">
+            {/* 1. Direction */}
+            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Direction <span className="text-red-500">*</span>
+              </Label>
+              <Select value={direction} onValueChange={(val: any) => setDirection(val)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="received">Received (CRV)</SelectItem>
+                  <SelectItem value="paid">Paid (CPV)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 2. Payment Mode */}
+            <div className={paymentMode === "bank" ? "lg:col-span-2 space-y-1" : "lg:col-span-3 space-y-1"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Payment Mode <span className="text-red-500">*</span>
+              </Label>
+              <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash in Hand</SelectItem>
+                  <SelectItem value="bank">Bank Account</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Conditional Bank Account (Agency Banks with Quick Add) */}
+            {paymentMode === "bank" && (
+              <div className="lg:col-span-2">
+                <AgencyBankSelect
+                  value={selectedBank}
+                  onChange={setSelectedBank}
+                  label="Bank Account"
+                  required={true}
+                />
+              </div>
+            )}
+
+            {/* 3. Amount (PKR) * */}
+            <div className="lg:col-span-3 space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Amount (PKR) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+                className="h-8 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
+                required
+                data-required-positive="true"
+                data-required-message="Amount must be greater than zero"
+              />
+            </div>
+
+            {/* 4. Cheque / Reference No */}
+            <div className="lg:col-span-3 space-y-1">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Cheque / Reference No
+              </Label>
+              <Input
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                placeholder="Chq #, Trx ID..."
+                className="h-8 text-xs"
               />
             </div>
           </div>

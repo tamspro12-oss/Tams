@@ -9,6 +9,8 @@ import { useSubUsers, SubUserPermissions } from "@/hooks/useSubUsers";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface CreateSubUserDialogProps {
   open: boolean;
@@ -18,6 +20,8 @@ interface CreateSubUserDialogProps {
 export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogProps) => {
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const { createSubUser } = useSubUsers();
   const { data: agencyId } = useCurrentAgencyId();
   const [formData, setFormData] = useState({
@@ -38,14 +42,9 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
     settings: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmittingRef.current || createSubUser.isPending) return;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
+    if (isSubmittingRef.current || isSubmittingLocal || createSubUser.isPending) return;
 
     if (!agencyId) {
       toast.error("Unable to identify active agency");
@@ -67,25 +66,31 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
       return;
     }
 
-    isSubmittingRef.current = true;
-    createSubUser.mutate(
-      {
-        email: emailTrimmed,
-        password: formData.password,
-        full_name: nameTrimmed,
-        permissions,
-        agency_id: agencyId,
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsSubmittingLocal,
+      contextLabel: "CreateSubUserDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to create team member",
+      execute: async () => {
+        return await createSubUser.mutateAsync({
+          email: emailTrimmed,
+          password: formData.password,
+          full_name: nameTrimmed,
+          permissions,
+          agency_id: agencyId,
+        });
       },
-      {
-        onSuccess: () => {
-          onOpenChange(false);
-          setFormData({ email: "", password: "", full_name: "" });
-        },
-        onSettled: () => {
-          isSubmittingRef.current = false;
-        },
-      }
-    );
+      onSuccess: () => {
+        onOpenChange(false);
+        setFormData({ email: "", password: "", full_name: "" });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const toggleModulePermission = (module: keyof SubUserPermissions, action?: "read" | "write" | "delete") => {
@@ -406,8 +411,8 @@ export const CreateSubUserDialog = ({ open, onOpenChange }: CreateSubUserDialogP
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" data-save-button="true" disabled={createSubUser.isPending}>
-              {createSubUser.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button type="submit" data-save-button="true" disabled={isSubmittingLocal || createSubUser.isPending}>
+              {(isSubmittingLocal || createSubUser.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Sub User
             </Button>
           </div>

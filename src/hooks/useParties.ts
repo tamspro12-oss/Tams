@@ -4,8 +4,12 @@ import { toast } from "sonner";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
-import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import {
+  refreshAffectedFinancialQueries,
+  scheduleCoalescedFinancialRefresh,
+} from "@/lib/accountingEngine";
 import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export interface Party {
   id: string;
@@ -123,43 +127,67 @@ export function useParties() {
       if ("agency_id" in data && data.agency_id !== userAgencyId) {
         return;
       }
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      scheduleCoalescedFinancialRefresh(queryClient, "parties-rt", "party", 350);
     },
   });
 
   const addPartyMutation = useMutation({
-    mutationFn: async (party: Partial<Party>) => {
+    mutationFn: async (party: Partial<Party> & { requestId?: string; isManual?: boolean }) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         throw new Error("You are offline. Connect to the internet to save.");
       }
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) {
-        throw new Error("Unable to save party: No active agency account found");
-      }
 
-      const partyPayload = {
-        ...party,
-        agency_id: activeAgencyId,
-      };
+      const { requestId, isManual, ...partyFields } = party;
+      const isAutoCode = !isManual && (!partyFields.code || !String(partyFields.code).trim());
 
-      const isAutoCode = !partyPayload.code || !String(partyPayload.code).trim();
-      const data = await withDuplicateRetry(
-        async () => {
-          const { data: inserted, error } = await (supabase as any)
-            .from("parties")
-            .insert([partyPayload])
-            .select()
-            .single();
-
-          if (error) throw error;
-          return inserted;
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "save_party_atomic",
+        {
+          p_id: null,
+          p_type: partyFields.type || "client",
+          p_name: partyFields.name || "",
+          p_code: isManual ? String(partyFields.code || "").trim() : null,
+          p_phone: partyFields.phone ?? null,
+          p_whatsapp: partyFields.whatsapp ?? null,
+          p_city: partyFields.city ?? null,
+          p_address: partyFields.address ?? null,
+          p_cnic: partyFields.cnic ?? null,
+          p_ntn: partyFields.ntn ?? null,
+          p_email: partyFields.email ?? null,
+          p_passport: partyFields.passport ?? null,
+          p_credit_limit: partyFields.credit_limit ?? 0,
+          p_opening_balance: partyFields.opening_balance ?? 0,
+          p_notes: partyFields.notes ?? null,
+          p_is_manual: Boolean(isManual || (partyFields.code && String(partyFields.code).trim())),
+          p_request_id: requestId ?? null,
         },
-        { isAutoMode: isAutoCode }
-      );
-      return data;
+        {
+          isAutoMode: isAutoCode,
+          legacyFallback: async () => {
+            const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+            if (!activeAgencyId) {
+              throw new Error("Unable to save party: No active agency account found");
+            }
+            const partyPayload = { ...partyFields, agency_id: activeAgencyId };
+            return await withDuplicateRetry(
+              async () => {
+                const { data: inserted, error } = await (supabase as any)
+                  .from("parties")
+                  .insert([partyPayload])
+                  .select()
+                  .single();
+                if (error) throw error;
+                return inserted;
+              },
+              { isAutoMode: isAutoCode }
+            );
+          },
+        }
+      ).then((res: any) => res?.party ?? res);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, "party", userAgencyId);
       toast.success("Party saved successfully");
     },
     onError: (err: any) => {
@@ -168,26 +196,61 @@ export function useParties() {
   });
 
   const updatePartyMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Party> }) => {
+    mutationFn: async ({
+      id,
+      updates,
+      requestId,
+    }: {
+      id: string;
+      updates: Partial<Party>;
+      requestId?: string;
+    }) => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         throw new Error("Network connection issue. You are offline.");
       }
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) {
-        throw new Error("Unable to identify active agency.");
-      }
-      const { data, error } = await (supabase as any)
-        .from("parties")
-        .update(updates)
-        .eq("id", id)
-        .eq("agency_id", activeAgencyId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "save_party_atomic",
+        {
+          p_id: id,
+          p_type: updates.type || "client",
+          p_name: updates.name || "",
+          p_code: updates.code ?? null,
+          p_phone: updates.phone ?? null,
+          p_whatsapp: updates.whatsapp ?? null,
+          p_city: updates.city ?? null,
+          p_address: updates.address ?? null,
+          p_cnic: updates.cnic ?? null,
+          p_ntn: updates.ntn ?? null,
+          p_email: updates.email ?? null,
+          p_passport: updates.passport ?? null,
+          p_credit_limit: updates.credit_limit ?? 0,
+          p_opening_balance: updates.opening_balance ?? 0,
+          p_notes: updates.notes ?? null,
+          p_is_manual: false,
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
+            if (!activeAgencyId) {
+              throw new Error("Unable to identify active agency.");
+            }
+            const { data, error } = await (supabase as any)
+              .from("parties")
+              .update(updates)
+              .eq("id", id)
+              .eq("agency_id", activeAgencyId)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      ).then((res: any) => res?.party ?? res);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, "party", userAgencyId);
       toast.success("Party updated successfully");
     },
     onError: (err: any) => {

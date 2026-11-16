@@ -4,6 +4,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export interface B2BBooking {
   id: string;
@@ -43,17 +44,17 @@ export function useB2BBookings(agentId?: string) {
     queryKey: ['b2b_bookings', agencyId, agentId],
     queryFn: async () => {
       if (!agencyId) return [];
-      
+
       let query = supabase
         .from('b2b_bookings')
         .select('*')
         .eq('agency_id', agencyId)
         .order('created_at', { ascending: false });
-      
+
       if (agentId) {
         query = query.eq('agent_id', agentId);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
       return data as B2BBooking[];
@@ -62,77 +63,85 @@ export function useB2BBookings(agentId?: string) {
   });
 
   const addBooking = useMutation({
-    mutationFn: async (booking: Omit<B2BBooking, 'id' | 'agency_id' | 'created_at' | 'updated_at'> & { amount_received?: number; payment_mode?: string | null; bank_name?: string | null }) => {
+    mutationFn: async (
+      booking: Omit<B2BBooking, 'id' | 'agency_id' | 'created_at' | 'updated_at'> & {
+        amount_received?: number;
+        payment_mode?: string | null;
+        bank_name?: string | null;
+        requestId?: string;
+      }
+    ) => {
       if (!agencyId) throw new Error('No agency ID');
-      
-      // Extract non-DB fields before inserting
-      const { amount_received, payment_mode, bank_name, ...bookingData } = booking;
+
+      const { amount_received, payment_mode, bank_name, requestId, ...bookingData } = booking;
       const amountReceived = amount_received || 0;
       const sellingPrice = bookingData.selling_price || 0;
       const commissionAmount = bookingData.commission_amount || 0;
-      
-      // Calculate the amount agent owes (selling price minus commission)
       const totalServiceAmount = sellingPrice - commissionAmount;
-      
-      // Auto-calculate payment status based on amounts
       const calculatedPaymentStatus = calculatePaymentStatus(totalServiceAmount, amountReceived);
-      
-      // Insert booking with calculated payment status
-      const { data: newBooking, error } = await supabase
-        .from('b2b_bookings')
-        .insert({ 
-          ...bookingData, 
-          agency_id: agencyId,
-          payment_status: calculatedPaymentStatus
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // AUTO-POST LEDGER ENTRIES
-      const bookingRef = newBooking.pnr || newBooking.passenger_name;
-      const entryDate = format(new Date(), 'yyyy-MM-dd');
-      
-      // Entry 1: DEBIT for total service amount (agent owes agency)
-      if (totalServiceAmount > 0) {
-        const { error: debitError } = await supabase
-          .from('b2b_ledger')
-          .insert({
-            agency_id: agencyId,
-            agent_id: bookingData.agent_id,
-            entry_date: entryDate,
-            entry_type: 'debit',
-            amount: totalServiceAmount,
-            remarks: `Booking: ${bookingRef} - ${bookingData.passenger_name} [Booking: ${bookingRef}]`
-          });
-        
-        if (debitError) {
-          console.error('Failed to create debit ledger entry:', debitError);
+
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        'save_b2b_booking_atomic',
+        {
+          p_booking_data: bookingData,
+          p_id: null,
+          p_amount_received: amountReceived,
+          p_payment_mode: payment_mode || 'cash',
+          p_bank_name: bank_name || null,
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data: newBooking, error } = await supabase
+              .from('b2b_bookings')
+              .insert({
+                ...bookingData,
+                agency_id: agencyId,
+                payment_status: calculatedPaymentStatus,
+              })
+              .select()
+              .single();
+            if (error) throw error;
+
+            const bookingRef = newBooking.pnr || newBooking.passenger_name;
+            const entryDate = format(new Date(), 'yyyy-MM-dd');
+
+            if (totalServiceAmount > 0) {
+              const { error: debitError } = await supabase
+                .from('b2b_ledger')
+                .insert({
+                  agency_id: agencyId,
+                  agent_id: bookingData.agent_id,
+                  entry_date: entryDate,
+                  entry_type: 'debit',
+                  amount: totalServiceAmount,
+                  remarks: `Booking: ${bookingRef} - ${bookingData.passenger_name} [Booking: ${bookingRef}]`,
+                });
+              if (debitError) console.error('Failed to create debit ledger entry:', debitError);
+            }
+
+            if (amountReceived > 0) {
+              const { error: creditError } = await supabase
+                .from('b2b_ledger')
+                .insert({
+                  agency_id: agencyId,
+                  agent_id: bookingData.agent_id,
+                  entry_date: entryDate,
+                  entry_type: 'credit',
+                  amount: amountReceived,
+                  remarks: `Payment received at booking [Booking: ${bookingRef}]`,
+                  payment_mode: payment_mode || 'cash',
+                  bank_name: payment_mode === 'bank' ? bank_name : null,
+                });
+              if (creditError) console.error('Failed to create credit ledger entry:', creditError);
+            }
+            return newBooking;
+          },
         }
-      }
-      
-      // Entry 2: CREDIT if payment received at booking (with payment mode)
-      if (amountReceived > 0) {
-        const { error: creditError } = await supabase
-          .from('b2b_ledger')
-          .insert({
-            agency_id: agencyId,
-            agent_id: bookingData.agent_id,
-            entry_date: entryDate,
-            entry_type: 'credit',
-            amount: amountReceived,
-            remarks: `Payment received at booking [Booking: ${bookingRef}]`,
-            payment_mode: payment_mode || 'cash',
-            bank_name: payment_mode === 'bank' ? bank_name : null
-          });
-        
-        if (creditError) {
-          console.error('Failed to create credit ledger entry:', creditError);
-        }
-      }
-      
-      return newBooking;
+      );
+
+      return rpcRes?.booking ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
@@ -145,16 +154,40 @@ export function useB2BBookings(agentId?: string) {
   });
 
   const updateBooking = useMutation({
-    mutationFn: async ({ id, booking }: { id: string; booking: Partial<B2BBooking> }) => {
-      const { data, error } = await supabase
-        .from('b2b_bookings')
-        .update(booking)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+    mutationFn: async ({
+      id,
+      booking,
+      requestId,
+    }: {
+      id: string;
+      booking: Partial<B2BBooking>;
+      requestId?: string;
+    }) => {
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        'save_b2b_booking_atomic',
+        {
+          p_booking_data: booking,
+          p_id: id,
+          p_amount_received: 0,
+          p_payment_mode: 'cash',
+          p_bank_name: null,
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data, error } = await supabase
+              .from('b2b_bookings')
+              .update(booking)
+              .eq('id', id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      );
+      return rpcRes?.booking ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2b_bookings'] });
@@ -168,22 +201,22 @@ export function useB2BBookings(agentId?: string) {
   const deleteBooking = useMutation({
     mutationFn: async (id: string) => {
       if (!agencyId) throw new Error('No agency ID');
-      
+
       // First, get the booking to create reversal entries
       const { data: booking, error: fetchError } = await supabase
         .from('b2b_bookings')
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (fetchError) throw fetchError;
-      
+
       const bookingRef = booking.pnr || booking.passenger_name;
       const sellingPrice = booking.selling_price || 0;
       const commissionAmount = booking.commission_amount || 0;
       const totalServiceAmount = sellingPrice - commissionAmount;
       const entryDate = format(new Date(), 'yyyy-MM-dd');
-      
+
       // Create REVERSAL CREDIT entry (reverse the original debit)
       if (totalServiceAmount > 0) {
         await supabase
@@ -197,13 +230,13 @@ export function useB2BBookings(agentId?: string) {
             remarks: `REVERSAL: Booking cancelled - ${booking.passenger_name} [Booking: ${bookingRef}]`
           });
       }
-      
+
       // Delete the booking
       const { error } = await supabase
         .from('b2b_bookings')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {

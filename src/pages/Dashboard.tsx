@@ -33,6 +33,7 @@ import {
   getKarachiTodayNoon,
   getKarachiYmd,
   invalidateAllFinancialQueries,
+  scheduleCoalescedFinancialRefresh,
 } from "@/lib/accountingEngine";
 import {
   Popover,
@@ -231,18 +232,20 @@ export default function Dashboard() {
     onRefresh: handleRefresh,
   });
 
-  // Real-time multi-table sync strictly filtered by agency_id
+  // Real-time multi-table sync strictly filtered by agency_id (coalesced to avoid refetch storms)
   const agencyRealtimeFilter = agency?.id ? `agency_id=eq.${agency.id}` : undefined;
+  const triggerDashboardSync = () =>
+    scheduleCoalescedFinancialRefresh(queryClient, "dashboard-rt", "all", 350);
   useRealtimeMultiTable({
     channelPrefix: "dashboard-live-sync",
     enabled: !!agency?.id,
     subscriptions: [
-      { table: "booking_invoices", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
-      { table: "parties", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
-      { table: "accounts", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
-      { table: "payment_vouchers", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
-      { table: "expenses", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
-      { table: "refunds", filter: agencyRealtimeFilter, callback: () => invalidateAllFinancialQueries(queryClient, agency?.id) },
+      { table: "booking_invoices", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "parties", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "accounts", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "payment_vouchers", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "expenses", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "refunds", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
     ],
   });
 

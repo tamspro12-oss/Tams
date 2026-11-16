@@ -10,6 +10,11 @@ import { toast } from "sonner";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { querySchema, validateData } from "@/lib/validations/schemas";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { supabase } from "@/integrations/supabase/client";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 interface AddQueryDialogProps {
   open: boolean;
@@ -23,6 +28,9 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -35,11 +43,6 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSubmittingRef.current || isSubmitting) return;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
-      return;
-    }
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -55,9 +58,7 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
       notes: (formData.get("notes") as string) || undefined,
     };
 
-    // Validate data
     const validation = validateData(querySchema, queryData);
-
     if (!validation.success) {
       toast.error((validation as { success: false; error: string }).error);
       return;
@@ -65,22 +66,48 @@ export function AddQueryDialogValidated({ open, onOpenChange, editQuery }: AddQu
 
     const validatedData = validation.data;
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      if (editQuery) {
-        await updateQuery.mutateAsync({ id: editQuery.id, query: validatedData });
-      } else {
-        await addQuery.mutateAsync(validatedData);
-      }
-      form.reset();
-      onOpenChange(false);
-    } catch (error) {
-      console.error("[AddQueryDialogValidated.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+    await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AddQueryDialogValidated.handleSubmit",
+      fallbackErrorMessage: "Failed to save query. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_query_atomic",
+          {
+            p_query_data: validatedData,
+            p_id: editQuery?.id ?? null,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              if (editQuery) {
+                await updateQuery.mutateAsync({ id: editQuery.id, query: validatedData });
+              } else {
+                await addQuery.mutateAsync(validatedData);
+              }
+              return { ok: true };
+            },
+          }
+        );
+        return { usedFallbackToast };
+      },
+      onSuccess: ({ usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editQuery ? "Query updated successfully" : "Query added successfully");
+        }
+        form.reset();
+        onOpenChange(false);
+        runBackgroundTask("AddQueryDialogValidated.refresh", () => {
+          queryClient.invalidateQueries({ queryKey: ["queries", userAgencyId] });
+          queryClient.invalidateQueries({ queryKey: ["queries"] });
+        });
+      },
+    });
   };
 
   return (

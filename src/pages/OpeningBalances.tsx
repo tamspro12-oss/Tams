@@ -22,6 +22,8 @@ import { toast } from "sonner";
 import { exportRowsToExcel, exportRowsToPDF } from "@/lib/simpleExport";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 const emptyForm: OpeningBalanceInput = {
   party_type: "client",
@@ -36,6 +38,8 @@ export default function OpeningBalances() {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isLocalSubmitting, setIsLocalSubmitting] = useState(false);
   const [editing, setEditing] = useState<OpeningBalance | null>(null);
   const [form, setForm] = useState<OpeningBalanceInput>(() => ({ ...emptyForm, as_of_date: getTodayDateString() }));
 
@@ -137,30 +141,34 @@ export default function OpeningBalances() {
     return true;
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current || upsertBalance.isPending || updateBalance.isPending) return;
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
     if (!validate()) return;
     const payload: OpeningBalanceInput = { ...form, amount: Number(form.amount) };
-    isSubmittingRef.current = true;
-    if (editing) {
-      updateBalance.mutate(
-        { id: editing.id, ...payload },
-        {
-          onSuccess: () => { setOpen(false); refetch(); },
-          onSettled: () => { isSubmittingRef.current = false; },
+
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsLocalSubmitting,
+      contextLabel: "OpeningBalances.submit",
+      fallbackErrorMessage: "Failed to save opening balance",
+      execute: async (requestId) => {
+        if (editing) {
+          return await updateBalance.mutateAsync({ id: editing.id, ...payload, requestId });
         }
-      );
-    } else {
-      upsertBalance.mutate(payload, {
-        onSuccess: () => { setOpen(false); refetch(); },
-        onSettled: () => { isSubmittingRef.current = false; },
-      });
-    }
+        return await upsertBalance.mutateAsync({ ...payload, requestId });
+      },
+      onSuccess: () => {
+        setOpen(false);
+        runBackgroundTask("OpeningBalances.refetch", () => refetch());
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   const buildExportRows = () => filtered.map((b) => ({
@@ -432,8 +440,8 @@ export default function OpeningBalances() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" data-save-button="true" disabled={!form.party_id || upsertBalance.isPending || updateBalance.isPending}>
-                {editing ? "Update" : "Save"}
+              <Button type="submit" data-save-button="true" disabled={!form.party_id || isLocalSubmitting || upsertBalance.isPending || updateBalance.isPending}>
+                {isLocalSubmitting || upsertBalance.isPending || updateBalance.isPending ? "Saving..." : editing ? "Update" : "Save"}
               </Button>
             </div>
           </form>

@@ -13,6 +13,12 @@ import { vendorSchema, validateData } from "@/lib/validations/schemas";
 import { toast } from "sonner";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface AddVendorDialogValidatedProps {
   editVendor?: any;
@@ -39,8 +45,11 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
   const { addVendor, updateVendor } = useVendors();
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   const isOpen = open !== undefined ? open : internalOpen;
@@ -90,78 +99,96 @@ export function AddVendorDialogValidated({ editVendor, open, onOpenChange }: Add
       return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const vendorData = {
+      name: formData.name.trim(),
+      contact_person: formData.contact_person?.trim() || undefined,
+      contact_number: formData.contact_number?.trim() || undefined,
+      email: formData.email?.trim() || undefined,
+      service_type: formData.service_type?.trim() || undefined,
+      payment_amount: totalAmount || undefined,
+      amount_paid: amountPaid || undefined,
+      notes: formData.notes?.trim() || undefined,
+    };
 
-    try {
-
-      const vendorData = {
-        name: formData.name.trim(),
-        contact_person: formData.contact_person?.trim() || undefined,
-        contact_number: formData.contact_number?.trim() || undefined,
-        email: formData.email?.trim() || undefined,
-        service_type: formData.service_type?.trim() || undefined,
-        payment_amount: totalAmount || undefined,
-        amount_paid: amountPaid || undefined,
-        notes: formData.notes?.trim() || undefined,
-      };
-
-      // Validate
-      const validation = validateData(vendorSchema, vendorData);
-
-      if (!validation.success) {
-        setIsSubmitting(false);
-        toast.error((validation as { success: false; error: string }).error);
-        return;
-      }
-
-      const validatedData = validation.data;
-
-      // Calculate payment status
-      let paymentStatus = "Pending";
-      if (totalAmount > 0) {
-        if (amountPaid >= totalAmount) {
-          paymentStatus = "Paid";
-        } else if (amountPaid > 0) {
-          paymentStatus = "Partial";
-        }
-      }
-
-      const finalData = {
-        ...validatedData,
-        payment_status: paymentStatus,
-        booking_date: formData.booking_date || null,
-      };
-
-      if (editVendor) {
-        await updateVendor.mutateAsync({ id: editVendor.id, vendor: finalData });
-      } else {
-        const newVendor = await addVendor.mutateAsync(finalData);
-
-        // Record initial payment history if amount was paid
-        if (amountPaid > 0 && agency?.id) {
-          const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
-          await addPaymentHistory.mutateAsync({
-            vendor_id: newVendor.id,
-            agency_id: agency.id,
-            payment_amount: amountPaid,
-            payment_type: paymentType,
-            payment_date: getTodayDateString(),
-            notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
-          });
-        }
-      }
-
-      setIsOpen(false);
-      if (!editVendor) {
-        setFormData(getInitialFormData());
-      }
-    } catch (error) {
-      console.error("[AddVendorDialogValidated.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+    // Validate before locking save runner
+    const validation = validateData(vendorSchema, vendorData);
+    if (!validation.success) {
+      toast.error((validation as { success: false; error: string }).error);
+      return;
     }
+
+    const validatedData = validation.data;
+    let paymentStatus = "Pending";
+    if (totalAmount > 0) {
+      if (amountPaid >= totalAmount) {
+        paymentStatus = "Paid";
+      } else if (amountPaid > 0) {
+        paymentStatus = "Partial";
+      }
+    }
+
+    const finalData = {
+      ...validatedData,
+      payment_status: paymentStatus,
+      booking_date: formData.booking_date || null,
+    };
+
+    await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AddVendorDialogValidated.handleSubmit",
+      fallbackErrorMessage: "Failed to save vendor. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_vendor_atomic",
+          {
+            p_vendor_data: finalData,
+            p_id: editVendor?.id ?? null,
+            p_opening_balance_amount: 0,
+            p_opening_balance_type: "payable",
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              if (editVendor) {
+                await updateVendor.mutateAsync({ id: editVendor.id, vendor: finalData });
+                return { vendor: { ...editVendor, ...finalData } };
+              }
+              const newVendor = await addVendor.mutateAsync(finalData);
+              if (amountPaid > 0 && agency?.id) {
+                const paymentType: "partial" | "full" = amountPaid >= totalAmount ? "full" : "partial";
+                await addPaymentHistory.mutateAsync({
+                  vendor_id: newVendor.id,
+                  agency_id: agency.id,
+                  payment_amount: amountPaid,
+                  payment_type: paymentType,
+                  payment_date: getTodayDateString(),
+                  notes: `Initial payment of ₨${amountPaid.toLocaleString()}`,
+                });
+              }
+              return { vendor: newVendor };
+            },
+          }
+        );
+        return { usedFallbackToast };
+      },
+      onSuccess: ({ usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editVendor ? "Vendor updated successfully" : "Vendor added successfully");
+        }
+        setIsOpen(false);
+        if (!editVendor) {
+          setFormData(getInitialFormData());
+        }
+        runBackgroundTask("AddVendorDialogValidated.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
+        });
+      },
+    });
   };
 
   return (

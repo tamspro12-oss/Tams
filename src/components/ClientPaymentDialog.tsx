@@ -11,8 +11,11 @@ import { PaymentHistorySection } from "./PaymentHistorySection";
 import { PaymentModeSelect } from "./PaymentModeSelect";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { getTodayDateString } from "@/components/ui/LockedDateField";
-import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface ClientPaymentDialogProps {
   client: any;
@@ -29,6 +32,8 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
   const [bankName, setBankName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -79,75 +84,98 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
       return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const todayYmd = getTodayDateString();
+    let paymentStatus = "Pending";
+    let paymentType: "partial" | "full" = "partial";
 
-    try {
-      const todayYmd = getTodayDateString();
-
-      // Determine payment status
-      let paymentStatus = "Pending";
-      let paymentType: "partial" | "full" = "partial";
-
-      if (newTotalPaid >= totalReceivable && totalReceivable > 0) {
-        paymentStatus = "Paid";
-        paymentType = "full";
-      } else if (newTotalPaid > 0) {
-        paymentStatus = "Partial";
-      }
-
-      // Update client payment
-      await updateClient.mutateAsync({
-        id: client.id,
-        client: {
-          ...client,
-          amount_paid: newTotalPaid,
-          payment_status: paymentStatus,
-        }
-      });
-
-      // Record payment history (only for positive payments)
-      if (additionalPayment > 0) {
-        await addPaymentHistory.mutateAsync({
-          client_id: client.id,
-          payment_amount: additionalPayment,
-          payment_type: paymentType,
-          payment_date: todayYmd,
-          notes: `Payment of ₨${additionalPayment.toLocaleString()}`,
-          payment_mode: paymentMode,
-          bank_name: paymentMode === "bank" ? bankName : null,
-        });
-
-        // Sync into master transactions table
-        try {
-          await supabase.from("transactions").insert({
-            agency_id: client.agency_id,
-            date: todayYmd,
-            type: "payment_in",
-            party_id: client.id,
-            party_type: "client",
-            booking_id: client.id,
-            debit: additionalPayment,
-            credit: 0,
-            method: paymentMode || "cash",
-            reference_no: client.pnr,
-            notes: `Payment for booking #${client.pnr || client.name}`,
-          });
-        } catch (e) {
-          console.warn("Unified transactions sync notice:", e);
-        }
-      }
-
-      onOpenChange(false);
-      setPaymentAmount("");
-      setPaymentMode("cash");
-      setBankName("");
-    } catch (error: unknown) {
-      handleSupabaseError(error, "Failed to update client payment", "ClientPaymentDialog.handleSubmit");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+    if (newTotalPaid >= totalReceivable && totalReceivable > 0) {
+      paymentStatus = "Paid";
+      paymentType = "full";
+    } else if (newTotalPaid > 0) {
+      paymentStatus = "Partial";
     }
+
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "ClientPaymentDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to update client payment",
+      execute: async (requestId) => {
+        return await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "record_client_payment_atomic",
+          {
+            p_client_id: client.id,
+            p_amount: additionalPayment,
+            p_payment_mode: paymentMode,
+            p_bank_name: paymentMode === "bank" ? bankName : null,
+            p_payment_date: todayYmd,
+            p_notes: `Payment of ₨${additionalPayment.toLocaleString()}`,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              await updateClient.mutateAsync({
+                id: client.id,
+                client: {
+                  ...client,
+                  amount_paid: newTotalPaid,
+                  payment_status: paymentStatus,
+                },
+              });
+
+              if (additionalPayment > 0) {
+                await addPaymentHistory.mutateAsync({
+                  client_id: client.id,
+                  payment_amount: additionalPayment,
+                  payment_type: paymentType,
+                  payment_date: todayYmd,
+                  notes: `Payment of ₨${additionalPayment.toLocaleString()}`,
+                  payment_mode: paymentMode,
+                  bank_name: paymentMode === "bank" ? bankName : null,
+                });
+
+                try {
+                  await supabase.from("transactions").insert({
+                    agency_id: client.agency_id,
+                    date: todayYmd,
+                    type: "payment_in",
+                    party_id: client.id,
+                    party_type: "client",
+                    booking_id: client.id,
+                    debit: additionalPayment,
+                    credit: 0,
+                    method: paymentMode || "cash",
+                    reference_no: client.pnr,
+                    notes: `Payment for booking #${client.pnr || client.name}`,
+                  });
+                } catch (err) {
+                  console.warn("Unified transactions sync notice:", err);
+                }
+              }
+              return { _alreadyToasted: true };
+            },
+          }
+        );
+      },
+      onSuccess: (res: any) => {
+        if (!res?._alreadyToasted) {
+          toast.success(
+            additionalPayment >= 0
+              ? "Client payment recorded successfully"
+              : "Payment adjustment recorded successfully"
+          );
+        }
+        onOpenChange(false);
+        setPaymentAmount("");
+        setPaymentMode("cash");
+        setBankName("");
+        runBackgroundTask("ClientPaymentDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", client.agency_id);
+        });
+      },
+    });
   };
 
   const handlePayFull = () => {

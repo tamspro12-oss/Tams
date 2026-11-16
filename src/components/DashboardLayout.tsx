@@ -17,6 +17,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GlobalSearchBar } from "@/components/GlobalSearchBar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LayoutDashboard,
@@ -215,15 +216,15 @@ function AppSidebar() {
                       {isActive && (
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 bg-accent rounded-r-full" />
                       )}
-                      
+
                       <div className="flex items-center gap-3 min-w-0">
-                        <item.icon 
+                        <item.icon
                           className={cn(
                             "w-[18px] h-[18px] flex-shrink-0 transition-colors duration-200",
                             isActive ? "text-accent" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
-                          )} 
+                          )}
                         />
-                        
+
                         <span className="text-[13px] leading-tight truncate">
                           {item.name}
                         </span>
@@ -312,19 +313,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Main Content */}
         <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
           {/* Header */}
-          <header className="border-b border-border/60 bg-background/95 backdrop-blur-xl px-4 md:px-6 lg:px-8 flex items-center justify-between gap-2 z-40 shrink-0 pt-[env(safe-area-inset-top,0px)] h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-16 md:pt-0">
-            
-            {/* === MOBILE HEADER LAYOUT === */}
-            <div className="md:hidden flex-1" />
-            
-            <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
-              <OfflineIndicator />
-              <NotificationBell />
-              <ThemeToggle />
-            </div>
-
-            {/* === DESKTOP HEADER LAYOUT === */}
-            <div className="hidden md:flex items-center gap-3 min-w-0 flex-1">
+          <header className="border-b border-border/60 bg-background/95 backdrop-blur-xl px-3 md:px-6 lg:px-8 flex items-center justify-between gap-2 md:gap-3 z-40 shrink-0 pt-[env(safe-area-inset-top,0px)] h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-16 md:pt-0">
+            {/* === DESKTOP LEFT: Session Timer & Agency Name === */}
+            <div className="hidden md:flex items-center gap-3 min-w-0 shrink-0">
               <SessionTimer />
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
@@ -333,11 +324,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {agencyLoading ? (
                   <Skeleton className="h-4 w-28" />
                 ) : (
-                  <span className="font-semibold text-sm text-foreground truncate">{agency?.name || 'Your Agency'}</span>
+                  <span className="font-semibold text-sm text-foreground truncate max-w-[180px]">{agency?.name || 'Your Agency'}</span>
                 )}
               </div>
             </div>
 
+            {/* === GLOBAL SEARCH BAR (All portal pages, mobile & desktop) === */}
+            <div className="flex-1 min-w-0 flex justify-start md:justify-center">
+              <GlobalSearchBar />
+            </div>
+
+            {/* === MOBILE RIGHT CONTROLS === */}
+            <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
+              <OfflineIndicator />
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
+
+            {/* === DESKTOP RIGHT CONTROLS === */}
             <div className="hidden md:flex items-center gap-2.5 flex-shrink-0">
               <NotificationBell />
               <OfflineIndicator />
@@ -348,7 +352,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </SidebarTrigger>
             </div>
           </header>
-          
+
           {/* Content Area - Only this container scrolls */}
           <div className="flex-1 overflow-y-auto overscroll-y-contain">
             <div className="p-2 sm:p-2 md:p-4 lg:p-6 pb-24 md:pb-6 w-full">

@@ -14,7 +14,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
-import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface AgentLumpSumPaymentDialogProps {
   agent: B2BAgent | null;
@@ -37,6 +40,8 @@ export function AgentLumpSumPaymentDialog({
   const [remarks, setRemarks] = useState<string>("Lump sum payment received");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
@@ -143,69 +148,81 @@ export function AgentLumpSumPaymentDialog({
 
     if (!agent) return;
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const validAllocations = allocationPreview
+      .filter((a) => a.allocated > 0)
+      .map((a) => ({
+        bookingId: a.booking.id,
+        bookingRef: a.booking.pnr || a.booking.passenger_name,
+        amount: a.allocated,
+        statusAfter: a.statusAfter,
+      }));
 
-    try {
-      // Build split payment allocations
-      const validAllocations = allocationPreview
-        .filter((a) => a.allocated > 0)
-        .map((a) => ({
-          bookingId: a.booking.id,
-          bookingRef: a.booking.pnr || a.booking.passenger_name,
-          amount: a.allocated,
-        }));
-
-      // Post to ledger using addSplitPayment
-      await addSplitPayment.mutateAsync({
-        agent_id: agent.id,
-        total_amount: paymentVal,
-        entry_date: entryDate,
-        remarks: (paymentMode === "bank" && bankName ? `[${bankName}] ` : "") + (remarks || `Lump sum allocated to ${validAllocations.length} bookings`),
-        allocations: validAllocations,
-      });
-
-      // Update payment_status on allocated bookings
-      for (const a of allocationPreview) {
-        if (a.allocated > 0) {
-          await updateBooking.mutateAsync({
-            id: a.booking.id,
-            booking: {
-              ...a.booking,
-              payment_status: a.statusAfter,
-            },
-          });
-        }
-      }
-
-      // Sync into master transactions table
-      try {
-        await supabase.from("transactions").insert({
-          agency_id: agent.agency_id,
-          date: entryDate,
-          type: "payment_in",
-          party_id: agent.id,
-          party_type: "agent",
-          debit: paymentVal,
-          credit: 0,
-          method: paymentMode || "cash",
-          notes: remarks || `Lump sum allocated to ${validAllocations.length} bookings`,
+    await runUiAtomicSave<{ count: number }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AgentLumpSumPaymentDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to process lump sum payment",
+      execute: async (requestId) => {
+        const splitRes = await addSplitPayment.mutateAsync({
+          agent_id: agent.id,
+          total_amount: paymentVal,
+          entry_date: entryDate,
+          payment_mode: paymentMode,
+          bank_name: paymentMode === "bank" ? bankName : null,
+          requestId,
+          remarks:
+            (paymentMode === "bank" && bankName ? `[${bankName}] ` : "") +
+            (remarks || `Lump sum allocated to ${validAllocations.length} bookings`),
+          allocations: validAllocations,
         });
-      } catch (e) {
-        console.warn("Unified transactions sync notice:", e);
-      }
 
-      toast.success(
-        `PKR ${paymentVal.toLocaleString()} received and allocated to ${validAllocations.length} booking(s)!`
-      );
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (err: unknown) {
-      handleSupabaseError(err, "Failed to process lump sum payment", "AgentLumpSumPaymentDialog.handleSubmit");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        // Pre-SQL fallback path only: update booking payment_status & transactions table if RPC was absent
+        if (!splitRes?.handledAtomically) {
+          for (const a of allocationPreview) {
+            if (a.allocated > 0) {
+              await updateBooking.mutateAsync({
+                id: a.booking.id,
+                booking: {
+                  ...a.booking,
+                  payment_status: a.statusAfter,
+                },
+              });
+            }
+          }
+
+          try {
+            await supabase.from("transactions").insert({
+              agency_id: agent.agency_id,
+              date: entryDate,
+              type: "payment_in",
+              party_id: agent.id,
+              party_type: "agent",
+              debit: paymentVal,
+              credit: 0,
+              method: paymentMode || "cash",
+              notes: remarks || `Lump sum allocated to ${validAllocations.length} bookings`,
+            });
+          } catch (err) {
+            console.warn("Unified transactions sync notice:", err);
+          }
+        }
+
+        return { count: validAllocations.length };
+      },
+      onSuccess: () => {
+        onOpenChange(false);
+        onSuccess?.();
+        runBackgroundTask("AgentLumpSumPaymentDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", agent.agency_id);
+        });
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   useFormKeyboardNav({

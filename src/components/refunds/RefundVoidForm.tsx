@@ -15,15 +15,21 @@ import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import {
   resolveAccountIdForPayment,
-  invalidateAllFinancialQueries,
+  refreshAffectedFinancialQueries,
 } from "@/lib/accountingEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { cleanPastedSearch } from "@/lib/searchUtils";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import {
+  createRequestId,
+  rpcWithPreSqlFallback,
+  runBackgroundTask,
+} from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import {
   RotateCcw,
   Search,
@@ -87,6 +93,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   // Auto-generated sequence preview + optional manual override
   const [autoRecordNo, setAutoRecordNo] = useState<string>("Auto-assigned");
@@ -111,6 +118,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
   useEffect(() => {
     if (open) {
+      requestIdRef.current = createRequestId();
       setRefundDate(getTodayDateString());
       setIsManualRecordNo(false);
       setManualRecordNo("");
@@ -308,104 +316,93 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         toast.error("Please enter a custom refund/void number or switch back to Auto");
         return;
       }
-      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
-      if (!available) {
-        toast.error("This refund or void number already exists. Please use Auto or choose another number.");
-        return;
-      }
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    const combinedNotes = [
+      notes,
+      paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+      deductions > 0 ? `Service Charges/Deductions: PKR ${deductions}` : null,
+      pendingVendorRefund && actionType === "refund" ? `Track as pending vendor refund: YES` : null,
+      matchedBooking ? `Ref Invoice: ${matchedBooking.invoiceNo || matchedBooking.pnr}` : null,
+      partyName ? `Party: ${partyName}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
 
-    try {
-      let activeAgencyId = currentAgencyId;
-      if (!activeAgencyId) {
-        activeAgencyId = await getAuthenticatedAgencyId();
-      }
-      if (!activeAgencyId) {
-        throw new Error("Unable to identify active agency account.");
-      }
+    const resolvedAccountId =
+      clientAmt > 0
+        ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
+        : null;
 
-      const combinedNotes = [
-        notes,
-        paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
-        deductions > 0 ? `Service Charges/Deductions: PKR ${deductions}` : null,
-        pendingVendorRefund && actionType === "refund" ? `Track as pending vendor refund: YES` : null,
-        matchedBooking ? `Ref Invoice: ${matchedBooking.invoiceNo || matchedBooking.pnr}` : null,
-        partyName ? `Party: ${partyName}` : null,
-      ]
-        .filter(Boolean)
-        .join(" | ");
+    const legacyParams = {
+      p_amount: clientAmt,
+      p_account_id: resolvedAccountId,
+      p_party_id: matchedBooking?.partyId || null,
+      p_party_type: "client",
+      p_booking_id:
+        matchedBooking?.sourceTable === "booking_invoices" ? matchedBooking.id : null,
+      p_date: refundDate,
+      p_method: paymentMode,
+      p_reference_no: isManualRecordNo ? manualRecordNo.trim() : null,
+      p_reason: reason.trim(),
+      p_notes: combinedNotes || null,
+      p_action_type: actionType,
+      p_vendor_refund_amount: vendorRefAmt,
+      p_deductions: deductions,
+      p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+      p_party_name: partyName || null,
+      p_invoice_search: invoiceSearch || null,
+      p_void_invoice: actionType === "void",
+      p_is_manual: isManualRecordNo,
+    };
 
-      const resolvedAccountId =
-        clientAmt > 0
-          ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
-          : null;
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "RefundVoidForm.handleSave",
+      fallbackErrorMessage: "Failed to process refund/void. Please try again.",
+      execute: async (requestId) => {
+        const data = await rpcWithPreSqlFallback(
+          supabase as any,
+          "record_refund",
+          { ...legacyParams, p_request_id: requestId },
+          { legacyParams, isAutoMode: !isManualRecordNo }
+        );
+        if (data && data.success === false) {
+          throw new Error(data.error || "Failed to record refund/void");
+        }
+        return data;
+      },
+      onSuccess: (rpcData) => {
+        const assignedNo =
+          rpcData?.refund_no || (isManualRecordNo ? manualRecordNo.trim() : autoRecordNo);
+        const typeLabel = actionType === "void" ? "Void" : "Refund";
 
-      // Call atomic refund RPC (single transaction updating refund, invoice, ledger & cash/bank)
-      const rpcData = await withDuplicateRetry(
-        async () => {
-          const { data, error: rpcError } = await (supabase as any).rpc("record_refund", {
-            p_amount: clientAmt,
-            p_account_id: resolvedAccountId,
-            p_party_id: matchedBooking?.partyId || null,
-            p_party_type: "client",
-            p_booking_id:
-              matchedBooking?.sourceTable === "booking_invoices" ? matchedBooking.id : null,
-            p_date: refundDate,
-            p_method: paymentMode,
-            p_reference_no: isManualRecordNo ? manualRecordNo.trim() : null,
-            p_reason: reason.trim(),
-            p_notes: combinedNotes || null,
-            p_action_type: actionType,
-            p_vendor_refund_amount: vendorRefAmt,
-            p_deductions: deductions,
-            p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-            p_party_name: partyName || null,
-            p_invoice_search: invoiceSearch || null,
-            p_void_invoice: actionType === "void",
-            p_is_manual: isManualRecordNo,
-          });
+        // Close modal IMMEDIATELY on successful save
+        onOpenChange(false);
+        toast.success(`${typeLabel} ${assignedNo} saved`);
 
-          if (rpcError) throw rpcError;
-          if (data && data.success === false) {
-            throw new Error(data.error || "Failed to record refund/void");
-          }
-          return data;
-        },
-        { isAutoMode: !isManualRecordNo }
-      );
+        // Clear fields cleanly & refresh affected queries in background
+        setInvoiceSearch("");
+        setMatchedBooking(null);
+        setPartyName("");
+        setClientRefundAmount("0");
+        setVendorRefundAmount("0");
+        setDeductionsAmount("0");
+        setReason("");
+        setNotes("");
+        setIsManualRecordNo(false);
+        setManualRecordNo("");
 
-      const assignedNo = rpcData?.refund_no || (isManualRecordNo ? manualRecordNo.trim() : autoRecordNo);
-      toast.success(`${actionType === "void" ? "Void" : "Refund"} ${assignedNo} recorded successfully`);
-
-      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
-      refetchRecentRefunds();
-
-      // Clear input fields (keep Date, Mode, Type)
-      setInvoiceSearch("");
-      setMatchedBooking(null);
-      setPartyName("");
-      setClientRefundAmount("0");
-      setVendorRefundAmount("0");
-      setDeductionsAmount("0");
-      setReason("");
-      setNotes("");
-      setIsManualRecordNo(false);
-      setManualRecordNo("");
-
-      // Regenerate sequence for next number
-      fetchNextNumber();
-
-      if (onSuccess) onSuccess();
-      // Keep modal open so user can enter next record quickly!
-    } catch (err: any) {
-      handleSupabaseError(err, "Failed to process refund/void", "RefundVoidForm.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        runBackgroundTask("refund-void-post-save", () => {
+          refreshAffectedFinancialQueries(queryClient, "refund", currentAgencyId);
+          refetchRecentRefunds();
+          fetchNextNumber();
+          if (onSuccess) onSuccess();
+        });
+      },
+    });
   };
 
   const isDirty = useMemo(() => {

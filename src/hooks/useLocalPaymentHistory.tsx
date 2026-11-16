@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cloudStorage } from '@/lib/storage/cloudStorageProvider';
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 
 // Client Payment History (Supabase cloud storage, agency-scoped)
@@ -37,7 +37,7 @@ export function useClientPaymentHistoryLocal(clientId?: string) {
       await cloudStorage.addClientPaymentHistory(payment);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, "party", userAgencyId);
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },
@@ -91,7 +91,7 @@ export function useVendorPaymentHistoryLocal(vendorId?: string) {
       await cloudStorage.addVendorPaymentHistory(payment);
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, userAgencyId);
+      refreshAffectedFinancialQueries(queryClient, "party", userAgencyId);
       import('@/lib/sessionManager').then(({ sessionManager }) => sessionManager.extendSession());
       import('@/lib/autoBackupTrigger').then(({ triggerAutoBackup }) => triggerAutoBackup());
     },

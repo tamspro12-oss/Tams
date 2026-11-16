@@ -13,7 +13,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { GmailAppPasswordGuide } from "@/components/GmailAppPasswordGuide";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
-import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const APP_PASSWORD_PATTERN = /^[a-zA-Z0-9]{16}$/;
@@ -35,6 +36,7 @@ export function EmailConfiguration() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   useEffect(() => {
     setHasInitializedEmail(false);
@@ -53,11 +55,6 @@ export function EmailConfiguration() {
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isSavingRef.current || isSaving) return;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
 
     if (!agency?.id) {
       toast.error("No active agency found");
@@ -79,41 +76,45 @@ export function EmailConfiguration() {
       return;
     }
 
-    isSavingRef.current = true;
-    setIsSaving(true);
-    try {
-      const updatePayload: { email: string; email_password?: string } = {
-        email: trimmedEmail,
-      };
-      if (cleanPassword.length === 16) {
-        updatePayload.email_password = cleanPassword;
-      }
-
-      const { error } = await supabase
-        .from("agencies")
-        .update(updatePayload)
-        .eq("id", agency.id);
-
-      if (error) throw error;
-
-      setAgencyEmail(trimmedEmail);
-      setAgencyEmailPassword("");
-      setShowPassword(false);
-      await queryClient.invalidateQueries({ queryKey: ["agency"] });
-
-      if (cleanPassword.length === 16) {
-        toast.success("Email configuration saved");
-      } else if (agency?.smtp_configured) {
-        toast.success("Agency email updated");
-      } else {
-        toast.success("Agency email saved. Add a 16-character Gmail App Password to enable email sending.");
-      }
-    } catch (error: unknown) {
-      handleSupabaseError(error, "Failed to update email configuration", "EmailConfiguration.handleSave");
-    } finally {
-      isSavingRef.current = false;
-      setIsSaving(false);
+    const updatePayload: { email: string; email_password?: string } = {
+      email: trimmedEmail,
+    };
+    if (cleanPassword.length === 16) {
+      updatePayload.email_password = cleanPassword;
     }
+
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSavingRef,
+      setIsSubmitting: setIsSaving,
+      contextLabel: "EmailConfiguration.handleSave",
+      fallbackErrorMessage: "Failed to update email configuration",
+      execute: async () => {
+        const { error } = await supabase
+          .from("agencies")
+          .update(updatePayload)
+          .eq("id", agency.id);
+        if (error) throw error;
+        return { savedPwd: cleanPassword.length === 16 };
+      },
+      onSuccess: ({ savedPwd }) => {
+        setAgencyEmail(trimmedEmail);
+        setAgencyEmailPassword("");
+        setShowPassword(false);
+
+        if (savedPwd) {
+          toast.success("Email configuration saved");
+        } else if (agency?.smtp_configured) {
+          toast.success("Agency email updated");
+        } else {
+          toast.success("Agency email saved. Add a 16-character Gmail App Password to enable email sending.");
+        }
+
+        runBackgroundTask("EmailConfiguration.refresh", () => {
+          queryClient.invalidateQueries({ queryKey: ["agency"] });
+        });
+      },
+    });
   };
 
   useFormKeyboardNav({

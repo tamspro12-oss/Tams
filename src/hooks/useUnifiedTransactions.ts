@@ -1,8 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { invalidateAllFinancialQueries, getKarachiYmd } from "@/lib/accountingEngine";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import {
+  refreshAffectedFinancialQueries,
+  type FinancialRefreshScope,
+  getKarachiYmd,
+} from "@/lib/accountingEngine";
+import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 import { toast } from "sonner";
 
 export interface AccountItem {
@@ -70,6 +75,7 @@ export interface RecordPaymentPayload {
   referenceNo?: string;
   category?: string;
   notes?: string;
+  requestId?: string;
 }
 
 export interface RecordExpensePayload {
@@ -82,6 +88,7 @@ export interface RecordExpensePayload {
   notes?: string;
   partyId?: string | null;
   partyType?: "client" | "agent" | "vendor" | null;
+  requestId?: string;
 }
 
 export interface RecordRefundPayload {
@@ -95,6 +102,7 @@ export interface RecordRefundPayload {
   referenceNo?: string;
   reason?: string;
   notes?: string;
+  requestId?: string;
 }
 
 export interface RecordTransferPayload {
@@ -104,6 +112,7 @@ export interface RecordTransferPayload {
   date?: string;
   referenceNo?: string;
   notes?: string;
+  requestId?: string;
 }
 
 // 1. Hook to get and manage Cash & Bank Accounts
@@ -196,7 +205,7 @@ export function useAccounts() {
       return data;
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, agencyId);
+      refreshAffectedFinancialQueries(queryClient, "bank", agencyId);
       toast.success("Account added successfully");
     },
     onError: (err: unknown) => {
@@ -217,7 +226,7 @@ export function useAccounts() {
       return data;
     },
     onSuccess: () => {
-      invalidateAllFinancialQueries(queryClient, agencyId);
+      refreshAffectedFinancialQueries(queryClient, "bank", agencyId);
       toast.success("Account updated");
     },
     onError: (err: unknown) => {
@@ -365,8 +374,8 @@ export function useTransactionMutations() {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
 
-  const invalidateAllFinance = () => {
-    invalidateAllFinancialQueries(queryClient, agencyId);
+  const invalidateAllFinance = (scope: FinancialRefreshScope = "all") => {
+    refreshAffectedFinancialQueries(queryClient, scope, agencyId);
     queryClient.invalidateQueries({ queryKey: ["b2b_agents"] });
     queryClient.invalidateQueries({ queryKey: ["b2b_bookings"] });
     queryClient.invalidateQueries({ queryKey: ["b2b_ledger"] });
@@ -381,30 +390,29 @@ export function useTransactionMutations() {
         throw new Error("Network connection issue — you are offline.");
       }
       const isManual = Boolean(payload.referenceNo?.trim());
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await (supabase.rpc as any)("record_payment", {
-            p_direction: payload.direction,
-            p_amount: payload.amount,
-            p_account_id: payload.accountId,
-            p_party_id: payload.partyId || null,
-            p_party_type: payload.partyType || null,
-            p_booking_id: payload.bookingId || null,
-            p_date: payload.date || getKarachiYmd(),
-            p_method: payload.method || "cash",
-            p_reference_no: payload.referenceNo || null,
-            p_category: payload.category || null,
-            p_notes: payload.notes || null,
-            p_is_manual: isManual,
-          });
-          if (error) throw error;
-          return data;
-        },
-        { isAutoMode: !isManual }
+      const legacyParams = {
+        p_direction: payload.direction,
+        p_amount: payload.amount,
+        p_account_id: payload.accountId,
+        p_party_id: payload.partyId || null,
+        p_party_type: payload.partyType || null,
+        p_booking_id: payload.bookingId || null,
+        p_date: payload.date || getKarachiYmd(),
+        p_method: payload.method || "cash",
+        p_reference_no: payload.referenceNo || null,
+        p_category: payload.category || null,
+        p_notes: payload.notes || null,
+        p_is_manual: isManual,
+      };
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "record_payment",
+        payload.requestId ? { ...legacyParams, p_request_id: payload.requestId } : legacyParams,
+        { legacyParams, isAutoMode: !isManual }
       );
     },
     onSuccess: () => {
-      invalidateAllFinance();
+      invalidateAllFinance("voucher");
       toast.success("Payment recorded successfully");
     },
     onError: (err: any) => {
@@ -419,28 +427,27 @@ export function useTransactionMutations() {
         throw new Error("Network connection issue — you are offline.");
       }
       const isManual = Boolean(payload.referenceNo?.trim());
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await (supabase.rpc as any)("record_expense", {
-            p_amount: payload.amount,
-            p_account_id: payload.accountId,
-            p_category: payload.category,
-            p_date: payload.date || getKarachiYmd(),
-            p_method: payload.method || "cash",
-            p_reference_no: payload.referenceNo || null,
-            p_notes: payload.notes || null,
-            p_party_id: payload.partyId || null,
-            p_party_type: payload.partyType || null,
-            p_is_manual: isManual,
-          });
-          if (error) throw error;
-          return data;
-        },
-        { isAutoMode: !isManual }
+      const legacyParams = {
+        p_amount: payload.amount,
+        p_account_id: payload.accountId,
+        p_category: payload.category,
+        p_date: payload.date || getKarachiYmd(),
+        p_method: payload.method || "cash",
+        p_reference_no: payload.referenceNo || null,
+        p_notes: payload.notes || null,
+        p_party_id: payload.partyId || null,
+        p_party_type: payload.partyType || null,
+        p_is_manual: isManual,
+      };
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "record_expense",
+        payload.requestId ? { ...legacyParams, p_request_id: payload.requestId } : legacyParams,
+        { legacyParams, isAutoMode: !isManual }
       );
     },
     onSuccess: () => {
-      invalidateAllFinance();
+      invalidateAllFinance("expense");
       toast.success("Expense recorded successfully");
     },
     onError: (err: any) => {
@@ -455,29 +462,28 @@ export function useTransactionMutations() {
         throw new Error("Network connection issue — you are offline.");
       }
       const isManual = Boolean(payload.referenceNo?.trim());
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await (supabase.rpc as any)("record_refund", {
-            p_amount: payload.amount,
-            p_account_id: payload.accountId,
-            p_party_id: payload.partyId || null,
-            p_party_type: payload.partyType || "client",
-            p_booking_id: payload.bookingId || null,
-            p_date: payload.date || getKarachiYmd(),
-            p_method: payload.method || "cash",
-            p_reference_no: payload.referenceNo || null,
-            p_reason: payload.reason || null,
-            p_notes: payload.notes || null,
-            p_is_manual: isManual,
-          });
-          if (error) throw error;
-          return data;
-        },
-        { isAutoMode: !isManual }
+      const legacyParams = {
+        p_amount: payload.amount,
+        p_account_id: payload.accountId,
+        p_party_id: payload.partyId || null,
+        p_party_type: payload.partyType || "client",
+        p_booking_id: payload.bookingId || null,
+        p_date: payload.date || getKarachiYmd(),
+        p_method: payload.method || "cash",
+        p_reference_no: payload.referenceNo || null,
+        p_reason: payload.reason || null,
+        p_notes: payload.notes || null,
+        p_is_manual: isManual,
+      };
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "record_refund",
+        payload.requestId ? { ...legacyParams, p_request_id: payload.requestId } : legacyParams,
+        { legacyParams, isAutoMode: !isManual }
       );
     },
     onSuccess: () => {
-      invalidateAllFinance();
+      invalidateAllFinance("refund");
       toast.success("Refund recorded successfully");
     },
     onError: (err: any) => {
@@ -492,25 +498,24 @@ export function useTransactionMutations() {
         throw new Error("Network connection issue — you are offline.");
       }
       const isManual = Boolean(payload.referenceNo?.trim());
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await (supabase.rpc as any)("record_transfer", {
-            p_from_account_id: payload.fromAccountId,
-            p_to_account_id: payload.toAccountId,
-            p_amount: payload.amount,
-            p_date: payload.date || getKarachiYmd(),
-            p_reference_no: payload.referenceNo || null,
-            p_notes: payload.notes || null,
-            p_is_manual: isManual,
-          });
-          if (error) throw error;
-          return data;
-        },
-        { isAutoMode: !isManual }
+      const legacyParams = {
+        p_from_account_id: payload.fromAccountId,
+        p_to_account_id: payload.toAccountId,
+        p_amount: payload.amount,
+        p_date: payload.date || getKarachiYmd(),
+        p_reference_no: payload.referenceNo || null,
+        p_notes: payload.notes || null,
+        p_is_manual: isManual,
+      };
+      return await rpcWithPreSqlFallback(
+        supabase as any,
+        "record_transfer",
+        payload.requestId ? { ...legacyParams, p_request_id: payload.requestId } : legacyParams,
+        { legacyParams, isAutoMode: !isManual }
       );
     },
     onSuccess: () => {
-      invalidateAllFinance();
+      invalidateAllFinance("cash_bank");
       toast.success("Transfer completed successfully");
     },
     onError: (err: any) => {

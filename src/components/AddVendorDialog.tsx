@@ -25,8 +25,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ScanAutofillButton } from "@/components/ai/ScanAutofillButton";
-import { useEnterToNext } from "@/hooks/useEnterToNext";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 export interface AddVendorDialogProps {
   editVendor?: any;
@@ -51,8 +57,11 @@ export function AddVendorDialog({
   const { addPaymentHistory } = useVendorPaymentHistoryLocal();
   const { balances, upsertBalance } = useOpeningBalances();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   // References
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -177,79 +186,103 @@ export function AddVendorDialog({
       return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      const paymentStatus = totalAmount > 0 && paidVal >= totalAmount ? "Paid" : paidVal > 0 ? "Partial" : "Pending";
+    const paymentStatus = totalAmount > 0 && paidVal >= totalAmount ? "Paid" : paidVal > 0 ? "Partial" : "Pending";
+    const vendorData = {
+      name: trimmedName,
+      contact_person: contactPerson.trim() || null,
+      contact_number: contactNumber.trim() || null,
+      email: email.trim() || null,
+      booking_date: bookingDate || null,
+      payment_amount: totalAmount,
+      amount_paid: paidVal,
+      payment_status: paymentStatus,
+      service_type: trimmedService,
+      notes: notes.trim() || null,
+    };
 
-      const vendorData = {
-        name: trimmedName,
-        contact_person: contactPerson.trim() || null,
-        contact_number: contactNumber.trim() || null,
-        email: email.trim() || null,
-        booking_date: bookingDate || null,
-        payment_amount: totalAmount,
-        amount_paid: paidVal,
-        payment_status: paymentStatus,
-        service_type: trimmedService,
-        notes: notes.trim() || null,
-      };
+    await runUiAtomicSave<{ saved: any; usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "AddVendorDialog.handleSaveInternal",
+      fallbackErrorMessage: "Failed to save vendor. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        const rpcRes = await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_vendor_atomic",
+          {
+            p_vendor_data: vendorData,
+            p_id: editVendor?.id ?? null,
+            p_opening_balance_amount: opBalNum,
+            p_opening_balance_type: openingBalanceType,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              let savedVendorResult: any = null;
+              if (editVendor) {
+                await updateVendor.mutateAsync({ id: editVendor.id, vendor: vendorData });
+                savedVendorResult = { ...editVendor, ...vendorData };
+              } else {
+                savedVendorResult = await addVendor.mutateAsync(vendorData);
+                if (paidVal > 0 && agency?.id) {
+                  const paymentType: "partial" | "full" = paidVal >= totalAmount ? "full" : "partial";
+                  await addPaymentHistory.mutateAsync({
+                    vendor_id: savedVendorResult.id,
+                    agency_id: agency.id,
+                    payment_amount: paidVal,
+                    payment_type: paymentType,
+                    payment_date: getTodayDateString(),
+                    notes: `Initial payment of PKR ${paidVal.toLocaleString()}`,
+                  });
+                }
+              }
 
-      let savedVendorResult: any = null;
-      if (editVendor) {
-        await updateVendor.mutateAsync({ id: editVendor.id, vendor: vendorData });
-        savedVendorResult = { ...editVendor, ...vendorData };
-      } else {
-        savedVendorResult = await addVendor.mutateAsync(vendorData);
+              if (savedVendorResult?.id && opBalNum > 0) {
+                await upsertBalance.mutateAsync({
+                  party_type: "vendor",
+                  party_id: savedVendorResult.id,
+                  balance_type: openingBalanceType,
+                  amount: opBalNum,
+                  as_of_date: getTodayDateString(),
+                  notes: "Initial brought-forward opening balance",
+                });
+              }
 
-        if (paidVal > 0 && agency?.id) {
-          const paymentType: "partial" | "full" = paidVal >= totalAmount ? "full" : "partial";
-          await addPaymentHistory.mutateAsync({
-            vendor_id: savedVendorResult.id,
-            agency_id: agency.id,
-            payment_amount: paidVal,
-            payment_type: paymentType,
-            payment_date: getTodayDateString(),
-            notes: `Initial payment of PKR ${paidVal.toLocaleString()}`,
-          });
+              return { vendor: savedVendorResult };
+            },
+          }
+        );
+
+        return { saved: rpcRes?.vendor ?? rpcRes, usedFallbackToast };
+      },
+      onSuccess: ({ saved, usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editVendor ? "Vendor updated successfully" : "Vendor saved successfully");
         }
-      }
-
-      // Record optional Opening Balance
-      if (savedVendorResult?.id && opBalNum > 0) {
-        await upsertBalance.mutateAsync({
-          party_type: "vendor",
-          party_id: savedVendorResult.id,
-          balance_type: openingBalanceType,
-          amount: opBalNum,
-          as_of_date: getTodayDateString(),
-          notes: "Initial brought-forward opening balance",
+        if (saved) {
+          onSaved?.(saved);
+        }
+        if (isSaveAndAddNext) {
+          resetForm("");
+          toast.info("Ready for next vendor");
+          setTimeout(() => {
+            vendorNameRef.current?.focus();
+          }, 60);
+        } else {
+          setIsOpen(false);
+        }
+        runBackgroundTask("AddVendorDialog.refresh", () => {
+          refreshAffectedFinancialQueries(queryClient, "all", userAgencyId);
         });
-      }
-
-      if (savedVendorResult) {
-        onSaved?.(savedVendorResult);
-      }
-
-      if (isSaveAndAddNext) {
-        resetForm("");
-        toast.info("Ready for next vendor");
-        setTimeout(() => {
-          vendorNameRef.current?.focus();
-        }, 60);
-      } else {
-        setIsOpen(false);
-      }
-    } catch (error) {
-      console.error("[AddVendorDialog.handleSaveInternal]", error);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+      },
+    });
   };
 
   // Keyboard navigation hook (covers both form inputs and pinned footer Save button)
-  useEnterToNext({
+  useFormKeyboardNav({
     containerRef: dialogRef,
     enabled: isOpen,
     isDirty: Boolean(name.trim() || contactPerson.trim() || paymentAmount),

@@ -4,7 +4,8 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { isMissingFunctionError } from "@/lib/friendlyError";
-import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { isMissingRpcOrParamError } from "@/lib/atomicSave";
 
 export interface CashBankEntry {
   id: string;
@@ -27,6 +28,7 @@ export type AddCashBankEntryInput = Omit<
   'id' | 'agency_id' | 'created_at' | 'updated_at' | 'transaction_id'
 > & {
   account_id?: string | null;
+  requestId?: string;
 };
 
 export function useCashBankEntries() {
@@ -57,21 +59,27 @@ export function useCashBankEntries() {
     mutationFn: async (input: AddCashBankEntryInput) => {
       if (!agencyId) throw new Error('No agency ID');
 
-      const { account_id, ...entry } = input;
-      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+      const { account_id, requestId, ...entry } = input;
+      const baseParams = {
+        p_entry_date: entry.entry_date,
+        p_entry_type: entry.entry_type,
+        p_amount: entry.amount,
+        p_payment_mode: entry.payment_mode,
+        p_bank_name: entry.bank_name,
+        p_category: entry.category,
+        p_description: entry.description,
+        p_reference_number: entry.reference_number,
+        p_account_id: account_id ?? null,
+      };
+      let { data: rpcData, error: rpcError } = await (supabase as any).rpc(
         'add_cash_bank_entry_atomic',
-        {
-          p_entry_date: entry.entry_date,
-          p_entry_type: entry.entry_type,
-          p_amount: entry.amount,
-          p_payment_mode: entry.payment_mode,
-          p_bank_name: entry.bank_name,
-          p_category: entry.category,
-          p_description: entry.description,
-          p_reference_number: entry.reference_number,
-          p_account_id: account_id ?? null,
-        }
+        requestId ? { ...baseParams, p_request_id: requestId } : baseParams
       );
+      if (rpcError && requestId && isMissingRpcOrParamError(rpcError)) {
+        const retry = await (supabase as any).rpc('add_cash_bank_entry_atomic', baseParams);
+        rpcData = retry.data;
+        rpcError = retry.error;
+      }
 
       if (!rpcError) {
         return rpcData?.entry ?? rpcData;
@@ -138,9 +146,8 @@ export function useCashBankEntries() {
       }
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'cash_bank', agencyId);
       toast.success('Entry recorded successfully');
     },
     onError: (error: unknown) => {
@@ -165,9 +172,8 @@ export function useCashBankEntries() {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'cash_bank', agencyId);
       toast.success('Entry updated successfully');
     },
     onError: (error: unknown) => {
@@ -194,9 +200,8 @@ export function useCashBankEntries() {
 
       if (error) throw error;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['cash_bank_entries'] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, 'cash_bank', agencyId);
       toast.success('Entry deleted and ledger reversed');
     },
     onError: (error: unknown) => {

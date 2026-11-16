@@ -17,7 +17,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
 import {
   resolveAccountIdForPayment,
-  invalidateAllFinancialQueries,
+  refreshAffectedFinancialQueries,
 } from "@/lib/accountingEngine";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
@@ -26,8 +26,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CopyValue } from "@/components/ui/CopyValue";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import { withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import {
+  createRequestId,
+  rpcWithPreSqlFallback,
+  runBackgroundTask,
+} from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import {
   Receipt,
   Repeat,
@@ -110,6 +116,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
   const [manualExpenseNo, setManualExpenseNo] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<string>(createRequestId());
 
   // Fetch / preview auto expense number (DB assigns real number atomically on save)
   const fetchNextExpenseNumber = async () => {
@@ -121,12 +128,13 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         setAutoExpenseNo(String(data));
         return;
       }
-    } catch {}
+    } catch { }
     setAutoExpenseNo("Auto-assigned");
   };
 
   useEffect(() => {
     if (open) {
+      requestIdRef.current = createRequestId();
       setExpenseDate(getTodayDateString());
       setIsManualExpenseNo(false);
       setManualExpenseNo("");
@@ -199,121 +207,143 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
         toast.error("Please enter a custom expense number or switch back to Auto");
         return;
       }
-      const available = await checkDocumentNumberAvailable("expense", customNo);
-      if (!available) {
-        toast.error("This expense number already exists. Please use Auto or choose another number.");
-        return;
-      }
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      let activeAgencyId = currentAgencyId;
-      if (!activeAgencyId) {
-        const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
-        activeAgencyId = await getAuthenticatedAgencyId();
-      }
-      if (!activeAgencyId) {
-        throw new Error("Unable to identify active agency account.");
-      }
-
-      const externalBillNote = !isManualExpenseNo && referenceNo.trim()
+    const externalBillNote =
+      !isManualExpenseNo && referenceNo.trim()
         ? `Bill/Ref: ${referenceNo.trim()}`
         : null;
+    const isRecurring = expenseMode === "recurring";
+    const resolvedAccountId = resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
+    const combinedNotes = [
+      isRecurring ? `[Recurring ${frequency}]` : null,
+      !isRecurring && paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
+      externalBillNote,
+      notes.trim() || null,
+    ]
+      .filter(Boolean)
+      .join(" — ") || null;
 
-      if (expenseMode === "recurring") {
-        const recurringPayload: any = {
-          agency_id: activeAgencyId,
-          expense_type: category,
-          amount: numAmount,
-          payment_mode: paymentMode,
-          bank_name: paymentMode === "bank" ? selectedBank : null,
-          expense_date: startDate || expenseDate,
-          notes: [
-            `[Recurring ${frequency}]`,
-            externalBillNote,
-            notes.trim() || null,
-          ]
-            .filter(Boolean)
-            .join(" — "),
-          is_recurring: true,
-          recurring_frequency: frequency.toLowerCase(),
-          recurring_parent_id: null,
-          is_paid: true,
-          reference_number: isManualExpenseNo ? manualExpenseNo.trim() : null,
-        };
+    const legacyRpcParams = {
+      p_amount: numAmount,
+      p_account_id: resolvedAccountId,
+      p_category: category,
+      p_date: isRecurring ? startDate || expenseDate : expenseDate,
+      p_method: paymentMode,
+      p_reference_no: isManualExpenseNo ? manualExpenseNo.trim() : null,
+      p_notes: combinedNotes,
+      p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
+      p_is_manual: isManualExpenseNo,
+    };
 
-        await withDuplicateRetry(
-          async () => {
-            const { error } = await (supabase as any).from("expenses").insert(recurringPayload);
-            if (error) throw error;
-          },
-          { isAutoMode: !isManualExpenseNo }
-        );
-        toast.success(`Recurring expense (${frequency}) registered successfully`);
-      } else {
-        const resolvedAccountId = resolveAccountIdForPayment(accounts, paymentMode, selectedBank);
-        const rpcData = await withDuplicateRetry(
-          async () => {
-            const { data, error: rpcError } = await (supabase as any).rpc("record_expense", {
-              p_amount: numAmount,
-              p_account_id: resolvedAccountId,
-              p_category: category,
-              p_date: expenseDate,
-              p_method: paymentMode,
-              p_reference_no: isManualExpenseNo ? manualExpenseNo.trim() : null,
-              p_notes: [
-                paymentMode === "bank" && selectedBank ? `Bank: ${selectedBank}` : null,
-                externalBillNote,
-                notes.trim() || null,
-              ]
-                .filter(Boolean)
-                .join(" — ") || null,
-              p_bank_name: paymentMode === "bank" ? selectedBank || null : null,
-              p_is_manual: isManualExpenseNo,
-            });
-
-            if (rpcError) throw rpcError;
-            if (data && data.success === false) {
-              throw new Error(data.error || "Failed to save expense");
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "ExpenseFormModal.handleSave",
+      fallbackErrorMessage: "Failed to record expense. Please try again.",
+      execute: async (requestId) => {
+        if (isRecurring) {
+          return await rpcWithPreSqlFallback(
+            supabase as any,
+            "record_expense",
+            {
+              ...legacyRpcParams,
+              p_request_id: requestId,
+              p_is_recurring: true,
+              p_recurring_frequency: frequency.toLowerCase(),
+              p_recurring_parent_id: null,
+            },
+            {
+              isAutoMode: !isManualExpenseNo,
+              legacyFallback: async () => {
+                // Pre-SQL fallback if new `record_expense` recurring overload is not deployed yet
+                let activeAgencyId = currentAgencyId;
+                if (!activeAgencyId) {
+                  const { getAuthenticatedAgencyId } = await import("@/lib/agencyContext");
+                  activeAgencyId = await getAuthenticatedAgencyId();
+                }
+                if (!activeAgencyId) {
+                  throw new Error("Unable to identify active agency account.");
+                }
+                const recurringPayload: any = {
+                  agency_id: activeAgencyId,
+                  expense_type: category,
+                  amount: numAmount,
+                  payment_mode: paymentMode,
+                  bank_name: paymentMode === "bank" ? selectedBank : null,
+                  expense_date: startDate || expenseDate,
+                  notes: combinedNotes,
+                  is_recurring: true,
+                  recurring_frequency: frequency.toLowerCase(),
+                  recurring_parent_id: null,
+                  is_paid: true,
+                  reference_number: isManualExpenseNo ? manualExpenseNo.trim() : null,
+                };
+                return await withDuplicateRetry(
+                  async () => {
+                    const { data, error } = await (supabase as any)
+                      .from("expenses")
+                      .insert(recurringPayload)
+                      .select()
+                      .single();
+                    if (error) throw error;
+                    return data;
+                  },
+                  { isAutoMode: !isManualExpenseNo }
+                );
+              },
             }
-            return data;
-          },
-          { isAutoMode: !isManualExpenseNo }
+          );
+        }
+
+        const data = await rpcWithPreSqlFallback(
+          supabase as any,
+          "record_expense",
+          { ...legacyRpcParams, p_request_id: requestId },
+          { legacyParams: legacyRpcParams, isAutoMode: !isManualExpenseNo }
         );
-        const assignedNo = rpcData?.reference_no || (isManualExpenseNo ? manualExpenseNo.trim() : "");
-        toast.success(`Expense ${assignedNo} recorded successfully`.replace(/\s+/g, " "));
-      }
+        if (data && data.success === false) {
+          throw new Error(data.error || "Failed to save expense");
+        }
+        return data;
+      },
+      onSuccess: (rpcData) => {
+        const assignedNo =
+          rpcData?.reference_no ||
+          rpcData?.reference_number ||
+          (isManualExpenseNo ? manualExpenseNo.trim() : "");
 
-      await invalidateAllFinancialQueries(queryClient, activeAgencyId);
+        // Close modal IMMEDIATELY on successful save
+        onOpenChange(false);
+        if (isRecurring) {
+          toast.success(`Recurring expense (${frequency}) saved`);
+        } else {
+          toast.success(`Expense ${assignedNo} saved`.replace(/\s+/g, " "));
+        }
 
-      // Clear form inputs (keep Date, Mode and Type)
-      setAmount("");
-      setReferenceNo("");
-      setNotes("");
-      setIsManualExpenseNo(false);
-      setManualExpenseNo("");
+        // Reset inputs & refresh affected caches in background
+        setAmount("");
+        setReferenceNo("");
+        setNotes("");
+        setIsManualExpenseNo(false);
+        setManualExpenseNo("");
 
-      // Regenerate next auto expense number
-      fetchNextExpenseNumber();
-
-      if (onSuccess) onSuccess();
-      // Keep modal open so user can enter the next record quickly!
-    } catch (err: any) {
-      handleSupabaseError(err, "Failed to record expense", "ExpenseFormModal.handleSave");
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
+        runBackgroundTask("expense-post-save", () => {
+          refreshAffectedFinancialQueries(queryClient, "expense", currentAgencyId);
+          fetchNextExpenseNumber();
+          if (onSuccess) onSuccess();
+        });
+      },
+    });
   };
 
   const isDirty = useMemo(() => {
     return Boolean(
       (parseFloat(amount) || 0) > 0 ||
-        referenceNo.trim() ||
-        notes.trim() ||
-        endDate
+      referenceNo.trim() ||
+      notes.trim() ||
+      endDate
     );
   }, [amount, referenceNo, notes, endDate]);
 

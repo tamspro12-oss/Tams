@@ -25,6 +25,11 @@ import { useQueries } from "@/hooks/useStorage";
 import { cn } from "@/lib/utils";
 import { UniversalPartySelect } from "@/components/parties/UniversalPartySelect";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { supabase } from "@/integrations/supabase/client";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 type Status = "pending" | "in-progress" | "completed" | "cancelled";
@@ -63,6 +68,9 @@ export default function QueryFormPage() {
   const [errors, setErrors] = useState<{ clientName?: string; queryText?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   // Field refs for keyboard focus & validation
   const formContainerRef = useRef<HTMLDivElement>(null);
@@ -134,14 +142,8 @@ export default function QueryFormPage() {
   const handleSave = useCallback(
     async (andAddAnother: boolean = false) => {
       if (isSubmittingRef.current || isSubmitting) return;
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        toast.error("You are offline, not saved");
-        return;
-      }
       if (!validate()) return;
 
-      isSubmittingRef.current = true;
-      setIsSubmitting(true);
       const payload = {
         client_name: clientName.trim(),
         contact_number: contactNumber.trim() || null,
@@ -153,35 +155,62 @@ export default function QueryFormPage() {
         notes: notes.trim() || null,
       };
 
-      try {
-        if (isEdit && id) {
-          await updateQuery.mutateAsync({ id, query: payload });
-        } else {
-          await addQuery.mutateAsync(payload);
-        }
-
-        if (andAddAnother) {
-          setClientName("");
-          setContactNumber("");
-          setAssignedTo("");
-          setPriority("medium");
-          setStatus("pending");
-          setDueDate("");
-          setQueryText("");
-          setNotes("");
-          setErrors({});
-          clientNameRef.current?.focus();
-        } else {
-          navigate("/app/leads-quotes?tab=queries");
-        }
-      } catch (e: unknown) {
-        console.error("[QueryFormPage.handleSave]", e);
-      } finally {
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-      }
+      await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+        requestIdRef,
+        isLockedRef: isSubmittingRef,
+        setIsSubmitting,
+        contextLabel: "QueryFormPage.handleSave",
+        fallbackErrorMessage: "Failed to save query. Please try again.",
+        execute: async (requestId) => {
+          let usedFallbackToast = false;
+          await rpcWithPreSqlFallback<any>(
+            supabase as any,
+            "save_query_atomic",
+            {
+              p_query_data: payload,
+              p_id: isEdit && id ? id : null,
+              p_request_id: requestId,
+            },
+            {
+              legacyFallback: async () => {
+                usedFallbackToast = true;
+                if (isEdit && id) {
+                  await updateQuery.mutateAsync({ id, query: payload });
+                } else {
+                  await addQuery.mutateAsync(payload);
+                }
+                return { ok: true };
+              },
+            }
+          );
+          return { usedFallbackToast };
+        },
+        onSuccess: ({ usedFallbackToast }) => {
+          if (!usedFallbackToast) {
+            toast.success(isEdit ? "Query updated successfully" : "Query saved successfully");
+          }
+          if (andAddAnother) {
+            setClientName("");
+            setContactNumber("");
+            setAssignedTo("");
+            setPriority("medium");
+            setStatus("pending");
+            setDueDate("");
+            setQueryText("");
+            setNotes("");
+            setErrors({});
+            clientNameRef.current?.focus();
+          } else {
+            navigate("/app/leads-quotes?tab=queries");
+          }
+          runBackgroundTask("QueryFormPage.refresh", () => {
+            queryClient.invalidateQueries({ queryKey: ["queries", userAgencyId] });
+            queryClient.invalidateQueries({ queryKey: ["queries"] });
+          });
+        },
+      });
     },
-    [clientName, contactNumber, priority, queryText, status, assignedTo, dueDate, notes, isEdit, id, updateQuery, addQuery, navigate, isSubmitting]
+    [clientName, contactNumber, priority, queryText, status, assignedTo, dueDate, notes, isEdit, id, updateQuery, addQuery, navigate, isSubmitting, queryClient, userAgencyId]
   );
 
   useFormKeyboardNav({

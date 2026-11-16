@@ -28,6 +28,8 @@ import { useAgencyBanks, COMMON_BANKS } from "@/hooks/useAgencyBanks";
 import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransactions";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { useLocation } from "react-router-dom";
 import { DateFilter, DatePresetFilterValue, isDateWithinPreset } from "@/components/DateFilter";
@@ -82,6 +84,9 @@ export default function BankCashManager() {
   const bankFormRef = useRef<HTMLFormElement>(null);
   const isEntrySubmittingRef = useRef(false);
   const isBankSubmittingRef = useRef(false);
+  const entryRequestIdRef = useRef<string>(createRequestId());
+  const bankRequestIdRef = useRef<string>(createRequestId());
+  const [isEntrySaving, setIsEntrySaving] = useState(false);
 
   useEffect(() => {
     if (showAddEntry) setEntryDate(getTodayDateString());
@@ -400,11 +405,6 @@ export default function BankCashManager() {
     e.preventDefault();
     if (isEntrySubmittingRef.current || addEntry.isPending) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
-
     const formData = new FormData(e.currentTarget);
 
     const isBankEntry = entryType === 'bank_in' || entryType === 'bank_out';
@@ -425,31 +425,39 @@ export default function BankCashManager() {
       return;
     }
 
-    isEntrySubmittingRef.current = true;
-    try {
-      // Resolve target account and execute single-step atomic cash/bank entry + ledger sync.
-      const targetAccount = isBankEntry
-        ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
-        : cashAccount || accounts[0];
+    const targetAccount = isBankEntry
+      ? bankAccounts.find((b) => b.name === bankName) || accounts[0]
+      : cashAccount || accounts[0];
 
-      await addEntry.mutateAsync({
-        entry_date: entryDate,
-        entry_type: entryType,
-        amount,
-        payment_mode: isBankEntry ? 'bank' : 'cash',
-        bank_name: bankName,
-        category,
-        description,
-        reference_number: referenceNumber,
-        account_id: targetAccount?.id ?? null,
-      });
-
-      setShowAddEntry(false);
-    } catch {
-      // Error toast and console logging handled by useCashBankEntries.addEntry
-    } finally {
-      isEntrySubmittingRef.current = false;
-    }
+    await runUiAtomicSave({
+      requestIdRef: entryRequestIdRef,
+      isLockedRef: isEntrySubmittingRef,
+      setIsSubmitting: setIsEntrySaving,
+      contextLabel: "BankCashManager.handleAddEntry",
+      fallbackErrorMessage: "Failed to save entry",
+      execute: async (requestId) => {
+        return await addEntry.mutateAsync({
+          entry_date: entryDate,
+          entry_type: entryType,
+          amount,
+          payment_mode: isBankEntry ? 'bank' : 'cash',
+          bank_name: bankName,
+          category,
+          description,
+          reference_number: referenceNumber,
+          account_id: targetAccount?.id ?? null,
+          requestId,
+        });
+      },
+      onSuccess: () => {
+        setShowAddEntry(false);
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   function entryDateFallback() {
@@ -460,11 +468,6 @@ export default function BankCashManager() {
   const handleAddBank = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isBankSubmittingRef.current || addBank.isPending) return;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Network connection issue. You are offline, not saved.");
-      return;
-    }
 
     const formData = new FormData(e.currentTarget);
     const bankName = ((formData.get('bank_name') as string) || '').trim();
@@ -481,23 +484,31 @@ export default function BankCashManager() {
       return;
     }
 
-    isBankSubmittingRef.current = true;
-    try {
-      await addBank.mutateAsync({
-        bank_name: bankName,
-        account_number: formData.get('account_number') as string || null,
-        account_title: formData.get('account_title') as string || null,
-        branch_name: formData.get('branch_name') as string || null,
-        is_active: true,
-        opening_balance: openingBalance,
-      });
-
-      setShowAddBank(false);
-    } catch {
-      // Error toast and console logging handled by useAgencyBanks.addBank
-    } finally {
-      isBankSubmittingRef.current = false;
-    }
+    await runUiAtomicSave({
+      requestIdRef: bankRequestIdRef,
+      isLockedRef: isBankSubmittingRef,
+      contextLabel: "BankCashManager.handleAddBank",
+      fallbackErrorMessage: "Failed to add bank account",
+      execute: async (requestId) => {
+        return await addBank.mutateAsync({
+          bank_name: bankName,
+          account_number: formData.get('account_number') as string || null,
+          account_title: formData.get('account_title') as string || null,
+          branch_name: formData.get('branch_name') as string || null,
+          is_active: true,
+          opening_balance: openingBalance,
+          requestId,
+        });
+      },
+      onSuccess: () => {
+        setShowAddBank(false);
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   return (
@@ -1025,8 +1036,8 @@ export default function BankCashManager() {
               <Button type="button" variant="outline" onClick={() => setShowAddEntry(false)}>
                 Cancel
               </Button>
-              <Button type="submit" data-save-button="true" disabled={addEntry.isPending}>
-                {addEntry.isPending ? "Saving..." : "Save Entry"}
+              <Button type="submit" data-save-button="true" disabled={isEntrySaving || addEntry.isPending}>
+                {isEntrySaving || addEntry.isPending ? "Saving..." : "Save Entry"}
               </Button>
             </DialogFooter>
           </form>

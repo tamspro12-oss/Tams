@@ -80,6 +80,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const pendingSeedSearchRef = useRef<string | null>(null);
   const advanceAfterCloseRef = useRef(false);
   const restoreTriggerFocusOnCloseRef = useRef(false);
+  const suppressFocusRestoreOnTabRef = useRef(false);
+  const popoverContentRef = useRef<HTMLDivElement>(null);
 
   const selectedItem = useMemo(() => {
     if (!value || value === "none") return null;
@@ -236,6 +238,33 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const handlePopoverKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Tab") {
+      // Never call preventDefault on Tab/Shift+Tab. When leaving the portal popover,
+      // synchronously move focus back to triggerRef so browser native Tab/Shift+Tab
+      // immediately advances to the next/previous control in visual order.
+      const popEl = popoverContentRef.current;
+      const focusables = popEl
+        ? Array.from(
+            popEl.querySelectorAll<HTMLElement>(
+              'input:not([disabled]), button:not([disabled]):not([tabindex="-1"]), a[href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => el.getAttribute("tabindex") !== "-1")
+        : [];
+      const activeEl = document.activeElement as HTMLElement | null;
+      const idx = activeEl ? focusables.indexOf(activeEl) : -1;
+      const leavingBackward = e.shiftKey && (idx <= 0 || focusables.length === 0);
+      const leavingForward = !e.shiftKey && (idx === -1 || idx >= focusables.length - 1);
+
+      if (leavingBackward || leavingForward) {
+        suppressFocusRestoreOnTabRef.current = true;
+        advanceAfterCloseRef.current = false;
+        restoreTriggerFocusOnCloseRef.current = false;
+        triggerRef.current?.focus({ preventScroll: true });
+        setOpen(false);
+      }
+      return;
+    }
+
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -336,8 +365,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       </PopoverTrigger>
 
       <PopoverContent
+        ref={popoverContentRef}
         data-searchable-select-content="true"
         onOpenAutoFocus={(e) => {
+          suppressFocusRestoreOnTabRef.current = false;
           e.preventDefault();
           const input = inputRef.current;
           if (input) {
@@ -355,6 +386,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           restoreTriggerFocusOnCloseRef.current = false;
         }}
         onCloseAutoFocus={(e) => {
+          if (suppressFocusRestoreOnTabRef.current) {
+            suppressFocusRestoreOnTabRef.current = false;
+            advanceAfterCloseRef.current = false;
+            restoreTriggerFocusOnCloseRef.current = false;
+            e.preventDefault();
+            return;
+          }
           const shouldAdvance = advanceAfterCloseRef.current;
           const shouldRestoreTrigger = restoreTriggerFocusOnCloseRef.current;
           advanceAfterCloseRef.current = false;
@@ -465,6 +503,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       optionRefs.current[idx] = el;
                     }}
                     type="button"
+                    tabIndex={-1}
                     role="option"
                     aria-selected={isClearSelected}
                     onMouseEnter={() => setHighlightedIndex(idx)}
@@ -495,6 +534,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     optionRefs.current[idx] = el;
                   }}
                   type="button"
+                  tabIndex={-1}
                   role="option"
                   aria-selected={isSelected}
                   onMouseEnter={() => setHighlightedIndex(idx)}

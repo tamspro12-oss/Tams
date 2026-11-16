@@ -8,9 +8,15 @@ import { FileText, History, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
-import { DocumentNumberControl, checkDocumentNumberAvailable } from "@/components/ui/DocumentNumberControl";
-import { parseSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
+import { withDuplicateRetry } from "@/lib/supabaseErrorHandler";
 import { loadAgencyTemplate } from "@/lib/agencyTemplates";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -43,12 +49,25 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
   const [invoiceHistory, setInvoiceHistory] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const isGeneratingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const dialogFormRef = useRef<HTMLDivElement>(null);
+  const cachedTemplateRef = useRef<Record<string, any> | null>(null);
   const [invoicePreviewNo, setInvoicePreviewNo] = useState("Auto-assigned");
   const [isManualInvoiceNo, setIsManualInvoiceNo] = useState(false);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const { toast } = useToast();
+  const { data: agencyIdHook } = useCurrentAgencyId();
+  const queryClient = useQueryClient();
 
-  // Load invoice history and preview number when dialog opens
+  useFormKeyboardNav({
+    containerRef: dialogFormRef,
+    enabled: open,
+    isDirty: Boolean(additionalNotes.trim()),
+    onSave: () => generateInvoice(),
+    onCancel: () => setOpen(false),
+  });
+
+  // Load invoice history, template, and preview number when dialog opens
   useEffect(() => {
     if (open) {
       loadInvoiceHistory();
@@ -57,8 +76,15 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       supabase.rpc("preview_next_number", { p_counter_type: "invoice" }).then(({ data, error }) => {
         setInvoicePreviewNo(!error && data ? String(data) : "Auto-assigned");
       });
+      if (agencyIdHook) {
+        loadAgencyTemplate<Record<string, any>>("invoice_template", agencyIdHook)
+          .then((res) => {
+            if (res?.data) cachedTemplateRef.current = res.data;
+          })
+          .catch(() => {});
+      }
     }
-  }, [open]);
+  }, [open, agencyIdHook]);
 
   const loadInvoiceHistory = async () => {
     try {
@@ -86,41 +112,29 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       return;
     }
 
-    if (isManualInvoiceNo) {
-      const customNo = manualInvoiceNo.trim();
-      if (!customNo) {
-        toast({
-          title: "Validation Error",
-          description: "Please enter a custom invoice number or switch back to Auto.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const available = await checkDocumentNumberAvailable("invoice", customNo);
-      if (!available) {
-        toast({
-          title: "Duplicate Number",
-          description: "This invoice number already exists. Please choose another.",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (isManualInvoiceNo && !manualInvoiceNo.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a custom invoice number or switch back to Auto.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    isGeneratingRef.current = true;
-    setIsGenerating(true);
-    try {
-      // Get user and agency info
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-
-      const agencyId = await getAuthenticatedAgencyId();
-      if (!agencyId) throw new Error("Agency not found");
-
-      // Load template (database first, localStorage fallback)
+    let template = cachedTemplateRef.current;
+    if (!template) {
+      const agencyIdResolved = agencyIdHook || (await getAuthenticatedAgencyId());
+      if (!agencyIdResolved) {
+        toast({
+          title: "Error",
+          description: "Unable to identify agency account.",
+          variant: "destructive",
+        });
+        return;
+      }
       const templateResult = await loadAgencyTemplate<Record<string, any>>(
         "invoice_template",
-        agencyId
+        agencyIdResolved
       );
       if (!templateResult.data) {
         toast({
@@ -130,236 +144,258 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
         });
         return;
       }
-
-      const template = templateResult.data;
-
-      const invoiceDate = new Date().toLocaleDateString();
-
-      // Calculate amounts (NaN-safe)
-      const amount = Math.max(0, Number(client.selling_price) || 0);
-      const paid = Math.max(0, Number(client.amount_paid) || 0);
-      const balance = Math.max(0, amount - paid);
-
-      // Save invoice record FIRST so DB trigger assigns atomic invoice_number before PDF creation
-      const insertedInvoice = await withDuplicateRetry(
-        async () => {
-          const { data, error: insertError } = await (supabase as any)
-            .from("invoices")
-            .insert({
-              invoice_number: isManualInvoiceNo ? manualInvoiceNo.trim() : "",
-              client_id: client.id,
-              agency_id: agencyId,
-              generated_by: user.id,
-              amount,
-              amount_paid: paid,
-              balance_due: balance,
-              invoice_date: new Date().toISOString().split("T")[0],
-              item_description: itemDescription.trim() || "Travel Package",
-              additional_notes: additionalNotes || null,
-              pdf_data: {
-                client_name: client.name,
-                destination: client.destination,
-                flight_date: client.flight_date,
-                pnr: client.pnr,
-                airline: client.airline,
-              },
-            })
-            .select("invoice_number")
-            .single();
-
-          if (insertError) throw insertError;
-          return data;
-        },
-        { isAutoMode: !isManualInvoiceNo }
-      );
-
-      const invoiceNumber = insertedInvoice?.invoice_number || (isManualInvoiceNo ? manualInvoiceNo.trim() : invoicePreviewNo);
-
-      // Generate PDF
-      const doc = new jsPDF();
-
-      let yPos = 20;
-
-      // Add logo if exists
-      if (template.logo) {
-        try {
-          doc.addImage(template.logo, 'PNG', 15, yPos, 40, 16);
-          yPos += 20;
-        } catch (error) {
-          console.log("Could not add logo", error);
-        }
-      }
-
-      // Agency Details
-      doc.setFontSize(20);
-      doc.setTextColor(template.themeColor || '#1e40af');
-      doc.text(template.agencyName || 'Agency Name', 15, yPos);
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      if (template.phone) {
-        doc.text(`Phone: ${template.phone}`, 15, yPos);
-        yPos += 5;
-      }
-      if (template.email) {
-        doc.text(`Email: ${template.email}`, 15, yPos);
-        yPos += 5;
-      }
-      if (template.address) {
-        const addressLines = doc.splitTextToSize(template.address, 80);
-        doc.text(addressLines, 15, yPos);
-        yPos += addressLines.length * 5;
-      }
-
-      // Invoice Header (Right side)
-      doc.setFontSize(24);
-      doc.setTextColor(template.themeColor || '#1e40af');
-      doc.text('INVOICE', 200, 25, { align: 'right' });
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Invoice #: ${invoiceNumber}`, 200, 35, { align: 'right' });
-      doc.text(`Date: ${invoiceDate}`, 200, 40, { align: 'right' });
-
-      yPos = Math.max(yPos, 50);
-
-      // Divider line
-      doc.setDrawColor(200, 200, 200);
-      doc.line(15, yPos, 195, yPos);
-      yPos += 10;
-
-      // Bill To Section
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('BILL TO:', 15, yPos);
-      yPos += 7;
-
-      doc.setFontSize(11);
-      doc.setTextColor(50, 50, 50);
-      doc.text(client.name, 15, yPos);
-      yPos += 6;
-
-      if (client.contact_number) {
-        doc.setFontSize(10);
-        doc.text(`Phone: ${client.contact_number}`, 15, yPos);
-        yPos += 6;
-      }
-
-      // Booking Details
-      if (client.flight_date || client.pnr || client.airline) {
-        yPos += 2;
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        if (client.flight_date) {
-          doc.text(`Travel Date: ${new Date(client.flight_date).toLocaleDateString()}`, 15, yPos);
-          yPos += 5;
-        }
-        if (client.pnr) {
-          doc.text(`PNR: ${client.pnr}`, 15, yPos);
-          yPos += 5;
-        }
-        if (client.airline) {
-          doc.text(`Airline: ${client.airline}`, 15, yPos);
-          yPos += 5;
-        }
-        if (client.group_booking_type === 'group' && client.group_size) {
-          doc.text(`Group Size: ${client.group_size} passengers`, 15, yPos);
-          yPos += 5;
-        }
-      }
-
-      yPos += 5;
-
-      // Invoice Table
-      const tableData = [
-        [itemDescription, `Rs ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2 })}`]
-      ];
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Description', 'Amount']],
-        body: tableData,
-        theme: 'striped',
-        headStyles: {
-          fillColor: template.themeColor || '#1e40af',
-          textColor: '#ffffff',
-          fontSize: 11,
-        },
-        columnStyles: {
-          0: { cellWidth: 130 },
-          1: { cellWidth: 'auto', halign: 'right' },
-        },
-        margin: { left: 15, right: 15 },
-      });
-
-      yPos = (doc as any).lastAutoTable.finalY + 10;
-
-      // Payment Summary
-      doc.setFillColor(240, 240, 240);
-      doc.rect(120, yPos, 75, 30, 'F');
-
-      doc.setFontSize(10);
-      doc.setTextColor(50, 50, 50);
-      doc.text('Subtotal:', 125, yPos + 7);
-      doc.text(`Rs ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2 })}`, 190, yPos + 7, { align: 'right' });
-
-      doc.text('Amount Paid:', 125, yPos + 14);
-      doc.text(`Rs ${paid.toLocaleString('en-PK', { minimumFractionDigits: 2 })}`, 190, yPos + 14, { align: 'right' });
-
-      doc.setFontSize(12);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(template.themeColor || '#1e40af');
-      doc.text('Balance Due:', 125, yPos + 24);
-      doc.text(`Rs ${balance.toLocaleString('en-PK', { minimumFractionDigits: 2 })}`, 190, yPos + 24, { align: 'right' });
-
-      yPos += 40;
-
-      // Additional Notes
-      if (additionalNotes.trim()) {
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Notes:', 15, yPos);
-        yPos += 6;
-        const notes = doc.splitTextToSize(additionalNotes, 180);
-        doc.text(notes, 15, yPos);
-        yPos += notes.length * 5;
-      }
-
-      // Footer
-      yPos = 270;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(15, yPos, 195, yPos);
-      yPos += 7;
-
-      doc.setFontSize(9);
-      doc.setTextColor(150, 150, 150);
-      doc.text('Thank you for your business!', 105, yPos, { align: 'center' });
-
-      // Save PDF cleanly after atomic DB save succeeded
-      const fileName = `Invoice-${invoiceNumber}-${client.name.replace(/\s+/g, '-')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "Success",
-        description: `Invoice ${invoiceNumber} generated successfully`,
-      });
-
-      loadInvoiceHistory();
-      setOpen(false);
-    } catch (error: any) {
-      console.error("Error generating invoice:", error);
-      const parsed = parseSupabaseError(error, "Failed to generate invoice");
-      toast({
-        title: "Error",
-        description: parsed.userMessage,
-        variant: "destructive",
-      });
-    } finally {
-      isGeneratingRef.current = false;
-      setIsGenerating(false);
+      template = templateResult.data;
+      cachedTemplateRef.current = template;
     }
+
+    const amount = Math.max(0, Number(client.selling_price) || 0);
+    const paid = Math.max(0, Number(client.amount_paid) || 0);
+    const balance = Math.max(0, amount - paid);
+
+    await runUiAtomicSave<{ invoiceNumber: string }>({
+      requestIdRef,
+      isLockedRef: isGeneratingRef,
+      setIsSubmitting: setIsGenerating,
+      contextLabel: "InvoiceGenerator.generateInvoice",
+      fallbackErrorMessage: "Failed to generate invoice",
+      execute: async (requestId) => {
+        const rpcRes = await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "generate_client_invoice_atomic",
+          {
+            p_client_id: client.id,
+            p_invoice_number: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
+            p_item_description: itemDescription.trim() || "Travel Package",
+            p_additional_notes: additionalNotes || null,
+            p_is_manual: isManualInvoiceNo,
+            p_request_id: requestId,
+          },
+          {
+            isAutoMode: !isManualInvoiceNo,
+            legacyFallback: async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) throw new Error("User not authenticated");
+              const agencyId = agencyIdHook || (await getAuthenticatedAgencyId());
+              if (!agencyId) throw new Error("Agency not found");
+
+              const inserted = await withDuplicateRetry(
+                async () => {
+                  const { data, error: insertError } = await (supabase as any)
+                    .from("invoices")
+                    .insert({
+                      invoice_number: isManualInvoiceNo ? manualInvoiceNo.trim() : "",
+                      client_id: client.id,
+                      agency_id: agencyId,
+                      generated_by: user.id,
+                      amount,
+                      amount_paid: paid,
+                      balance_due: balance,
+                      invoice_date: new Date().toISOString().split("T")[0],
+                      item_description: itemDescription.trim() || "Travel Package",
+                      additional_notes: additionalNotes || null,
+                      pdf_data: {
+                        client_name: client.name,
+                        destination: client.destination,
+                        flight_date: client.flight_date,
+                        pnr: client.pnr,
+                        airline: client.airline,
+                      },
+                    })
+                    .select("invoice_number")
+                    .single();
+                  if (insertError) throw insertError;
+                  return data;
+                },
+                { isAutoMode: !isManualInvoiceNo }
+              );
+              return { invoice: inserted };
+            },
+          }
+        );
+
+        const invObj = rpcRes?.invoice ?? rpcRes;
+        const invoiceNumber =
+          invObj?.invoice_number || (isManualInvoiceNo ? manualInvoiceNo.trim() : invoicePreviewNo);
+        return { invoiceNumber };
+      },
+      onSuccess: ({ invoiceNumber }) => {
+        setOpen(false);
+        toast({
+          title: "Success",
+          description: `Invoice ${invoiceNumber} generated successfully`,
+        });
+
+        runBackgroundTask("InvoiceGenerator.pdfAndRefresh", () => {
+          try {
+            const invoiceDate = new Date().toLocaleDateString();
+            const doc = new jsPDF();
+            let yPos = 20;
+
+            if (template!.logo) {
+              try {
+                doc.addImage(template!.logo, "PNG", 15, yPos, 40, 16);
+                yPos += 20;
+              } catch (error) {
+                console.log("Could not add logo", error);
+              }
+            }
+
+            doc.setFontSize(20);
+            doc.setTextColor(template!.themeColor || "#1e40af");
+            doc.text(template!.agencyName || "Agency Name", 15, yPos);
+            yPos += 8;
+
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            if (template!.phone) {
+              doc.text(`Phone: ${template!.phone}`, 15, yPos);
+              yPos += 5;
+            }
+            if (template!.email) {
+              doc.text(`Email: ${template!.email}`, 15, yPos);
+              yPos += 5;
+            }
+            if (template!.address) {
+              const addressLines = doc.splitTextToSize(template!.address, 80);
+              doc.text(addressLines, 15, yPos);
+              yPos += addressLines.length * 5;
+            }
+
+            doc.setFontSize(24);
+            doc.setTextColor(template!.themeColor || "#1e40af");
+            doc.text("INVOICE", 200, 25, { align: "right" });
+
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Invoice #: ${invoiceNumber}`, 200, 35, { align: "right" });
+            doc.text(`Date: ${invoiceDate}`, 200, 40, { align: "right" });
+
+            yPos = Math.max(yPos, 50);
+
+            doc.setDrawColor(200, 200, 200);
+            doc.line(15, yPos, 195, yPos);
+            yPos += 10;
+
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text("BILL TO:", 15, yPos);
+            yPos += 7;
+
+            doc.setFontSize(11);
+            doc.setTextColor(50, 50, 50);
+            doc.text(client.name, 15, yPos);
+            yPos += 6;
+
+            if (client.contact_number) {
+              doc.setFontSize(10);
+              doc.text(`Phone: ${client.contact_number}`, 15, yPos);
+              yPos += 6;
+            }
+
+            if (client.flight_date || client.pnr || client.airline) {
+              yPos += 2;
+              doc.setFontSize(10);
+              doc.setTextColor(100, 100, 100);
+              if (client.flight_date) {
+                doc.text(`Travel Date: ${new Date(client.flight_date).toLocaleDateString()}`, 15, yPos);
+                yPos += 5;
+              }
+              if (client.pnr) {
+                doc.text(`PNR: ${client.pnr}`, 15, yPos);
+                yPos += 5;
+              }
+              if (client.airline) {
+                doc.text(`Airline: ${client.airline}`, 15, yPos);
+                yPos += 5;
+              }
+              if (client.group_booking_type === "group" && client.group_size) {
+                doc.text(`Group Size: ${client.group_size} passengers`, 15, yPos);
+                yPos += 5;
+              }
+            }
+
+            yPos += 5;
+
+            const tableData = [
+              [itemDescription, `Rs ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`],
+            ];
+
+            autoTable(doc, {
+              startY: yPos,
+              head: [["Description", "Amount"]],
+              body: tableData,
+              theme: "striped",
+              headStyles: {
+                fillColor: template!.themeColor || "#1e40af",
+                textColor: "#ffffff",
+                fontSize: 11,
+              },
+              columnStyles: {
+                0: { cellWidth: 130 },
+                1: { cellWidth: "auto", halign: "right" },
+              },
+              margin: { left: 15, right: 15 },
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY + 10;
+
+            doc.setFillColor(240, 240, 240);
+            doc.rect(120, yPos, 75, 30, "F");
+
+            doc.setFontSize(10);
+            doc.setTextColor(50, 50, 50);
+            doc.text("Subtotal:", 125, yPos + 7);
+            doc.text(`Rs ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 7, { align: "right" });
+
+            doc.text("Amount Paid:", 125, yPos + 14);
+            doc.text(`Rs ${paid.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 14, { align: "right" });
+
+            doc.setFontSize(12);
+            doc.setFont(undefined as any, "bold");
+            doc.setTextColor(template!.themeColor || "#1e40af");
+            doc.text("Balance Due:", 125, yPos + 24);
+            doc.text(`Rs ${balance.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 24, { align: "right" });
+
+            yPos += 40;
+
+            if (additionalNotes.trim()) {
+              doc.setFont(undefined as any, "normal");
+              doc.setFontSize(10);
+              doc.setTextColor(100, 100, 100);
+              doc.text("Notes:", 15, yPos);
+              yPos += 6;
+              const notes = doc.splitTextToSize(additionalNotes, 180);
+              doc.text(notes, 15, yPos);
+              yPos += notes.length * 5;
+            }
+
+            yPos = 270;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(15, yPos, 195, yPos);
+            yPos += 7;
+
+            doc.setFontSize(9);
+            doc.setTextColor(150, 150, 150);
+            doc.text("Thank you for your business!", 105, yPos, { align: "center" });
+
+            const fileName = `Invoice-${invoiceNumber}-${client.name.replace(/\s+/g, "-")}.pdf`;
+            doc.save(fileName);
+          } catch (pdfErr) {
+            console.warn("Background invoice PDF error:", pdfErr);
+          }
+
+          loadInvoiceHistory();
+          refreshAffectedFinancialQueries(queryClient, "invoice", agencyIdHook);
+        });
+      },
+      onErrorToast: (friendlyMessage) => {
+        toast({
+          title: "Error",
+          description: friendlyMessage,
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   return (
@@ -374,7 +410,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent ref={dialogFormRef} className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader className="pr-8">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -499,7 +535,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={generateInvoice} disabled={isGenerating}>
+            <Button data-save-button="true" onClick={generateInvoice} disabled={isGenerating}>
               <Download className="w-4 h-4 mr-2" />
               {isGenerating ? "Generating..." : "Generate PDF"}
             </Button>

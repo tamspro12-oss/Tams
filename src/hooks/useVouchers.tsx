@@ -4,6 +4,7 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import type { Voucher, VoucherType } from "@/types/voucher";
 import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export type VoucherInput = Omit<Voucher, "id" | "agency_id" | "created_at" | "updated_at" | "created_by">;
 
@@ -43,31 +44,50 @@ export function useVouchers() {
   };
 
   const addVoucher = useMutation({
-    mutationFn: async (v: VoucherInput) => {
+    mutationFn: async (
+      v: VoucherInput & { requestId?: string; enableAgentVouchersId?: string | null }
+    ) => {
       if (!agencyId) throw new Error("No active agency found");
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const manualNo = v.voucher_number?.trim() || "";
+      const { requestId, enableAgentVouchersId, ...voucherFields } = v;
+      const manualNo = voucherFields.voucher_number?.trim() || "";
       const isAuto = !manualNo || /^(__AUTO__|preview|auto-generated)$/i.test(manualNo);
 
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await supabase
-            .from("vouchers" as any)
-            .insert({
-              ...v,
-              voucher_number: isAuto ? "" : manualNo,
-              agency_id: agencyId,
-              created_by: user?.id,
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-          return data;
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        "save_voucher_atomic",
+        {
+          p_voucher_data: voucherFields,
+          p_id: null,
+          p_is_manual: !isAuto,
+          p_enable_agent_vouchers_id: enableAgentVouchersId ?? null,
+          p_request_id: requestId ?? null,
         },
-        { isAutoMode: isAuto }
+        {
+          isAutoMode: isAuto,
+          legacyFallback: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            return await withDuplicateRetry(
+              async () => {
+                const { data, error } = await supabase
+                  .from("vouchers" as any)
+                  .insert({
+                    ...voucherFields,
+                    voucher_number: isAuto ? "" : manualNo,
+                    agency_id: agencyId,
+                    created_by: user?.id,
+                  })
+                  .select()
+                  .single();
+                if (error) throw error;
+                return data;
+              },
+              { isAutoMode: isAuto }
+            );
+          },
+        }
       );
+
+      return rpcRes?.voucher ?? rpcRes;
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["vouchers"] });
@@ -77,19 +97,43 @@ export function useVouchers() {
   });
 
   const updateVoucher = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<VoucherInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from("vouchers" as any)
-        .update({
-          ...patch,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async ({
+      id,
+      requestId,
+      enableAgentVouchersId,
+      ...patch
+    }: Partial<VoucherInput> & {
+      id: string;
+      requestId?: string;
+      enableAgentVouchersId?: string | null;
+    }) => {
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        "save_voucher_atomic",
+        {
+          p_voucher_data: patch,
+          p_id: id,
+          p_is_manual: false,
+          p_enable_agent_vouchers_id: enableAgentVouchersId ?? null,
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data, error } = await supabase
+              .from("vouchers" as any)
+              .update({
+                ...patch,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      );
+      return rpcRes?.voucher ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vouchers"] });

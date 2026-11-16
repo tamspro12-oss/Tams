@@ -4,7 +4,8 @@ import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { isMissingFunctionError } from "@/lib/friendlyError";
-import { invalidateAllFinancialQueries } from "@/lib/accountingEngine";
+import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
+import { isMissingRpcOrParamError } from "@/lib/atomicSave";
 
 export type PartyType = "client" | "vendor" | "b2b_agent";
 export type BalanceType = "receivable" | "payable";
@@ -22,7 +23,9 @@ export interface OpeningBalance {
   updated_at: string;
 }
 
-export type OpeningBalanceInput = Omit<OpeningBalance, "id" | "agency_id" | "created_at" | "updated_at">;
+export type OpeningBalanceInput = Omit<OpeningBalance, "id" | "agency_id" | "created_at" | "updated_at"> & {
+  requestId?: string;
+};
 
 async function syncOpeningTransactionLegacy(
   agencyId: string,
@@ -113,17 +116,24 @@ export function useOpeningBalances() {
     mutationFn: async (b: OpeningBalanceInput) => {
       if (!agencyId) throw new Error("No agency");
 
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+      const { requestId, ...cleanInput } = b;
+      const baseParams = {
+        p_party_type: cleanInput.party_type,
+        p_party_id: cleanInput.party_id,
+        p_balance_type: cleanInput.balance_type,
+        p_amount: cleanInput.amount,
+        p_as_of_date: cleanInput.as_of_date,
+        p_notes: cleanInput.notes ?? null,
+      };
+      let { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
         "upsert_opening_balance_atomic",
-        {
-          p_party_type: b.party_type,
-          p_party_id: b.party_id,
-          p_balance_type: b.balance_type,
-          p_amount: b.amount,
-          p_as_of_date: b.as_of_date,
-          p_notes: b.notes ?? null,
-        }
+        requestId ? { ...baseParams, p_request_id: requestId } : baseParams
       );
+      if (rpcErr && requestId && isMissingRpcOrParamError(rpcErr)) {
+        const retry = await (supabase as any).rpc("upsert_opening_balance_atomic", baseParams);
+        rpcData = retry.data;
+        rpcErr = retry.error;
+      }
 
       if (!rpcErr) {
         return rpcData?.opening_balance ?? rpcData;
@@ -144,7 +154,7 @@ export function useOpeningBalances() {
       const { data, error } = await supabase
         .from("opening_balances" as any)
         .upsert(
-          { ...b, agency_id: agencyId },
+          { ...cleanInput, agency_id: agencyId },
           { onConflict: "agency_id,party_type,party_id" }
         )
         .select()
@@ -164,9 +174,8 @@ export function useOpeningBalances() {
 
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, "opening_balance", agencyId);
       toast.success("Opening balance saved");
     },
     onError: (e: unknown) =>
@@ -174,19 +183,25 @@ export function useOpeningBalances() {
   });
 
   const updateBalance = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<OpeningBalanceInput> & { id: string }) => {
+    mutationFn: async ({ id, requestId, ...patch }: Partial<OpeningBalanceInput> & { id: string; requestId?: string }) => {
       if (!agencyId) throw new Error("No agency");
 
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+      const baseParams = {
+        p_id: id,
+        p_amount: patch.amount ?? 0,
+        p_balance_type: patch.balance_type ?? null,
+        p_as_of_date: patch.as_of_date ?? null,
+        p_notes: patch.notes ?? null,
+      };
+      let { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
         "update_opening_balance_atomic",
-        {
-          p_id: id,
-          p_amount: patch.amount ?? 0,
-          p_balance_type: patch.balance_type ?? null,
-          p_as_of_date: patch.as_of_date ?? null,
-          p_notes: patch.notes ?? null,
-        }
+        requestId ? { ...baseParams, p_request_id: requestId } : baseParams
       );
+      if (rpcErr && requestId && isMissingRpcOrParamError(rpcErr)) {
+        const retry = await (supabase as any).rpc("update_opening_balance_atomic", baseParams);
+        rpcData = retry.data;
+        rpcErr = retry.error;
+      }
 
       if (!rpcErr) {
         return rpcData?.opening_balance ?? rpcData;
@@ -220,9 +235,8 @@ export function useOpeningBalances() {
 
       return data;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, "opening_balance", agencyId);
       toast.success("Opening balance updated");
     },
     onError: (e: unknown) =>
@@ -264,9 +278,8 @@ export function useOpeningBalances() {
       const { error } = await supabase.from("opening_balances" as any).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["opening_balances"] });
-      await invalidateAllFinancialQueries(queryClient, agencyId);
+    onSuccess: () => {
+      refreshAffectedFinancialQueries(queryClient, "opening_balance", agencyId);
       toast.success("Opening balance removed");
     },
     onError: (e: unknown) =>

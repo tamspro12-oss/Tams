@@ -15,7 +15,9 @@ import { useB2BAgents } from "@/hooks/useB2BAgents";
 import type { Voucher, VoucherType, VoucherStatus, VoucherPassenger } from "@/types/voucher";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { supabase } from "@/integrations/supabase/client";
-import { DocumentNumberControl, checkDocumentNumberAvailable, type AutoDocType } from "@/components/ui/DocumentNumberControl";
+import { DocumentNumberControl, type AutoDocType } from "@/components/ui/DocumentNumberControl";
+import { createRequestId } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 
 interface CreateVoucherDialogProps {
   open: boolean;
@@ -89,6 +91,7 @@ export function CreateVoucherDialog({
   const [terms, setTerms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
   const [isFullScreen, setIsFullScreen] = useState(true);
   const [voucherPreviewNo, setVoucherPreviewNo] = useState("Auto-assigned");
   const [isManualVoucherNo, setIsManualVoucherNo] = useState(false);
@@ -110,19 +113,7 @@ export function CreateVoucherDialog({
     };
   }, [open, voucherToEdit, activeDocType]);
 
-  // Keyboard navigation & Ctrl+Enter to save
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        const form = document.querySelector<HTMLFormElement>("#voucher-form");
-        if (form) form.requestSubmit();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  // Unified keyboard navigation & Ctrl+Enter save handled by useFormKeyboardNav below
 
   // Load existing voucher or initial booking data
   useEffect(() => {
@@ -361,91 +352,88 @@ export function CreateVoucherDialog({
       return;
     }
 
-    if (!voucherToEdit && isManualVoucherNo) {
-      const customNo = manualVoucherNo.trim();
-      if (!customNo) {
-        toast.error("Please enter a custom voucher number or switch back to Auto");
-        return;
-      }
-      const available = await checkDocumentNumberAvailable(activeDocType, customNo);
-      if (!available) {
-        toast.error("This voucher number already exists. Please use Auto or choose another number.");
-        return;
-      }
+    if (!voucherToEdit && isManualVoucherNo && !manualVoucherNo.trim()) {
+      toast.error("Please enter a custom voucher number or switch back to Auto");
+      return;
     }
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      const payload: any = {
-        ...(!voucherToEdit ? { voucher_number: isManualVoucherNo ? manualVoucherNo.trim() : "" } : {}),
-        voucher_type: voucherType,
-        status,
-        passenger_name: passengerName.trim(),
-        passenger_passport: passengerPassport.trim() || null,
-        contact_number: contactNumber.trim() || null,
-        agent_id: selectedAgentId !== "none" ? selectedAgentId : null,
-        booking_id: bookingId || null,
-        passengers: passengers.filter((p) => p.name.trim().length > 0),
+    const payload: any = {
+      ...(!voucherToEdit ? { voucher_number: isManualVoucherNo ? manualVoucherNo.trim() : "" } : {}),
+      voucher_type: voucherType,
+      status,
+      passenger_name: passengerName.trim(),
+      passenger_passport: passengerPassport.trim() || null,
+      contact_number: contactNumber.trim() || null,
+      agent_id: selectedAgentId !== "none" ? selectedAgentId : null,
+      booking_id: bookingId || null,
+      passengers: passengers.filter((p) => p.name.trim().length > 0),
 
-        remarks: remarks.trim() || null,
-        terms_and_conditions: terms.trim() || null,
-      };
+      remarks: remarks.trim() || null,
+      terms_and_conditions: terms.trim() || null,
+    };
 
-      if (voucherType === "Umrah") {
-        payload.package_name = packageName.trim() || null;
-        payload.makkah_hotel = makkahHotel.trim() || null;
-        payload.makkah_check_in = makkahCheckIn || null;
-        payload.makkah_check_out = makkahCheckOut || null;
-        payload.makkah_nights = makkahNights || null;
+    if (voucherType === "Umrah") {
+      payload.package_name = packageName.trim() || null;
+      payload.makkah_hotel = makkahHotel.trim() || null;
+      payload.makkah_check_in = makkahCheckIn || null;
+      payload.makkah_check_out = makkahCheckOut || null;
+      payload.makkah_nights = makkahNights || null;
 
-        payload.madinah_hotel = madinahHotel.trim() || null;
-        payload.madinah_check_in = madinahCheckIn || null;
-        payload.madinah_check_out = madinahCheckOut || null;
-        payload.madinah_nights = madinahNights || null;
+      payload.madinah_hotel = madinahHotel.trim() || null;
+      payload.madinah_check_in = madinahCheckIn || null;
+      payload.madinah_check_out = madinahCheckOut || null;
+      payload.madinah_nights = madinahNights || null;
 
-        payload.room_type = roomType || null;
-        payload.number_of_rooms = numberOfRooms || 1;
-        payload.meal_plan = mealPlan || null;
-        payload.hotel_confirmation_code = hotelConfirmationCode.trim() || null;
-        payload.transport_details = transportDetails.trim() || null;
-        payload.ziyarat_details = ziyaratDetails.trim() || null;
-        payload.visa_status = visaStatus || null;
-      } else if (voucherType === "Hotel") {
-        payload.hotel_name = hotelName.trim() || null;
-        payload.city = city.trim() || null;
-        payload.check_in = checkIn || null;
-        payload.check_out = checkOut || null;
-        payload.nights = nights || null;
-        payload.room_type = roomType || null;
-        payload.number_of_rooms = numberOfRooms || 1;
-        payload.meal_plan = mealPlan || null;
-        payload.hotel_confirmation_code = hotelConfirmationCode.trim() || null;
-      } else if (voucherType === "Ticket") {
-        payload.airline = airline.trim() || null;
-        payload.flight_number = flightNumber.trim() || null;
-        payload.sector = sector.trim() || null;
-        payload.departure_date = departureDate ? new Date(departureDate).toISOString() : null;
-        payload.arrival_date = arrivalDate ? new Date(arrivalDate).toISOString() : null;
-        payload.flight_class = flightClass || "Economy";
-        payload.baggage = baggage.trim() || null;
-        payload.pnr = pnr.trim() || null;
-        payload.ticket_number = ticketNumber.trim() || null;
-      }
-
-      if (voucherToEdit) {
-        await onSave({ id: voucherToEdit.id, ...payload });
-      } else {
-        await onSave(payload);
-      }
-
-      onOpenChange(false);
-    } catch (err: any) {
-      console.error("Voucher submission error:", err);
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+      payload.room_type = roomType || null;
+      payload.number_of_rooms = numberOfRooms || 1;
+      payload.meal_plan = mealPlan || null;
+      payload.hotel_confirmation_code = hotelConfirmationCode.trim() || null;
+      payload.transport_details = transportDetails.trim() || null;
+      payload.ziyarat_details = ziyaratDetails.trim() || null;
+      payload.visa_status = visaStatus || null;
+    } else if (voucherType === "Hotel") {
+      payload.hotel_name = hotelName.trim() || null;
+      payload.city = city.trim() || null;
+      payload.check_in = checkIn || null;
+      payload.check_out = checkOut || null;
+      payload.nights = nights || null;
+      payload.room_type = roomType || null;
+      payload.number_of_rooms = numberOfRooms || 1;
+      payload.meal_plan = mealPlan || null;
+      payload.hotel_confirmation_code = hotelConfirmationCode.trim() || null;
+    } else if (voucherType === "Ticket") {
+      payload.airline = airline.trim() || null;
+      payload.flight_number = flightNumber.trim() || null;
+      payload.sector = sector.trim() || null;
+      payload.departure_date = departureDate ? new Date(departureDate).toISOString() : null;
+      payload.arrival_date = arrivalDate ? new Date(arrivalDate).toISOString() : null;
+      payload.flight_class = flightClass || "Economy";
+      payload.baggage = baggage.trim() || null;
+      payload.pnr = pnr.trim() || null;
+      payload.ticket_number = ticketNumber.trim() || null;
     }
+
+    await runUiAtomicSave({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting,
+      contextLabel: "CreateVoucherDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save voucher. Please try again.",
+      execute: async (requestId) => {
+        if (voucherToEdit) {
+          return await onSave({ id: voucherToEdit.id, ...payload, requestId });
+        }
+        return await onSave({ ...payload, isManual: isManualVoucherNo, requestId });
+      },
+      onSuccess: () => {
+        onOpenChange(false);
+      },
+      onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        if (timedOut || offline) {
+          toast.error(friendlyMessage);
+        }
+      },
+    });
   };
 
   useFormKeyboardNav({
@@ -462,11 +450,11 @@ export function CreateVoucherDialog({
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-        "overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6"
-          : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6"
-      )}>
+          "overflow-hidden flex flex-col transition-all duration-300",
+          isFullScreen
+            ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0 p-4 sm:p-6"
+            : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] p-4 sm:p-6"
+        )}>
         <DialogHeader className="shrink-0 border-b pb-3 pr-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { toast } from "sonner";
 import { handleSupabaseError, withDuplicateRetry } from "@/lib/supabaseErrorHandler";
+import { rpcWithPreSqlFallback } from "@/lib/atomicSave";
 
 export interface QuotationItem {
   description: string;
@@ -77,22 +78,41 @@ export function useQuotations() {
   });
 
   const addQuotation = useMutation({
-    mutationFn: async (q: QuotationInput) => {
+    mutationFn: async (q: QuotationInput & { requestId?: string; isManual?: boolean }) => {
       if (!agencyId) throw new Error("No active agency assigned");
-      const { data: { user } } = await supabase.auth.getUser();
-      const isAuto = !q.quotation_number || !q.quotation_number.trim();
-      return await withDuplicateRetry(
-        async () => {
-          const { data, error } = await supabase
-            .from("quotations" as any)
-            .insert({ ...q, agency_id: agencyId, created_by: user?.id })
-            .select()
-            .single();
-          if (error) throw error;
-          return data;
+      const { requestId, isManual, ...quoteFields } = q;
+      const isAuto = !isManual && (!quoteFields.quotation_number || !quoteFields.quotation_number.trim());
+
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        "save_quotation_atomic",
+        {
+          p_quotation_data: quoteFields,
+          p_id: null,
+          p_is_manual: !isAuto,
+          p_request_id: requestId ?? null,
         },
-        { isAutoMode: isAuto }
+        {
+          isAutoMode: isAuto,
+          legacyFallback: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            return await withDuplicateRetry(
+              async () => {
+                const { data, error } = await supabase
+                  .from("quotations" as any)
+                  .insert({ ...quoteFields, agency_id: agencyId, created_by: user?.id })
+                  .select()
+                  .single();
+                if (error) throw error;
+                return data;
+              },
+              { isAutoMode: isAuto }
+            );
+          },
+        }
       );
+
+      return rpcRes?.quotation ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
@@ -102,15 +122,34 @@ export function useQuotations() {
   });
 
   const updateQuotation = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<QuotationInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from("quotations" as any)
-        .update(patch)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+    mutationFn: async ({
+      id,
+      requestId,
+      ...patch
+    }: Partial<QuotationInput> & { id: string; requestId?: string }) => {
+      const rpcRes = await rpcWithPreSqlFallback<any>(
+        supabase as any,
+        "save_quotation_atomic",
+        {
+          p_quotation_data: patch,
+          p_id: id,
+          p_is_manual: false,
+          p_request_id: requestId ?? null,
+        },
+        {
+          legacyFallback: async () => {
+            const { data, error } = await supabase
+              .from("quotations" as any)
+              .update(patch)
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          },
+        }
+      );
+      return rpcRes?.quotation ?? rpcRes;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });

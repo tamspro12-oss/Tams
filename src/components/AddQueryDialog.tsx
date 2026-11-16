@@ -13,6 +13,11 @@ import { cn } from "@/lib/utils";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { FormSectionNav } from "@/components/FormSectionNav";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { supabase } from "@/integrations/supabase/client";
+import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
+import { runUiAtomicSave } from "@/lib/atomicSaveUi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 interface AddQueryDialogProps {
   open: boolean;
@@ -29,8 +34,12 @@ const SECTIONS = [
 export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const isSubmittingRef = useRef(false);
+  const requestIdRef = useRef<string>(createRequestId());
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const { addQuery, updateQuery } = useQueries();
+  const queryClient = useQueryClient();
+  const { data: userAgencyId } = useCurrentAgencyId();
 
   const { activeSection, setSectionRef, scrollToSection, containerRef, isVisible } = useScrollAnimation(SECTIONS.length);
 
@@ -44,7 +53,7 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSubmittingRef.current || addQuery.isPending || updateQuery.isPending) return;
+    if (isSubmittingRef.current || isSubmittingLocal || addQuery.isPending || updateQuery.isPending) return;
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -71,25 +80,48 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
       notes: formData.get("notes") as string,
     };
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are offline, not saved");
-      return;
-    }
-
-    isSubmittingRef.current = true;
-    try {
-      if (editQuery) {
-        await updateQuery.mutateAsync({ id: editQuery.id, query: queryData });
-      } else {
-        await addQuery.mutateAsync(queryData);
-      }
-      form.reset();
-      onOpenChange(false);
-    } catch (error) {
-      console.error("[AddQueryDialog.handleSubmit]", error);
-    } finally {
-      isSubmittingRef.current = false;
-    }
+    await runUiAtomicSave<{ usedFallbackToast?: boolean }>({
+      requestIdRef,
+      isLockedRef: isSubmittingRef,
+      setIsSubmitting: setIsSubmittingLocal,
+      contextLabel: "AddQueryDialog.handleSubmit",
+      fallbackErrorMessage: "Failed to save query. Please try again.",
+      execute: async (requestId) => {
+        let usedFallbackToast = false;
+        await rpcWithPreSqlFallback<any>(
+          supabase as any,
+          "save_query_atomic",
+          {
+            p_query_data: queryData,
+            p_id: editQuery?.id ?? null,
+            p_request_id: requestId,
+          },
+          {
+            legacyFallback: async () => {
+              usedFallbackToast = true;
+              if (editQuery) {
+                await updateQuery.mutateAsync({ id: editQuery.id, query: queryData });
+              } else {
+                await addQuery.mutateAsync(queryData);
+              }
+              return { ok: true };
+            },
+          }
+        );
+        return { usedFallbackToast };
+      },
+      onSuccess: ({ usedFallbackToast }) => {
+        if (!usedFallbackToast) {
+          toast.success(editQuery ? "Query updated successfully" : "Query added successfully");
+        }
+        form.reset();
+        onOpenChange(false);
+        runBackgroundTask("AddQueryDialog.refresh", () => {
+          queryClient.invalidateQueries({ queryKey: ["queries", userAgencyId] });
+          queryClient.invalidateQueries({ queryKey: ["queries"] });
+        });
+      },
+    });
   };
 
   return (
@@ -379,10 +411,10 @@ export function AddQueryDialog({ open, onOpenChange, editQuery }: AddQueryDialog
             <Button
               type="submit"
               data-save-button="true"
-              disabled={addQuery.isPending || updateQuery.isPending}
+              disabled={isSubmittingLocal || addQuery.isPending || updateQuery.isPending}
               className="px-6 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25"
             >
-              {addQuery.isPending || updateQuery.isPending ? "Saving..." : editQuery ? "Update Query" : "Add Query"}
+              {isSubmittingLocal || addQuery.isPending || updateQuery.isPending ? "Saving..." : editQuery ? "Update Query" : "Add Query"}
             </Button>
           </div>
         </form>

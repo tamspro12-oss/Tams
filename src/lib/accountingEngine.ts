@@ -350,6 +350,141 @@ const FINANCIAL_QUERY_PREFIXES = [
   "reports",
 ] as const;
 
+export type FinancialRefreshScope =
+  | "invoice"
+  | "voucher"
+  | "refund"
+  | "expense"
+  | "party"
+  | "bank"
+  | "cash_bank"
+  | "opening_balance"
+  | "all";
+
+const SCOPE_QUERY_PREFIXES: Record<FinancialRefreshScope, readonly string[]> = {
+  invoice: [
+    "booking_invoices",
+    "sales_expenses_invoices",
+    "dashboard_invoices",
+    "agency_financial_summary",
+    "agency_overdue_invoices",
+    "parties",
+    "payment_vouchers",
+    "recent_payment_vouchers",
+    "accounts_with_balances",
+    "agency_ledger",
+    "party_statement",
+    "party_balances",
+    "dashboard",
+  ],
+  voucher: [
+    "payment_vouchers",
+    "recent_payment_vouchers",
+    "booking_invoices",
+    "sales_expenses_invoices",
+    "parties",
+    "accounts_with_balances",
+    "agency_financial_summary",
+    "agency_ledger",
+    "party_statement",
+    "party_balances",
+    "dashboard",
+  ],
+  refund: [
+    "refunds",
+    "sales_refunds",
+    "recent_sales_refunds",
+    "booking_invoices",
+    "sales_expenses_invoices",
+    "parties",
+    "accounts_with_balances",
+    "agency_financial_summary",
+    "agency_ledger",
+    "party_statement",
+    "dashboard",
+  ],
+  expense: [
+    "expenses",
+    "sales_expenses",
+    "accounts_with_balances",
+    "agency_financial_summary",
+    "agency_ledger",
+    "dashboard",
+  ],
+  party: [
+    "parties",
+    "clients",
+    "vendors",
+    "clients-paginated",
+    "party_balances",
+    "party_statement",
+  ],
+  bank: [
+    "agency_banks",
+    "accounts",
+    "accounts_with_balances",
+    "cash_bank_entries",
+    "agency_financial_summary",
+  ],
+  cash_bank: [
+    "cash_bank_entries",
+    "transactions",
+    "accounts",
+    "accounts_with_balances",
+    "agency_financial_summary",
+    "agency_ledger",
+    "dashboard",
+  ],
+  opening_balance: [
+    "opening_balances",
+    "parties",
+    "party_balances",
+    "party_statement",
+    "transactions",
+    "agency_financial_summary",
+  ],
+  all: FINANCIAL_QUERY_PREFIXES,
+};
+
+const pendingBackgroundTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Triggers a non-blocking background refresh for ONLY the queries affected by
+ * a specific save operation, so dialogs close immediately without waiting for
+ * network refetches of unrelated screens.
+ */
+export function refreshAffectedFinancialQueries(
+  queryClient: QueryClient,
+  scope: FinancialRefreshScope = "all",
+  _agencyId?: string | null
+): void {
+  const prefixes = SCOPE_QUERY_PREFIXES[scope] || FINANCIAL_QUERY_PREFIXES;
+  for (const key of prefixes) {
+    void queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
+
+/**
+ * Coalesced background invalidation used by Realtime subscribers so multi-table
+ * database triggers don't trigger 5-6 overlapping 40-query refetch storms.
+ */
+export function scheduleCoalescedFinancialRefresh(
+  queryClient: QueryClient,
+  channelKey = "global",
+  scope: FinancialRefreshScope = "all",
+  delayMs = 350
+): void {
+  const existing = pendingBackgroundTimers.get(channelKey);
+  if (existing) {
+    clearTimeout(existing);
+  }
+  const timer = setTimeout(() => {
+    pendingBackgroundTimers.delete(channelKey);
+    refreshAffectedFinancialQueries(queryClient, scope);
+  }, delayMs);
+  pendingBackgroundTimers.set(channelKey, timer);
+}
+
 export async function invalidateAllFinancialQueries(
   queryClient: QueryClient,
   _agencyId?: string | null
