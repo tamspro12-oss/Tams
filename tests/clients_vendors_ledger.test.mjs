@@ -18,6 +18,7 @@ const {
   formatDrCrAmount,
   getDrCrLabelForParty,
   buildPartyLedger,
+  filterPartyLedgerRows,
   validateStatementPeriod,
   buildPartyStatement,
 } = await import("../src/lib/partyLedger.ts");
@@ -535,5 +536,24 @@ test("12. Empty period still builds a valid statement with brought-forward and c
   assert.equal(emptyStmt.totalCredit, 0);
   assert.equal(emptyStmt.closingBalance, 6500);
   assert.equal(emptyStmt.hasMismatch, false);
+});
+
+// REGRESSION 13: Undefined/loading ledger never crashes filterPartyLedgerRows or buildPartyStatement
+test("13. Loading/undefined ledger safely falls back without crashing View Ledger or Send Statement", () => {
+  const filtered = filterPartyLedgerRows(undefined, { datePreset: "all" });
+  assert.deepEqual(filtered.rowsNewestFirst, []);
+  assert.equal(filtered.totalDebit, 0);
+  assert.equal(filtered.totalCredit, 0);
+  assert.equal(filtered.closingBalance, 0);
+
+  const stmt = buildPartyStatement({
+    party: SAMPLE_CLIENT,
+    ledger: undefined,
+    preset: "this_month",
+    todayYmd: "2026-11-16",
+  });
+  assert.equal(stmt.valid, true);
+  assert.equal(stmt.broughtForward, SAMPLE_CLIENT.opening_balance);
+  assert.deepEqual(stmt.entries, []);
 });
 

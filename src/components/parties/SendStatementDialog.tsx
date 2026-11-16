@@ -42,7 +42,8 @@ interface SendStatementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   party: PartyLedgerPartyInput;
-  ledger: PartyLedgerResult;
+  ledger?: PartyLedgerResult;
+  isLedgerLoading?: boolean;
   initialCustomFrom?: string;
   initialCustomTo?: string;
 }
@@ -60,6 +61,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
   onOpenChange,
   party,
   ledger,
+  isLedgerLoading = false,
   initialCustomFrom,
   initialCustomTo,
 }) => {
@@ -426,7 +428,12 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
           )}
 
           {/* Live Period Preview */}
-          {statement.valid && (
+          {isLedgerLoading ? (
+            <div className="rounded-lg border bg-muted/30 p-4 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              <span>Loading ledger entries for statement...</span>
+            </div>
+          ) : statement.valid && (
             <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
@@ -501,7 +508,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                   type="button"
                   size="sm"
                   onClick={handleSendEmail}
-                  disabled={!statement.valid || busyAction !== null}
+                  disabled={isLedgerLoading || !statement.valid || busyAction !== null}
                   className="h-8 px-3 text-xs gap-1.5 cursor-pointer"
                 >
                   {busyAction === "email" ? (
@@ -540,7 +547,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!statement.valid || busyAction !== null}
+                disabled={isLedgerLoading || !statement.valid || busyAction !== null}
                 onClick={handleDownloadPdf}
                 className="h-8 px-3 text-xs gap-1.5 cursor-pointer"
               >
@@ -556,7 +563,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!statement.valid || busyAction !== null}
+                disabled={isLedgerLoading || !statement.valid || busyAction !== null}
                 onClick={handleSendWhatsApp}
                 className="h-8 px-3 text-xs gap-1.5 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
               >
@@ -571,7 +578,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
               <Button
                 type="button"
                 size="sm"
-                disabled={!statement.valid || busyAction !== null}
+                disabled={isLedgerLoading || !statement.valid || busyAction !== null}
                 onClick={() => {
                   setSendError(null);
                   setShowEmailForm((prev) => !prev);
