@@ -9,10 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/design-system";
 import { isInvoiceVoidedOrRefunded } from "@/lib/accountingEngine";
-import {
-  generateBookingConfirmationPdf,
-  generateBookingInvoicePdf,
-} from "@/lib/pdf/bookingInvoicePdf";
 import { FileCheck, Printer } from "lucide-react";
 
 interface InvoiceQuickViewDialogProps {
@@ -107,7 +103,10 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                   variant="outline"
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={() =>
+                  onClick={async () => {
+                    const { generateBookingConfirmationPdf } = await import(
+                      "@/lib/pdf/bookingInvoicePdf"
+                    );
                     generateBookingConfirmationPdf({
                       invoiceNo: invoice.invoice_no,
                       invoiceDate: invoice.invoice_date,
@@ -121,8 +120,8 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                       balanceDue: remaining,
                       passengers: invoice.passengers || [],
                       currency: invoice.currency,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <FileCheck className="w-3.5 h-3.5" />
                   Confirmation PDF
@@ -132,7 +131,10 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                   variant="outline"
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={() =>
+                  onClick={async () => {
+                    const { generateBookingInvoicePdf } = await import(
+                      "@/lib/pdf/bookingInvoicePdf"
+                    );
                     generateBookingInvoicePdf({
                       invoiceNo: invoice.invoice_no,
                       invoiceDate: invoice.invoice_date,
@@ -146,8 +148,8 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                       passportNo: invoice.passport_no,
                       passengers: invoice.passengers || [],
                       currency: invoice.currency,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <Printer className="w-3.5 h-3.5" />
                   Invoice PDF

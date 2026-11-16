@@ -14,12 +14,7 @@ import { useAgency } from "@/hooks/useAgency";
 import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import { sendEmail } from "@/lib/emailService";
 import { logAndFriendlyMessage, toFriendlyMessage } from "@/lib/friendlyError";
-import {
-  generateAccountStatementPdf,
-  sanitizeFilename,
-  type AgencyInfo,
-  type StatementRow,
-} from "@/lib/reportPdfGenerator";
+import type { AgencyInfo, StatementRow } from "@/lib/reportPdfGenerator";
 import {
   buildPartyStatement,
   buildStatementWhatsAppText,
@@ -141,6 +136,10 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
 
     const bfLabel =
       preset === "all_time" ? "Opening Balance" : "Balance brought forward";
+
+    const { generateAccountStatementPdf, sanitizeFilename } = await import(
+      "@/lib/reportPdfGenerator"
+    );
 
     const doc = generateAccountStatementPdf({
       agency: agencyInfo,
@@ -366,11 +365,10 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                       setPreset(opt.value);
                       setSendError(null);
                     }}
-                    className={`h-8 px-2.5 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
-                      selected
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background hover:bg-muted text-foreground border-border"
-                    }`}
+                    className={`h-8 px-2.5 rounded-md border text-xs font-medium transition-colors cursor-pointer ${selected
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted text-foreground border-border"
+                      }`}
                   >
                     {opt.label}
                   </button>
