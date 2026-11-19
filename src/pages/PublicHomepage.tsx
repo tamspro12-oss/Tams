@@ -17,6 +17,7 @@ import { SeoHead } from "@/components/SeoHead";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
+import { PublicReveal } from "@/components/public/PublicReveal";
 import { Tile } from "@/components/public/Tile";
 
 interface StripItem {
@@ -48,59 +49,66 @@ function HomepageContent() {
 
       <main className="flex-1 flex flex-col justify-between max-w-[1200px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-16 gap-10 sm:gap-12">
         {/* Section A: Hero */}
-        <section className="flex flex-col items-center justify-center text-center max-w-4xl mx-auto w-full pt-2 sm:pt-4">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center mx-auto mb-6 shadow-xs">
-            <Plane className="w-5 h-5 text-teal-700" strokeWidth={1.75} />
-          </div>
+        <section className="tams-hero-section flex flex-col items-center justify-center text-center max-w-4xl mx-auto w-full pt-2 sm:pt-4">
+          <div className="tams-hero-glow-teal" aria-hidden="true" />
+          <div className="tams-hero-glow-gold" aria-hidden="true" />
 
-          <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-bold text-[#0F172A] tracking-tight leading-[1.12] max-w-4xl mx-auto">
-            Travel Agency Management System
-          </h1>
+          <PublicReveal className="relative z-10 w-full flex flex-col items-center">
+            <div className="tams-icon-tile-soft w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xs">
+              <Plane className="w-5 h-5 text-[#0F5E63]" strokeWidth={1.75} />
+            </div>
 
-          <p className="mt-4 sm:mt-5 text-base sm:text-lg lg:text-xl text-[#475569] max-w-2xl mx-auto leading-relaxed font-normal">
-            Bookings, visas, accounts and vouchers, everything in one place.
-          </p>
+            <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-bold text-[#0F172A] tracking-tight leading-[1.12] max-w-4xl mx-auto">
+              Travel Agency{" "}
+              <span className="tams-headline-gradient">Management System</span>
+            </h1>
 
-          <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5">
-            <Link to="/login">
-              <Button
-                size="lg"
-                className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
-              >
-                <span>Login</span>
-                <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
-              </Button>
-            </Link>
+            <p className="mt-4 sm:mt-5 text-base sm:text-lg lg:text-xl text-[#475569] max-w-2xl mx-auto leading-relaxed font-normal">
+              Bookings, visas, accounts and vouchers, everything in one place.
+            </p>
 
-            <Link to="/signup">
-              <Button
-                variant="outline"
-                size="lg"
-                className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
-              >
-                Sign Up Free
-              </Button>
-            </Link>
-          </div>
+            <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5">
+              <Link to="/login">
+                <Button
+                  size="lg"
+                  className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+                >
+                  <span>Login</span>
+                  <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
+                </Button>
+              </Link>
+
+              <Link to="/signup">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+                >
+                  Sign Up Free
+                </Button>
+              </Link>
+            </div>
+          </PublicReveal>
         </section>
 
         {/* Section B: 7 Equal Tiles Strip */}
-        <section className="w-full text-center">
+        <section className="relative z-10 w-full text-center">
           <div className="tams-home-strip-grid tams-grid-gap grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3.5 lg:gap-4">
-            {STRIP_ITEMS.map((item) => (
-              <Tile
-                key={item.id}
-                icon={item.icon}
-                title={item.title}
-                compact
-                noTruncate
-                to="/features"
-                className="h-[118px] sm:h-[124px] lg:h-[132px] p-4"
-              />
+            {STRIP_ITEMS.map((item, idx) => (
+              <PublicReveal key={item.id} delay={idx * 65}>
+                <Tile
+                  icon={item.icon}
+                  title={item.title}
+                  compact
+                  noTruncate
+                  to="/features"
+                  className="h-[118px] sm:h-[124px] lg:h-[132px] p-4"
+                />
+              </PublicReveal>
             ))}
           </div>
 
-          <div className="mt-6">
+          <PublicReveal delay={180} className="mt-6">
             <Link
               to="/features"
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5E63] hover:text-[#0B4A4E] transition-colors group"
@@ -108,38 +116,40 @@ function HomepageContent() {
               <span>View all features</span>
               <ArrowRight className="w-4 h-4 text-[#0F5E63] transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
             </Link>
-          </div>
+          </PublicReveal>
         </section>
 
         {/* Section C: Final CTA Clean Rounded-2xl Banner */}
-        <section className="w-full">
-          <div className="tams-banner-card rounded-2xl bg-white border border-slate-200/80 shadow-sm px-6 py-6 sm:px-8 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <h2 className="text-lg sm:text-xl font-semibold text-[#0F172A] tracking-tight">
-              Ready to get started?
-            </h2>
+        <section className="relative z-10 w-full">
+          <PublicReveal delay={120}>
+            <div className="tams-card tams-banner-card rounded-2xl bg-white border border-slate-200/80 shadow-sm px-6 py-6 sm:px-8 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-[#0F172A] tracking-tight">
+                Ready to get started?
+              </h2>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Link to="/login">
-                <Button
-                  size="sm"
-                  className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
-                >
-                  <span>Login</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
-                </Button>
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link to="/login">
+                  <Button
+                    size="sm"
+                    className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+                  >
+                    <span>Login</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
+                  </Button>
+                </Link>
 
-              <Link to="/signup">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="tams-btn-secondary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
-                >
-                  Sign Up Free
-                </Button>
-              </Link>
+                <Link to="/signup">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="tams-btn-secondary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+                  >
+                    Sign Up Free
+                  </Button>
+                </Link>
+              </div>
             </div>
-          </div>
+          </PublicReveal>
         </section>
       </main>
 

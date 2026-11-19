@@ -1,13 +1,18 @@
-import { Shield, UserCircle2, Loader2 } from "lucide-react";
+import { Shield, UserCircle2, Loader2, Users, FileText } from "lucide-react";
 import { AdminUserManagement } from "@/components/AdminUserManagement";
+import { AdminBlogManager } from "@/components/admin/AdminBlogManager";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
 export default function Admin() {
   const { isAdmin, loading } = useIsAdmin();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeTab = searchParams.get("tab") === "blogs" ? "blogs" : "users";
 
   useEffect(() => {
     if (!loading && !isAdmin) {
@@ -30,6 +35,16 @@ export default function Admin() {
     return null;
   }
 
+  const handleTabChange = (nextTab: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === "blogs") {
+      nextParams.set("tab", "blogs");
+    } else {
+      nextParams.delete("tab");
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -40,7 +55,7 @@ export default function Admin() {
           <div>
             <h1 className="text-3xl font-bold">Admin Panel</h1>
             <p className="text-muted-foreground mt-1">
-              Manage users, subscriptions, and system settings
+              Manage users, subscriptions, blogs, and system settings
             </p>
           </div>
         </div>
@@ -50,12 +65,31 @@ export default function Admin() {
         <div className="flex items-center gap-2">
           <UserCircle2 className="h-5 w-5 text-primary" />
           <p className="text-sm font-medium text-primary">
-            Super Admin Access: You can create user accounts, reset passwords, and manage subscriptions
+            Super Admin Access: You can create user accounts, reset passwords, manage subscriptions, and publish blogs
           </p>
         </div>
       </div>
 
-      <AdminUserManagement />
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="users" className="gap-2">
+            <Users className="h-4 w-4" />
+            Users &amp; Subscriptions
+          </TabsTrigger>
+          <TabsTrigger value="blogs" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Blogs
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users">
+          <AdminUserManagement />
+        </TabsContent>
+
+        <TabsContent value="blogs">
+          <AdminBlogManager />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
