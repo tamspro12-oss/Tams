@@ -19,7 +19,6 @@ import { SeoHead } from "@/components/SeoHead";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
-import { PublicReveal } from "@/components/public/PublicReveal";
 import { Tile } from "@/components/public/Tile";
 
 interface FeatureDef {
@@ -55,30 +54,28 @@ function FeaturesPageContent() {
 
       <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between gap-10">
         {/* Top Heading */}
-        <PublicReveal className="text-center">
+        <div className="text-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#0F172A] tracking-tight">
-            Everything your{" "}
-            <span className="tams-headline-gradient">agency needs</span>
+            Everything your agency needs
           </h1>
-        </PublicReveal>
+        </div>
 
         {/* 10 Equal Tiles Grid: grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 */}
         <div className="tams-features-grid tams-grid-gap grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {FEATURES_DATA.map((feature, idx) => (
-            <PublicReveal key={feature.id} delay={idx * 65}>
-              <Tile
-                icon={feature.icon}
-                title={feature.title}
-                caption={feature.caption}
-                noTruncate
-                className="h-[144px] sm:h-[152px] p-5"
-              />
-            </PublicReveal>
+          {FEATURES_DATA.map((feature) => (
+            <Tile
+              key={feature.id}
+              icon={feature.icon}
+              title={feature.title}
+              caption={feature.caption}
+              noTruncate
+              className="h-[144px] sm:h-[152px] p-5"
+            />
           ))}
         </div>
 
         {/* Centered CTA Row below grid */}
-        <PublicReveal delay={160} className="pt-2 text-center flex flex-wrap items-center justify-center gap-3.5">
+        <div className="pt-2 text-center flex flex-wrap items-center justify-center gap-3.5">
           <Link to="/login">
             <Button
               size="lg"
@@ -98,7 +95,7 @@ function FeaturesPageContent() {
               Sign Up Free
             </Button>
           </Link>
-        </PublicReveal>
+        </div>
       </main>
 
       <PublicFooter compact />

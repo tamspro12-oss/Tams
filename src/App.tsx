@@ -59,8 +59,6 @@ const PublicHomepage = lazyWithRetry(() => import("./pages/PublicHomepage"));
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const PricingPage = lazyWithRetry(() => import("./pages/PricingPage"));
 const ContactPage = lazyWithRetry(() => import("./pages/ContactPage"));
-const BlogsPage = lazyWithRetry(() => import("./pages/BlogsPage"));
-const BlogDetailPage = lazyWithRetry(() => import("./pages/BlogDetailPage"));
 const LoginPage = lazyWithRetry(() => import("./pages/LoginPage"));
 const SignupPage = lazyWithRetry(() => import("./pages/SignupPage"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
@@ -193,8 +191,6 @@ const App = () => {
                   <Route path="/features" element={<RouteErrorBoundary routeName="Features"><FeaturesPage /></RouteErrorBoundary>} />
                   <Route path="/pricing" element={<RouteErrorBoundary routeName="Pricing"><PricingPage /></RouteErrorBoundary>} />
                   <Route path="/contact" element={<RouteErrorBoundary routeName="Contact"><ContactPage /></RouteErrorBoundary>} />
-                  <Route path="/blogs" element={<RouteErrorBoundary routeName="Blogs"><BlogsPage /></RouteErrorBoundary>} />
-                  <Route path="/blogs/:slug" element={<RouteErrorBoundary routeName="Blog Post"><BlogDetailPage /></RouteErrorBoundary>} />
                   <Route path="/login" element={<RouteErrorBoundary routeName="Login"><LoginPage /></RouteErrorBoundary>} />
                   <Route path="/signup" element={<RouteErrorBoundary routeName="Sign Up"><SignupPage /></RouteErrorBoundary>} />
                   <Route path="/privacy" element={<RouteErrorBoundary routeName="Privacy Policy"><PrivacyPolicy /></RouteErrorBoundary>} />

@@ -70,7 +70,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
               >
                 {link.label}
                 {isActive && (
-                  <span className="tams-nav-underline absolute bottom-0.5 left-3.5 right-3.5 h-[2px] rounded-full" />
+                  <span className="absolute bottom-0.5 left-3.5 right-3.5 h-[2px] bg-[#0F5E63] rounded-full" />
                 )}
               </Link>
             );

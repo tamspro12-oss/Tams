@@ -2,16 +2,14 @@
 
 /* ==========================================================================
    TAMS PRO — Scoped Public Marketing Design System (.tams-public-landing)
-   Strictly isolated to /, /features, /pricing, /contact, /blogs and PublicHeader/Footer.
+   Strictly isolated to /, /features, /pricing, /contact and PublicHeader/Footer.
    Does not affect /app/* or any logged-in dashboard view.
    ========================================================================== */
 
 .tams-public-landing,
 .tams-public-landing.min-h-screen {
   background-color: #F8FAFC !important;
-  background-image:
-    radial-gradient(ellipse 80% 48% at 50% -6%, rgba(13, 148, 136, 0.09), transparent 65%),
-    radial-gradient(ellipse 50% 35% at 78% 6%, rgba(201, 162, 75, 0.06), transparent 62%) !important;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -5%, rgba(13, 148, 136, 0.08), transparent 65%) !important;
   background-repeat: no-repeat !important;
   color: #0F172A !important;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
@@ -65,202 +63,52 @@
   border-radius: 9999px !important;
 }
 
-/* ==========================================================================
-   Part 1 & 2 — Hero Ambient Glows, Headline Gradient & Nav Gradient Underline
-   ========================================================================== */
-
-.tams-public-landing .tams-hero-section {
-  position: relative;
-}
-
-@keyframes tamsFloatTeal {
-  0% {
-    transform: translate3d(-16px, 0px, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(18px, -12px, 0) scale(1.05);
-  }
-}
-
-@keyframes tamsFloatGold {
-  0% {
-    transform: translate3d(14px, 4px, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(-16px, -10px, 0) scale(1.06);
-  }
-}
-
-.tams-public-landing .tams-hero-glow-teal {
-  position: absolute;
-  top: -3.5rem;
-  left: 50%;
-  margin-left: -260px;
-  width: 520px;
-  height: 290px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(13, 148, 136, 0.16) 0%, rgba(16, 185, 129, 0.08) 45%, transparent 72%);
-  filter: blur(28px);
-  opacity: 0.75;
-  pointer-events: none;
-  z-index: 0;
-  animation: tamsFloatTeal 16s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.tams-public-landing .tams-hero-glow-gold {
-  position: absolute;
-  top: -1rem;
-  left: 56%;
-  margin-left: -170px;
-  width: 340px;
-  height: 210px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(201, 162, 75, 0.12) 0%, rgba(201, 162, 75, 0.04) 45%, transparent 70%);
-  filter: blur(26px);
-  opacity: 0.7;
-  pointer-events: none;
-  z-index: 0;
-  animation: tamsFloatGold 20s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.tams-public-landing .tams-headline-gradient {
-  background: linear-gradient(135deg, #0F5E63 0%, #0D9488 55%, #B88F37 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.tams-public-landing .tams-nav-underline {
-  background: linear-gradient(90deg, #0F5E63 0%, #10B981 60%, #C9A24B 100%) !important;
-}
-
-/* ==========================================================================
-   Luxury Card Surface & Icon Tiles
-   ========================================================================== */
-
+/* Luxury Card Surface */
 .tams-public-landing .tams-card {
-  background: linear-gradient(180deg, #FFFFFF 0%, #F7FBFA 100%) !important;
+  background-color: #FFFFFF !important;
   border: 1px solid rgba(15, 23, 42, 0.08) !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 16px -2px rgba(15, 23, 42, 0.04);
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tams-public-landing .tams-card-interactive:hover {
   transform: translateY(-4px);
-  border: 1px solid transparent !important;
-  background:
-    linear-gradient(180deg, #FFFFFF 0%, #F4FAF8 100%) padding-box,
-    linear-gradient(135deg, rgba(15, 94, 99, 0.42), rgba(16, 185, 129, 0.36), rgba(201, 162, 75, 0.48)) border-box !important;
-  box-shadow: 0 12px 28px -8px rgba(15, 94, 99, 0.12), 0 6px 14px -6px rgba(201, 162, 75, 0.08);
+  border-color: rgba(20, 184, 166, 0.35) !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(13, 148, 136, 0.06);
 }
 
-.tams-public-landing .tams-icon-tile-gradient {
-  background: linear-gradient(135deg, #0F5E63 0%, #0D9488 55%, #10B981 100%) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 4px 12px -2px rgba(15, 94, 99, 0.28);
-}
-
-.tams-public-landing .group:hover .tams-icon-tile-gradient {
-  background: linear-gradient(135deg, #0B4A4E 0%, #0F766E 55%, #059669 100%) !important;
-  box-shadow: 0 6px 16px -2px rgba(15, 94, 99, 0.36);
-}
-
-.tams-public-landing .tams-icon-tile-soft {
-  background: linear-gradient(135deg, rgba(15, 94, 99, 0.10) 0%, rgba(16, 185, 129, 0.14) 70%, rgba(201, 162, 75, 0.14) 100%) !important;
-  border: 1px solid rgba(15, 94, 99, 0.16) !important;
-  color: #0F5E63 !important;
-}
-
-.tams-public-landing .group:hover .tams-icon-tile-soft {
-  background: linear-gradient(135deg, rgba(15, 94, 99, 0.16) 0%, rgba(16, 185, 129, 0.20) 65%, rgba(201, 162, 75, 0.22) 100%) !important;
-  border-color: rgba(15, 94, 99, 0.28) !important;
-}
-
-/* ==========================================================================
-   Pricing Featured Card, Gold Badge & Chips
-   ========================================================================== */
-
+/* Featured Pricing Card */
 .tams-public-landing .tams-card-featured {
-  border: 2px solid transparent !important;
-  background:
-    linear-gradient(180deg, #FFFFFF 0%, #FAFDFC 100%) padding-box,
-    linear-gradient(135deg, #0F5E63 0%, #10B981 52%, #C9A24B 100%) border-box !important;
-  box-shadow: 0 20px 30px -8px rgba(15, 94, 99, 0.10), 0 8px 16px -6px rgba(201, 162, 75, 0.12);
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-color: #FFFFFF !important;
+  border: 2px solid rgba(13, 148, 136, 0.8) !important;
+  box-shadow: 0 20px 25px -5px rgba(19, 78, 74, 0.06), 0 8px 10px -6px rgba(19, 78, 74, 0.04);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tams-public-landing .tams-card-featured:hover {
   transform: translateY(-4px);
-  box-shadow: 0 24px 36px -8px rgba(15, 94, 99, 0.15), 0 12px 20px -6px rgba(201, 162, 75, 0.18);
+  border-color: #0D9488 !important;
+  box-shadow: 0 24px 32px -6px rgba(19, 78, 74, 0.1), 0 10px 14px -6px rgba(19, 78, 74, 0.06);
 }
 
-.tams-public-landing .tams-badge-gold {
-  background: linear-gradient(135deg, #C9A24B 0%, #B38A33 100%) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(255, 255, 255, 0.28) !important;
-  box-shadow: 0 4px 12px -2px rgba(201, 162, 75, 0.45);
-}
-
-.tams-public-landing .tams-discount-pill {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(201, 162, 75, 0.18) 100%) !important;
-  border: 1px solid rgba(201, 162, 75, 0.38) !important;
-  color: #0F5E63 !important;
-}
-
-/* ==========================================================================
-   Contact Tinted Surface & Card Hover Glow
-   ========================================================================== */
-
-.tams-public-landing .tams-contact-surface {
-  background: linear-gradient(180deg, rgba(240, 250, 248, 0.72) 0%, rgba(250, 248, 242, 0.48) 100%);
-  border: 1px solid rgba(15, 94, 99, 0.09);
-  box-shadow: 0 4px 24px -8px rgba(15, 94, 99, 0.06);
-}
-
-.tams-public-landing .tams-contact-card:hover {
-  box-shadow: 0 14px 30px -8px rgba(15, 94, 99, 0.14), 0 6px 16px -6px rgba(201, 162, 75, 0.12);
-}
-
-/* ==========================================================================
-   Primary & Secondary Buttons (Gradient + Hover Shine Sweep)
-   ========================================================================== */
-
+/* Primary & Secondary Buttons */
 .tams-public-landing .tams-btn-primary {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, #0F5E63 0%, #0D7A74 100%) !important;
+  background-color: #0F5E63 !important;
   color: #FFFFFF !important;
-  border: 1px solid rgba(15, 94, 99, 0.9) !important;
-  box-shadow: 0 4px 14px -2px rgba(15, 94, 99, 0.30), 0 1px 2px rgba(15, 23, 42, 0.08);
-  transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.tams-public-landing .tams-btn-primary::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.24) 50%, transparent 70%);
-  transform: translate3d(-130%, 0, 0);
-  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
+  border: 1px solid #0F5E63 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 94, 99, 0.18);
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tams-public-landing .tams-btn-primary:hover {
-  background: linear-gradient(135deg, #0B4A4E 0%, #0B6863 100%) !important;
+  background-color: #0B4A4E !important;
   border-color: #0B4A4E !important;
   color: #FFFFFF !important;
-  box-shadow: 0 8px 20px -4px rgba(15, 94, 99, 0.38), 0 2px 4px rgba(15, 23, 42, 0.08);
-}
-
-.tams-public-landing .tams-btn-primary:hover::after {
-  transform: translate3d(130%, 0, 0);
+  box-shadow: 0 4px 12px rgba(15, 94, 99, 0.25);
 }
 
 .tams-public-landing .tams-btn-secondary {
@@ -272,153 +120,9 @@
 }
 
 .tams-public-landing .tams-btn-secondary:hover {
-  background-color: #F4FAF9 !important;
+  background-color: #F1F5F9 !important;
   color: #0F172A !important;
-  border-color: rgba(15, 94, 99, 0.45) !important;
-  box-shadow: 0 2px 8px -2px rgba(15, 94, 99, 0.10);
-}
-
-/* ==========================================================================
-   Scroll Reveal Fade-Up
-   ========================================================================== */
-
-.tams-public-landing .tams-reveal {
-  opacity: 0;
-  transform: translate3d(0, 14px, 0);
-  transition:
-    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
-}
-
-.tams-public-landing .tams-reveal-visible {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-}
-
-/* ==========================================================================
-   Public Blog Prose Styling (used on /blogs/:slug)
-   ========================================================================== */
-
-.tams-blog-prose {
-  color: #334155;
-  font-size: 1.05rem;
-  line-height: 1.78;
-}
-
-.tams-blog-prose h1,
-.tams-blog-prose h2,
-.tams-blog-prose h3,
-.tams-blog-prose h4 {
-  color: #0F172A;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 1.85rem;
-  margin-bottom: 0.75rem;
-  line-height: 1.3;
-}
-
-.tams-blog-prose h1 {
-  font-size: 1.75rem;
-}
-
-.tams-blog-prose h2 {
-  font-size: 1.45rem;
-}
-
-.tams-blog-prose h3 {
-  font-size: 1.2rem;
-}
-
-.tams-blog-prose h4 {
-  font-size: 1.05rem;
-}
-
-.tams-blog-prose p {
-  margin-bottom: 1.15rem;
-  color: #334155;
-}
-
-.tams-blog-prose ul,
-.tams-blog-prose ol {
-  margin: 1rem 0 1.25rem 1.4rem;
-  color: #334155;
-}
-
-.tams-blog-prose ul {
-  list-style-type: disc;
-}
-
-.tams-blog-prose ol {
-  list-style-type: decimal;
-}
-
-.tams-blog-prose li {
-  margin-bottom: 0.45rem;
-  padding-left: 0.25rem;
-}
-
-.tams-blog-prose strong,
-.tams-blog-prose b {
-  color: #0F172A;
-  font-weight: 700;
-}
-
-.tams-blog-prose em,
-.tams-blog-prose i {
-  font-style: italic;
-}
-
-.tams-blog-prose blockquote {
-  margin: 1.5rem 0;
-  padding: 0.9rem 1.25rem;
-  border-left: 3px solid #0F5E63;
-  background: linear-gradient(90deg, rgba(15, 94, 99, 0.06), rgba(201, 162, 75, 0.04));
-  border-radius: 0.75rem;
-  color: #1E293B;
-}
-
-.tams-blog-prose blockquote p:last-child {
-  margin-bottom: 0;
-}
-
-.tams-blog-prose a {
-  color: #0F5E63;
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: rgba(15, 94, 99, 0.35);
-  text-underline-offset: 3px;
-  transition: color 150ms ease, text-decoration-color 150ms ease;
-}
-
-.tams-blog-prose a:hover {
-  color: #0B4A4E;
-  text-decoration-color: #0B4A4E;
-}
-
-.tams-blog-prose img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 1.5rem auto;
-  border-radius: 1rem !important;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.08);
-}
-
-.tams-blog-prose code {
-  font-family: 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
-  font-size: 0.88em;
-  background-color: #F1F5F9;
-  color: #0F5E63;
-  padding: 0.15rem 0.4rem;
-  border-radius: 0.375rem !important;
-}
-
-.tams-blog-prose hr {
-  margin: 2rem 0;
-  border: 0;
-  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  border-color: #94A3B8 !important;
 }
 
 /* Protect public pages from global mobile table/dashboard overrides in index.css */
@@ -485,9 +189,6 @@
   .tams-public-landing main .tams-contact-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   }
-  .tams-public-landing main .tams-blogs-grid {
-    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-  }
 }
 
 @media (hover: none) and (pointer: coarse) and (min-width: 640px) {
@@ -499,9 +200,6 @@
   }
   .tams-public-landing main .tams-contact-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-  .tams-public-landing main .tams-blogs-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -518,28 +216,5 @@
   .tams-public-landing main .tams-features-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
-  .tams-public-landing main .tams-blogs-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
 }
 
-/* Strict prefers-reduced-motion compliance */
-@media (prefers-reduced-motion: reduce) {
-  .tams-public-landing .tams-reveal,
-  .tams-public-landing .tams-reveal-visible {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-  .tams-public-landing .tams-hero-glow-teal,
-  .tams-public-landing .tams-hero-glow-gold {
-    animation: none !important;
-  }
-  .tams-public-landing .tams-btn-primary::after {
-    display: none !important;
-  }
-  .tams-public-landing .tams-card-interactive:hover,
-  .tams-public-landing .tams-card-featured:hover {
-    transform: none !important;
-  }
-}

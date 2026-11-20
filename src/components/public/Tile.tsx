@@ -11,7 +11,6 @@ export interface TileProps {
   className?: string;
   compact?: boolean;
   noTruncate?: boolean;
-  iconVariant?: "gradient" | "soft";
 }
 
 export const Tile: React.FC<TileProps> = ({
@@ -23,18 +22,16 @@ export const Tile: React.FC<TileProps> = ({
   className = "",
   compact = false,
   noTruncate = false,
-  iconVariant = "gradient",
 }) => {
-  const iconShape = compact ? "w-10 h-10 rounded-xl" : "w-11 h-11 rounded-xl";
-  const iconSurface =
-    iconVariant === "soft" ? "tams-icon-tile-soft" : "tams-icon-tile-gradient";
-  const iconBoxClasses = `${iconShape} ${iconSurface} flex items-center justify-center shrink-0 transition-all duration-200`;
+  const iconBoxClasses = compact
+    ? "w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center shrink-0 transition-all duration-200 group-hover:bg-teal-100/80 group-hover:border-teal-200/80 group-hover:text-[#0F5E63]"
+    : "w-11 h-11 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center shrink-0 transition-all duration-200 group-hover:bg-teal-100/80 group-hover:border-teal-200/80 group-hover:text-[#0F5E63]";
 
   const iconClasses = compact ? "w-[18px] h-[18px]" : "w-5 h-5";
 
   const content = (
     <div
-      className={`tams-card tams-card-interactive group relative flex flex-col justify-between h-[136px] sm:h-[148px] rounded-2xl p-5 bg-white hover:-translate-y-1 transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
+      className={`tams-card tams-card-interactive group relative flex flex-col justify-between h-[136px] sm:h-[148px] rounded-2xl p-5 bg-white hover:-translate-y-1 hover:border-teal-500/30 hover:shadow-lg transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
     >
       <div className={iconBoxClasses}>
         <Icon className={iconClasses} strokeWidth={1.75} />
