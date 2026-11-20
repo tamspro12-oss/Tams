@@ -422,7 +422,7 @@ export function useFormKeyboardNav({
 
       const inOpenPopup = Boolean(
         hasOpenPopup() ||
-          target?.closest('[data-searchable-select-content="true"], [role="listbox"]')
+        target?.closest('[data-searchable-select-content="true"], [role="listbox"]')
       );
       const repeatableRow = target?.closest('[data-pax-row], [data-repeatable-row]') as HTMLElement | null;
 

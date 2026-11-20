@@ -1061,7 +1061,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
                                 </Button>
                               )}
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                               <div className="space-y-1">
                                 <Label className="text-xs">From</Label>
                                 <Input value={segment.departure_city} onChange={(e) => updateSegment(idx, 'departure_city', e.target.value)} placeholder="Departure" className="enterprise-input h-9 text-sm" />
@@ -1635,7 +1635,7 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
                         </DialogDescription>
                       </DialogHeader>
                       <form ref={quickVendorFormRef} className="space-y-4 pt-2">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <Label htmlFor="vendor_name" className="text-sm">Vendor Name *</Label>
                             <Input id="vendor_name" name="vendor_name" required placeholder="Company name" className="enterprise-input" />

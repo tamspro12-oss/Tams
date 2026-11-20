@@ -329,9 +329,9 @@ export function NewReminderDialog({
         </div>
 
         {/* Body: Flat single screen, tight grid, no section headers */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 space-y-3">
           {/* LINE 1: Date | Time | Type | Priority */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
             <div>
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Date <span className="text-red-500">*</span>

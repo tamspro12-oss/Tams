@@ -499,8 +499,8 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
         </div>
       </div>
 
-      {/* 4. Transport + Ziyarat + Food / Add-ons (3 small tiles in ONE row, amber tinted) */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* 4. Transport + Ziyarat + Food / Add-ons (3 small tiles in ONE row on >=360px, stacked on 320px) */}
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
         {/* Transport */}
         <div className="rounded-xl p-2.5 bg-amber-50/70 ring-1 ring-amber-200/80 dark:bg-amber-950/20 dark:ring-amber-900/40 space-y-1 shadow-2xs">
           <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 block truncate">🚌 Transport</span>
@@ -510,7 +510,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={transport}
             onFocus={e => e.target.select()}
             onChange={e => setTransport(e.target.value)}
-            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
             placeholder="0.00"
             disabled={isPresetLocked}
           />
@@ -518,7 +518,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={transportCurrency}
             onChange={setTransportCurrency}
             disabled={isPresetLocked}
-            className="h-8 min-h-[32px] text-[10px]"
+            className="h-10 min-h-[40px] text-xs"
           />
           <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
             {fmtTotal(transportPerPerson)}
@@ -534,7 +534,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={ziyarat}
             onFocus={e => e.target.select()}
             onChange={e => setZiyarat(e.target.value)}
-            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
             placeholder="0.00"
             disabled={isPresetLocked}
           />
@@ -542,7 +542,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={ziyaratCurrency}
             onChange={setZiyaratCurrency}
             disabled={isPresetLocked}
-            className="h-8 min-h-[32px] text-[10px]"
+            className="h-10 min-h-[40px] text-xs"
           />
           <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
             {fmtTotal(ziyaratPerPerson)}
@@ -558,7 +558,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={food}
             onFocus={e => e.target.select()}
             onChange={e => setFood(e.target.value)}
-            className="h-10 min-h-[40px] text-center font-bold text-sm bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
+            className="h-11 min-h-[44px] text-center font-bold text-base bg-white ring-1 ring-slate-300 text-slate-900 rounded-lg tabular-nums p-1"
             placeholder="0.00"
             disabled={isPresetLocked}
           />
@@ -566,7 +566,7 @@ export function MobileUmrahCostCards(props: MobileUmrahCostCardsProps) {
             value={foodCurrency}
             onChange={setFoodCurrency}
             disabled={isPresetLocked}
-            className="h-8 min-h-[32px] text-[10px]"
+            className="h-10 min-h-[40px] text-xs"
           />
           <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300 block text-center truncate">
             {fmtTotal(foodPerPerson)}

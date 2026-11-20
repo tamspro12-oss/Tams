@@ -34,12 +34,12 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
   const navLinks = MARKETING_NAVIGATION.mainNav;
 
   return (
-    <header className="sticky top-0 z-50 w-full h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/70 transition-colors">
+    <header className="sticky top-0 z-50 w-full pt-[env(safe-area-inset-top,0px)] md:pt-0 h-[calc(4rem+env(safe-area-inset-top,0px))] md:h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/70 transition-colors">
       <div className="max-w-[1200px] mx-auto h-full flex items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Left: Plane logo mark + TAMS PRO */}
         <Link
           to="/"
-          className="flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-xl group"
+          className="flex items-center gap-2.5 min-h-[44px] md:min-h-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-xl group"
           aria-label="TAMS Pro Home"
         >
           <div className="w-9 h-9 rounded-xl bg-[#0F5E63] border border-teal-700/20 flex items-center justify-center shadow-sm group-hover:bg-[#0B4A4E] transition-colors">
@@ -105,7 +105,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
           <Link to="/login" className="sm:hidden">
             <Button
               size="sm"
-              className="tams-btn-primary h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#0F5E63] text-white hover:bg-[#0B4A4E]"
+              className="tams-btn-primary h-11 md:h-8 px-4 rounded-xl text-xs font-semibold bg-[#0F5E63] text-white hover:bg-[#0B4A4E]"
             >
               Login
             </Button>
@@ -114,7 +114,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl text-[#0F172A] hover:bg-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-teal-600 transition-colors"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-xl text-[#0F172A] hover:bg-[#F1F5F9] focus:outline-none focus:ring-2 focus:ring-teal-600 transition-colors"
             aria-expanded={mobileMenuOpen}
             aria-label="Toggle navigation menu"
           >
@@ -130,7 +130,8 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
       {/* Mobile drawer */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-x-0 top-16 bottom-0 bg-[#F8FAFC]/95 backdrop-blur-lg border-t border-slate-200/80 z-50 flex flex-col justify-between px-6 py-6"
+          data-mobile-nav=""
+          className="md:hidden fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top,0px))] bottom-0 h-[calc(100dvh-4rem-env(safe-area-inset-top,0px))] overflow-y-auto bg-[#F8FAFC]/95 backdrop-blur-lg border-t border-slate-200/80 z-50 flex flex-col justify-between px-6 py-6"
           role="dialog"
           aria-modal="true"
         >
@@ -159,7 +160,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
             })}
           </div>
 
-          <div className="pt-6 border-t border-slate-200/80 space-y-3 pb-8">
+          <div className="pt-6 border-t border-slate-200/80 space-y-3 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
             <Link
               to="/login"
               onClick={() => setMobileMenuOpen(false)}

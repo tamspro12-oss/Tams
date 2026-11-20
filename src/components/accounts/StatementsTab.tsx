@@ -358,7 +358,7 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
         </div>
 
         {/* 3. Compact 4 Summary Boxes */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 p-2.5 sm:p-3 border-b bg-background">
+        <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5 p-2.5 sm:p-3 border-b bg-background">
           <div className="p-2 sm:p-2.5 rounded-md bg-muted/30 border border-border/70">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Opening Balance</p>
             <p className="text-xs sm:text-sm font-bold text-foreground mt-0.5 font-mono">

@@ -125,8 +125,13 @@
   border-color: #94A3B8 !important;
 }
 
-/* Protect public pages from global mobile table/dashboard overrides in index.css */
-@media (max-width: 768px) {
+/* Protect public pages from global mobile table/dashboard overrides (strictly < 768px) */
+@media (max-width: 767px) {
+  .tams-public-landing,
+  .tams-public-landing.min-h-screen {
+    overflow-x: clip !important;
+  }
+
   .tams-public-landing main {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
@@ -146,12 +151,6 @@
 
   .tams-public-landing .tams-pricing-gap {
     gap: 1.5rem !important;
-  }
-
-  .tams-public-landing a,
-  .tams-public-landing button {
-    min-height: unset;
-    min-width: unset;
   }
 }
 
@@ -198,14 +197,14 @@
   .tams-public-landing main .tams-features-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
-  .tams-public-landing main .tams-contact-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
 }
 
 @media (hover: none) and (pointer: coarse) and (min-width: 768px) {
   .tams-public-landing main .tams-pricing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .tams-public-landing main .tams-contact-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 

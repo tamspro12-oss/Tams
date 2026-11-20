@@ -33,7 +33,7 @@ function ContactPageContent() {
 
         <div className="max-w-[840px] mx-auto w-full my-auto space-y-5">
           {/* Row of 3 equal Tile boxes */}
-          <div className="tams-contact-grid tams-grid-gap grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="tams-contact-grid tams-grid-gap grid grid-cols-1 md:grid-cols-3 gap-4">
             <Tile
               icon={Mail}
               title={CONTACT_CHANNELS.email.label}
@@ -55,7 +55,7 @@ function ContactPageContent() {
           </div>
 
           {/* Under it: Full-width rounded-2xl horizontal banner */}
-          <div className="tams-card tams-banner-card rounded-2xl p-6 sm:p-8 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          <div className="tams-card tams-banner-card rounded-2xl p-6 sm:p-8 bg-white flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-[#0F172A] tracking-tight">
                 Request account access
@@ -68,10 +68,10 @@ function ContactPageContent() {
               </p>
             </div>
 
-            <Link to="/signup" className="shrink-0">
+            <Link to="/signup" className="w-full md:w-auto shrink-0">
               <Button
                 size="lg"
-                className="tams-btn-primary group w-full sm:w-auto h-11 px-6 rounded-xl text-xs sm:text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all"
+                className="tams-btn-primary group w-full md:w-auto h-11 px-6 rounded-xl text-xs sm:text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all"
               >
                 <span>Sign Up Free</span>
                 <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />

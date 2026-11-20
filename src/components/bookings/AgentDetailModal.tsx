@@ -372,7 +372,7 @@ export function AgentDetailModal({
         {/* ===================== BODY CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Top Info & Totals Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 min-[375px]:grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Total Bookings</span>
               <span className="text-base sm:text-lg font-bold text-foreground">
@@ -449,7 +449,7 @@ export function AgentDetailModal({
           {/* Sub-Tabs: Bookings | Ledger | Statement | Add Payment */}
           <div className="flex items-center justify-between border-b pb-2">
             <Tabs value={cardSubTab} onValueChange={(val: any) => setCardSubTab(val)} className="w-full sm:w-auto">
-              <TabsList className="grid grid-cols-4 w-full sm:w-auto h-9 p-0.5 bg-muted/60 border">
+              <TabsList className="flex items-center justify-start overflow-x-auto sm:grid sm:grid-cols-4 w-full sm:w-auto h-auto sm:h-9 p-1 sm:p-0.5 bg-muted/60 border">
                 <TabsTrigger value="bookings" className="text-xs font-semibold gap-1.5">
                   <Receipt className="w-3.5 h-3.5 text-primary" />
                   Bookings
@@ -633,8 +633,8 @@ export function AgentDetailModal({
 
       {/* Single Booking Detail Modal when row is clicked */}
       {selectedBookingForView && (
-        <div className="fixed inset-0 z-60 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card border rounded-lg shadow-xl w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-60 bg-background/80 backdrop-blur-xs flex items-center justify-center p-2 md:p-4 animate-in fade-in">
+          <div className="bg-card border rounded-lg shadow-xl w-[calc(100vw-1rem)] md:w-[96vw] max-w-[96vw] h-[calc(var(--mobile-vvh,100dvh)-1rem)] md:h-[92vh] max-h-[calc(var(--mobile-vvh,100dvh)-1rem)] md:max-h-[92vh] overflow-hidden flex flex-col">
             <div className="p-4 border-b flex items-center justify-between bg-muted/40">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base">{selectedBookingForView.passenger_name}</h3>
@@ -653,7 +653,7 @@ export function AgentDetailModal({
             </div>
 
             <div className="p-4 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="p-2.5 bg-muted/30 rounded border">
                   <span className="text-muted-foreground block">Selling Price</span>
                   <span className="font-bold text-sm">
@@ -680,7 +680,7 @@ export function AgentDetailModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Flight Date</span>
                   <span className="font-semibold text-foreground">

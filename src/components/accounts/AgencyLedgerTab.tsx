@@ -270,7 +270,7 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   return (
     <div className="space-y-2.5">
       {/* 1. Small Summary Strip On Top */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
+      <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
         <Card className="bg-gradient-to-br from-emerald-500/10 via-background to-background border-emerald-500/20 shadow-xs">
           <CardContent className="p-2.5 sm:p-3 flex items-center justify-between">
             <div>
@@ -337,10 +337,10 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
               [ Search party, PNR, note... ] [ This Month ▾ ] [ All Parties ▾ ] [ All Types ▾ ] [ All Accounts ▾ ] ........ [ Excel ] [ PDF ] [ Add Payment ] */}
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-2 flex-1 min-w-0">
+            <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap items-stretch md:items-center gap-2 flex-1 min-w-0">
               {/* Search */}
-              <div className="relative w-full sm:w-48 xl:w-56 shrink-0">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <div className="relative w-full md:w-48 xl:w-56 shrink-0">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search party, PNR, note..."
                   value={searchQuery}
@@ -352,15 +352,15 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                       setSearchQuery(cleanPastedSearch(pasted));
                     }
                   }}
-                  className="h-8 text-xs pl-8"
+                  className="h-11 md:h-8 text-base md:text-xs pl-8"
                 />
               </div>
 
-              {/* Filters in 2-column grid on mobile, row on tablet/desktop */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap xl:flex-nowrap items-center gap-2 flex-1 min-w-0">
+              {/* Filters stack on <375px, 2-col on <768px, row on desktop */}
+              <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:flex md:flex-wrap xl:flex-nowrap items-center gap-2 flex-1 min-w-0">
                 {/* Date Preset */}
                 <Select value={dateFilterPreset} onValueChange={(val: any) => setDateFilterPreset(val)}>
-                  <SelectTrigger className="h-8 text-xs w-full sm:w-28 xl:w-32">
+                  <SelectTrigger className="h-11 md:h-8 text-sm md:text-xs w-full md:w-28 xl:w-32">
                     <SelectValue placeholder="Period" />
                   </SelectTrigger>
                   <SelectContent>

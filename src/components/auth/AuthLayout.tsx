@@ -28,7 +28,7 @@ export function AuthLayout({
       : "Secure Login";
 
   return (
-    <div className="h-dvh w-full overflow-hidden bg-background flex flex-col lg:flex-row select-none">
+    <div className="min-h-dvh lg:h-dvh w-full overflow-y-auto lg:overflow-hidden bg-background flex flex-col lg:flex-row select-none">
       <SeoHead title={seoTitle} description={seoDescription} path={seoPath} />
       <h1 className="sr-only">{title} - TAMS Pro</h1>
 
@@ -112,11 +112,11 @@ export function AuthLayout({
       {/* ========================================================================= */}
       {/* MOBILE HEADER STRIP (< 1024px): Slim Gradient Strip (~105px)               */}
       {/* ========================================================================= */}
-      <header className="lg:hidden w-full h-[96px] sm:h-[110px] bg-gradient-to-br from-[#0F2847] via-[#0A1E35] to-[#040D18] px-4 pt-3 pb-5 flex flex-col justify-between shrink-0 relative overflow-hidden">
+      <header className="lg:hidden w-full min-h-[96px] sm:min-h-[110px] bg-gradient-to-br from-[#0F2847] via-[#0A1E35] to-[#040D18] px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-5 flex flex-col justify-between shrink-0 relative overflow-hidden">
         <div className="flex items-center justify-between w-full z-10">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-white/80 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-0 px-1 md:px-0 text-xs text-white/80 hover:text-white transition-colors"
             aria-label="Back to home"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -141,7 +141,7 @@ export function AuthLayout({
       {/* ========================================================================= */}
       {/* RIGHT PANEL (Desktop & Mobile): Form Card Vertically Centered (~55%)      */}
       {/* ========================================================================= */}
-      <main className="w-full lg:w-[55%] xl:w-[56%] flex-1 flex flex-col justify-start lg:justify-center items-center px-4 py-2 sm:px-6 lg:p-8 xl:p-10 overflow-y-auto lg:overflow-hidden bg-slate-50/70 dark:bg-slate-950/70 -mt-3 sm:-mt-4 lg:mt-0 z-10">
+      <main className="w-full lg:w-[55%] xl:w-[56%] flex-1 flex flex-col justify-start lg:justify-center items-center px-4 py-2 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:pb-2 sm:px-6 lg:p-8 xl:p-10 overflow-y-auto lg:overflow-hidden bg-slate-50/70 dark:bg-slate-950/70 -mt-3 sm:-mt-4 lg:mt-0 z-10">
         {/* Desktop "Back to Home" Link */}
         <div className="hidden lg:block w-full max-w-xl mb-3">
           <Link

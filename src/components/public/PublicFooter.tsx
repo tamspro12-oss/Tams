@@ -6,7 +6,7 @@ import { MARKETING_NAVIGATION } from "@/config/marketingContent";
 export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   return (
     <footer
-      className={`w-full border-t border-slate-200/80 bg-white/60 backdrop-blur-sm text-[#475569] ${
+      className={`w-full border-t border-slate-200/80 bg-white/60 backdrop-blur-sm text-[#475569] safe-area-bottom ${
         compact ? "py-3.5 lg:py-4" : "py-6"
       } transition-colors`}
     >
@@ -23,7 +23,7 @@ export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false 
         </Link>
 
         {/* Links */}
-        <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2" aria-label="Footer Navigation">
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 md:gap-x-6 md:gap-y-2" aria-label="Footer Navigation">
           {MARKETING_NAVIGATION.footerLinks.map((link) => (
             <Link
               key={link.href}

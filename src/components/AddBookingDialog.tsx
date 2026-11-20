@@ -220,7 +220,7 @@ export function AddBookingDialog({ open, onOpenChange, editBooking }: AddBooking
                   <Input id="flightDate" name="flightDate" type="date" required defaultValue={editBooking?.flight_date || ''} className="h-9 text-xs" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div className="space-y-1.5">
                     <Label htmlFor="seatClass" className="text-xs font-semibold">Seat Class</Label>
                     <Input id="seatClass" name="seatClass" placeholder="Economy, Business..." maxLength={50} defaultValue={editBooking?.seat_class || ''} className="h-9 text-xs" />

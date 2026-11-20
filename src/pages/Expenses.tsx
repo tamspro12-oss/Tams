@@ -107,15 +107,15 @@ export default function Expenses() {
       </div>
 
       <div className="space-y-2 sm:space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Expense Tracker</h1>
             <p className="text-muted-foreground mt-1">Track and manage agency expenses</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <DateFilterSelector />
             <PermissionGate module="expenses" action="write">
-              <Button onClick={() => setShowAddDialog(true)} className="gap-2">
+              <Button onClick={() => setShowAddDialog(true)} className="gap-2 flex-1 md:flex-none">
                 <Plus className="w-4 h-4" />
                 Add Expense
               </Button>
@@ -130,7 +130,7 @@ export default function Expenses() {
           </TabsList>
 
           <TabsContent value="one-time" className="space-y-4">
-            <div className="grid gap-1.5 sm:gap-3 grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 md:gap-3 grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader className="pb-1 sm:pb-2 p-2 sm:p-4">
                   <CardTitle className="text-xs sm:text-sm font-medium">Total Expenses</CardTitle>
@@ -170,53 +170,98 @@ export default function Expenses() {
             ) : filteredExpenses.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No expenses recorded. Click "Add Expense" to get started.</div>
             ) : (
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Expense Type</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Payment Mode</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredExpenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell>{expense.expense_date ? format(new Date(expense.expense_date), "MMM dd, yyyy") : "-"}</TableCell>
-                        <TableCell className="font-medium">{expense.expense_type}</TableCell>
-                        <TableCell>₨ {Number(expense.amount).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {expense.payment_mode === "bank" ? (
-                              <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{expense.bank_name || "Bank"}</span>
-                            ) : (
-                              <span className="flex items-center gap-1"><Banknote className="w-3 h-3" />Cash</span>
-                            )}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{expense.notes || "-"}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <PermissionGate module="expenses" action="write">
-                              <Button size="sm" variant="ghost" onClick={() => { setEditingExpense(expense); setShowAddDialog(true); }}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                            </PermissionGate>
-                            <PermissionGate module="expenses" action="delete">
-                              <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this expense?")) deleteExpense.mutate(expense.id); }}>
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </PermissionGate>
-                          </div>
-                        </TableCell>
+              <>
+                <div className="md:hidden space-y-2.5">
+                  {filteredExpenses.map((expense) => (
+                    <Card key={expense.id} className="p-3.5 space-y-2 text-xs">
+                      <div className="flex items-start justify-between gap-2 pb-1.5 border-b">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-foreground">{expense.expense_type}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {expense.expense_date ? format(new Date(expense.expense_date), "MMM dd, yyyy") : "-"}
+                          </p>
+                        </div>
+                        <span className="font-bold text-sm text-destructive shrink-0">
+                          ₨ {Number(expense.amount).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Mode</span>
+                        <Badge variant="outline" className="capitalize">
+                          {expense.payment_mode === "bank" ? (
+                            <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{expense.bank_name || "Bank"}</span>
+                          ) : (
+                            <span className="flex items-center gap-1"><Banknote className="w-3 h-3" />Cash</span>
+                          )}
+                        </Badge>
+                      </div>
+                      {expense.notes && (
+                        <p className="text-muted-foreground break-words">{expense.notes}</p>
+                      )}
+                      <div className="flex gap-2 justify-end pt-1 border-t">
+                        <PermissionGate module="expenses" action="write">
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingExpense(expense); setShowAddDialog(true); }} aria-label="Edit expense">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate module="expenses" action="delete">
+                          <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this expense?")) deleteExpense.mutate(expense.id); }} aria-label="Delete expense">
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </PermissionGate>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="hidden md:block border rounded-lg overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Expense Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Payment Mode</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredExpenses.map((expense) => (
+                        <TableRow key={expense.id}>
+                          <TableCell>{expense.expense_date ? format(new Date(expense.expense_date), "MMM dd, yyyy") : "-"}</TableCell>
+                          <TableCell className="font-medium">{expense.expense_type}</TableCell>
+                          <TableCell>₨ {Number(expense.amount).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {expense.payment_mode === "bank" ? (
+                                <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{expense.bank_name || "Bank"}</span>
+                              ) : (
+                                <span className="flex items-center gap-1"><Banknote className="w-3 h-3" />Cash</span>
+                              )}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">{expense.notes || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <PermissionGate module="expenses" action="write">
+                                <Button size="sm" variant="ghost" onClick={() => { setEditingExpense(expense); setShowAddDialog(true); }}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              </PermissionGate>
+                              <PermissionGate module="expenses" action="delete">
+                                <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this expense?")) deleteExpense.mutate(expense.id); }}>
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </PermissionGate>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </TabsContent>
 

@@ -314,7 +314,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Main Content */}
         <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
           {/* Header */}
-          <header className="border-b border-border/60 bg-background/95 backdrop-blur-xl px-3 md:px-6 lg:px-8 flex items-center justify-between gap-2 md:gap-3 z-40 shrink-0 pt-[env(safe-area-inset-top,0px)] h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-16 md:pt-0">
+          <header className="border-b border-border/60 bg-background/95 backdrop-blur-xl px-3 md:px-6 lg:px-8 flex items-center justify-between gap-2 md:gap-3 z-40 shrink-0 pt-[env(safe-area-inset-top,0px)] h-[calc(3.5rem+env(safe-area-inset-top,0px))] md:h-16 md:pt-0">
+            {/* === MOBILE LEFT: Sidebar Drawer Trigger === */}
+            <SidebarTrigger
+              data-sidebar-trigger=""
+              className="md:hidden h-11 w-11 -ml-1 hover:bg-accent/10 active:bg-accent/10 rounded-xl inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="h-5 w-5" />
+            </SidebarTrigger>
+
             {/* === DESKTOP LEFT: Session Timer & Agency Name === */}
             <div className="hidden md:flex items-center gap-3 min-w-0 shrink-0">
               <SessionTimer />
@@ -356,7 +365,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* Content Area - Only this container scrolls */}
           <div className="flex-1 overflow-y-auto overscroll-y-contain">
-            <div className="p-2 sm:p-2 md:p-4 lg:p-6 pb-24 md:pb-6 w-full">
+            <div className="p-4 md:p-4 lg:p-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-6 w-full">
               {children}
             </div>
           </div>

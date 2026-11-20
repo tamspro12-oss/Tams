@@ -69,7 +69,7 @@ export function DatePresetFilter({ value, onChange, className }: DatePresetFilte
           variant="outline"
           size="sm"
           className={cn(
-            "h-10 text-xs font-medium px-3 rounded-lg flex items-center justify-between gap-2 border-border/80 bg-background hover:bg-muted/40 transition-colors",
+            "h-11 md:h-10 text-xs font-medium px-3 rounded-lg flex items-center justify-between gap-2 border-border/80 bg-background hover:bg-muted/40 transition-colors",
             value.preset !== "this_month" && value.preset !== "all" && "border-primary/50 text-primary font-semibold",
             className
           )}
@@ -81,7 +81,7 @@ export function DatePresetFilter({ value, onChange, className }: DatePresetFilte
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0 opacity-70" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-2 z-50 text-xs" align="start">
+      <PopoverContent className="w-[min(calc(100vw-1rem),280px)] md:w-64 p-2 z-50 text-xs" align="start">
         <div className="space-y-1">
           <p className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Filter by Date
@@ -126,14 +126,14 @@ export function DatePresetFilter({ value, onChange, className }: DatePresetFilte
 
             {value.preset === "custom" && (
               <div className="space-y-2 pt-1 px-1">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground mb-0.5 block">From</label>
                     <Input
                       type="date"
                       value={tempFrom}
                       onChange={(e) => setTempFrom(e.target.value)}
-                      className="h-8 text-xs px-2"
+                      className="h-10 md:h-8 text-base md:text-xs px-2"
                     />
                   </div>
                   <div>
@@ -142,7 +142,7 @@ export function DatePresetFilter({ value, onChange, className }: DatePresetFilte
                       type="date"
                       value={tempTo}
                       onChange={(e) => setTempTo(e.target.value)}
-                      className="h-8 text-xs px-2"
+                      className="h-10 md:h-8 text-base md:text-xs px-2"
                     />
                   </div>
                 </div>
@@ -150,7 +150,7 @@ export function DatePresetFilter({ value, onChange, className }: DatePresetFilte
                   type="button"
                   size="sm"
                   onClick={handleApplyCustom}
-                  className="w-full h-7 text-xs font-medium"
+                  className="w-full h-11 md:h-7 text-xs font-medium"
                 >
                   Apply Range
                 </Button>

@@ -387,7 +387,7 @@ export function GlobalSearchBar() {
             }
           }}
           placeholder="Search client, vendor, invoice #, voucher #, PNR, passport, phone..."
-          className="h-9 pl-8 pr-16 text-xs bg-muted/40 border-border/60 focus-visible:bg-background rounded-lg"
+          className="h-10 md:h-9 pl-8 pr-9 md:pr-16 text-base md:text-xs bg-muted/40 border-border/60 focus-visible:bg-background rounded-lg"
         />
         <div className="absolute right-2 flex items-center gap-1">
           {isLoading ? (
@@ -395,6 +395,7 @@ export function GlobalSearchBar() {
           ) : query ? (
             <button
               type="button"
+              data-compact-btn=""
               aria-label="Clear global search"
               onClick={() => {
                 setQuery("");
@@ -402,19 +403,19 @@ export function GlobalSearchBar() {
                 setErrorMsg(null);
                 inputRef.current?.focus();
               }}
-              className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+              className="p-1.5 md:p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           ) : null}
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground bg-background border border-border/70 rounded select-none">
+          <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground bg-background border border-border/70 rounded select-none">
             Ctrl+K
           </kbd>
         </div>
       </div>
 
       {isOpen && cleanLength > 0 && (
-        <div className="fixed sm:absolute left-2 right-2 sm:left-0 sm:right-auto sm:w-[min(92vw,540px)] top-[calc(3.25rem+env(safe-area-inset-top,0px))] sm:top-full sm:mt-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[75vh]">
+        <div className="fixed md:absolute left-2 right-2 md:left-0 md:right-auto md:w-[min(92vw,540px)] top-[calc(3.75rem+env(safe-area-inset-top,0px))] md:top-full md:mt-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[min(75dvh,calc(var(--mobile-vvh,100dvh)-5rem))] md:max-h-[75vh]">
           {cleanLength < GLOBAL_SEARCH_MIN_CHARS ? (
             <div className="px-4 py-6 text-center text-xs text-muted-foreground">
               Type at least {GLOBAL_SEARCH_MIN_CHARS} characters to search across parties, invoices, and vouchers.

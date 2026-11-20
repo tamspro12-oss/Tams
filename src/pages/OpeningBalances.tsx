@@ -248,36 +248,68 @@ export default function OpeningBalances() {
           {reconciliation.length === 0 ? (
             <p className="text-sm text-muted-foreground">No opening balances yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Party</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Receivable</TableHead>
-                    <TableHead className="text-right">Payable</TableHead>
-                    <TableHead className="text-right">Net</TableHead>
-                    <TableHead className="text-right">Entries</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reconciliation.map((r) => (
-                    <TableRow key={r.key} className={r.count > 1 ? "bg-destructive/5" : ""}>
-                      <TableCell className="font-medium">{r.label}</TableCell>
-                      <TableCell className="capitalize">{r.party_type.replace("_", " ")}</TableCell>
-                      <TableCell className="text-right text-primary">PKR {r.receivable.toLocaleString()}</TableCell>
-                      <TableCell className="text-right text-destructive">PKR {r.payable.toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-semibold ${r.net >= 0 ? "text-primary" : "text-destructive"}`}>
+            <>
+              <div className="md:hidden space-y-2.5">
+                {reconciliation.map((r) => (
+                  <div
+                    key={r.key}
+                    className={`border rounded-xl p-3.5 space-y-1.5 text-xs ${r.count > 1 ? "bg-destructive/5 border-destructive/30" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 pb-1 border-b">
+                      <span className="font-semibold text-sm text-foreground">{r.label}</span>
+                      <span className="capitalize text-[11px] text-muted-foreground shrink-0">
+                        {r.party_type.replace("_", " ")} • {r.count > 1 ? <span className="text-destructive font-semibold">{r.count} ⚠</span> : `${r.count}x`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Receivable</span>
+                      <span className="text-primary font-medium">PKR {r.receivable.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Payable</span>
+                      <span className="text-destructive font-medium">PKR {r.payable.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between gap-2 pt-1 border-t">
+                      <span className="text-muted-foreground font-medium">Net</span>
+                      <span className={`font-semibold ${r.net >= 0 ? "text-primary" : "text-destructive"}`}>
                         PKR {r.net.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {r.count > 1 ? <span className="text-destructive font-semibold">{r.count} ⚠</span> : r.count}
-                      </TableCell>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Receivable</TableHead>
+                      <TableHead className="text-right">Payable</TableHead>
+                      <TableHead className="text-right">Net</TableHead>
+                      <TableHead className="text-right">Entries</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {reconciliation.map((r) => (
+                      <TableRow key={r.key} className={r.count > 1 ? "bg-destructive/5" : ""}>
+                        <TableCell className="font-medium">{r.label}</TableCell>
+                        <TableCell className="capitalize">{r.party_type.replace("_", " ")}</TableCell>
+                        <TableCell className="text-right text-primary">PKR {r.receivable.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-destructive">PKR {r.payable.toLocaleString()}</TableCell>
+                        <TableCell className={`text-right font-semibold ${r.net >= 0 ? "text-primary" : "text-destructive"}`}>
+                          PKR {r.net.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.count > 1 ? <span className="text-destructive font-semibold">{r.count} ⚠</span> : r.count}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -285,32 +317,34 @@ export default function OpeningBalances() {
       <Card>
         <CardHeader className="space-y-3">
           <CardTitle className="text-base">All Opening Balances</CardTitle>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
+            <div className="relative flex-1 min-w-0 md:min-w-[200px]">
               <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="pl-9 pr-8 h-9 text-xs rounded-lg"
+                className="pl-9 pr-8 h-11 md:h-9 text-base md:text-xs rounded-lg"
                 placeholder="Search party or notes..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
                 <button
+                  type="button"
+                  data-compact-btn=""
                   onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
               <DateFilter
                 value={dateFilter}
                 onChange={setDateFilter}
-                className="h-9 shrink-0"
+                className="h-11 md:h-9 flex-1 md:flex-none shrink-0"
               />
               <Select value={partyFilter} onValueChange={setPartyFilter}>
-                <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+                <SelectTrigger className="h-11 md:h-9 w-full md:w-36 text-sm md:text-xs rounded-lg shrink-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="z-50 text-xs">
@@ -321,7 +355,7 @@ export default function OpeningBalances() {
                 </SelectContent>
               </Select>
               <Select value={kindFilter} onValueChange={setKindFilter}>
-                <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+                <SelectTrigger className="h-11 md:h-9 w-full md:w-32 text-sm md:text-xs rounded-lg shrink-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="z-50 text-xs">
@@ -339,47 +373,78 @@ export default function OpeningBalances() {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No opening balances match.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Party</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>{labelOf(b)}</TableCell>
-                      <TableCell className="capitalize">{b.party_type.replace("_", " ")}</TableCell>
-                      <TableCell className="capitalize">{b.balance_type}</TableCell>
-                      <TableCell className={`font-semibold ${b.balance_type === "receivable" ? "text-primary" : "text-destructive"}`}>
+            <>
+              <div className="md:hidden space-y-2.5">
+                {filtered.map((b) => (
+                  <div key={b.id} className="border rounded-xl p-3.5 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2 pb-1.5 border-b">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-foreground">{labelOf(b)}</p>
+                        <p className="text-[11px] text-muted-foreground capitalize">
+                          {b.party_type.replace("_", " ")} • {b.as_of_date}
+                        </p>
+                      </div>
+                      <span className={`font-bold text-sm shrink-0 ${b.balance_type === "receivable" ? "text-primary" : "text-destructive"}`}>
                         PKR {Number(b.amount).toLocaleString()}
-                      </TableCell>
-                      <TableCell>{b.as_of_date}</TableCell>
-                      <TableCell className="text-right">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(b)}>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="capitalize text-muted-foreground">{b.balance_type}</span>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => openEdit(b)} aria-label="Edit opening balance">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => setDeleteId(b.id)}>
+                        <Button size="icon" variant="ghost" onClick={() => setDeleteId(b.id)} aria-label="Delete opening balance">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                      </TableCell>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Kind</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell>{labelOf(b)}</TableCell>
+                        <TableCell className="capitalize">{b.party_type.replace("_", " ")}</TableCell>
+                        <TableCell className="capitalize">{b.balance_type}</TableCell>
+                        <TableCell className={`font-semibold ${b.balance_type === "receivable" ? "text-primary" : "text-destructive"}`}>
+                          PKR {Number(b.amount).toLocaleString()}
+                        </TableCell>
+                        <TableCell>{b.as_of_date}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(b)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteId(b.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto z-[100]">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto z-[100]">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Opening Balance" : "Opening Balance"}</DialogTitle>
             <DialogDescription>One opening balance per party. Re-saving the same party updates the existing record.</DialogDescription>
@@ -412,7 +477,7 @@ export default function OpeningBalances() {
               </Select>
               {errors.party_id && <p className="text-xs text-destructive">{errors.party_id}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Type *</Label>
                 <Select value={form.balance_type} onValueChange={(v) => setForm({ ...form, balance_type: v as BalanceType })}>

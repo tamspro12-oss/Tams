@@ -1001,8 +1001,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                       {/* Makkah Hotel */}
                       <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200/50 dark:border-amber-800/30 space-y-3">
                         <h5 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Makkah Hotel</h5>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2 col-span-2 sm:col-span-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-2">
                             <Label htmlFor="makkah_hotel" className="text-xs font-medium">Hotel Name</Label>
                             <Input
                               id="makkah_hotel"
@@ -1036,8 +1036,8 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                       {/* Madinah Hotel */}
                       <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200/50 dark:border-green-800/30 space-y-3">
                         <h5 className="text-sm font-semibold text-green-800 dark:text-green-200">Madinah Hotel</h5>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2 col-span-2 sm:col-span-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-2">
                             <Label htmlFor="madinah_hotel" className="text-xs font-medium">Hotel Name</Label>
                             <Input
                               id="madinah_hotel"
@@ -1218,7 +1218,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="space-y-1">
                           <Label className="text-xs">From</Label>
                           <Input value={segment.departure_city} onChange={(e) => updateSegment(idx, 'departure_city', e.target.value)} placeholder="Departure" className="enterprise-input h-9 text-sm" />
@@ -1641,7 +1641,7 @@ export function AddB2BBookingDialog({ open, onOpenChange, agent, editBooking }: 
                 {!editBooking && sellingPrice > 0 && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200/50 dark:border-blue-800/30 space-y-2">
                     <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-3">Accounting Summary</h4>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                       <span className="text-muted-foreground">Total Service Amount:</span>
                       <span className="font-medium text-right">PKR {(sellingPrice - calculateCommission(sellingPrice)).toLocaleString()}</span>
 

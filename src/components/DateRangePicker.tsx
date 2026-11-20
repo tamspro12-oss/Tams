@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -22,6 +23,8 @@ export function DateRangePicker({
   onDateRangeChange,
   className,
 }: DateRangePickerProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
@@ -30,7 +33,7 @@ export function DateRangePicker({
             id="date"
             variant={"outline"}
             className={cn(
-              "justify-start text-left font-normal",
+              "w-full md:w-auto min-h-[44px] md:min-h-0 justify-start text-left font-normal truncate",
               !dateRange && "text-muted-foreground"
             )}
           >
@@ -56,7 +59,7 @@ export function DateRangePicker({
             defaultMonth={dateRange?.from}
             selected={dateRange}
             onSelect={onDateRangeChange}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
             className="pointer-events-auto"
           />
         </PopoverContent>

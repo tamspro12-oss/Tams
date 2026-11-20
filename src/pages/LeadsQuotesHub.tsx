@@ -69,9 +69,9 @@ export default function LeadsQuotesHub() {
         path="/app/leads-quotes"
       />
 
-      {/* Pill Switcher / Segmented Control (Height 40px / h-10) */}
+      {/* Pill Switcher / Segmented Control (Height 40px / h-10 on desktop, 44px+ on mobile) */}
       <div className="shrink-0 flex items-center justify-between gap-2 pb-1 border-b border-border/50">
-        <div className="w-full sm:w-auto p-1 bg-muted/60 dark:bg-muted/40 border border-border/70 rounded-xl h-10 flex items-center gap-1 shadow-inner">
+        <div className="w-full md:w-auto p-1 bg-muted/60 dark:bg-muted/40 border border-border/70 rounded-xl min-h-[44px] md:h-10 flex flex-wrap md:flex-nowrap items-center gap-1 shadow-inner">
           {/* Tab 1: Quotations (First and Default) */}
           <button
             type="button"
@@ -79,7 +79,7 @@ export default function LeadsQuotesHub() {
             aria-selected={currentTab === "quotations"}
             onClick={() => handleTabChange("quotations")}
             className={cn(
-              "flex-1 sm:flex-initial h-8 px-3 sm:px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-150 select-none",
+              "flex-1 md:flex-initial min-h-[40px] md:min-h-0 md:h-8 px-3 md:px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-150 select-none min-w-0",
               currentTab === "quotations"
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -107,7 +107,7 @@ export default function LeadsQuotesHub() {
             aria-selected={currentTab === "queries"}
             onClick={() => handleTabChange("queries")}
             className={cn(
-              "flex-1 sm:flex-initial h-8 px-3 sm:px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-150 select-none",
+              "flex-1 md:flex-initial min-h-[40px] md:min-h-0 md:h-8 px-3 md:px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-150 select-none min-w-0",
               currentTab === "queries"
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/50"

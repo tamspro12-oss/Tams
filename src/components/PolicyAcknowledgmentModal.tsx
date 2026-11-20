@@ -38,7 +38,7 @@ export const PolicyAcknowledgmentModal = ({
 
   return (
     <Dialog open={open} modal>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-primary" />

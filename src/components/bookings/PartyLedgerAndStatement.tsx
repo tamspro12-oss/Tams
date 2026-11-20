@@ -430,7 +430,7 @@ export function PartyLedgerAndStatement({
 
           {/* Statement Sheet */}
           <div className="p-4 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 rounded-lg border bg-background">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">Total Invoiced / Charged</p>
                 <p className="text-base font-bold text-purple-600 mt-0.5">
@@ -502,7 +502,7 @@ export function PartyLedgerAndStatement({
           </CardHeader>
           <CardContent className="p-4">
             <form ref={paymentFormRef} onSubmit={handlePaymentSubmit} className="space-y-4 max-w-lg">
-              <div className="grid grid-cols-2 gap-3 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Amount (PKR) *</Label>
                   <div className="relative">
@@ -530,7 +530,7 @@ export function PartyLedgerAndStatement({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Deposit / Account *</Label>
                   <Select value={paymentAccountId} onValueChange={setPaymentAccountId}>
@@ -564,7 +564,7 @@ export function PartyLedgerAndStatement({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Reference # / Slip</Label>
                   <Input

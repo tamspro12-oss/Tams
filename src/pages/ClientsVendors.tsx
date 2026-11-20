@@ -676,7 +676,7 @@ export default function ClientsVendors() {
         onValueChange={(val: any) => setActiveTab(val)}
         className="w-full"
       >
-        <TabsList className="mb-3 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-none border border-slate-200 dark:border-slate-700">
+        <TabsList className="mb-3 w-full md:w-auto justify-start overflow-x-auto max-w-full bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-none border border-slate-200 dark:border-slate-700">
           <TabsTrigger
             value="parties"
             className="text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5 rounded-none data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900"
@@ -730,12 +730,12 @@ export default function ClientsVendors() {
                   }
                 }}
                 placeholder="Search party by code, name, phone, email, city, address..."
-                className="pl-8 h-9 text-xs rounded-none"
+                className="pl-8 h-11 md:h-9 text-base md:text-xs rounded-none"
               />
             </div>
 
             <Select value={typeFilter} onValueChange={(val: any) => setTypeFilter(val)}>
-              <SelectTrigger className="h-9 w-[120px] text-xs rounded-none">
+              <SelectTrigger className="h-11 md:h-9 w-full md:w-[120px] text-sm md:text-xs rounded-none">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -747,7 +747,7 @@ export default function ClientsVendors() {
             </Select>
 
             <Select value={balanceFilter} onValueChange={(val: any) => setBalanceFilter(val)}>
-              <SelectTrigger className="h-9 w-[130px] text-xs rounded-none">
+              <SelectTrigger className="h-11 md:h-9 w-full md:w-[130px] text-sm md:text-xs rounded-none">
                 <SelectValue placeholder="Balance" />
               </SelectTrigger>
               <SelectContent>

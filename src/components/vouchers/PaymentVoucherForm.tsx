@@ -626,7 +626,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
         {/* BODY + FOOTER wrapped for unified keyboard nav */}
         <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 space-y-2.5">
           {/* ROW 1: Voucher Date | Link to Invoice (with Search button) | Party (Client / Vendor) with Quick Add */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-start">
             {/* 1. Voucher Date (Locked System Date) */}
@@ -670,6 +670,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                     type="button"
                     size="sm"
                     tabIndex={-1}
+                    data-compact-btn=""
                     onClick={() => {
                       lastSearchedQueryRef.current = searchQuery.trim();
                       executeSearchInvoice();
@@ -812,9 +813,9 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
           {/* Matched Invoice compact preview banner */}
           {matchedInvoice && (
-            <div className="p-2 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+            <div className="p-2 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                 <span className="font-bold text-teal-900 dark:text-teal-200">
                   {matchedInvoice.clientName}
                 </span>
@@ -827,7 +828,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 font-mono text-[11px]">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
                 <span>Total: PKR {matchedInvoice.totalAmount.toLocaleString()}</span>
                 <span>Paid: PKR {matchedInvoice.paidAmount.toLocaleString()}</span>
                 <span className="font-bold text-red-600 dark:text-red-400">
@@ -839,7 +840,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
 
           {/* LINE 3: Remarks (Single-line input, expandable, with write-off checkbox) */}
           <div className="space-y-1 pt-1 border-t">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Remarks
               </Label>
@@ -886,9 +887,9 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                 recentVouchers.map((v: any, idx: number) => (
                   <div
                     key={v.id || idx}
-                    className="px-2.5 py-1 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                    className="px-2.5 py-1.5 sm:py-1 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                         {v.voucher_no}
                       </span>
@@ -897,7 +898,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
                         {v.party?.name || "Direct"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Badge
                         variant="outline"
                         className={`text-[9px] px-1 py-0 uppercase ${
@@ -920,13 +921,13 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
         </div>
 
         {/* FOOTER */}
-        <div className="px-5 py-2.5 border-t bg-slate-50 dark:bg-slate-900 flex items-center justify-end gap-2 shrink-0">
+        <div className="px-4 md:px-5 py-2.5 border-t bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="h-8 text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer w-full sm:w-auto"
           >
             Close
           </Button>
@@ -936,7 +937,7 @@ export const PaymentVoucherForm: React.FC<PaymentVoucherFormProps> = ({
             data-save-button="true"
             disabled={isSubmitting}
             onClick={handleSave}
-            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[110px]"
+            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer w-full sm:w-auto min-w-[110px]"
           >
             {isSubmitting ? "Saving..." : "Save Voucher"}
           </Button>

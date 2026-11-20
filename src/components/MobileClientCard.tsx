@@ -188,7 +188,7 @@ export function MobileClientCard({ client, vendorName, onEdit, onDelete, onPayme
       {/* Expanded Details */}
       {expanded && (
         <div className="border-t border-border/40 p-3.5 bg-muted/30 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3">
             <div>
               <div className="text-[11px] text-muted-foreground uppercase tracking-wider">Passport</div>
               <div className="text-sm font-medium mt-0.5">{client.passport_number || "—"}</div>

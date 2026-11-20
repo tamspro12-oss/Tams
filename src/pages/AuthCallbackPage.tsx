@@ -209,7 +209,7 @@ export default function AuthCallbackPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:py-4">
       <Card className="w-full max-w-md shadow-2xl border-slate-700 bg-card/95 backdrop-blur-md rounded-2xl overflow-hidden">
         <CardContent className="pt-10 pb-8 px-6 text-center">
           {/* 1. LOADING STATE */}
@@ -299,7 +299,7 @@ export default function AuthCallbackPage() {
                   placeholder="agency@example.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="h-10 text-xs"
+                  className="h-11 md:h-10 text-base md:text-xs"
                 />
 
                 <Button
@@ -308,7 +308,7 @@ export default function AuthCallbackPage() {
                   size="sm"
                   disabled={resending || cooldownLeft > 0 || !emailInput.trim()}
                   onClick={() => handleResendVerification()}
-                  className="w-full h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-medium"
+                  className="w-full h-11 md:h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-medium"
                 >
                   {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                   <span>

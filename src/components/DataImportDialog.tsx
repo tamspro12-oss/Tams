@@ -358,7 +358,7 @@ export function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) 
               </AlertDescription>
             </Alert>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="border rounded-lg p-4 text-center">
                 <div className="text-3xl font-bold text-green-600">{result.success}</div>
                 <div className="text-sm text-muted-foreground">Records Imported</div>

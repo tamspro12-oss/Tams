@@ -16,8 +16,10 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import { useAgency } from "@/hooks/useAgency";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Reports() {
+  const isMobile = useIsMobile();
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date())
@@ -258,16 +260,16 @@ export default function Reports() {
   }, [clients, expenses, vendors, dateRange]);
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Financial Reports</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Financial Reports</h1>
           <p className="text-muted-foreground mt-1">
             View comprehensive financial summaries and analytics
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <FileText className="w-4 h-4 mr-2" />
             PDF
@@ -446,20 +448,20 @@ export default function Reports() {
 
       {/* Custom Range Dialog */}
       <Dialog open={showCustomDialog} onOpenChange={setShowCustomDialog}>
-        <DialogContent ref={customDialogRef} className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent ref={customDialogRef} className="w-[calc(100vw-1rem)] max-w-lg md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Custom Date Range</DialogTitle>
           </DialogHeader>
-          <div className="flex justify-center py-4">
+          <div className="flex justify-center py-2 md:py-4">
             <CalendarComponent
               mode="range"
               selected={customRange}
               onSelect={setCustomRange}
-              numberOfMonths={2}
+              numberOfMonths={isMobile ? 1 : 2}
               className="pointer-events-auto"
             />
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
             <div className="text-sm text-muted-foreground">
               {customRange?.from && customRange?.to ? (
                 `${format(customRange.from, "MMM dd, yyyy")} - ${format(customRange.to, "MMM dd, yyyy")}`
@@ -467,11 +469,11 @@ export default function Reports() {
                 "Select start and end dates"
               )}
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowCustomDialog(false)}>
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              <Button variant="outline" onClick={() => setShowCustomDialog(false)} className="w-full md:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleApplyCustomRange} disabled={!customRange?.from || !customRange?.to}>
+              <Button onClick={handleApplyCustomRange} disabled={!customRange?.from || !customRange?.to} className="w-full md:w-auto">
                 Apply
               </Button>
             </div>

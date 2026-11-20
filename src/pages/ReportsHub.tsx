@@ -22,6 +22,7 @@ import { useParties, type Party } from "@/hooks/useParties";
 import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useAgency } from "@/hooks/useAgency";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
 import { PartyLedgerDrawer } from "@/components/parties/PartyLedgerDrawer";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -95,6 +96,7 @@ type FinancialSubReport =
 
 export default function ReportsHub() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Tab from URL (default to Daily Report: daily-report)
@@ -1538,7 +1540,7 @@ export default function ReportsHub() {
 
           {/* Top Summary Cards: Gross Booking Revenue, Cost of Sales, Operating Expenses, Net Agency Profit */}
           {loadingInvoices || loadingExpenses ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="p-3.5 rounded-xl border bg-card space-y-2">
                   <Skeleton className="h-3 w-20" />
@@ -1547,7 +1549,7 @@ export default function ReportsHub() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Card 1: Gross Booking Revenue */}
               <div
                 onClick={() =>
@@ -1967,7 +1969,7 @@ export default function ReportsHub() {
           {financialSubReport === "accounts_summary" && (
             <div className="space-y-4">
               {/* Liquidity Top Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-card border rounded-xl p-3 shadow-xs">
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     Total Liquid Funds
@@ -2159,7 +2161,7 @@ export default function ReportsHub() {
           {financialSubReport === "assets_dues" && (
             <div className="space-y-4">
               {/* Working Capital Metrics */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-card border rounded-xl p-3 shadow-xs">
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     Cash & Bank (Liquid)
@@ -2391,11 +2393,18 @@ export default function ReportsHub() {
                             a.monthKey.localeCompare(b.monthKey)
                           );
                         })()}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        margin={isMobile ? { top: 8, right: 8, left: -12, bottom: 28 } : { top: 10, right: 10, left: 0, bottom: 20 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <XAxis
+                          dataKey="month"
+                          tick={{ fontSize: isMobile ? 9 : 11 }}
+                          angle={isMobile ? -25 : 0}
+                          textAnchor={isMobile ? "end" : "middle"}
+                          height={isMobile ? 48 : 30}
+                        />
                         <YAxis
+                          width={isMobile ? 40 : 60}
                           tick={{ fontSize: 10 }}
                           tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
                         />
@@ -2574,11 +2583,18 @@ export default function ReportsHub() {
                           });
                           return Array.from(catMap.values()).sort((a, b) => b.amount - a.amount);
                         })()}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        margin={isMobile ? { top: 8, right: 8, left: -12, bottom: 28 } : { top: 10, right: 10, left: 0, bottom: 20 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis dataKey="category" tick={{ fontSize: 10 }} />
+                        <XAxis
+                          dataKey="category"
+                          tick={{ fontSize: isMobile ? 9 : 10 }}
+                          angle={isMobile ? -25 : 0}
+                          textAnchor={isMobile ? "end" : "middle"}
+                          height={isMobile ? 52 : 30}
+                        />
                         <YAxis
+                          width={isMobile ? 40 : 60}
                           tick={{ fontSize: 10 }}
                           tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
                         />

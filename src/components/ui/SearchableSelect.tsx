@@ -330,7 +330,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           {...triggerProps}
           onKeyDown={handleTriggerKeyDown}
           className={cn(
-            "w-full h-8 px-2.5 py-1 text-xs border rounded-none bg-background flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-teal-500/60 focus:border-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 data-[field-error=true]:border-red-500 data-[field-error=true]:ring-2 data-[field-error=true]:ring-red-500/40 transition-colors",
+            "w-full min-h-[44px] md:min-h-0 md:h-8 px-2.5 py-2 md:py-1 text-sm md:text-xs border rounded-none bg-background flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-teal-500/60 focus:border-teal-600 focus-visible:ring-2 focus-visible:ring-teal-500 data-[field-error=true]:border-red-500 data-[field-error=true]:ring-2 data-[field-error=true]:ring-red-500/40 transition-colors",
             isEmpty ? "text-muted-foreground" : "text-foreground font-medium",
             disabled && "opacity-50 cursor-not-allowed",
             className,
@@ -423,7 +423,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           handleCloseOnly();
         }}
         className={cn(
-          "w-[300px] sm:w-[360px] p-0 rounded-none bg-background border shadow-md",
+          "w-[min(calc(100vw-1rem),320px)] md:w-[360px] p-0 rounded-none bg-background border shadow-md",
           popoverClassName
         )}
         align="start"
@@ -445,17 +445,18 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               }}
               placeholder={searchPlaceholder}
               data-search-box="true"
-              className="h-8 pl-8 pr-7 text-xs customer-search-box rounded-none bg-white dark:bg-slate-950"
+              className="h-10 md:h-8 pl-8 pr-8 text-base md:text-xs customer-search-box rounded-none bg-white dark:bg-slate-950"
             />
             {search && (
               <button
                 type="button"
                 tabIndex={-1}
+                data-compact-btn=""
                 onClick={() => {
                   setSearch("");
                   inputRef.current?.focus();
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="w-3 h-3" />
               </button>

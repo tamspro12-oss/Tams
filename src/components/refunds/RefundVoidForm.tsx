@@ -473,9 +473,9 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
         {/* BODY + FOOTER wrapped for keyboard navigation */}
         <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 space-y-2.5">
           {/* LINE 1: Date | Type | Original Invoice / PNR / Ticket No * | Party */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-start">
             {/* Date (Locked to System Date) */}
             <div className="lg:col-span-2">
               <LockedDateField
@@ -540,6 +540,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
                       executeSearchInvoice();
                     }}
                     disabled={isSearching}
+                    data-compact-btn=""
                     className="h-6 text-[10px] px-2 bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer"
                   >
                     <Search className="w-2.5 h-2.5 mr-1" />
@@ -587,7 +588,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
           )}
 
           {/* LINE 2: Client Refund / Void Charges | Supplier Refund | Deductions | Mode | Bank */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
             {/* Amount Field:
                 When Type = Void: "Void Charges (PKR)", OPTIONAL (no star)
                 When Type = Refund: "Client Refund (PKR) *", REQUIRED */}
@@ -726,7 +727,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
 
           {/* COMPACT SHEET BELOW FORM: Recent Recorded Refunds & Voids (5 records, read-only) */}
           <div className="pt-2 border-t space-y-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1">
               <div className="flex items-center gap-1.5">
                 <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
@@ -741,7 +742,47 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
               </span>
             </div>
 
-            <div className="rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[140px] overflow-y-auto">
+            <div className="md:hidden space-y-2 max-h-[200px] overflow-y-auto">
+              {recentRefunds.length === 0 ? (
+                <div className="p-3 text-center text-muted-foreground text-xs rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  No records yet. Save an entry above to see it here.
+                </div>
+              ) : (
+                recentRefunds.map((r: any, idx: number) => {
+                  const rNo = r.refund_no || r.reference_no || `REF-${idx + 1}`;
+                  const matchParty = r.notes?.match(/Party:\s*([^|]+)/);
+                  const pName = matchParty ? matchParty[1].trim() : "Customer";
+                  const matchInv = r.notes?.match(/Ref Invoice:\s*([^|]+)/);
+                  const invPnr = matchInv ? matchInv[1].trim() : r.invoice_no || "—";
+                  const amt = Number(r.refund_amount) || 0;
+
+                  return (
+                    <div key={r.id || idx} className="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-1.5 text-xs select-text">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                            <CopyValue value={rNo} label="refund number" />
+                          </div>
+                          <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">
+                            <CopyValue value={pName} label="party name" />
+                          </div>
+                        </div>
+                        <div className="font-mono font-bold text-right text-purple-600 dark:text-purple-400 shrink-0">
+                          <CopyValue value={amt} isAmount={true} displayValue={`PKR ${amt.toLocaleString()}`} label="amount" />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-1">
+                        <span className="font-mono">{r.refund_date || "—"}</span>
+                        <span className="font-mono">{invPnr !== "—" ? <CopyValue value={invPnr} label="invoice or PNR" /> : "—"}</span>
+                        <span className="uppercase">{r.payment_mode || "CASH"}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[140px] overflow-y-auto">
               <table className="w-full text-xs text-left">
                 <thead className="sticky top-0 bg-slate-100/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-400 font-semibold border-b text-[11px]">
                   <tr>
@@ -800,13 +841,13 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
         </div>
 
         {/* FOOTER: Only Cancel and Record Void / Record Refund */}
-        <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
+        <div className="px-4 md:px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="h-8 text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -816,7 +857,7 @@ export const RefundVoidForm: React.FC<RefundVoidFormProps> = ({
             data-save-button="true"
             disabled={isSubmitting}
             onClick={handleSave}
-            className={`h-8 text-xs text-white cursor-pointer min-w-[120px] ${
+            className={`h-8 text-xs text-white cursor-pointer w-full sm:w-auto min-w-[120px] ${
               actionType === "void"
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-purple-600 hover:bg-purple-700"

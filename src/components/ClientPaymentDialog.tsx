@@ -202,7 +202,7 @@ export function ClientPaymentDialog({ client, open, onOpenChange }: ClientPaymen
           {/* Left Column: Form & Calculations */}
           <div className="lg:col-span-6 flex flex-col gap-3 min-h-0">
             {/* Payment Summary */}
-            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/60 border">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/60 border">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Total Amount</p>
                 <p className="font-bold text-base">₨ {totalReceivable.toLocaleString()}</p>

@@ -16,7 +16,7 @@ export function PwaOnboardModal() {
 
   return (
     <Dialog open={showOnboarding} onOpenChange={(open) => !open && dismissOnboarding()}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">

@@ -166,18 +166,20 @@ export default function Vouchers() {
         </div>
 
         {/* 2. Search box (flexible width) */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-0 md:min-w-[200px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search vouchers (passenger, passport, PNR, voucher #, hotel)..."
-            className="pl-9 pr-8 h-9 text-xs rounded-lg bg-background"
+            className="pl-9 pr-8 h-11 md:h-9 text-base md:text-xs rounded-lg bg-background"
           />
           {searchQuery && (
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -188,12 +190,12 @@ export default function Vouchers() {
         <DateFilter
           value={dateFilter}
           onChange={setDateFilter}
-          className="h-9 shrink-0"
+          className="h-11 md:h-9 w-full md:w-auto shrink-0"
         />
 
         {/* 4. "All Services" dropdown */}
         <Select value={filterService} onValueChange={setFilterService}>
-          <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0 bg-background">
+          <SelectTrigger className="h-11 md:h-9 w-full md:w-36 text-sm md:text-xs rounded-lg shrink-0 bg-background">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="z-50 text-xs">
@@ -211,7 +213,7 @@ export default function Vouchers() {
             setEditingVoucher(null);
             setIsCreateOpen(true);
           }}
-          className="h-9 text-xs rounded-lg px-3.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
+          className="h-11 md:h-9 w-full md:w-auto text-xs rounded-lg px-3.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Create Voucher

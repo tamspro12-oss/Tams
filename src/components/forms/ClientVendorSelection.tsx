@@ -56,7 +56,7 @@ export function ClientVendorSelection({
                 <Search className="ml-2 h-4 w-4 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
+            <PopoverContent className="w-[min(calc(100vw-1rem),400px)] md:w-[400px] p-0" align="start">
               <Command>
                 <CommandInput 
                   placeholder="Search vendors..." 

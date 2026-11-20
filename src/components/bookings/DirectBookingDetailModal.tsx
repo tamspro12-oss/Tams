@@ -284,7 +284,7 @@ export function DirectBookingDetailModal({
         {/* ===================== FULL SCREEN BODY ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Top Quick Stats Card */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 min-[375px]:grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="bg-card border rounded-lg p-3">
               <span className="text-xs text-muted-foreground block">Selling Price</span>
               <span className="text-base sm:text-lg font-bold text-foreground">
@@ -350,7 +350,7 @@ export function DirectBookingDetailModal({
           {/* Sub-Tabs: Bookings | Ledger | Statement | Add Payment */}
           <div className="flex items-center justify-between border-b pb-2">
             <Tabs value={cardSubTab} onValueChange={(val: any) => setCardSubTab(val)} className="w-full sm:w-auto">
-              <TabsList className="grid grid-cols-4 w-full sm:w-auto h-9 p-0.5 bg-muted/60 border">
+              <TabsList className="flex items-center justify-start overflow-x-auto sm:grid sm:grid-cols-4 w-full sm:w-auto h-auto sm:h-9 p-1 sm:p-0.5 bg-muted/60 border">
                 <TabsTrigger value="bookings" className="text-xs font-semibold gap-1.5">
                   <Plane className="w-3.5 h-3.5 text-primary" />
                   Bookings
@@ -401,7 +401,7 @@ export function DirectBookingDetailModal({
                     </div>
                   )}
                 </CardHeader>
-                <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                   <div>
                     <span className="text-muted-foreground block mb-0.5">Service Type</span>
                     <span className="font-semibold text-foreground text-sm">

@@ -99,7 +99,7 @@ export const UniversalPartySelect: React.FC<UniversalPartySelectProps> = ({
         clearLabel={noneLabel}
         required={required}
         requiredMessage={`Please select ${label}`}
-        popoverClassName="w-[320px] sm:w-[380px]"
+        popoverClassName="w-[min(calc(100vw-1rem),340px)] md:w-[380px]"
         triggerProps={{
           "data-customer-box": "true",
           className: "customer-search-box",

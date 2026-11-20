@@ -302,7 +302,7 @@ export function BookingTemplateDesigner() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs p-2.5 bg-muted/40 rounded-md">
+            <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-2 text-xs p-2.5 bg-muted/40 rounded-md">
               <div>
                 <span className="text-muted-foreground block text-[10px]">Booking Ref</span>
                 <span className="font-semibold">{bookingPrefix}-2026-001</span>

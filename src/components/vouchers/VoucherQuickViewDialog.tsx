@@ -49,7 +49,7 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 text-xs pt-1">
-              <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
                 <div>
                   <span className="text-muted-foreground block">Party</span>
                   <span className="font-semibold">{displayPartyName}</span>

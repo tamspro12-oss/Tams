@@ -530,7 +530,7 @@ export const UserManagementList = () => {
                 />
               </div>
               <Select value={filterPlan} onValueChange={setFilterPlan}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="h-11 md:h-10 w-full md:w-[180px]">
                   <SelectValue placeholder="Filter by plan" />
                 </SelectTrigger>
                 <SelectContent>
@@ -542,7 +542,7 @@ export const UserManagementList = () => {
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="h-11 md:h-10 w-full md:w-[180px]">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -563,8 +563,118 @@ export const UserManagementList = () => {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border/50">
-              <Table>
+              <>
+                <div className="md:hidden space-y-2.5">
+                  {filteredUsers.map((user) => {
+                    const isMaster = user.role === 'super_admin';
+                    return (
+                      <div
+                        key={user.id}
+                        className={`border rounded-xl p-3.5 space-y-2 text-xs ${isMaster ? "bg-amber-500/5 border-amber-500/30" : ""}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 pb-1.5 border-b">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 font-semibold text-sm text-foreground">
+                              {isMaster && <Crown className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span className="truncate">{user.full_name}</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground break-all">{user.email}</p>
+                          </div>
+                          {isMaster ? (
+                            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-none shadow-xs text-[10px] font-bold gap-1 shrink-0">
+                              <Crown className="h-3 w-3" />
+                              Master
+                            </Badge>
+                          ) : (
+                            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="shrink-0">
+                              {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
+                              {user.role}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Agency</span>
+                          <span className="font-medium text-right break-words">{user.agency_name}</span>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-muted-foreground">Plan & Status</span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {isMaster ? (
+                              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold uppercase text-[10px]">
+                                Lifetime
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="capitalize text-[11px]">
+                                {user.subscription_plan}
+                              </Badge>
+                            )}
+                            {getLicenseStatusBadge(user.license_status, user.license_expiry, user.role)}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-muted-foreground">Expiry / Devices</span>
+                          <span className="font-medium text-right">
+                            {isMaster
+                              ? 'Lifetime'
+                              : user.license_expiry
+                                ? format(new Date(user.license_expiry), 'MMM dd, yyyy HH:mm')
+                                : '-'}{' '}
+                            • {user.active_sessions} dev
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1 pt-1.5 border-t">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditUser(user);
+                              setEditForm({ full_name: user.full_name, email: user.email });
+                            }}
+                            title="Edit user"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setResetPasswordUser(user);
+                              setPasswordForm({ password: '', confirmPassword: '' });
+                            }}
+                            title="Reset password"
+                          >
+                            <Key className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditSubscriptionUser(user);
+                              setSubscriptionForm({ plan: isMaster ? 'lifetime' : (user.subscription_plan || 'free') });
+                            }}
+                            title="Change plan"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </Button>
+                          {!isMaster && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDeleteUser(user)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto rounded-lg border border-border/50">
+                <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-bold">Name</TableHead>
@@ -705,6 +815,7 @@ export const UserManagementList = () => {
                 </TableBody>
               </Table>
               </div>
+              </>
             )}
           </>
         )}
@@ -895,7 +1006,7 @@ export const UserManagementList = () => {
             <div className="flex-1 overflow-auto rounded-md bg-muted p-4 font-mono text-xs">
               <pre className="whitespace-pre-wrap">{SUPABASE_SETUP_SQL}</pre>
             </div>
-            <DialogFooter className="flex items-center justify-between sm:justify-between">
+            <DialogFooter className="flex flex-col-reverse gap-2 md:flex-row md:items-center md:justify-between">
               <Button
                 variant="outline"
                 size="sm"

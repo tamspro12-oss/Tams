@@ -507,7 +507,7 @@ export function CreateVoucherDialog({
                 onValueChange={(val) => setVoucherType(val as VoucherType)}
                 className="w-full"
               >
-                <TabsList className="grid grid-cols-3 w-full h-11">
+                <TabsList className="flex items-center justify-start overflow-x-auto sm:grid sm:grid-cols-3 w-full h-auto sm:h-11 p-1 sm:p-1">
                   <TabsTrigger value="Umrah" className="gap-2">
                     <Sparkles className="w-4 h-4 text-amber-500" />
                     Umrah Package
@@ -782,7 +782,7 @@ export function CreateVoucherDialog({
               </div>
 
               {/* Room & Service Details */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[11px]">Room Type</Label>
                   <Input
@@ -917,7 +917,7 @@ export function CreateVoucherDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[11px]">Room Type</Label>
                   <Input
@@ -1020,7 +1020,7 @@ export function CreateVoucherDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[11px]">PNR / Booking Ref</Label>
                   <Input

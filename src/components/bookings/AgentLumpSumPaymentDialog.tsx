@@ -362,7 +362,7 @@ export function AgentLumpSumPaymentDialog({
             </div>
 
             <div className="border rounded-md overflow-hidden bg-background">
-              <div className="max-h-[190px] overflow-y-auto">
+              <div className="max-h-[190px] overflow-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/60 text-muted-foreground sticky top-0 border-b">
                     <tr>
@@ -440,7 +440,7 @@ export function AgentLumpSumPaymentDialog({
           </div>
         </form>
 
-        <DialogFooter className="p-3 border-t bg-muted/40 shrink-0 flex items-center justify-between">
+        <DialogFooter className="p-3 border-t bg-muted/40 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-between gap-2">
           <Button
             type="button"
             variant="outline"
@@ -448,7 +448,7 @@ export function AgentLumpSumPaymentDialog({
             tabIndex={-1}
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
-            className="text-xs"
+            className="text-xs w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -459,7 +459,7 @@ export function AgentLumpSumPaymentDialog({
             data-save-button="true"
             onClick={handleSubmit}
             disabled={isSubmitting || (parseFloat(amount) || 0) <= 0}
-            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 w-full sm:w-auto"
           >
             <CheckCircle className="w-3.5 h-3.5" />
             Confirm & Allocate Payment

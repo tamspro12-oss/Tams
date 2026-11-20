@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useQuotations";
 import { useParties, type Party } from "@/hooks/useParties";
 import { useAgency } from "@/hooks/useAgency";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { cn } from "@/lib/utils";
 import {
@@ -87,6 +88,7 @@ const CUSTOM_RECIPIENT_ID = "__custom_recipient__";
 
 export default function QuotationFormPage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { id } = useParams<{ id?: string }>();
   const isEdit = Boolean(id);
   const location = useLocation();
@@ -656,7 +658,7 @@ export default function QuotationFormPage() {
       >
         {/* 1. HEADER FIELDS */}
         <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
             {/* Quotation # (Auto with optional Manual Override on create) */}
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
@@ -729,7 +731,7 @@ export default function QuotationFormPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
             {/* Phone Number (Auto-filled on client select, remains editable) */}
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
@@ -743,7 +745,7 @@ export default function QuotationFormPage() {
                   markDirty();
                 }}
                 placeholder="e.g. +92 300 1234567"
-                className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                className="h-11 md:h-8 text-base md:text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
               />
             </div>
 
@@ -853,6 +855,95 @@ export default function QuotationFormPage() {
             </span>
           </div>
 
+          {isMobile ? (
+            <div className="space-y-3">
+              {items.map((item, idx) => (
+                <div
+                  key={idx}
+                  data-repeatable-row={idx}
+                  className="rounded-xl border bg-muted/20 p-3 space-y-2.5 text-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] font-bold text-muted-foreground">
+                      Item #{idx + 1}
+                    </span>
+                    {items.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        tabIndex={-1}
+                        onClick={() => handleRemoveItem(idx)}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 gap-1"
+                        aria-label={`Remove line ${idx + 1}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Description</Label>
+                    <Input
+                      data-line-field="description"
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange(idx, "description", e.target.value)
+                      }
+                      placeholder="Service item description..."
+                      data-required={
+                        idx === 0 && items.every((i) => !i.description.trim())
+                          ? "true"
+                          : undefined
+                      }
+                      data-required-message="Please enter at least one line item description"
+                      className="h-11 text-base bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Qty</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step="1"
+                        value={item.qty}
+                        onChange={(e) =>
+                          handleItemChange(idx, "qty", Number(e.target.value) || 0)
+                        }
+                        className="h-11 text-base font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Unit Price</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={item.unit_price || ""}
+                        onChange={(e) =>
+                          handleItemChange(
+                            idx,
+                            "unit_price",
+                            Number(e.target.value) || 0
+                          )
+                        }
+                        placeholder="0"
+                        className="h-11 text-base font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-1.5 border-t border-border/50">
+                    <span className="text-[11px] font-medium text-muted-foreground">Line Amount</span>
+                    <span className="font-mono font-bold text-sm text-foreground">
+                      {currency}{" "}
+                      {((Number(item.qty) || 0) * (Number(item.unit_price) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead>
@@ -944,6 +1035,7 @@ export default function QuotationFormPage() {
               </tbody>
             </table>
           </div>
+          )}
 
           <div>
             <button
@@ -1071,7 +1163,7 @@ export default function QuotationFormPage() {
         {/* 5. ACTION BUTTONS */}
         <div
           data-nav-order="3"
-          className="pt-3 border-t flex flex-wrap items-center justify-end gap-2.5"
+          className="pt-3 border-t flex flex-col-reverse md:flex-row flex-wrap md:items-center md:justify-end gap-2.5"
         >
           <Button
             type="button"
@@ -1079,7 +1171,7 @@ export default function QuotationFormPage() {
             size="sm"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="h-9 px-4 text-xs cursor-pointer"
+            className="w-full md:w-auto h-11 md:h-9 px-4 text-xs cursor-pointer"
           >
             Cancel
           </Button>
@@ -1090,7 +1182,7 @@ export default function QuotationFormPage() {
             data-nav-skip="true"
             onClick={() => handleSave(true)}
             disabled={isSubmitting}
-            className="h-9 px-4 text-xs font-semibold gap-1.5 cursor-pointer"
+            className="w-full md:w-auto h-11 md:h-9 px-4 text-xs font-semibold gap-1.5 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Save & PDF
@@ -1100,7 +1192,7 @@ export default function QuotationFormPage() {
             size="sm"
             data-save-button="true"
             disabled={isSubmitting}
-            className="h-9 px-5 text-xs font-semibold bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500"
+            className="w-full md:w-auto h-11 md:h-9 px-5 text-xs font-semibold bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             <Save className="w-3.5 h-3.5" />
             {isSubmitting ? "Saving..." : "Save Quotation"}

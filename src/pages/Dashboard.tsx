@@ -325,7 +325,7 @@ export default function Dashboard() {
         </div>
 
         {/* 2. CANONICAL 6 KPI METRIC CARDS (Part G7: Every card drills down) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
           {/* Card 1: CASH & BANK */}
           <div
             onClick={() => navigate("/app/sales-expenses?tab=payment-vouchers")}
@@ -585,7 +585,7 @@ export default function Dashboard() {
         {/* 4. NOTIFICATIONS CENTER (Latest 3 unread items, with live action buttons & instant badge update) */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
           {/* Section Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-6 py-4 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                 <Bell className="w-4 h-4" />
@@ -605,7 +605,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate("/app/notifications")}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50/60 hover:bg-indigo-50 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50/60 hover:bg-indigo-50 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 px-3.5 py-2 md:py-1.5 min-h-[44px] md:min-h-0 rounded-lg transition-colors cursor-pointer"
             >
               <span>View All Notifications</span>
               <ArrowRight className="w-4 h-4" />
@@ -630,7 +630,7 @@ export default function Dashboard() {
               topDashboardAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`px-6 py-4 flex items-start justify-between gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors border-l-4 ${alert.priority === "overdue"
+                  className={`px-4 md:px-6 py-4 flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors border-l-4 ${alert.priority === "overdue"
                     ? "border-l-red-500"
                     : alert.priority === "due_today"
                       ? "border-l-amber-500"
@@ -666,7 +666,7 @@ export default function Dashboard() {
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
                         {alert.description}
                       </p>
-                      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-slate-400">
                         {alert.invoiceNo && (
                           <span className="flex items-center gap-1 font-mono">
                             Inv: <CopyValue value={alert.invoiceNo} label="invoice number" className="text-slate-600 dark:text-slate-300 font-bold" />
@@ -686,7 +686,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center justify-end md:justify-start gap-2 shrink-0 w-full md:w-auto">
                     {alert.mainAction && (
                       <Button
                         size="sm"
@@ -708,7 +708,7 @@ export default function Dashboard() {
                             navigate("/app/sales-expenses?tab=expenses&new=1");
                           }
                         }}
-                        className="h-7 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                        className="h-11 md:h-7 flex-1 md:flex-none text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
                       >
                         {alert.mainAction.label}
                       </Button>
@@ -720,7 +720,7 @@ export default function Dashboard() {
                         markAsDone(alert.id);
                         toast.success("Alert marked as completed");
                       }}
-                      className="h-7 text-xs text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                      className="h-11 md:h-7 flex-1 md:flex-none text-xs text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                     >
                       <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" />
                       Mark Done

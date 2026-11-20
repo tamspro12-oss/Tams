@@ -85,18 +85,20 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     >
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2">
         {/* Search input (Find Booking) */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-0 md:min-w-[200px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
             value={filters.searchQuery}
             onChange={(e) => update({ searchQuery: e.target.value })}
             placeholder={searchPlaceholder}
-            className="pl-8 pr-8 h-9 text-xs bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
+            className="pl-8 pr-8 h-11 md:h-9 text-base md:text-xs bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
           />
           {filters.searchQuery && (
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => update({ searchQuery: "" })}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 md:p-0.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -104,12 +106,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Date Filter */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-1.5 shrink-0">
           <Select
             value={filters.dateRange}
             onValueChange={(val: any) => update({ dateRange: val })}
           >
-            <SelectTrigger className="h-9 w-[120px] text-xs font-medium border-slate-200 dark:border-slate-700">
+            <SelectTrigger className="h-11 md:h-9 w-full md:w-[120px] text-sm md:text-xs font-medium border-slate-200 dark:border-slate-700">
               <CalendarIcon className="w-3.5 h-3.5 mr-1 text-slate-400" />
               <SelectValue placeholder="Date" />
             </SelectTrigger>
@@ -123,19 +125,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </Select>
 
           {filters.dateRange === "custom" && (
-            <div className="flex items-center gap-1">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-1.5 md:gap-1 w-full md:w-auto">
               <Input
                 type="date"
                 value={filters.startDate || ""}
                 onChange={(e) => update({ startDate: e.target.value })}
-                className="h-9 w-[125px] text-xs px-2"
+                className="h-11 md:h-9 w-full md:w-[125px] text-base md:text-xs px-2"
               />
-              <span className="text-xs text-slate-400">to</span>
+              <span className="text-xs text-slate-400 hidden md:inline">to</span>
               <Input
                 type="date"
                 value={filters.endDate || ""}
                 onChange={(e) => update({ endDate: e.target.value })}
-                className="h-9 w-[125px] text-xs px-2"
+                className="h-11 md:h-9 w-full md:w-[125px] text-base md:text-xs px-2"
               />
             </div>
           )}
@@ -147,7 +149,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             value={filters.partyId || "all"}
             onValueChange={(val) => update({ partyId: val })}
           >
-            <SelectTrigger className="h-9 min-w-[130px] max-w-[180px] text-xs border-slate-200 dark:border-slate-700">
+            <SelectTrigger className="h-11 md:h-9 w-full md:w-auto md:min-w-[130px] md:max-w-[180px] text-sm md:text-xs border-slate-200 dark:border-slate-700">
               <SelectValue placeholder="Client / Vendor" />
             </SelectTrigger>
             <SelectContent className="max-h-60">
@@ -167,7 +169,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             value={filters.entryType}
             onValueChange={(val: any) => update({ entryType: val })}
           >
-            <SelectTrigger className="h-9 w-[110px] text-xs border-slate-200 dark:border-slate-700">
+            <SelectTrigger className="h-11 md:h-9 w-full md:w-[110px] text-sm md:text-xs border-slate-200 dark:border-slate-700">
               <SelectValue placeholder="Entry Type" />
             </SelectTrigger>
             <SelectContent>
@@ -186,7 +188,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             value={filters.service}
             onValueChange={(val: any) => update({ service: val })}
           >
-            <SelectTrigger className="h-9 w-[110px] text-xs border-slate-200 dark:border-slate-700">
+            <SelectTrigger className="h-11 md:h-9 w-full md:w-[110px] text-sm md:text-xs border-slate-200 dark:border-slate-700">
               <SelectValue placeholder="Service" />
             </SelectTrigger>
             <SelectContent>
@@ -207,7 +209,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             value={filters.status}
             onValueChange={(val: any) => update({ status: val })}
           >
-            <SelectTrigger className="h-9 w-[100px] text-xs border-slate-200 dark:border-slate-700">
+            <SelectTrigger className="h-11 md:h-9 w-full md:w-[100px] text-sm md:text-xs border-slate-200 dark:border-slate-700">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -225,11 +227,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             variant="ghost"
             size="sm"
             onClick={handleReset}
-            className="h-9 px-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 shrink-0 gap-1 cursor-pointer"
+            className="h-11 md:h-9 w-full md:w-auto px-3 md:px-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 shrink-0 gap-1 cursor-pointer"
             title="Reset Filters"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset</span>
+            <span>Reset</span>
           </Button>
         )}
       </div>

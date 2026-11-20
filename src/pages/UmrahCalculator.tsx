@@ -1961,15 +1961,16 @@ export default function UmrahCalculator() {
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
             {/* Adults */}
             <div className="space-y-1">
               <label className="text-[10px] font-semibold text-muted-foreground uppercase block text-center">Adults</label>
               <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(adultCount, -1, setAdultCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -1979,13 +1980,14 @@ export default function UmrahCalculator() {
                   value={adultCount}
                   onFocus={e => e.target.select()}
                   onChange={e => setAdultCount(e.target.value)}
-                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  className="w-full min-w-0 text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
                   placeholder="0"
                 />
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(adultCount, 1, setAdultCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -1998,8 +2000,9 @@ export default function UmrahCalculator() {
               <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(childCount, -1, setChildCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -2009,13 +2012,14 @@ export default function UmrahCalculator() {
                   value={childCount}
                   onFocus={e => e.target.select()}
                   onChange={e => setChildCount(e.target.value)}
-                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  className="w-full min-w-0 text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
                   placeholder="0"
                 />
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(childCount, 1, setChildCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -2028,8 +2032,9 @@ export default function UmrahCalculator() {
               <div className="flex items-center border border-border rounded-xl bg-background overflow-hidden h-11 min-h-[44px]">
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(infantCount, -1, setInfantCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -2039,13 +2044,14 @@ export default function UmrahCalculator() {
                   value={infantCount}
                   onFocus={e => e.target.select()}
                   onChange={e => setInfantCount(e.target.value)}
-                  className="w-full text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
+                  className="w-full min-w-0 text-center text-base font-bold bg-transparent border-0 focus:outline-none p-0"
                   placeholder="0"
                 />
                 <button
                   type="button"
+                  data-compact-btn=""
                   onClick={() => stepCount(infantCount, 1, setInfantCount)}
-                  className="h-full px-3 hover:bg-muted text-muted-foreground active:scale-95"
+                  className="h-full px-2.5 min-[400px]:px-3 hover:bg-muted text-muted-foreground active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -2105,7 +2111,7 @@ export default function UmrahCalculator() {
           </Button>
 
           {/* Row of three equal buttons: Save Draft | Download | Reset */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
             <Button
               onClick={handleSaveDraft}
               variant="outline"
@@ -2133,8 +2139,8 @@ export default function UmrahCalculator() {
           </div>
         </div>
 
-        {/* STICKY BOTTOM BAR (always visible on mobile) */}
-        <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 bg-slate-900 text-white dark:bg-card dark:text-foreground border-t border-border shadow-2xl px-4 py-2.5 flex items-center justify-between safe-area-bottom">
+        {/* STICKY BOTTOM BAR (always visible on mobile above MobileBottomNav) */}
+        <div className="fixed bottom-[calc(4.4rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 bg-slate-900 text-white dark:bg-card dark:text-foreground border-t border-border shadow-2xl px-4 py-2.5 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <span className="text-[10px] font-medium text-slate-300 block">
               Total ({totalPassengers || 1} pax)
@@ -2160,10 +2166,10 @@ export default function UmrahCalculator() {
         {/* Mobile Summary Bottom Sheet */}
         <Sheet open={mobileSummaryOpen} onOpenChange={setMobileSummaryOpen}>
           <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-4 safe-area-bottom">
-            <SheetHeader className="text-left pb-3 border-b">
-              <SheetTitle className="text-base font-bold flex items-center justify-between">
+            <SheetHeader className="text-left pb-3 border-b pr-10">
+              <SheetTitle className="text-base font-bold flex items-center justify-between gap-2">
                 <span>Umrah Package Breakdown</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
                   {result?.nights || 0} Nights
                 </span>
               </SheetTitle>
@@ -2297,8 +2303,8 @@ export default function UmrahCalculator() {
         {/* Mobile Preset Selector Bottom Sheet */}
         <Sheet open={mobilePresetSheetOpen} onOpenChange={setMobilePresetSheetOpen}>
           <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-4 safe-area-bottom">
-            <SheetHeader className="text-left pb-3 border-b">
-              <SheetTitle className="text-base font-bold flex items-center justify-between">
+            <SheetHeader className="text-left pb-3 border-b pr-10">
+              <SheetTitle className="text-base font-bold flex items-center justify-between gap-2">
                 <span>Select Package Preset</span>
                 <Button
                   onClick={() => {

@@ -63,11 +63,11 @@ export function ForgotPasswordDialog() {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <button type="button" className="text-sm text-primary hover:underline font-medium">
+        <button type="button" data-compact-btn="" className="text-sm text-primary hover:underline font-medium py-1 md:py-0">
           Forgot password?
         </button>
       </DialogTrigger>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
         {sent ? (
           <div className="space-y-5 text-center py-4">
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">

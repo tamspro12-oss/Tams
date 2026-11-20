@@ -16,6 +16,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface DateFilterSelectorProps {
   className?: string;
@@ -24,6 +25,7 @@ export interface DateFilterSelectorProps {
 
 export function DateFilterSelector({ className, size = "sm" }: DateFilterSelectorProps = {}) {
   const { filter, setPreset, setCustomRange, getFilterLabel } = useDateFilter();
+  const isMobile = useIsMobile();
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [customRange, setCustomRangeState] = useState<DateRange | undefined>();
 
@@ -95,10 +97,10 @@ export function DateFilterSelector({ className, size = "sm" }: DateFilterSelecto
               mode="range"
               selected={customRange}
               onSelect={setCustomRangeState}
-              numberOfMonths={2}
-              className="pointer-events-auto"
+              numberOfMonths={isMobile ? 1 : 2}
+              className="pointer-events-auto mx-auto"
             />
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
               <div className="text-sm text-muted-foreground">
                 {customRange?.from && (
                   <>
@@ -107,11 +109,11 @@ export function DateFilterSelector({ className, size = "sm" }: DateFilterSelecto
                   </>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setShowCustomDialog(false)}>
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                <Button variant="outline" onClick={() => setShowCustomDialog(false)} className="w-full md:w-auto">
                   Cancel
                 </Button>
-                <Button onClick={handleCustomApply} disabled={!customRange?.from}>
+                <Button onClick={handleCustomApply} disabled={!customRange?.from} className="w-full md:w-auto">
                   Apply
                 </Button>
               </div>

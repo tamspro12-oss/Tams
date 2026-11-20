@@ -351,7 +351,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
             <div
               role="radiogroup"
               aria-label="Statement period"
-              className="grid grid-cols-2 sm:grid-cols-3 gap-1.5"
+              className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-3 gap-1.5"
             >
               {PERIOD_OPTIONS.map((opt) => {
                 const selected = preset === opt.value;
@@ -377,7 +377,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
             </div>
 
             {preset === "custom" && (
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
                 <div className="space-y-1">
                   <Label htmlFor="stmt-from-date" className="text-[11px] font-medium">
                     From
@@ -390,7 +390,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                       setCustomFrom(e.target.value);
                       setSendError(null);
                     }}
-                    className="h-8 text-xs"
+                    className="h-11 md:h-8 text-base md:text-xs"
                   />
                 </div>
                 <div className="space-y-1">
@@ -405,7 +405,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
                       setCustomTo(e.target.value);
                       setSendError(null);
                     }}
-                    className="h-8 text-xs"
+                    className="h-11 md:h-8 text-base md:text-xs"
                   />
                 </div>
               </div>

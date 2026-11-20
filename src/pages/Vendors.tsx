@@ -240,7 +240,7 @@ export default function Vendors() {
 
       <div className="space-y-4">
         {/* Single Top Toolbar: one row, all controls same height & radius as Client Bookings */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
           {/* Left: Title & Subtitle */}
           <div className="flex items-center gap-2.5 shrink-0 pr-1">
             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
@@ -253,7 +253,7 @@ export default function Vendors() {
           </div>
 
           {/* Middle: Search Box & Date Filter */}
-          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 flex-1 min-w-0 md:min-w-[200px]">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -267,10 +267,10 @@ export default function Vendors() {
                     setSearchTerm(cleanPastedSearch(pasted));
                   }
                 }}
-                className="pl-9 h-9 text-xs rounded-lg bg-background"
+                className="pl-9 h-11 md:h-9 text-base md:text-xs rounded-lg bg-background"
               />
             </div>
-            <DateFilterSelector size="sm" className="h-9 text-xs rounded-lg shrink-0" />
+            <DateFilterSelector size="sm" className="h-11 md:h-9 w-full md:w-auto text-xs rounded-lg shrink-0" />
           </div>
 
           {/* Right: Add Vendor Primary Button */}
@@ -282,7 +282,7 @@ export default function Vendors() {
         </div>
 
         {/* Stats Cards: Exact same size, padding, font sizes and height as Client Bookings tab */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
             <span className="text-xs font-semibold text-muted-foreground block">
               Total Vendors

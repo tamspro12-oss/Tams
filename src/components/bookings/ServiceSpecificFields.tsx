@@ -195,7 +195,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
           {details.tripType !== "Multicity" ? (
             <>
               <div
-                className={`grid grid-cols-2 sm:grid-cols-3 ${
+                className={`grid grid-cols-1 sm:grid-cols-3 ${
                   showIssuanceFields ? "md:grid-cols-6" : "md:grid-cols-4"
                 } gap-2 items-end`}
               >
@@ -317,7 +317,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
               </div>
 
               {details.tripType === "Return" && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end bg-blue-50/40 dark:bg-blue-950/20 p-2 rounded border border-blue-100 dark:border-blue-900/40">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end bg-blue-50/40 dark:bg-blue-950/20 p-2 rounded border border-blue-100 dark:border-blue-900/40">
                   <div className="space-y-1">
                     <Label className="text-[11px] font-semibold text-blue-900 dark:text-blue-300">
                       Return Flight Date
@@ -382,7 +382,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
                       handleLegChange(idx, "from", e.target.value.toUpperCase())
                     }
                     placeholder="From"
-                    className="h-7 text-xs uppercase font-mono w-16 bg-background"
+                    className="h-7 text-xs uppercase font-mono flex-1 min-w-[70px] sm:flex-none sm:w-16 bg-background"
                   />
                   <Input
                     value={leg.to}
@@ -390,13 +390,13 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
                       handleLegChange(idx, "to", e.target.value.toUpperCase())
                     }
                     placeholder="To"
-                    className="h-7 text-xs uppercase font-mono w-16 bg-background"
+                    className="h-7 text-xs uppercase font-mono flex-1 min-w-[70px] sm:flex-none sm:w-16 bg-background"
                   />
                   <Input
                     type="date"
                     value={leg.date}
                     onChange={(e) => handleLegChange(idx, "date", e.target.value)}
-                    className="h-7 text-xs w-32 px-1.5 bg-background"
+                    className="h-7 text-xs w-full sm:w-32 px-1.5 bg-background"
                   />
                   <Input
                     value={leg.airline}
@@ -404,7 +404,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
                       handleLegChange(idx, "airline", e.target.value)
                     }
                     placeholder="Airline"
-                    className="h-7 text-xs flex-1 bg-background"
+                    className="h-7 text-xs flex-1 min-w-[120px] sm:min-w-0 bg-background"
                   />
                   {showIssuanceFields && (
                     <Input
@@ -417,7 +417,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
                         )
                       }
                       placeholder="PNR"
-                      className="h-7 text-xs uppercase font-mono w-24 bg-background"
+                      className="h-7 text-xs uppercase font-mono flex-1 min-w-[100px] sm:flex-none sm:w-24 bg-background"
                     />
                   )}
                   {details.multicityLegs.length > 1 && (
@@ -441,7 +441,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
       {service === "Umrah" && (
         <div className="space-y-2.5">
           {showInlineZiyarat && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
               <div className="space-y-1">
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Ziyarat
@@ -456,7 +456,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end">
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Departure City
@@ -575,7 +575,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Makkah Hotel
@@ -674,7 +674,7 @@ export const ServiceSpecificFields: React.FC<ServiceSpecificFieldsProps> = ({
 
       {/* D. HOTEL BOOKING */}
       {service === "Hotel" && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end pt-0.5">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end pt-0.5">
           <div className="space-y-1">
             <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
               Hotel Name
@@ -867,7 +867,7 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
               placeholder="Passenger Name"
               data-required={requireFirstPassenger && idx === 0 ? "true" : undefined}
               data-required-message="Please select a Client or enter Passenger Name"
-              className="h-7 text-xs flex-1 min-w-[130px] bg-background"
+              className="h-7 text-xs flex-1 min-w-[180px] sm:min-w-[130px] bg-background"
             />
             <Input
               data-pax-field="passport"
@@ -881,13 +881,13 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
                 )
               }
               placeholder="Passport #"
-              className="h-7 text-xs w-28 uppercase font-mono bg-background"
+              className="h-7 text-xs flex-1 min-w-[110px] sm:flex-none sm:w-28 uppercase font-mono bg-background"
             />
             <Select
               value={pax.type || "Adult"}
               onValueChange={(val) => handlePassengerChange(idx, "type", val)}
             >
-              <SelectTrigger className="h-7 text-[11px] w-20 bg-background">
+              <SelectTrigger className="h-7 text-[11px] flex-1 min-w-[90px] sm:flex-none sm:w-20 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -902,7 +902,7 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
               value={pax.gender || "Male"}
               onValueChange={(val) => handlePassengerChange(idx, "gender", val)}
             >
-              <SelectTrigger className="h-7 text-[11px] w-16 bg-background">
+              <SelectTrigger className="h-7 text-[11px] flex-1 min-w-[80px] sm:flex-none sm:w-16 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -921,7 +921,7 @@ export const PassengersSection: React.FC<PassengersSectionProps> = ({
               value={pax.dob || ""}
               onChange={(e) => handlePassengerChange(idx, "dob", e.target.value)}
               data-pax-last-field="true"
-              className="h-7 text-xs w-32 bg-background"
+              className="h-7 text-xs flex-1 min-w-[130px] sm:flex-none sm:w-32 bg-background"
             />
             {passengers.length > 1 && (
               <button

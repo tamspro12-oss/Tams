@@ -620,7 +620,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
                         selectedBookingInfo.outstanding > 0 ? "text-amber-600" : "text-green-600"
                       )} />
                       <AlertDescription>
-                        <div className="grid grid-cols-3 gap-4 mt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-1">
                           <div>
                             <p className="text-xs text-muted-foreground">Service Amount</p>
                             <p className="font-semibold">PKR {selectedBookingInfo.serviceAmount.toLocaleString()}</p>
@@ -763,7 +763,7 @@ export function AddB2BLedgerDialog({ open, onOpenChange, agent, editEntry, prese
 
                       {/* Summary */}
                       <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-center">
                           <div>
                             <p className="text-xs text-muted-foreground">Total Payment</p>
                             <p className="text-lg font-bold">PKR {splitSummary.totalPayment.toLocaleString()}</p>

@@ -201,32 +201,34 @@ export default function Refunds() {
       <Card>
         <CardHeader className="space-y-3">
           <CardTitle className="text-base">Refund History</CardTitle>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
+            <div className="relative flex-1 min-w-0 md:min-w-[200px]">
               <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="pl-9 pr-8 h-9 text-xs rounded-lg"
+                className="pl-9 pr-8 h-11 md:h-9 text-base md:text-xs rounded-lg"
                 placeholder="Search by client, booking, reason, amount..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
                 <button
+                  type="button"
+                  data-compact-btn=""
                   onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
               <DateFilter
                 value={dateFilter}
                 onChange={setDateFilter}
-                className="h-9 shrink-0"
+                className="h-11 md:h-9 flex-1 md:flex-none shrink-0"
               />
               <Select value={modeFilter} onValueChange={setModeFilter}>
-                <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+                <SelectTrigger className="h-11 md:h-9 w-full md:w-36 text-sm md:text-xs rounded-lg shrink-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="z-50 text-xs">
@@ -245,47 +247,80 @@ export default function Refunds() {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No refunds match your filters.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Mode</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.refund_date}</TableCell>
-                      <TableCell>{clientName(r.client_id)}</TableCell>
-                      <TableCell className="font-semibold text-destructive">
+            <>
+              <div className="md:hidden space-y-2.5">
+                {filtered.map((r) => (
+                  <div key={r.id} className="border rounded-xl p-3.5 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2 pb-1.5 border-b">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-foreground">{clientName(r.client_id)}</p>
+                        <p className="text-[11px] text-muted-foreground">{r.refund_date}</p>
+                      </div>
+                      <span className="font-bold text-sm text-destructive shrink-0">
                         PKR {Number(r.refund_amount).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="capitalize">{r.payment_mode || "cash"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{r.reason || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(r)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Mode</span>
+                      <span className="capitalize font-medium">{r.payment_mode || "cash"}</span>
+                    </div>
+                    {r.reason && (
+                      <p className="text-muted-foreground break-words">{r.reason}</p>
+                    )}
+                    <div className="flex justify-end gap-1 pt-1 border-t">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(r)} aria-label="Edit refund">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)} aria-label="Delete refund">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.refund_date}</TableCell>
+                        <TableCell>{clientName(r.client_id)}</TableCell>
+                        <TableCell className="font-semibold text-destructive">
+                          PKR {Number(r.refund_amount).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="capitalize">{r.payment_mode || "cash"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{r.reason || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(r)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] overflow-y-auto z-[100]">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg md:w-[98vw] md:max-w-[98vw] h-auto md:h-[96vh] max-h-[96vh] overflow-y-auto z-[100]">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Refund" : "Record Refund"}</DialogTitle>
             <DialogDescription>Refunds reduce client receivables and total revenue.</DialogDescription>
@@ -313,7 +348,7 @@ export default function Refunds() {
                 </Select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
               <LockedDateField
                 label="Date"
                 value={form.refund_date}
@@ -326,7 +361,7 @@ export default function Refunds() {
                 {errors.refund_amount && <p className="text-xs text-destructive">{errors.refund_amount}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Mode</Label>
                 <Select value={form.payment_mode || "cash"} onValueChange={(v) => setForm({ ...form, payment_mode: v })}>

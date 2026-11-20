@@ -61,22 +61,22 @@ function HomepageContent() {
             Bookings, visas, accounts and vouchers, everything in one place.
           </p>
 
-          <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5">
-            <Link to="/login">
+          <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5 w-full sm:w-auto">
+            <Link to="/login" className="w-full sm:w-auto">
               <Button
                 size="lg"
-                className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+                className="tams-btn-primary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
               >
                 <span>Login</span>
                 <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
               </Button>
             </Link>
 
-            <Link to="/signup">
+            <Link to="/signup" className="w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="lg"
-                className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+                className="tams-btn-secondary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
               >
                 Sign Up Free
               </Button>
@@ -103,7 +103,7 @@ function HomepageContent() {
           <div className="mt-6">
             <Link
               to="/features"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5E63] hover:text-[#0B4A4E] transition-colors group"
+              className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-sm font-semibold text-[#0F5E63] hover:text-[#0B4A4E] transition-colors group"
             >
               <span>View all features</span>
               <ArrowRight className="w-4 h-4 text-[#0F5E63] transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
@@ -118,22 +118,22 @@ function HomepageContent() {
               Ready to get started?
             </h2>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Link to="/login">
+            <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
+              <Link to="/login" className="w-full sm:w-auto">
                 <Button
                   size="sm"
-                  className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+                  className="tams-btn-primary w-full sm:w-auto h-11 md:h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
                 >
                   <span>Login</span>
                   <ArrowRight className="w-3.5 h-3.5 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
                 </Button>
               </Link>
 
-              <Link to="/signup">
+              <Link to="/signup" className="w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="tams-btn-secondary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+                  className="tams-btn-secondary w-full sm:w-auto h-11 md:h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
                 >
                   Sign Up Free
                 </Button>

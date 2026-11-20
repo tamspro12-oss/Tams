@@ -467,9 +467,9 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
         {/* BODY + FOOTER wrapped in ref for keyboard navigation */}
         <div ref={formRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 space-y-2.5">
           {/* TOP ROW: Date (Locked), Service Type, Client, Vendor, + Trip Type / Ziyarat inline */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 items-start">
             {/* 1. Locked Transaction Date */}
             <LockedDateField
               label="Date"
@@ -600,7 +600,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           />
           {/* MONEY: One single row with Profit Preview badge */}
           <div className="pt-1 border-t space-y-1">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
               {/* Purchasing Cost */}
               <div>
                 <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
@@ -739,14 +739,14 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         </div>
 
         {/* FOOTER: Only Cancel and Save */}
-        <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
+        <div className="px-4 md:px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             tabIndex={-1}
             onClick={() => onOpenChange(false)}
-            className="h-8 text-xs cursor-pointer"
+            className="h-8 text-xs cursor-pointer w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -756,7 +756,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             data-save-button="true"
             disabled={isSubmitting}
             onClick={() => handleSave(false, false)}
-            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[90px] focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
+            className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer w-full sm:w-auto min-w-[90px] focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
           >
             {isSubmitting ? "Saving..." : "Save"}
           </Button>

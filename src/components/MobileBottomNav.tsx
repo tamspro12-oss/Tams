@@ -162,7 +162,7 @@ export function MobileBottomNav() {
         {/* Blur background */}
         <div className="absolute inset-0 bg-background/90 backdrop-blur-xl border-t border-border/50" />
 
-        <div className="relative flex items-center justify-around px-2 py-1.5">
+        <div className="relative flex items-center justify-around px-1 sm:px-2 py-1.5 gap-0.5">
           {navItems.map((item) => {
             const isActive = item.matches(location.pathname);
             return (
@@ -170,20 +170,20 @@ export function MobileBottomNav() {
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[56px] transition-all duration-200 touch-manipulation select-none",
+                  "flex flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 rounded-xl flex-1 min-w-0 min-h-[48px] transition-all duration-200 touch-manipulation select-none",
                   "active:scale-95",
                   isActive ? "text-accent" : "text-muted-foreground"
                 )}
               >
                 <div
                   className={cn(
-                    "flex items-center justify-center w-10 h-8 rounded-xl transition-all duration-200",
+                    "flex items-center justify-center w-9 sm:w-10 h-7 sm:h-8 rounded-xl transition-all duration-200",
                     isActive && "bg-accent/12"
                   )}
                 >
                   <item.icon className={cn("w-5 h-5", isActive && "stroke-[2.5px]")} />
                 </div>
-                <span className={cn("text-[10px] leading-tight", isActive ? "font-bold" : "font-medium")}>
+                <span className={cn("text-[10px] leading-tight truncate max-w-full", isActive ? "font-bold" : "font-medium")}>
                   {item.label}
                 </span>
               </Link>
@@ -195,17 +195,17 @@ export function MobileBottomNav() {
             type="button"
             onClick={() => setSheetOpen(true)}
             className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[56px] transition-all duration-200 touch-manipulation select-none relative",
+              "flex flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 rounded-xl flex-1 min-w-0 min-h-[48px] transition-all duration-200 touch-manipulation select-none relative",
               "active:scale-95 text-muted-foreground"
             )}
           >
-            <div className="flex items-center justify-center w-10 h-8 rounded-xl relative">
+            <div className="flex items-center justify-center w-9 sm:w-10 h-7 sm:h-8 rounded-xl relative">
               <MoreHorizontal className="w-5 h-5" />
               {pendingRemindersCount > 0 && (
-                <span className="absolute 1 top-0 right-0 w-2 h-2 rounded-full bg-amber-500" />
+                <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-amber-500" />
               )}
             </div>
-            <span className="text-[10px] font-medium leading-tight">More</span>
+            <span className="text-[10px] font-medium leading-tight truncate max-w-full">More</span>
           </button>
         </div>
       </nav>
@@ -213,13 +213,13 @@ export function MobileBottomNav() {
       {/* Mobile "More" Drawer Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-4 safe-area-bottom">
-          <SheetHeader className="text-left pb-3 border-b">
+          <SheetHeader className="text-left pb-3 border-b pr-10">
             <SheetTitle className="text-base font-bold flex items-center justify-between">
               <span>All Modules & Features</span>
             </SheetTitle>
           </SheetHeader>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-3">
             {moreItems.map((item) => (
               <button
                 key={item.label}

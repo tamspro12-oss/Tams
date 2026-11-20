@@ -6,14 +6,23 @@ import { ViewModeProvider } from "./contexts/ViewModeContext";
 import { initPwaInstall } from "./lib/pwaInstall";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initDesignEnhancer } from "./lib/designEnhancer";
+import { initMobileViewport } from "./lib/mobileViewport";
 import App from "./App.tsx";
 import "./index.css";
+import "./styles/mobile.css";
 
 // Initialize Global Design Enhancer (Save buttons, customer search boxes, balance & receivable colors)
 try {
   initDesignEnhancer();
 } catch (e) {
   console.warn('[TAMS] Design enhancer initialization error:', e);
+}
+
+// Initialize Mobile Viewport & Soft-Keyboard Helper (no-op on >= 768px desktop)
+try {
+  initMobileViewport();
+} catch (e) {
+  console.warn('[TAMS] Mobile viewport helper error:', e);
 }
 
 // Initialize PWA features safely

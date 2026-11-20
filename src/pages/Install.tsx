@@ -35,25 +35,25 @@ export default function Install() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <SeoHead title="Install TAMS Pro App - iPhone, Android & Desktop" description="Step-by-step guide to install the TAMS Pro travel agency app on iPhone, Android or desktop for faster, offline-ready access." path="/install" />
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-md">
-              <Plane className="w-6 h-6 text-primary-foreground" />
+      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)] md:pt-0">
+        <div className="container mx-auto px-4 min-h-16 py-2 md:py-0 md:h-16 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-primary rounded-lg flex items-center justify-center shadow-md shrink-0">
+              <Plane className="w-5 h-5 md:w-6 md:h-6 text-primary-foreground" />
             </div>
-            <div>
-              <span className="block font-bold text-lg">TAMS</span>
-              <p className="text-xs text-muted-foreground">Travel Agency Management</p>
+            <div className="min-w-0">
+              <span className="block font-bold text-base md:text-lg truncate">TAMS</span>
+              <p className="hidden sm:block text-xs text-muted-foreground truncate">Travel Agency Management</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Link to="/auth">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2 h-11 md:h-9 px-3 md:px-3.5">
                 Login
               </Button>
             </Link>
             <Link to="/">
-              <Button variant="default" size="sm" className="gap-2">
+              <Button variant="default" size="sm" className="gap-2 h-11 md:h-9 px-3 md:px-3.5">
                 <ArrowLeft className="w-4 h-4" />
                 Back to App
               </Button>
@@ -346,7 +346,7 @@ export default function Install() {
                     <p className="text-muted-foreground mb-3">
                       Navigate to <code className="bg-muted px-2 py-1 rounded text-sm">tamspro.online</code> in Chrome, Edge, or Brave.
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-2 flex-1">
                         <Chrome className="w-6 h-6 text-blue-500" />
                         <span className="text-sm">Chrome</span>
@@ -450,7 +450,7 @@ export default function Install() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border mt-12 py-6 text-center text-sm text-muted-foreground">
+      <footer className="border-t border-border mt-12 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:pb-6 px-4 text-center text-sm text-muted-foreground">
         <p>© {new Date().getFullYear()} TAMS Pro - Travel Agency Management System</p>
         <div className="flex gap-4 justify-center mt-2">
           <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>

@@ -75,22 +75,22 @@ function FeaturesPageContent() {
         </div>
 
         {/* Centered CTA Row below grid */}
-        <div className="pt-2 text-center flex flex-wrap items-center justify-center gap-3.5">
-          <Link to="/login">
+        <div className="pt-2 text-center flex flex-wrap items-center justify-center gap-3.5 w-full sm:w-auto">
+          <Link to="/login" className="w-full sm:w-auto">
             <Button
               size="lg"
-              className="tams-btn-primary h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+              className="tams-btn-primary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
             >
               <span>Login</span>
               <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
             </Button>
           </Link>
 
-          <Link to="/signup">
+          <Link to="/signup" className="w-full sm:w-auto">
             <Button
               variant="outline"
               size="lg"
-              className="tams-btn-secondary h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+              className="tams-btn-secondary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
             >
               Sign Up Free
             </Button>

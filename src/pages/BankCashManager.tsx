@@ -545,7 +545,7 @@ export default function BankCashManager() {
       {/* Grand Total Card */}
       <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-background border-primary/20">
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm text-muted-foreground font-medium">Total Balance (All Accounts)</p>
               <p className={`text-3xl sm:text-4xl font-bold ${grandTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -806,47 +806,14 @@ export default function BankCashManager() {
                   <p className="text-sm">Add your agency's bank accounts to track transactions.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Bank Name</TableHead>
-                      <TableHead>Account Number</TableHead>
-                      <TableHead>Account Title</TableHead>
-                      <TableHead>Branch</TableHead>
-                      <TableHead>Opening Balance</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="md:hidden space-y-2.5">
                     {agencyBanks.map((bank: any) => (
-                      <TableRow key={bank.id}>
-                        <TableCell className="font-medium">
-                          <CopyValue value={bank.bank_name} label="bank name" />
-                        </TableCell>
-                        <TableCell>
-                          {bank.account_number ? (
-                            <CopyValue value={bank.account_number} label="account number" />
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {bank.account_title ? (
-                            <CopyValue value={bank.account_title} label="account title" />
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
-                        <TableCell>{bank.branch_name || "-"}</TableCell>
-                        <TableCell>
-                          <CopyValue
-                            value={bank.opening_balance || 0}
-                            isAmount={true}
-                            displayValue={`₨ ${(bank.opening_balance || 0).toLocaleString()}`}
-                            label="opening balance"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
+                      <div key={bank.id} className="border rounded-xl p-3.5 space-y-2 text-xs">
+                        <div className="flex items-start justify-between gap-2 pb-1.5 border-b">
+                          <div className="font-semibold text-sm text-foreground min-w-0">
+                            <CopyValue value={bank.bank_name} label="bank name" />
+                          </div>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -855,14 +822,102 @@ export default function BankCashManager() {
                                 deleteBank.mutate(bank.id);
                               }
                             }}
+                            aria-label="Delete bank account"
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Account Number</span>
+                          <span className="font-medium text-right">
+                            {bank.account_number ? <CopyValue value={bank.account_number} label="account number" /> : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Account Title</span>
+                          <span className="font-medium text-right">
+                            {bank.account_title ? <CopyValue value={bank.account_title} label="account title" /> : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Branch</span>
+                          <span className="font-medium text-right">{bank.branch_name || "-"}</span>
+                        </div>
+                        <div className="flex justify-between gap-2 pt-1 border-t">
+                          <span className="text-muted-foreground">Opening Balance</span>
+                          <span className="font-semibold text-right">
+                            <CopyValue
+                              value={bank.opening_balance || 0}
+                              isAmount={true}
+                              displayValue={`₨ ${(bank.opening_balance || 0).toLocaleString()}`}
+                              label="opening balance"
+                            />
+                          </span>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Bank Name</TableHead>
+                          <TableHead>Account Number</TableHead>
+                          <TableHead>Account Title</TableHead>
+                          <TableHead>Branch</TableHead>
+                          <TableHead>Opening Balance</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {agencyBanks.map((bank: any) => (
+                          <TableRow key={bank.id}>
+                            <TableCell className="font-medium">
+                              <CopyValue value={bank.bank_name} label="bank name" />
+                            </TableCell>
+                            <TableCell>
+                              {bank.account_number ? (
+                                <CopyValue value={bank.account_number} label="account number" />
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {bank.account_title ? (
+                                <CopyValue value={bank.account_title} label="account title" />
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell>{bank.branch_name || "-"}</TableCell>
+                            <TableCell>
+                              <CopyValue
+                                value={bank.opening_balance || 0}
+                                isAmount={true}
+                                displayValue={`₨ ${(bank.opening_balance || 0).toLocaleString()}`}
+                                label="opening balance"
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm('Delete this bank account?')) {
+                                    deleteBank.mutate(bank.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -871,7 +926,7 @@ export default function BankCashManager() {
 
       {/* Transaction Details Dialog */}
       <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {selectedBank === null ? (
@@ -899,7 +954,7 @@ export default function BankCashManager() {
 
       {/* Add Entry Dialog */}
       <Dialog open={showAddEntry} onOpenChange={setShowAddEntry}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-primary" />
@@ -946,7 +1001,7 @@ export default function BankCashManager() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
               <LockedDateField
                 label="Date"
                 name="entry_date"
@@ -1046,7 +1101,7 @@ export default function BankCashManager() {
 
       {/* Add Bank Dialog */}
       <Dialog open={showAddBank} onOpenChange={setShowAddBank}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-blue-600" />
@@ -1173,58 +1228,95 @@ function TransactionTable({ transactions, onDelete }: { transactions: any[]; onD
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-            {onDelete && <TableHead className="w-10"></TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {transactions.map((t, idx) => (
-            <TableRow key={t.id || idx}>
-              <TableCell className="whitespace-nowrap">
-                {t.date ? format(parseISO(t.date), "MMM dd, yyyy") : "-"}
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className="capitalize">
-                  {t.type}
-                </Badge>
-              </TableCell>
-              <TableCell className="max-w-xs truncate">{t.description}</TableCell>
-              <TableCell className="text-right font-semibold">
-                <CopyValue
-                  value={t.amount}
-                  isAmount={true}
-                  displayValue={
-                    <span className={t.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {t.amount >= 0 ? '+' : ''}₨ {t.amount.toLocaleString()}
-                    </span>
-                  }
-                  label="transaction amount"
-                />
-              </TableCell>
-              {onDelete && (
-                <TableCell>
-                  {t.canDelete && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onDelete(t.id)}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  )}
-                </TableCell>
+    <>
+      <div className="md:hidden space-y-2">
+        {transactions.map((t, idx) => (
+          <div key={t.id || idx} className="border rounded-lg p-3 space-y-1.5 text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[11px] text-muted-foreground">
+                  {t.date ? format(parseISO(t.date), "MMM dd, yyyy") : "-"}
+                </span>
+                <p className="font-medium text-foreground break-words mt-0.5">{t.description}</p>
+              </div>
+              <Badge variant="outline" className="capitalize shrink-0">
+                {t.type}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t">
+              <CopyValue
+                value={t.amount}
+                isAmount={true}
+                displayValue={
+                  <span className={`font-semibold ${t.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {t.amount >= 0 ? '+' : ''}₨ {t.amount.toLocaleString()}
+                  </span>
+                }
+                label="transaction amount"
+              />
+              {onDelete && t.canDelete && (
+                <Button size="sm" variant="ghost" onClick={() => onDelete(t.id)} aria-label="Delete transaction">
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </Button>
               )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              {onDelete && <TableHead className="w-10"></TableHead>}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {transactions.map((t, idx) => (
+              <TableRow key={t.id || idx}>
+                <TableCell className="whitespace-nowrap">
+                  {t.date ? format(parseISO(t.date), "MMM dd, yyyy") : "-"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize">
+                    {t.type}
+                  </Badge>
+                </TableCell>
+                <TableCell className="max-w-xs truncate">{t.description}</TableCell>
+                <TableCell className="text-right font-semibold">
+                  <CopyValue
+                    value={t.amount}
+                    isAmount={true}
+                    displayValue={
+                      <span className={t.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {t.amount >= 0 ? '+' : ''}₨ {t.amount.toLocaleString()}
+                      </span>
+                    }
+                    label="transaction amount"
+                  />
+                </TableCell>
+                {onDelete && (
+                  <TableCell>
+                    {t.canDelete && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onDelete(t.id)}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }

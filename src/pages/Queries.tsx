@@ -261,7 +261,7 @@ export default function Queries() {
       </div>
 
       {/* Slim Single-Row Stats Strip (~64px): Total, Pending, Completed, Urgent */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2 shrink-0">
+      <div className="grid grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 shrink-0">
         <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
           <span className="text-[11px] text-muted-foreground font-medium">Total Queries</span>
           <span className="text-lg md:text-xl font-black text-foreground">{stats.total}</span>
@@ -290,34 +290,36 @@ export default function Queries() {
       </div>
 
       {/* ONE Filter Row: Search | DATE FILTER | All Priorities | All Status */}
-      <div ref={filterBarRef} className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
-        <div className="relative flex-1">
+      <div ref={filterBarRef} className="flex flex-col md:flex-row gap-2 mb-2 shrink-0">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="pl-9 h-9 text-xs rounded-lg"
+            className="pl-9 pr-8 h-11 md:h-9 text-base md:text-xs rounded-lg"
             placeholder="Search by client, phone, request text, assignee..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
           {searchInput && (
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => setSearchInput("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-2 pb-0.5 md:pb-0">
           <DatePresetFilter
             value={dateFilter}
             onChange={setDateFilter}
-            className="h-9 shrink-0"
+            className="h-11 md:h-9 flex-1 md:flex-none shrink-0"
           />
 
           <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+            <SelectTrigger className="h-11 md:h-9 flex-1 md:flex-none md:w-32 text-sm md:text-xs rounded-lg shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="z-50 text-xs">
@@ -330,7 +332,7 @@ export default function Queries() {
           </Select>
 
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+            <SelectTrigger className="h-11 md:h-9 flex-1 md:flex-none md:w-32 text-sm md:text-xs rounded-lg shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="z-50 text-xs">

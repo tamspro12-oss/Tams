@@ -67,7 +67,7 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="relative h-9 w-9 hover:bg-accent/10 active:bg-accent/10 rounded-xl inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation flex-shrink-0 border border-border/40 text-foreground"
+          className="relative h-11 w-11 md:h-9 md:w-9 hover:bg-accent/10 active:bg-accent/10 rounded-xl inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation flex-shrink-0 border border-border/40 text-foreground"
           aria-label="Open notifications"
         >
           <Bell className="h-4.5 w-4.5" />
@@ -81,10 +81,10 @@ export function NotificationBell() {
 
       <PopoverContent
         align="end"
-        className="w-[94vw] sm:w-[420px] p-0 shadow-xl border bg-card/98 backdrop-blur-md rounded-xl overflow-hidden z-50"
+        className="w-[calc(100vw-1rem)] md:w-[420px] p-0 shadow-xl border bg-card/98 backdrop-blur-md rounded-xl overflow-hidden z-50"
       >
         {/* Header */}
-        <div className="p-3 border-b bg-muted/40 flex items-center justify-between">
+        <div className="p-3 border-b bg-muted/40 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-primary" />
             <h3 className="font-bold text-sm text-foreground">Notifications & Alerts</h3>
@@ -98,8 +98,9 @@ export function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 type="button"
+                data-compact-btn=""
                 onClick={() => markAllAsRead()}
-                className="text-[11px] text-muted-foreground hover:text-foreground font-medium px-2 py-0.5 rounded hover:bg-muted"
+                className="text-[11px] text-muted-foreground hover:text-foreground font-medium px-2 py-1 md:py-0.5 rounded hover:bg-muted"
               >
                 Mark all read
               </button>
@@ -177,8 +178,9 @@ export function NotificationBell() {
                     <Button
                       size="sm"
                       variant="outline"
+                      data-compact-btn=""
                       onClick={() => handleAction(alert)}
-                      className="h-6 text-[11px] px-2 font-semibold"
+                      className="min-h-[36px] md:min-h-0 md:h-6 text-[11px] px-2.5 md:px-2 font-semibold"
                     >
                       {alert.mainAction.label}
                     </Button>

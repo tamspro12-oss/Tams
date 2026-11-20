@@ -230,8 +230,8 @@ export function AddEntryModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 overflow-hidden bg-background border rounded-xl shadow-2xl">
         {/* 1. Sticky Header */}
-        <div className="px-6 py-3.5 border-b shrink-0 bg-white dark:bg-slate-900">
-          <DialogTitle className="text-base font-bold flex items-center justify-between">
+        <div className="px-4 md:px-6 pr-12 md:pr-6 py-3.5 border-b shrink-0 bg-white dark:bg-slate-900">
+          <DialogTitle className="text-base font-bold flex flex-wrap items-center justify-between gap-2">
             <span className="text-lg">Add Financial Entry</span>
             <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider">
               Unified Ledger
@@ -243,7 +243,7 @@ export function AddEntryModal({
 
           {/* 4 Entry Modes */}
           <Tabs value={mode} onValueChange={(val: any) => setMode(val)} className="w-full mt-3">
-            <TabsList className="grid grid-cols-4 w-full h-9 p-0.5 bg-background border">
+            <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto md:h-9 gap-1 md:gap-0 p-1 md:p-0.5 bg-background border">
               <TabsTrigger
                 value="received"
                 className="text-xs font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white cursor-pointer"
@@ -278,7 +278,7 @@ export function AddEntryModal({
 
         {/* 2. Flexible Form Body */}
         <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
             {/* Column 1: Amount, Date & Account Selection */}
             <div className="flex flex-col gap-3 min-h-0">
               <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">

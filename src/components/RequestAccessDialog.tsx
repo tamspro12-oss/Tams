@@ -118,7 +118,7 @@ Sent from TAMS PRO Request Access Form`
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-lg md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto">
         {submitted ? (
           // Success State
           <div className="py-8 text-center space-y-6">

@@ -246,12 +246,12 @@ export function VendorPaymentDialog({ vendor, open, onOpenChange }: VendorPaymen
           {/* Left Column: Form & Calculations */}
           <div className="lg:col-span-6 flex flex-col gap-3 min-h-0">
             {/* Payment Summary */}
-            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/50 border">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/50 border">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-1">Total Payable</p>
                 <p className="text-base font-bold">₨ {totalPayable.toLocaleString()}</p>
               </div>
-              <div className="text-center border-l border-r">
+              <div className="text-center border-y py-2 sm:py-0 sm:border-y-0 sm:border-l sm:border-r">
                 <p className="text-xs text-muted-foreground mb-1">Already Paid</p>
                 <p className="text-base font-bold text-green-600">₨ {currentPaid.toLocaleString()}</p>
               </div>

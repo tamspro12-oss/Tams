@@ -346,7 +346,7 @@ export default function Quotations() {
       </div>
 
       {/* Stats Strip: Slim single-row strip (~64px) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2 shrink-0">
+      <div className="grid grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 shrink-0">
         <div className="h-16 px-3.5 py-2 rounded-xl border border-border/70 bg-card/70 flex flex-col justify-center">
           <span className="text-[11px] text-muted-foreground font-medium">Total Quotations</span>
           <span className="text-lg md:text-xl font-black text-foreground">{stats.totalCount}</span>
@@ -375,11 +375,11 @@ export default function Quotations() {
       </div>
 
       {/* Filter Row: ONE LINE (Search | DATE FILTER | All Services | All Status) */}
-      <div ref={filterBarRef} className="flex flex-col sm:flex-row gap-2 mb-2 shrink-0">
-        <div className="relative flex-1">
+      <div ref={filterBarRef} className="flex flex-col md:flex-row gap-2 mb-2 shrink-0">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="pl-9 h-9 text-xs rounded-lg"
+            className="pl-9 pr-8 h-11 md:h-9 text-base md:text-xs rounded-lg"
             placeholder="Search by quotation #, client, title, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -393,25 +393,27 @@ export default function Quotations() {
           />
           {search && (
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 md:p-0 text-muted-foreground hover:text-foreground"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0">
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-2 pb-0.5 md:pb-0">
           {/* Date Filter Dropdown with presets */}
           <DatePresetFilter
             value={dateFilter}
             onChange={setDateFilter}
-            className="h-9 shrink-0"
+            className="h-11 md:h-9 flex-1 md:flex-none shrink-0"
           />
 
           {/* All Services */}
           <Select value={filterService} onValueChange={setFilterService}>
-            <SelectTrigger className="h-9 w-36 text-xs rounded-lg shrink-0">
+            <SelectTrigger className="h-11 md:h-9 flex-1 md:flex-none md:w-36 text-sm md:text-xs rounded-lg shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="z-50 text-xs">
@@ -426,7 +428,7 @@ export default function Quotations() {
 
           {/* All Status Dropdown */}
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-9 w-32 text-xs rounded-lg shrink-0">
+            <SelectTrigger className="h-11 md:h-9 flex-1 md:flex-none md:w-32 text-sm md:text-xs rounded-lg shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="z-50 text-xs">
@@ -804,7 +806,7 @@ export default function Quotations() {
 
       {/* Preview Dialog */}
       <Dialog open={Boolean(previewQ)} onOpenChange={(o) => !o && setPreviewQ(null)}>
-        <DialogContent className="w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh] overflow-y-auto z-[100] p-4 sm:p-6">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl md:w-[96vw] md:max-w-[96vw] h-auto md:h-[92vh] max-h-[92vh] overflow-y-auto z-[100] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Eye className="w-5 h-5 text-primary" />
@@ -835,7 +837,7 @@ export default function Quotations() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2.5 rounded-lg border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-muted/20 p-2.5 rounded-lg border">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase font-semibold">Recipient / Client</p>
                   <p className="font-bold text-foreground text-xs">{previewQ.client_name}</p>
@@ -852,7 +854,8 @@ export default function Quotations() {
               </div>
 
               {/* Items List */}
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
+                <div className="min-w-[440px]">
                 <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/60 text-[11px] font-semibold text-muted-foreground">
                   <div className="col-span-6">Description</div>
                   <div className="col-span-2 text-center">Qty</div>
@@ -869,6 +872,7 @@ export default function Quotations() {
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
 
               {/* Totals */}

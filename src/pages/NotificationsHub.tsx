@@ -374,28 +374,29 @@ export default function NotificationsHub() {
 
       {/* FILTER BAR: Search Bar & Status Filter (for tabs other than preferences) */}
       {currentTab !== "preferences" && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2 bg-slate-50 dark:bg-slate-900/60 rounded-xl border">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-2 bg-slate-50 dark:bg-slate-900/60 rounded-xl border">
+          <div className="relative flex-1 min-w-0 md:min-w-[200px]">
             <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
               placeholder="Search by title, client, invoice no, PNR, or ticket no..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 text-xs bg-white dark:bg-slate-950"
+              className="h-11 md:h-8 pl-8 text-base md:text-xs bg-white dark:bg-slate-950"
             />
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               {(["active", "done", "snoozed", "all"] as StatusFilter[]).map((st) => (
                 <button
                   key={st}
                   type="button"
+                  data-compact-btn=""
                   onClick={() => setStatusFilter(st)}
                   className={cn(
-                    "h-7 px-2.5 rounded-lg text-xs font-semibold transition-all capitalize",
+                    "min-h-[38px] md:min-h-0 md:h-7 px-3 md:px-2.5 rounded-lg text-xs font-semibold transition-all capitalize",
                     statusFilter === st
                       ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs"
                       : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border hover:bg-slate-100"
@@ -564,7 +565,87 @@ export default function NotificationsHub() {
         <div className="space-y-3">
           {/* Reminders Table Register */}
           <div className="border rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
-            <div className="overflow-x-auto">
+            {/* Mobile Reminder Cards (< 768px) */}
+            <div className="md:hidden divide-y divide-border/60">
+              {remindersError ? (
+                <div className="p-6 text-center space-y-2">
+                  <p className="text-xs font-medium text-destructive">Could not load custom reminders.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchReminders()}>
+                    Tap to retry
+                  </Button>
+                </div>
+              ) : filteredAlerts.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No reminders found for this filter.
+                </div>
+              ) : (
+                filteredAlerts.map((r) => {
+                  const isOverdue = r.priority === "overdue";
+                  return (
+                    <div
+                      key={r.id}
+                      className={cn("p-3.5 space-y-2 text-xs", isOverdue && "bg-red-50/20")}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {r.dueDate || r.createdAt.slice(0, 10)} • 09:00 •{" "}
+                            <CopyValue value={r.sourceId ? `REM-${r.sourceId.slice(0, 4)}` : "REM-AUTO"} label="reminder no" />
+                          </span>
+                          <p className="font-semibold text-sm text-foreground break-words mt-0.5">{r.title}</p>
+                        </div>
+                        {getPriorityStyle(r.priority).badge}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                        <span className="truncate">{r.clientName || r.vendorName || "General"}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {r.sourceType || "Task"}
+                          </Badge>
+                          <span className={r.isDone ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>
+                            {r.isDone ? "Done" : "Active"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1.5 border-t border-border/50">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => markAsDone(r.id)}
+                          className="text-xs font-semibold text-emerald-600"
+                        >
+                          Done
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => snoozeAlert(r.id, "tomorrow")}
+                          className="text-xs text-muted-foreground"
+                        >
+                          Snooze
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setReminderToDelete({
+                              alertId: r.id,
+                              sourceId: r.sourceId,
+                              title: r.title,
+                            })
+                          }
+                          className="text-xs text-destructive hover:bg-destructive/10"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-[#0B192C] text-white uppercase text-[11px] font-bold tracking-wider">
                   <tr>
@@ -710,7 +791,7 @@ export default function NotificationsHub() {
                 Alert Triggers
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/15">
                   <div className="pr-2">
                     <p className="font-semibold text-xs text-foreground">Pending Client Payments</p>
@@ -829,7 +910,7 @@ export default function NotificationsHub() {
                 Timing & Threshold Settings
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label className="text-xs font-semibold text-foreground">Days Before Departure to Alert</Label>
                   <Input
@@ -902,7 +983,7 @@ export default function NotificationsHub() {
                 Delivery Channels
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/15">
                   <div className="pr-2">
                     <p className="font-semibold text-xs text-foreground">Sound Notifications</p>

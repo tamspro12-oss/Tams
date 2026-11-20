@@ -83,14 +83,14 @@ export default function Auth() {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-accent p-4 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-accent p-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:py-4 animate-fade-in">
       <SeoHead title="Sign In - TAMS Pro Account Access" description="Access your TAMS Pro travel agency account to manage bookings, vendors, invoices and reports securely." path="/auth" />
       <h1 className="sr-only">Sign in to your TAMS Pro account</h1>
       <div className="w-full max-w-md">
         {/* Premium Login Card */}
         <Card className="shadow-soft-xl border-0 backdrop-blur-sm bg-card/95 relative">
           {/* View Mode Toggle - Top Right */}
-          <div className="absolute top-4 right-4 z-10">
+          <div className="flex justify-end px-4 pt-4 md:p-0 md:block md:absolute md:top-4 md:right-4 z-10">
             <Button
               variant="outline"
               size="sm"

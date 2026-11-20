@@ -53,7 +53,7 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 text-xs pt-1">
-              <div className="grid grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 p-3 rounded-lg bg-muted/40 border">
                 <div>
                   <span className="text-muted-foreground block">Client / Party</span>
                   <span className="font-semibold">{displayClientName}</span>
@@ -77,7 +77,7 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-lg border bg-card font-mono">
+              <div className="grid grid-cols-1 min-[375px]:grid-cols-3 gap-2 text-center p-3 rounded-lg border bg-card font-mono">
                 <div>
                   <span className="text-[11px] text-muted-foreground block font-sans">Total</span>
                   <span className="font-bold">PKR {total.toLocaleString()}</span>

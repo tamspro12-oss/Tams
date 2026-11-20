@@ -131,7 +131,7 @@ export function ManageAgentsModal({ open, onOpenChange }: ManageAgentsModalProps
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-0">
+          <div className="flex-1 overflow-auto p-0">
             <table className="w-full text-xs">
               <thead className="bg-muted/60 text-muted-foreground sticky top-0 border-b z-10">
                 <tr>

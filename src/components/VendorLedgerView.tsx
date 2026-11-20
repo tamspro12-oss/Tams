@@ -275,14 +275,14 @@ export function VendorLedgerView({ vendorId, vendorName }: VendorLedgerViewProps
       </div>
 
       {/* Totals Footer */}
-      <div className="grid grid-cols-3 gap-2 p-3 rounded-lg bg-muted/50 border">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 rounded-lg bg-muted/50 border">
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground">Total Debits</p>
           <p className="text-sm font-bold text-destructive">
             ₨ {totals.totalDebits.toLocaleString()}
           </p>
         </div>
-        <div className="text-center border-l border-r">
+        <div className="text-center border-y py-1.5 sm:py-0 sm:border-y-0 sm:border-l sm:border-r">
           <p className="text-[10px] text-muted-foreground">Total Credits</p>
           <p className="text-sm font-bold text-success">
             ₨ {totals.totalCredits.toLocaleString()}

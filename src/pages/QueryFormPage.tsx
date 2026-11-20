@@ -225,10 +225,10 @@ export default function QueryFormPage() {
   return (
     <div
       ref={formContainerRef}
-      className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-4xl mx-auto overflow-hidden bg-background"
+      className="flex flex-col min-h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-4.25rem)] w-full max-w-4xl mx-auto overflow-y-auto md:overflow-hidden bg-background"
     >
       {/* 1. Global Header Bar: ONLY Back arrow + Title on left, and X (close icon) on far right */}
-      <div className="h-11 md:h-12 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-20">
+      <div className="h-12 px-3 sm:px-6 border-b border-border/70 flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-20">
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
             type="button"
@@ -236,7 +236,7 @@ export default function QueryFormPage() {
             size="icon"
             tabIndex={-1}
             onClick={handleClose}
-            className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+            className="h-10 w-10 md:h-8 md:w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
             title="Go back (Esc)"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -254,7 +254,7 @@ export default function QueryFormPage() {
           tabIndex={-1}
           onClick={handleClose}
           aria-label="Cancel and close"
-          className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+          className="h-10 w-10 md:h-8 md:w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
           title="Cancel and close (Esc)"
         >
           <X className="w-4 h-4" />
@@ -262,7 +262,7 @@ export default function QueryFormPage() {
       </div>
 
       {/* Main Form Content: Explicit Inline Grid per row, Zero Vertical Scroll on Desktop */}
-      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-3 sm:p-5 flex flex-col justify-center min-w-0">
+      <div className="flex-1 overflow-y-auto lg:overflow-hidden p-3 sm:p-5 flex flex-col md:justify-center min-w-0">
         <div
           className="bg-card rounded-2xl border border-border/70 shadow-sm p-3.5 sm:p-5 flex flex-col justify-between min-w-0"
           style={{ width: "100%", gap: "10px" }}
@@ -310,8 +310,8 @@ export default function QueryFormPage() {
             </div>
           </div>
 
-          {/* ROW 2: 2 Equal 50%/50% Columns (Contact Number & Assigned To) */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px", width: "100%" }}>
+          {/* ROW 2: 2 Equal 50%/50% Columns on desktop, stacked on mobile */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
             <div style={{ width: "100%", minWidth: 0 }}>
               <Label htmlFor="contact_number" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Contact Number
@@ -325,7 +325,7 @@ export default function QueryFormPage() {
                   value={contactNumber}
                   onChange={(e) => setContactNumber(e.target.value)}
                   placeholder="e.g. +92 300 1234567"
-                  className="pl-9 h-8 sm:h-9 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none transition-all"
+                  className="pl-9 h-11 md:h-9 text-base md:text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none transition-all"
                   style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
@@ -342,22 +342,22 @@ export default function QueryFormPage() {
                   value={assignedTo}
                   onChange={(e) => setAssignedTo(e.target.value)}
                   placeholder="e.g. Desk 1 / Usman"
-                  className="pl-9 h-8 sm:h-9 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="pl-9 h-11 md:h-9 text-base md:text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
             </div>
           </div>
 
-          {/* ROW 3: 3 Equal 33.3% Columns (Priority *, Status *, Due Date) */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", width: "100%" }}>
+          {/* ROW 3: 3 Equal Columns on desktop, stacked on mobile */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
             <div style={{ width: "100%", minWidth: 0 }}>
               <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Priority <span className="text-destructive">*</span>
               </Label>
               <Select value={priority} onValueChange={(val: Priority) => setPriority(val)}>
                 <SelectTrigger
-                  className="h-8 sm:h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-11 md:h-9 text-sm md:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
                   <div className="flex items-center gap-1.5 truncate">
@@ -383,7 +383,7 @@ export default function QueryFormPage() {
               </Label>
               <Select value={status} onValueChange={(val: Status) => setStatus(val)}>
                 <SelectTrigger
-                  className="h-8 sm:h-9 text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="h-11 md:h-9 text-sm md:text-xs rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 >
                   <div className="flex items-center gap-1.5 truncate">
@@ -414,7 +414,7 @@ export default function QueryFormPage() {
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="pl-9 h-8 sm:h-9 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+                  className="pl-9 h-11 md:h-9 text-base md:text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
                   style={{ width: "100%", minWidth: 0 }}
                 />
               </div>
@@ -467,18 +467,9 @@ export default function QueryFormPage() {
             />
           </div>
 
-          {/* Bottom Footer Bar (Inside the Bottom of the Form Card): Side-by-Side Action Buttons on the Bottom Right */}
+          {/* Bottom Footer Bar */}
           <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              gap: "8px",
-              paddingTop: "10px",
-              marginTop: "4px",
-              borderTop: "1px solid hsl(var(--border) / 0.6)",
-              width: "100%",
-            }}
+            className="flex flex-col-reverse md:flex-row md:justify-end md:items-center gap-2 pt-2.5 mt-1 border-t border-border/60 w-full"
           >
             {!isEdit && (
               <Button
@@ -487,7 +478,7 @@ export default function QueryFormPage() {
                 size="sm"
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting}
-                className="h-8 sm:h-9 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
+                className="w-full md:w-auto h-11 md:h-9 px-3.5 text-xs gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none font-medium"
                 title="Save and clear for next entry (Ctrl+Shift+Enter)"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
@@ -501,7 +492,7 @@ export default function QueryFormPage() {
               data-save-button="true"
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
-              className="h-8 sm:h-9 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
+              className="w-full md:w-auto h-11 md:h-9 px-5 text-xs font-semibold shadow-sm gap-1.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:outline-none"
               title="Save Query (Ctrl+S)"
             >
               <Save className="w-3.5 h-3.5" />

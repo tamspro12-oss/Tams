@@ -41,7 +41,7 @@ export default function SubscriptionExpired() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-destructive/20 via-background to-destructive/10 p-4 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-destructive/20 via-background to-destructive/10 p-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:py-4 animate-fade-in">
       <SeoHead title="Subscription Expired - TAMS Pro" description="Your TAMS Pro subscription has expired. Renew to restore access to your travel agency bookings and reports." path="/subscription-expired" />
       <h1 className="sr-only">TAMS Pro subscription expired</h1>
       <div className="w-full max-w-md">

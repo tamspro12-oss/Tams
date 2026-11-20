@@ -241,7 +241,7 @@ export default function LoginPage() {
 
         {/* Password */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
             <Label htmlFor="login-password" className="text-[13px] font-medium text-foreground">
               Password
             </Label>
@@ -251,7 +251,8 @@ export default function LoginPage() {
                 trigger={
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                    data-compact-btn=""
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer py-1 md:py-0"
                   >
                     Resend link?
                   </button>
@@ -282,6 +283,7 @@ export default function LoginPage() {
             <button
               type="button"
               tabIndex={0}
+              data-compact-btn=""
               onClick={() => setShowPassword(!showPassword)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -323,7 +325,7 @@ export default function LoginPage() {
               size="sm"
               disabled={resendingVerification || cooldownLeft > 0}
               onClick={() => handleResendVerificationFromLogin(unverifiedEmail)}
-              className="w-full h-8 text-xs font-semibold gap-1.5 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
+              className="w-full h-11 md:h-8 text-xs font-semibold gap-1.5 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
             >
               {resendingVerification ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3 text-amber-600" />}
               <span>

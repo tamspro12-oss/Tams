@@ -453,23 +453,24 @@ export default function ClientBookings() {
       {/* Top Toolbar: One row, all items same height & radius */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5 bg-card border rounded-lg p-2.5 shadow-xs">
         {/* 1. Search Box (far left, takes flexible width) */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-0 md:min-w-[200px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search name, passport, PNR, destination..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 text-xs pl-9 rounded-lg bg-background"
+            className="h-11 md:h-9 text-base md:text-xs pl-9 rounded-lg bg-background"
           />
         </div>
 
         {/* 2. ONE Segmented Switch with 4 options: All | Direct | B2B | Manage Agents */}
-        <div className="inline-flex h-9 items-center rounded-lg border border-input bg-muted/40 p-0.5 shrink-0 overflow-x-auto">
+        <div className="inline-flex h-11 md:h-9 items-center rounded-lg border border-input bg-muted/40 p-0.5 shrink-0 overflow-x-auto max-w-full">
           <button
             type="button"
+            data-compact-btn=""
             onClick={() => setFilterChip("all")}
             className={cn(
-              "h-7 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap",
+              "h-9 md:h-7 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap",
               filterChip === "all"
                 ? "bg-background text-foreground shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
@@ -479,9 +480,10 @@ export default function ClientBookings() {
           </button>
           <button
             type="button"
+            data-compact-btn=""
             onClick={() => setFilterChip("direct")}
             className={cn(
-              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              "h-9 md:h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
               filterChip === "direct"
                 ? "bg-blue-600 text-white shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
@@ -492,9 +494,10 @@ export default function ClientBookings() {
           </button>
           <button
             type="button"
+            data-compact-btn=""
             onClick={() => setFilterChip("b2b")}
             className={cn(
-              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              "h-9 md:h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
               filterChip === "b2b"
                 ? "bg-purple-600 text-white shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
@@ -505,12 +508,13 @@ export default function ClientBookings() {
           </button>
           <button
             type="button"
+            data-compact-btn=""
             onClick={() => {
               setFilterChip("agents");
               setShowManageAgents(true);
             }}
             className={cn(
-              "h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+              "h-9 md:h-7 px-3 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
               filterChip === "agents"
                 ? "bg-purple-600 text-white shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
@@ -522,12 +526,12 @@ export default function ClientBookings() {
         </div>
 
         {/* 3. Time Filter Dropdown (matching height & radius) */}
-        <DateFilterSelector size="sm" className="h-9 text-xs rounded-lg shrink-0" />
+        <DateFilterSelector size="sm" className="h-11 md:h-9 w-full lg:w-auto text-xs rounded-lg shrink-0" />
 
         {/* 4. Export */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 text-xs rounded-lg gap-1.5 shrink-0">
+            <Button variant="outline" size="sm" className="h-11 md:h-9 w-full lg:w-auto text-xs rounded-lg gap-1.5 shrink-0">
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
             </Button>
@@ -548,7 +552,7 @@ export default function ClientBookings() {
         <Button
           size="sm"
           onClick={() => handleOpenAddBooking("direct")}
-          className="h-9 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
+          className="h-11 md:h-9 w-full lg:w-auto text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Add Booking
@@ -556,7 +560,7 @@ export default function ClientBookings() {
       </div>
 
       {/* Row 2: Top Stat Cards - 4 in ONE row: Total Revenue, Purchase Cost, Total Pending, Total Paid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-3">
         {/* 1. Total Revenue */}
         <div className="bg-card border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-shadow">
           <span className="text-xs font-semibold text-muted-foreground block">

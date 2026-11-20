@@ -532,7 +532,7 @@ export function ExcelGrid<T = any>({
       className="outline-none space-y-2"
     >
       {/* Top Toolbar: Search summary, Columns toggle, Mobile mode switch, Export */}
-      <div className="flex items-center justify-between gap-2 px-1 py-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-1">
         <div className="flex items-center gap-2">
           {title && (
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -561,24 +561,28 @@ export function ExcelGrid<T = any>({
           {/* Mobile View Toggle */}
           <div className="md:hidden flex items-center bg-muted/60 p-0.5 rounded-lg border">
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => setMobileMode("cards")}
               className={cn(
-                "p-1 rounded-md text-xs",
+                "p-2 rounded-md text-xs min-h-[38px] min-w-[38px] inline-flex items-center justify-center",
                 mobileMode === "cards" ? "bg-white shadow text-primary" : "text-muted-foreground"
               )}
               title="Card view"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              data-compact-btn=""
               onClick={() => setMobileMode("grid")}
               className={cn(
-                "p-1 rounded-md text-xs",
+                "p-2 rounded-md text-xs min-h-[38px] min-w-[38px] inline-flex items-center justify-center",
                 mobileMode === "grid" ? "bg-white shadow text-primary" : "text-muted-foreground"
               )}
               title="Grid view"
             >
-              <TableIcon className="w-3.5 h-3.5" />
+              <TableIcon className="w-4 h-4" />
             </button>
           </div>
 
@@ -644,9 +648,9 @@ export function ExcelGrid<T = any>({
         </div>
       </div>
 
-      {/* Mobile Cards (only visible on mobile screens when renderMobileCard is passed and mobileMode is cards) */}
-      {renderMobileCard && mobileMode === "cards" && (
-        <div className="md:hidden space-y-2">
+      {/* Mobile Cards (custom renderMobileCard OR responsive key/value card fallback on < 768px) */}
+      {mobileMode === "cards" && (
+        <div className="md:hidden space-y-2.5">
           {processedData.length === 0 ? (
             emptyState || <div className="p-8 text-center text-xs text-muted-foreground">No records</div>
           ) : (
@@ -654,20 +658,67 @@ export function ExcelGrid<T = any>({
               <div
                 key={keyExtractor(row, idx)}
                 onClick={() => onRowClick && onRowClick(row)}
-                className="cursor-pointer"
+                className={onRowClick ? "cursor-pointer" : undefined}
               >
-                {renderMobileCard(row, idx)}
+                {renderMobileCard ? (
+                  renderMobileCard(row, idx)
+                ) : (
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
+                    {activeColumns.map((col, colIdx) => {
+                      const cellValue = col.render
+                        ? col.render(row, idx)
+                        : String((row as any)[col.key] ?? "—");
+                      const isActionCol =
+                        col.key.toLowerCase().includes("action") ||
+                        col.header.toLowerCase().includes("action");
+                      if (isActionCol) {
+                        return (
+                          <div
+                            key={col.key}
+                            onClick={(e) => e.stopPropagation()}
+                            className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2"
+                          >
+                            {cellValue}
+                          </div>
+                        );
+                      }
+                      if (colIdx === 0) {
+                        return (
+                          <div
+                            key={col.key}
+                            className="flex items-start justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 font-semibold text-sm text-foreground"
+                          >
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground shrink-0 pt-0.5">
+                              {col.header}
+                            </span>
+                            <div className="text-right min-w-0 break-words">{cellValue}</div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={col.key} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-muted-foreground font-medium shrink-0">
+                            {col.header}
+                          </span>
+                          <div className="text-right min-w-0 break-words font-medium text-foreground">
+                            {cellValue}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))
           )}
         </div>
       )}
 
-      {/* Excel Table View (Always rendered on desktop; on mobile rendered when mobileMode is grid or no renderMobileCard) */}
+      {/* Excel Table View (Always rendered on desktop; on mobile rendered when mobileMode is grid) */}
       <div
         className={cn(
           "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm",
-          renderMobileCard && mobileMode === "cards" ? "hidden md:block" : "block"
+          mobileMode === "cards" ? "hidden md:block" : "block"
         )}
       >
         <div className="overflow-x-auto max-h-[70vh] relative">
@@ -734,6 +785,8 @@ export function ExcelGrid<T = any>({
                         {/* Per-column filter trigger */}
                         {col.filterable !== false && (
                           <button
+                            type="button"
+                            data-compact-btn=""
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveFilterCol(activeFilterCol === col.key ? null : col.key);
@@ -763,6 +816,8 @@ export function ExcelGrid<T = any>({
                                 </span>
                                 {Boolean(checkboxFilters[col.key]?.length) && (
                                   <button
+                                    type="button"
+                                    data-compact-btn=""
                                     onClick={() => clearCheckboxFilter(col.key)}
                                     className="text-[10px] text-amber-600 hover:text-amber-700 font-medium cursor-pointer"
                                   >

@@ -181,14 +181,14 @@ export function ResendVerificationDialog({
                   placeholder="agency@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-10 text-xs"
+                  className="h-11 md:h-10 text-base md:text-xs"
                 />
               </div>
 
               <Button
                 type="submit"
                 disabled={resending || cooldownLeft > 0 || !email.trim()}
-                className="w-full h-9 text-xs font-semibold gap-1.5 cursor-pointer"
+                className="w-full h-11 md:h-9 text-xs font-semibold gap-1.5 cursor-pointer"
               >
                 {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                 <span>

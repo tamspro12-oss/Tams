@@ -9,6 +9,7 @@ import { useB2BBookings, B2BBooking } from "@/hooks/useB2BBookings";
 import { useB2BLedger, B2BLedgerEntry } from "@/hooks/useB2BLedger";
 import { useVendors } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { AddB2BBookingDialog } from "@/components/AddB2BBookingDialog";
 import { AddB2BLedgerDialog } from "@/components/AddB2BLedgerDialog";
 import { Switch } from "@/components/ui/switch";
@@ -115,6 +116,7 @@ const getFilterLabel = (preset: DateFilterPreset, customRange?: DateRange): stri
 export default function B2BAgentDashboard() {
   const { agentId } = useParams<{ agentId: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   
   const [showAddBooking, setShowAddBooking] = useState(false);
   const [showAddLedger, setShowAddLedger] = useState(false);
@@ -850,7 +852,7 @@ export default function B2BAgentDashboard() {
           </Card>
 
           {/* Stats Cards - Using LEDGER as source of truth for balance */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2 text-blue-600 mb-2">
@@ -939,97 +941,175 @@ export default function B2BAgentDashboard() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>PNR</TableHead>
-                      <TableHead>Passenger</TableHead>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead className="text-right">Service Amt</TableHead>
-                      <TableHead className="text-right">Paid</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="text-right">Profit</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.map(booking => {
-                      const serviceAmount = getBookingServiceAmount(booking);
-                      const paidAmount = getBookingPaidAmount(booking);
-                      const outstanding = getBookingOutstanding(booking);
-                      
-                      return (
-                        <TableRow key={booking.id}>
-                          <TableCell className="font-medium">{booking.pnr || '-'}</TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{booking.passenger_name}</p>
-                              {booking.destination && (
-                                <p className="text-xs text-muted-foreground">{booking.destination}</p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{getVendorName(booking.vendor_id)}</TableCell>
-                          <TableCell className="text-right">PKR {serviceAmount.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-green-600">PKR {paidAmount.toLocaleString()}</TableCell>
-                          <TableCell className={cn(
-                            "text-right font-medium",
-                            outstanding > 0 ? "text-red-600" : "text-green-600"
-                          )}>
+            <>
+              <div className="md:hidden space-y-2.5">
+                {bookings.map((booking) => {
+                  const serviceAmount = getBookingServiceAmount(booking);
+                  const paidAmount = getBookingPaidAmount(booking);
+                  const outstanding = getBookingOutstanding(booking);
+                  return (
+                    <Card key={booking.id} className="p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2 pb-2 border-b">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate">{booking.passenger_name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            PNR: {booking.pnr || "-"}
+                            {booking.destination ? ` • ${booking.destination}` : ""}
+                          </p>
+                        </div>
+                        <Badge variant={booking.payment_status === 'paid' ? 'default' : booking.payment_status === 'partial' ? 'secondary' : 'destructive'}>
+                          {booking.payment_status}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Vendor</span>
+                          <span className="font-medium text-right truncate">{getVendorName(booking.vendor_id)}</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Service Amt</span>
+                          <span className="font-medium">PKR {serviceAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Paid</span>
+                          <span className="font-medium text-green-600">PKR {paidAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Balance</span>
+                          <span className={cn("font-semibold", outstanding > 0 ? "text-red-600" : "text-green-600")}>
                             PKR {outstanding.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right text-purple-600">PKR {(booking.profit || 0).toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={booking.payment_status === 'paid' ? 'default' : booking.payment_status === 'partial' ? 'secondary' : 'destructive'}>
-                              {booking.payment_status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {outstanding > 0 && (
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Profit</span>
+                          <span className="font-medium text-purple-600">PKR {(booking.profit || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t flex flex-wrap items-center justify-end gap-1.5">
+                        {outstanding > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRecordPayment(booking.id)}
+                            title="Record Payment"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 gap-1"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            <span>Pay</span>
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => setEditBooking(booking)} aria-label="Edit booking">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteBooking(booking)} aria-label="Delete booking">
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => generateBookingPDF(booking)}
+                          title="Download Booking PDF"
+                        >
+                          <Download className="w-4 h-4 text-blue-600" />
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <Card className="hidden md:block">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PNR</TableHead>
+                        <TableHead>Passenger</TableHead>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead className="text-right">Service Amt</TableHead>
+                        <TableHead className="text-right">Paid</TableHead>
+                        <TableHead className="text-right">Balance</TableHead>
+                        <TableHead className="text-right">Profit</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bookings.map(booking => {
+                        const serviceAmount = getBookingServiceAmount(booking);
+                        const paidAmount = getBookingPaidAmount(booking);
+                        const outstanding = getBookingOutstanding(booking);
+                        
+                        return (
+                          <TableRow key={booking.id}>
+                            <TableCell className="font-medium">{booking.pnr || '-'}</TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{booking.passenger_name}</p>
+                                {booking.destination && (
+                                  <p className="text-xs text-muted-foreground">{booking.destination}</p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{getVendorName(booking.vendor_id)}</TableCell>
+                            <TableCell className="text-right">PKR {serviceAmount.toLocaleString()}</TableCell>
+                            <TableCell className="text-right text-green-600">PKR {paidAmount.toLocaleString()}</TableCell>
+                            <TableCell className={cn(
+                              "text-right font-medium",
+                              outstanding > 0 ? "text-red-600" : "text-green-600"
+                            )}>
+                              PKR {outstanding.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right text-purple-600">PKR {(booking.profit || 0).toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Badge variant={booking.payment_status === 'paid' ? 'default' : booking.payment_status === 'partial' ? 'secondary' : 'destructive'}>
+                                {booking.payment_status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {outstanding > 0 && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleRecordPayment(booking.id)}
+                                    title="Record Payment"
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" onClick={() => setEditBooking(booking)}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setDeleteBooking(booking)}>
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  onClick={() => handleRecordPayment(booking.id)}
-                                  title="Record Payment"
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  onClick={() => generateBookingPDF(booking)}
+                                  title="Download Booking PDF"
                                 >
-                                  <CreditCard className="w-4 h-4" />
+                                  <Download className="w-4 h-4 text-blue-600" />
                                 </Button>
-                              )}
-                              <Button variant="ghost" size="icon" onClick={() => setEditBooking(booking)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => setDeleteBooking(booking)}>
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => generateBookingPDF(booking)}
-                                title="Download Booking PDF"
-                              >
-                                <Download className="w-4 h-4 text-blue-600" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                title="Email Booking"
-                              >
-                                <Send className="w-4 h-4 text-green-600" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  title="Email Booking"
+                                >
+                                  <Send className="w-4 h-4 text-green-600" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            </>
           )}
         </TabsContent>
 
@@ -1109,7 +1189,7 @@ export default function B2BAgentDashboard() {
               </div>
 
               {/* Balance Summary Cards - Using stats from ledger */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
                   <p className="text-xs text-muted-foreground mb-1">Opening Balance</p>
                   <p className="text-lg font-semibold">PKR 0</p>
@@ -1156,7 +1236,79 @@ export default function B2BAgentDashboard() {
             </Card>
           ) : (
             <Card className="border border-border/50">
-              <div className="overflow-x-auto">
+              {/* Mobile Ledger Cards (< 768px) */}
+              <div className="md:hidden divide-y divide-border/50">
+                {(() => {
+                  let runningBalance = 0;
+                  return ledgerEntries.map((entry, index) => {
+                    const bookingMatch = entry.remarks?.match(/\[Booking: (.+?)\]/);
+                    const linkedBookingRef = bookingMatch ? bookingMatch[1] : null;
+                    const displayRemarks = entry.remarks?.replace(/\s*\[Booking: .+?\]/, '') || '';
+                    if (entry.entry_type === 'debit') {
+                      runningBalance += entry.amount;
+                    } else {
+                      runningBalance -= entry.amount;
+                    }
+                    const description =
+                      displayRemarks ||
+                      (entry.entry_type === 'credit' ? 'Payment Received' : 'Ticket Issued / Service');
+
+                    return (
+                      <div key={entry.id} className="p-3.5 space-y-2 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[11px] text-muted-foreground font-mono">
+                              #{index + 1} • {format(new Date(entry.entry_date), 'dd MMM yyyy')}
+                            </span>
+                            <p className="font-semibold text-sm text-foreground break-words mt-0.5">
+                              {description}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={entry.entry_type === 'credit' ? 'default' : 'destructive'}
+                            className="text-xs shrink-0"
+                          >
+                            {entry.entry_type === 'credit' ? 'Cr' : 'Dr'}
+                          </Badge>
+                        </div>
+                        {linkedBookingRef && (
+                          <div className="flex items-center gap-1.5 text-blue-600 font-medium">
+                            <Plane className="w-3 h-3 shrink-0" />
+                            <span>{linkedBookingRef}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between pt-1">
+                          <div>
+                            <span className="text-muted-foreground block text-[11px]">
+                              {entry.entry_type === 'debit' ? 'Debit' : 'Credit'}
+                            </span>
+                            <span className={entry.entry_type === 'debit' ? 'font-bold text-red-600' : 'font-bold text-green-600'}>
+                              PKR {entry.amount.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-muted-foreground block text-[11px]">Balance</span>
+                            <span className={cn("font-bold", runningBalance > 0 ? "text-red-600" : "text-green-600")}>
+                              PKR {Math.abs(runningBalance).toLocaleString()}
+                              {runningBalance > 0 && ' Dr'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/30">
+                          <Button variant="ghost" size="icon" onClick={() => setEditLedgerEntry(entry)} aria-label="Edit ledger entry">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteLedgerEntryConfirm(entry)} aria-label="Delete ledger entry">
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -1340,7 +1492,7 @@ export default function B2BAgentDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Sales Report */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1609,10 +1761,10 @@ export default function B2BAgentDashboard() {
               mode="range"
               selected={customRange}
               onSelect={setCustomRange}
-              numberOfMonths={2}
-              className="pointer-events-auto"
+              numberOfMonths={isMobile ? 1 : 2}
+              className="pointer-events-auto mx-auto"
             />
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
               <div className="text-sm text-muted-foreground">
                 {customRange?.from && (
                   <>
@@ -1621,11 +1773,11 @@ export default function B2BAgentDashboard() {
                   </>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setShowCustomDialog(false)}>
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                <Button variant="outline" onClick={() => setShowCustomDialog(false)} className="w-full md:w-auto">
                   Cancel
                 </Button>
-                <Button onClick={handleCustomApply} disabled={!customRange?.from}>
+                <Button onClick={handleCustomApply} disabled={!customRange?.from} className="w-full md:w-auto">
                   Apply
                 </Button>
               </div>

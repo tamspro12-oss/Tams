@@ -1,0 +1,152 @@
+/* ==========================================================================
+   MOBILE-ONLY OPTIMIZATIONS (Strictly scoped to <= 767px)
+   Desktop (>= 768px / >= 1024px) must never be affected by this file.
+   ========================================================================== */
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  main {
+    max-width: 100%;
+    overflow-x: clip;
+    overflow-wrap: break-word;
+  }
+
+  /* Constrain media inside viewport without distorting aspect ratios */
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  /* Safe-area padding utilities for notched / Capacitor iOS & Android shells */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Prevent iOS Safari / Capacitor WebView zoom-on-focus (<16px font triggers zoom) */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):not([data-compact-input]),
+  select,
+  textarea,
+  [role="combobox"] {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable >= 44px touch targets on mobile interactive controls,
+     explicitly skipping checkboxes, switches, radios, calendar day grids,
+     and small inline icon buttons tagged with data-compact-btn or data-quick-add-btn. */
+  button:not([role="checkbox"]):not([role="switch"]):not([role="radio"]):not([data-compact-btn]):not([data-quick-add-btn]):not(.rdp-day):not(.rdp-nav_button),
+  [role="button"]:not([data-compact-btn]),
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Dialog / AlertDialog sizing: stay within viewport width & visualViewport height */
+  [role="dialog"]:not([data-sheet-content]):not([data-mobile-nav]) {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(
+      var(--mobile-vvh, 100dvh) - 1rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    ) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-dialog-close],
+  [data-sheet-close] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    top: 0.5rem !important;
+    right: 0.5rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Radix popovers, dropdowns, and select menus fit mobile screens */
+  [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  [role="listbox"],
+  [role="menu"] {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: min(60dvh, calc(var(--mobile-vvh, 100dvh) * 0.55)) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Horizontal scrollable tab strips (keep CSS-grid tablists symmetric) */
+  [role="tablist"] {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  [role="tablist"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [role="tablist"]:not(.grid):not(.flex-wrap) {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  [role="tab"] {
+    min-height: 44px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Preserve genuine table layout inside horizontally scrollable wrappers */
+  table {
+    width: 100%;
+  }
+
+  /* Calendar (react-day-picker) sizing to fit 320px–414px screens cleanly */
+  .rdp {
+    max-width: 100%;
+  }
+
+  .rdp-table {
+    width: 100%;
+  }
+
+  .rdp-cell,
+  .rdp-head_cell {
+    width: 2.35rem;
+    min-width: 2.25rem;
+  }
+
+  .rdp-day {
+    width: 2.25rem !important;
+    height: 2.5rem !important;
+    min-height: 40px !important;
+  }
+
+  /* Umrah Calculator always uses dedicated mobile UI below 768px */
+  .calc-desktop-view {
+    display: none !important;
+  }
+
+  .calc-mobile-view {
+    display: flex !important;
+  }
+}

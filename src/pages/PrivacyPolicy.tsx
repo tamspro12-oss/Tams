@@ -8,10 +8,10 @@ export default function PrivacyPolicy() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-8">
       <SeoHead title="Privacy Policy - TAMS Pro" description="How TAMS Pro collects, uses, and protects your travel agency data. Read our privacy policy and data handling practices." path="/privacy" />
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
           <Button
             variant="outline"
             onClick={() => navigate('/app/settings')}
@@ -33,9 +33,9 @@ export default function PrivacyPolicy() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-3">
-              <Shield className="w-8 h-8 text-primary" />
-              <div>
-                <h1 className="text-3xl font-semibold leading-none tracking-tight">Privacy Policy</h1>
+              <Shield className="w-8 h-8 text-primary shrink-0" />
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-semibold leading-none md:leading-none tracking-tight">Privacy Policy</h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   Effective Date: November 25, 2025
                 </p>

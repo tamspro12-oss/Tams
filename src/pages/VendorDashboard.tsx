@@ -277,7 +277,7 @@ export default function VendorDashboard() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 min-[375px]:grid-cols-2 md:grid-cols-5">
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -336,7 +336,7 @@ export default function VendorDashboard() {
 
       {/* Tabs */}
       <Tabs defaultValue="bookings" className="space-y-4">
-        <TabsList>
+        <TabsList className="w-full md:w-auto justify-start overflow-x-auto">
           <TabsTrigger value="bookings" className="gap-2">
             <Plane className="w-4 h-4" />
             Bookings

@@ -31,7 +31,7 @@ export const Tile: React.FC<TileProps> = ({
 
   const content = (
     <div
-      className={`tams-card tams-card-interactive group relative flex flex-col justify-between h-[136px] sm:h-[148px] rounded-2xl p-5 bg-white hover:-translate-y-1 hover:border-teal-500/30 hover:shadow-lg transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
+      className={`tams-card tams-card-interactive group relative flex flex-col justify-between max-md:!h-auto max-md:min-h-[118px] h-[136px] sm:h-[148px] rounded-2xl p-5 bg-white hover:-translate-y-1 hover:border-teal-500/30 hover:shadow-lg transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 text-left overflow-hidden ${className}`}
     >
       <div className={iconBoxClasses}>
         <Icon className={iconClasses} strokeWidth={1.75} />

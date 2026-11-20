@@ -309,13 +309,13 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
             <Button
               type="button"
               variant="outline"
               disabled={resending || cooldownLeft > 0}
               onClick={handleResendFromSignup}
-              className="h-10 text-xs font-semibold gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700"
+              className="h-11 md:h-10 text-xs font-semibold gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700"
             >
               {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
               <span>
@@ -331,7 +331,7 @@ export default function SignupPage() {
                 setLastResendAt(null);
                 setCooldownLeft(0);
               }}
-              className="h-10 text-xs font-semibold gap-1.5 cursor-pointer"
+              className="h-11 md:h-10 text-xs font-semibold gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Wrong email? Go back</span>
@@ -481,6 +481,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 tabIndex={0}
+                data-compact-btn=""
                 onClick={() => setShowPassword(!showPassword)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {

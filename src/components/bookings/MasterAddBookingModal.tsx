@@ -901,7 +901,7 @@ export function MasterAddBookingModal({
           aria-labelledby="booking-dialog-title"
           ref={formContainerRef}
           data-booking-form="true"
-          className="relative w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          className="relative w-[calc(100vw-1rem)] md:w-[98vw] max-w-[98vw] h-[calc(var(--mobile-vvh,100dvh)-1rem)] md:h-[96vh] max-h-[calc(var(--mobile-vvh,100dvh)-1rem)] md:max-h-[96vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ======================= 1. HEADER (CENTERED TABS) ======================= */}
           <div className="h-14 border-b border-border/80 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-muted/30">
@@ -1026,7 +1026,7 @@ export function MasterAddBookingModal({
                               <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0 ml-1" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[320px] p-0" align="start">
+                          <PopoverContent className="w-[min(calc(100vw-1rem),320px)] md:w-[320px] p-0" align="start">
                             <Command>
                               <CommandInput
                                 placeholder="Search agent name or agency..."
@@ -1146,7 +1146,7 @@ export function MasterAddBookingModal({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-5 lg:grid-cols-10 gap-2">
                 {/* 1. Service Type */}
                 <div>
                   <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 block">
@@ -1333,7 +1333,7 @@ export function MasterAddBookingModal({
               </div>
 
               <div className="border border-purple-200 dark:border-purple-900/60 rounded-md overflow-hidden bg-background">
-                <div className="max-h-[145px] sm:max-h-[165px] overflow-y-auto">
+                <div className="max-h-[145px] sm:max-h-[165px] overflow-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead className="bg-purple-100/60 dark:bg-purple-950/50 text-purple-900 dark:text-purple-200 sticky top-0 z-10 border-b border-purple-200 dark:border-purple-900/60">
                       <tr>
@@ -1490,7 +1490,7 @@ export function MasterAddBookingModal({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 {/* 0. Agent Rate (Only shown in B2B mode) */}
                 {bookingMode === "b2b" && (
                   <div>
@@ -1647,7 +1647,7 @@ export function MasterAddBookingModal({
                           <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0 ml-1" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[280px] p-0" align="start">
+                      <PopoverContent className="w-[min(calc(100vw-1rem),280px)] md:w-[280px] p-0" align="start">
                         <Command>
                           <CommandInput
                             placeholder="Search vendor or service..."

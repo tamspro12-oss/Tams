@@ -421,9 +421,9 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
         {/* ONE COMPACT FORM: Scroll-safe on smaller viewports */}
         <form ref={formRef} onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2.5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 space-y-2.5">
             {/* LINE 1: Expense Date | Category * | Amount (PKR) * | Paid From | (Bank if Bank Account) | Bill / Receipt / Ref No */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-12 gap-2 items-start">
               {/* Expense Date: Standardized Locked System Date */}
               <div className="lg:col-span-2">
                 <LockedDateField
@@ -524,7 +524,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
             {/* If Recurring Expense: extra compact inline row with frequency, start date, end date, next due date */}
             {expenseMode === "recurring" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end pt-1">
                 <div>
                   <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Frequency
@@ -595,7 +595,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
 
             {/* COMPACT SHEET BELOW FORM: Recent Recorded Expenses (5 records, read-only) */}
             <div className="pt-2 border-t space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-1">
                 <div className="flex items-center gap-1.5">
                   <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
                   <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
@@ -610,7 +610,67 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                 </span>
               </div>
 
-              <div className="rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[140px] overflow-y-auto">
+              <div className="md:hidden space-y-2 max-h-[200px] overflow-y-auto">
+                {recentFiveExpenses.length === 0 ? (
+                  <div className="p-3 text-center text-muted-foreground text-xs rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    No records yet. Save an entry above to see it here.
+                  </div>
+                ) : (
+                  recentFiveExpenses.map((item: any, idx: number) => {
+                    const isRec = item.is_recurring === true && !item.recurring_parent_id;
+                    const amt = parseFloat(item.amount) || 0;
+                    const expNo =
+                      item.reference_number ||
+                      item.reference_no ||
+                      (item.id ? `EXP-${item.id.slice(0, 6).toUpperCase()}` : "EXP-1001");
+                    const refVal = item.reference_number || item.reference_no || "—";
+                    const paidFrom =
+                      item.payment_mode === "bank"
+                        ? item.bank_name
+                          ? `Bank (${item.bank_name})`
+                          : "Bank Account"
+                        : "Cash in Hand";
+
+                    return (
+                      <div key={item.id || idx} className="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-1.5 text-xs select-text">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                              <CopyValue value={expNo} label="expense number" />
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">
+                              <CopyValue value={item.expense_type || item.category || "General"} label="category" />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-mono font-bold text-red-600 dark:text-red-400">
+                              <CopyValue value={amt} isAmount={true} displayValue={`PKR ${amt.toLocaleString()}`} label="amount" />
+                            </div>
+                            <div className="mt-0.5">
+                              {isRec ? (
+                                <Badge className="text-[9px] h-4 px-1.5 bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 border-0">
+                                  Recurring
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
+                                  Normal
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-1">
+                          <span className="font-mono">{item.expense_date || (item.created_at ? item.created_at.slice(0, 10) : "—")}</span>
+                          <span className="truncate">{paidFrom}</span>
+                          {refVal !== "—" && <span className="font-mono">Ref: <CopyValue value={refVal} label="reference" /></span>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="hidden md:block rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[140px] overflow-y-auto">
                 <table className="w-full text-xs text-left">
                   <thead className="sticky top-0 bg-slate-100/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-400 font-semibold border-b text-[11px]">
                     <tr>
@@ -688,13 +748,13 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
           </div>
 
           {/* FOOTER: Only Cancel and Save Expense */}
-          <div className="px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex items-center justify-end gap-2.5 shrink-0">
+          <div className="px-4 md:px-5 py-2.5 border-t bg-gray-50 dark:bg-slate-900/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 shrink-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="h-8 text-xs cursor-pointer"
+              className="h-8 text-xs cursor-pointer w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -703,7 +763,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
               size="sm"
               data-save-button="true"
               disabled={isSubmitting}
-              className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer min-w-[110px]"
+              className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer w-full sm:w-auto min-w-[110px]"
             >
               {isSubmitting ? "Saving..." : "Save Expense"}
             </Button>
@@ -726,13 +786,13 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   data-required-message="Please enter a category name"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAddCategoryOpen(false)}
-                  className="h-7 text-xs"
+                  className="h-7 text-xs w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
@@ -741,7 +801,7 @@ export const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({
                   size="sm"
                   data-save-button="true"
                   onClick={handleAddCategory}
-                  className="h-7 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white"
+                  className="h-7 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white w-full sm:w-auto"
                 >
                   Add Category
                 </Button>

@@ -90,7 +90,7 @@ export function UpdateNotification() {
   const iosMode = isIOSPWA();
 
   return (
-    <Alert className="fixed bottom-4 right-4 w-auto max-w-md z-50 bg-primary text-primary-foreground border-primary shadow-2xl">
+    <Alert className="fixed left-4 right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:left-auto md:bottom-4 md:right-4 md:w-auto max-w-md z-50 bg-primary text-primary-foreground border-primary shadow-2xl">
       <div className="flex items-start gap-3">
         {iosMode ? <Smartphone className="h-5 w-5 mt-0.5" /> : <RefreshCw className="h-5 w-5 mt-0.5" />}
         <div className="flex-1">
