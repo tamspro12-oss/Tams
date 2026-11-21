@@ -8,10 +8,11 @@ export function useCurrentAgencyId() {
   return useQuery({
     queryKey: ["current-agency-id", user?.id ?? "anonymous"],
     queryFn: async () => {
-      if (!user) return null;
-      return await getAuthenticatedAgencyId();
+      if (!user?.id) return null;
+      return await getAuthenticatedAgencyId(user.id);
     },
     enabled: !!user?.id,
-    staleTime: 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }

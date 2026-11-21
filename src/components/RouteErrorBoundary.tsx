@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
@@ -8,12 +9,16 @@ interface Props {
   routeName?: string;
 }
 
+interface InnerProps extends Props {
+  onNavigateDashboard: () => void;
+}
+
 interface State {
   hasError: boolean;
   error: Error | null;
 }
 
-export class RouteErrorBoundary extends Component<Props, State> {
+class RouteErrorBoundaryInner extends Component<InnerProps, State> {
   public state: State = {
     hasError: false,
     error: null,
@@ -28,7 +33,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   private handleGoToDashboard = () => {
-    window.location.href = "/app/dashboard";
+    this.setState({ hasError: false, error: null });
+    this.props.onNavigateDashboard();
   };
 
   private handleReload = () => {
@@ -46,7 +52,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
     } catch {
       // Ignore
     }
-    window.location.href = "/app/dashboard";
+    this.setState({ hasError: false, error: null });
+    this.props.onNavigateDashboard();
   };
 
   public render() {
@@ -90,6 +97,18 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+export function RouteErrorBoundary({ children, routeName }: Props) {
+  const navigate = useNavigate();
+  return (
+    <RouteErrorBoundaryInner
+      routeName={routeName}
+      onNavigateDashboard={() => navigate("/app/dashboard")}
+    >
+      {children}
+    </RouteErrorBoundaryInner>
+  );
 }
 
 export default RouteErrorBoundary;

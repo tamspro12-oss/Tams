@@ -15,7 +15,8 @@ export default function SubscriptionExpired() {
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       if (user && await verifySuperAdminStatus(user.id)) {
         navigate("/app/dashboard", { replace: true });
         return;
@@ -61,7 +62,7 @@ export default function SubscriptionExpired() {
               </div>
             </div>
           </CardHeader>
-          
+
           <CardContent className="space-y-6">
             <div className="space-y-4 text-center">
               {subscription?.agencyName && (
@@ -69,7 +70,7 @@ export default function SubscriptionExpired() {
                   Agency: <span className="font-semibold text-foreground">{subscription.agencyName}</span>
                 </p>
               )}
-              
+
               {subscription?.plan && (
                 <p className="text-sm text-muted-foreground">
                   Plan: <span className="font-semibold text-foreground capitalize">{subscription.plan}</span>
@@ -88,16 +89,16 @@ export default function SubscriptionExpired() {
               </div>
             </div>
 
-            <Button 
+            <Button
               onClick={handleLogout}
               variant="outline"
-              className="w-full h-12 text-base font-semibold" 
+              className="w-full h-12 text-base font-semibold"
             >
               Back to Login
             </Button>
           </CardContent>
         </Card>
-        
+
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground font-medium">
             <span className="font-semibold">Developed by TAMS Developers</span>

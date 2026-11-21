@@ -1,33 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
-import { verifySuperAdminStatus } from "@/lib/adminAuth";
-import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAgency } from "@/hooks/useAgency";
 import { getDaysRemaining, isLicenseExpiredWithGrace } from "@/lib/licenseUtils";
 
 export function useSubscription() {
-  const { data: cachedAgencyId } = useCurrentAgencyId();
+  const { user } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const { data: agency, isLoading: agencyLoading } = useAgency();
 
   return useQuery({
-    queryKey: ["subscription", cachedAgencyId ?? "anonymous"],
+    queryKey: [
+      "subscription",
+      user?.id ?? "anonymous",
+      agency?.id ?? null,
+      isAdmin,
+      agency?.subscription_plan ?? null,
+      agency?.license_expiry ?? null,
+      agency?.license_status ?? null,
+      agency?.license_active ?? null,
+    ],
+    enabled: !!user?.id && !adminLoading && (isAdmin || !agencyLoading),
     queryFn: async () => {
-      const { data: { user }, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !user) return null;
+      if (!user?.id) return null;
 
-      const isSuperAdmin = await verifySuperAdminStatus(user.id);
-      const agencyId = cachedAgencyId || (await getAuthenticatedAgencyId());
-
-      if (isSuperAdmin) {
-        let agencyName = "Super Admin HQ";
-        if (agencyId) {
-          const { data: agency } = await supabase
-            .from("agencies")
-            .select("name")
-            .eq("id", agencyId)
-            .maybeSingle();
-          if (agency?.name) agencyName = agency.name;
-        }
-
+      if (isAdmin) {
         return {
           isExpired: false,
           daysRemaining: 999999,
@@ -35,20 +32,12 @@ export function useSubscription() {
           expiryDate: "2099-12-31T23:59:59.000Z",
           isActive: true,
           status: "active",
-          agencyName,
+          agencyName: agency?.name || "Super Admin HQ",
           isLifetime: true,
         };
       }
 
-      if (!agencyId) return null;
-
-      const { data: agency, error } = await supabase
-        .from("agencies")
-        .select("subscription_plan, license_expiry, license_active, license_status, name")
-        .eq("id", agencyId)
-        .maybeSingle();
-
-      if (error || !agency) return null;
+      if (!agency) return null;
 
       const now = new Date();
       const isExpired = isLicenseExpiredWithGrace(agency.license_expiry, now);
@@ -65,6 +54,7 @@ export function useSubscription() {
         isLifetime: agency.subscription_plan === "lifetime",
       };
     },
-    staleTime: 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }

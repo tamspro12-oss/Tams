@@ -1,13 +1,15 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ReactNode, Suspense, useEffect, useRef, useState } from "react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { sessionManager } from "@/lib/sessionManager";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 import { migrateAllLocalTemplatesToDb } from "@/lib/agencyTemplates";
+import { saveLastAppRoute } from "@/lib/lastRouteStorage";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAgency } from "@/hooks/useAgency";
+import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { SessionTimer } from "@/components/SessionTimer";
@@ -20,6 +22,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalSearchBar } from "@/components/GlobalSearchBar";
 import { MobileInstallButton } from "@/components/MobileInstallButton";
 import { PaymentVoucherHost } from "@/components/vouchers/PaymentVoucherHost";
+import { PageContentSkeleton } from "@/components/SkeletonLoaders";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Menu,
@@ -55,7 +58,7 @@ import {
 import { useUnifiedAlerts } from "@/hooks/useUnifiedAlerts";
 
 interface DashboardLayoutProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 function AppSidebar() {
@@ -271,8 +274,15 @@ function AppSidebar() {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: agency, isLoading: agencyLoading } = useAgency();
+  const { user } = useAuth();
   const location = useLocation();
   useDocumentTitle();
+
+  useEffect(() => {
+    if (user?.id && location.pathname.startsWith("/app/")) {
+      saveLastAppRoute(user.id, location.pathname, location.search);
+    }
+  }, [user?.id, location.pathname, location.search]);
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -335,7 +345,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Content Area - Only this container scrolls */}
           <div className="flex-1 overflow-y-auto overscroll-y-contain">
             <div className="p-4 md:p-4 lg:p-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-6 w-full">
-              {children}
+              <Suspense fallback={<PageContentSkeleton />}>
+                {children ?? <Outlet />}
+              </Suspense>
             </div>
           </div>
 

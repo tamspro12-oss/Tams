@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,12 @@ import { Eye, EyeOff, AlertCircle, Mail, ShieldCheck, Loader2 } from "lucide-rea
 import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
 import { ResendVerificationDialog } from "@/components/auth/ResendVerificationDialog";
 import { z } from "zod";
-import { useQueryClient } from "@tanstack/react-query";
-import { preloadEssentialData } from "@/lib/dataPreloader";
 import { clearAllAgencyDataCache } from "@/lib/cacheManager";
 import { getAuthCallbackUrl } from "@/lib/authRedirect";
 import { getResendCooldownRemaining, RESEND_COOLDOWN_SECONDS } from "@/lib/authFlowState";
 import { logAndFriendlyMessage } from "@/lib/friendlyError";
+import { useAuth } from "@/hooks/useAuth";
+import { resolvePostLoginRoute } from "@/lib/lastRouteStorage";
 
 const loginSchema = z.object({
   email: z
@@ -34,7 +34,7 @@ export default function LoginPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { user: authUser, loading: authLoading } = useAuth();
 
   const statusNotice =
     (location.state as { message?: string } | null)?.message ||
@@ -146,13 +146,12 @@ export default function LoginPage() {
       import("@/lib/sessionManager").then(({ sessionManager }) => {
         sessionManager.startSession(data.user.id);
       });
-      preloadEssentialData(queryClient);
 
       toast({
         title: "Welcome back!",
         description: "You've successfully signed in",
       });
-      navigate("/app/dashboard");
+      navigate(resolvePostLoginRoute(location.state, data.user.id), { replace: true });
       // keep loading=true to prevent flash before redirect
     }
   };
@@ -192,6 +191,10 @@ export default function LoginPage() {
     }
   };
 
+  if (!authLoading && authUser && !loading) {
+    return <Navigate to={resolvePostLoginRoute(location.state, authUser.id)} replace />;
+  }
+
   return (
     <AuthLayout
       title="Welcome back"
@@ -222,9 +225,8 @@ export default function LoginPage() {
             autoComplete="email"
             enterKeyHint="next"
             placeholder="agency@example.com"
-            className={`h-11 sm:h-12 text-[16px] sm:text-sm rounded-lg transition-colors focus-visible:ring-emerald-500 ${
-              fieldErrors.email ? "border-destructive focus-visible:ring-destructive" : ""
-            }`}
+            className={`h-11 sm:h-12 text-[16px] sm:text-sm rounded-lg transition-colors focus-visible:ring-emerald-500 ${fieldErrors.email ? "border-destructive focus-visible:ring-destructive" : ""
+              }`}
             required
             onChange={() => {
               if (fieldErrors.email) {
@@ -270,9 +272,8 @@ export default function LoginPage() {
               autoComplete="current-password"
               enterKeyHint="done"
               placeholder="••••••••"
-              className={`h-11 sm:h-12 text-[16px] sm:text-sm rounded-lg pr-11 transition-colors focus-visible:ring-emerald-500 ${
-                fieldErrors.password ? "border-destructive focus-visible:ring-destructive" : ""
-              }`}
+              className={`h-11 sm:h-12 text-[16px] sm:text-sm rounded-lg pr-11 transition-colors focus-visible:ring-emerald-500 ${fieldErrors.password ? "border-destructive focus-visible:ring-destructive" : ""
+                }`}
               required
               onChange={() => {
                 if (fieldErrors.password) {

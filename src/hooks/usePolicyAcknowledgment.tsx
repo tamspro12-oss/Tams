@@ -21,13 +21,50 @@ export const usePolicyAcknowledgment = () => {
   const [needsAcknowledgment, setNeedsAcknowledgment] = useState(false);
 
   useEffect(() => {
-    if (!user) {
+    let isMounted = true;
+    if (!user?.id) {
       setLoading(false);
       return;
     }
 
-    fetchAcknowledgment();
-  }, [user]);
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('policy_acknowledgments')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+        if (error) throw error;
+
+        setAcknowledgment(data);
+
+        if (!data) {
+          setNeedsAcknowledgment(true);
+        } else if (
+          data.privacy_policy_version !== CURRENT_PRIVACY_VERSION ||
+          data.terms_version !== CURRENT_TERMS_VERSION
+        ) {
+          setNeedsAcknowledgment(true);
+        } else {
+          setNeedsAcknowledgment(false);
+        }
+      } catch (error) {
+        console.error('Error fetching policy acknowledgment:', error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const fetchAcknowledgment = async () => {
     if (!user) return;

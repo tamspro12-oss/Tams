@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ import { format, parseISO, isPast } from "date-fns";
 import { toast } from "sonner";
 import { useQuotations, type Quotation } from "@/hooks/useQuotations";
 import { useClients } from "@/hooks/useStorage";
-import { useAgency } from "@/hooks/useAgency";
+import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
 import { downloadQuotationPdf, quotationPdfBase64 } from "@/lib/quotationPdf";
 import { sendEmail } from "@/lib/emailService";
 import {
@@ -78,6 +79,7 @@ export default function Quotations() {
   const { quotations = [], isLoading, updateQuotation, deleteQuotation } = useQuotations();
   const { clients = [] } = useClients();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -227,7 +229,15 @@ export default function Quotations() {
       });
       return;
     }
-    if (!agency?.email || !agency?.smtp_configured) {
+    const smtpConfigured = agency?.email
+      ? await queryClient.fetchQuery({
+          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+          queryFn: fetchAgencySmtpConfigured,
+          staleTime: 10 * 60 * 1000,
+        })
+      : false;
+
+    if (!agency?.email || !smtpConfigured) {
       toast.error("Add your Gmail App Password in Settings → Email Integration to send emails.");
       return;
     }

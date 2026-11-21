@@ -9,9 +9,12 @@ export async function verifySuperAdminStatus(userId?: string | null): Promise<bo
   try {
     let targetUserId = userId ?? null;
     if (!targetUserId) {
-      const { data: { user }, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !user) return false;
-      targetUserId = user.id;
+      const {
+        data: { session },
+        error: authErr,
+      } = await supabase.auth.getSession();
+      if (authErr || !session?.user) return false;
+      targetUserId = session.user.id;
     }
 
     const { data: roleRow, error: roleError } = await supabase
@@ -21,8 +24,8 @@ export async function verifySuperAdminStatus(userId?: string | null): Promise<bo
       .eq("role", "super_admin" as any)
       .maybeSingle();
 
-    if (!roleError && roleRow?.role === ("super_admin" as any)) {
-      return true;
+    if (!roleError) {
+      return roleRow?.role === ("super_admin" as any);
     }
 
     const { data: hasRoleResult, error: rpcError } = await (supabase as any).rpc("has_role", {

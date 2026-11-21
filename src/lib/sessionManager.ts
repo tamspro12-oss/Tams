@@ -14,6 +14,7 @@ export class SessionManager {
   private onTimeout: (() => void) | null = null;
   private lastActivity: number = Date.now();
   private activityHandler: () => void;
+  private listenersAttached: boolean = false;
 
   private constructor() {
     this.activityHandler = () => this.updateActivity();
@@ -39,6 +40,7 @@ export class SessionManager {
 
   // Start session tracking
   startSession(userId: string) {
+    this.setupActivityListeners();
     this.lastActivity = Date.now();
     const session = {
       userId,
@@ -64,18 +66,22 @@ export class SessionManager {
 
   // Setup activity listeners
   private setupActivityListeners() {
+    if (this.listenersAttached || typeof document === "undefined") return;
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
     events.forEach(event => {
       document.addEventListener(event, this.activityHandler, true);
     });
+    this.listenersAttached = true;
   }
 
   // Clean up activity listeners to prevent memory leak
   private cleanupActivityListeners() {
+    if (!this.listenersAttached || typeof document === "undefined") return;
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
     events.forEach(event => {
       document.removeEventListener(event, this.activityHandler, true);
     });
+    this.listenersAttached = false;
   }
 
   // Reset timeout timers

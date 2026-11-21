@@ -22,6 +22,15 @@ import { useParties, type Party } from "@/hooks/useParties";
 import { useAccounts, type AccountItem } from "@/hooks/useUnifiedTransactions";
 import { useQuotations } from "@/hooks/useQuotations";
 import { useAgency } from "@/hooks/useAgency";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import {
+  fetchAgencyBookingInvoices,
+  fetchAgencyClients,
+  fetchAgencyExpenses,
+  fetchAgencyPaymentVouchers,
+  fetchAgencyRefunds,
+  mapLegacyClientsToInvoices,
+} from "@/lib/agencyQueries";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
 import { PartyLedgerDrawer } from "@/components/parties/PartyLedgerDrawer";
@@ -244,6 +253,7 @@ export default function ReportsHub() {
     [ledgerPartyId, parties]
   );
   const { accounts = [], isLoading: loadingAccounts } = useAccounts();
+  const { data: agencyId } = useCurrentAgencyId();
   const { data: agency } = useAgency();
   const queryClient = useQueryClient();
 
@@ -252,41 +262,41 @@ export default function ReportsHub() {
 
   useRealtimeMultiTable({
     channelPrefix: "reports-hub-realtime",
-    enabled: !!agency?.id,
+    enabled: !!agencyId,
     subscriptions: [
       {
         table: "booking_invoices",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "payment_vouchers",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "expenses",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "refunds",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "transactions",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "accounts",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
       {
         table: "parties",
-        filter: agency?.id ? `agency_id=eq.${agency.id}` : undefined,
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
     ],
@@ -295,101 +305,56 @@ export default function ReportsHub() {
   // Shared Report Export PDF Dialog State
   const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
 
-  // 1. Fetch Invoices
+  // 1. Fetch Invoices (canonical shared cache key)
   const {
-    data: rawInvoices = [],
+    data: dbInvoices = [],
     isLoading: loadingInvoices,
+    isFetched: invoicesFetched,
     isError: errorInvoices,
     refetch: refetchInvoices,
   } = useQuery({
-    queryKey: ["report_invoices", agency?.id],
-    enabled: !!agency?.id,
-    queryFn: async () => {
-      if (!agency?.id) return [];
-
-      const { data, error } = await (supabase as any)
-        .from("booking_invoices")
-        .select("*, party:parties!party_id(name), vendor:parties!vendor_id(name)")
-        .eq("agency_id", agency.id)
-        .order("invoice_date", { ascending: false });
-
-      if (error) {
-        console.error("Failed to fetch report invoices:", error);
-        throw error;
-      }
-      if (data && data.length > 0) return data;
-
-      // Fallback: clients table (only when booking_invoices has zero rows)
-      const { data: clientsData, error: clientsError } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("agency_id", agency.id)
-        .order("created_at", { ascending: false });
-
-      if (clientsError) {
-        console.error("Failed to fetch fallback clients for reports:", clientsError);
-        throw clientsError;
-      }
-
-      return (clientsData || []).map((c: any) => ({
-        id: c.id,
-        invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || (c.created_at ? getKarachiYmd(c.created_at) : ""),
-        created_at: c.created_at,
-        service: c.travel_type || "Ticket",
-        client_name: c.name,
-        party: { name: c.name },
-        client_amount: c.selling_price || 0,
-        vendor_payable: c.purchasing_price || 0,
-        profit: (c.selling_price || 0) - (c.purchasing_price || 0),
-        paid_amount: c.amount_paid || 0,
-        payment_status: (c.payment_status || "Pending").toLowerCase(),
-        is_void: ["void", "refunded", "cancelled"].includes((c.payment_status || "").toLowerCase()),
-        pnr: c.pnr,
-        ticket_no: c.passport_number,
-        more_details: { remaining_due_date: c.remaining_payment_date },
-        remaining_payment_date: c.remaining_payment_date,
-      }));
-    },
+    queryKey: ["booking_invoices", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyBookingInvoices(agencyId!),
   });
 
-  // 1b. Fetch Payment Vouchers for canonical vendor dues calculation
+  const { data: legacyClients = [] } = useQuery({
+    queryKey: ["clients", agencyId],
+    enabled: !!agencyId && invoicesFetched && dbInvoices.length === 0,
+    queryFn: () => fetchAgencyClients(agencyId!),
+  });
+
+  const rawInvoices = useMemo(
+    () => (dbInvoices.length > 0 ? dbInvoices : mapLegacyClientsToInvoices(legacyClients)),
+    [dbInvoices, legacyClients]
+  );
+
+  // 1b. Fetch Payment Vouchers (canonical shared cache key)
   const {
     data: rawVouchers = [],
     isError: errorVouchers,
     refetch: refetchVouchers,
   } = useQuery({
-    queryKey: ["report_vouchers", agency?.id],
-    enabled: !!agency?.id,
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await (supabase as any)
-        .from("payment_vouchers")
-        .select("*")
-        .eq("agency_id", agency.id);
-      if (error) {
-        console.error("Failed to fetch report vouchers:", error);
-        throw error;
-      }
-      return data || [];
-    },
+    queryKey: ["payment_vouchers", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyPaymentVouchers(agencyId!),
   });
 
-  // 2. Fetch Transactions / Vouchers
+  // 2. Fetch Transactions
   const {
     data: rawTransactions = [],
     isLoading: loadingTransactions,
     isError: errorTransactions,
     refetch: refetchTransactions,
   } = useQuery({
-    queryKey: ["report_transactions", agency?.id],
-    enabled: !!agency?.id,
+    queryKey: ["report_transactions", agencyId],
+    enabled: !!agencyId,
     queryFn: async () => {
-      if (!agency?.id) return [];
+      if (!agencyId) return [];
       const { data, error } = await (supabase as any)
         .from("transactions")
         .select("*")
-        .eq("agency_id", agency.id)
+        .eq("agency_id", agencyId)
         .order("date", { ascending: false });
       if (error) {
         console.error("Failed to fetch report transactions:", error);
@@ -399,52 +364,28 @@ export default function ReportsHub() {
     },
   });
 
-  // 3. Fetch Expenses
+  // 3. Fetch Expenses (canonical shared cache key)
   const {
     data: rawExpenses = [],
     isLoading: loadingExpenses,
     isError: errorExpenses,
     refetch: refetchExpenses,
   } = useQuery({
-    queryKey: ["report_expenses", agency?.id],
-    enabled: !!agency?.id,
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("agency_id", agency.id)
-        .order("expense_date", { ascending: false });
-      if (error) {
-        console.error("Failed to fetch report expenses:", error);
-        throw error;
-      }
-      return data || [];
-    },
+    queryKey: ["expenses", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyExpenses(agencyId!),
   });
 
-  // 4. Fetch Refunds
+  // 4. Fetch Refunds (canonical shared cache key)
   const {
     data: rawRefunds = [],
     isLoading: loadingRefunds,
     isError: errorRefunds,
     refetch: refetchRefunds,
   } = useQuery({
-    queryKey: ["report_refunds", agency?.id],
-    enabled: !!agency?.id,
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await supabase
-        .from("refunds")
-        .select("*")
-        .eq("agency_id", agency.id)
-        .order("refund_date", { ascending: false });
-      if (error) {
-        console.error("Failed to fetch report refunds:", error);
-        throw error;
-      }
-      return data || [];
-    },
+    queryKey: ["refunds", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyRefunds(agencyId!),
   });
 
   const hasReportLoadError =
@@ -460,10 +401,10 @@ export default function ReportsHub() {
 
   // Canonical DB financial summary RPC for position reconciliation with Dashboard
   const { data: financialSummaryRpc } = useQuery({
-    queryKey: ["agency_financial_summary", agency?.id, "reports_position"],
-    enabled: !!agency?.id,
+    queryKey: ["agency_financial_summary", agencyId, "reports_position"],
+    enabled: !!agencyId,
     queryFn: async () => {
-      if (!agency?.id) return null;
+      if (!agencyId) return null;
       const nowAnchor = getKarachiTodayNoon();
       const { data, error } = await (supabase as any).rpc("get_agency_financial_summary", {
         p_period_start: format(startOfMonth(nowAnchor), "yyyy-MM-dd"),

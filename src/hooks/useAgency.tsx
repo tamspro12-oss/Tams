@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 
 // NOTE: email_password and license_key are intentionally NOT selected here.
 // They are no longer readable by app users directly (column-level revoke).
-// SMTP status is exposed as a boolean flag only.
 const AGENCY_COLUMNS = [
   "id",
   "agency_no",
@@ -26,34 +25,49 @@ const AGENCY_COLUMNS = [
   "email_cleanup_keep_days",
 ].join(", ");
 
+export async function fetchAgencySmtpConfigured(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc("agency_smtp_configured");
+    if (error) return false;
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 export function useAgency() {
+  const { user } = useAuth();
   const { data: agencyId } = useCurrentAgencyId();
 
   return useQuery({
-    queryKey: ["agency", agencyId ?? "anonymous"],
+    queryKey: ["agency", user?.id ?? "anonymous", agencyId ?? null],
     queryFn: async () => {
-      const resolvedAgencyId = agencyId || (await getAuthenticatedAgencyId());
-      if (!resolvedAgencyId) return null;
+      if (!agencyId) return null;
 
       const { data, error } = await supabase
         .from("agencies")
         .select(AGENCY_COLUMNS)
-        .eq("id", resolvedAgencyId)
+        .eq("id", agencyId)
         .maybeSingle();
 
       if (error || !data) return null;
-
-      let smtpConfigured = false;
-      try {
-        const { data: res } = await supabase.rpc("agency_smtp_configured");
-        smtpConfigured = !!res;
-      } catch {
-        // ignore RPC error
-      }
-
-      return { ...(data as any), smtp_configured: smtpConfigured } as any;
+      return data as any;
     },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
+    enabled: !!user?.id && !!agencyId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+}
+
+export function useAgencySmtpConfigured(enabled: boolean = true) {
+  const { user } = useAuth();
+  const { data: agencyId } = useCurrentAgencyId();
+
+  return useQuery({
+    queryKey: ["agency-smtp-configured", agencyId ?? "anonymous"],
+    queryFn: fetchAgencySmtpConfigured,
+    enabled: enabled && !!user?.id && !!agencyId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }

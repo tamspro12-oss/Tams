@@ -78,7 +78,7 @@ export default function NotificationsHub() {
     dismissAlert,
     remindersError,
     refetchReminders,
-  } = useUnifiedAlerts();
+  } = useUnifiedAlerts({ immediate: true });
   const { deleteReminder } = useReminders();
   const [reminderToDelete, setReminderToDelete] = useState<{
     alertId: string;

@@ -30,6 +30,14 @@ import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useAgency } from "@/hooks/useAgency";
+import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import {
+  fetchAgencyBookingInvoices,
+  fetchAgencyClients,
+  fetchAgencyExpenses,
+  fetchAgencyPaymentVouchers,
+  fetchAgencyRefunds,
+} from "@/lib/agencyQueries";
 import {
   computeFinancialMetrics,
   getKarachiTodayNoon,
@@ -51,6 +59,7 @@ import { CopyValue } from "@/components/ui/CopyValue";
 export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: agencyId } = useCurrentAgencyId();
   const { data: agency } = useAgency();
   const [selectedMonth, setSelectedMonth] = useState<Date>(() => getKarachiTodayNoon());
 
@@ -69,13 +78,13 @@ export default function Dashboard() {
 
   // 2. Canonical Single-Source-of-Truth DB Financial Summary RPC
   const { data: rpcSummary } = useQuery({
-    queryKey: ["agency_financial_summary", agency?.id, monthStartYmd, monthEndYmd],
+    queryKey: ["agency_financial_summary", agencyId, monthStartYmd, monthEndYmd],
     queryFn: async () => {
-      if (!agency?.id) return null;
+      if (!agencyId) return null;
       const { data, error } = await (supabase as any).rpc("get_agency_financial_summary", {
         p_start_date: monthStartYmd,
         p_end_date: monthEndYmd,
-        p_agency_id: agency.id,
+        p_agency_id: agencyId,
       });
       if (error || !data) return null;
       return data as {
@@ -87,93 +96,55 @@ export default function Dashboard() {
         overdue_count?: number;
       };
     },
-    enabled: !!agency?.id,
+    enabled: !!agencyId,
   });
 
-  // 3. Canonical Underlying Tables (used when DB RPC unavailable + for fallback verification)
-  const { data: rawInvoices = [], isLoading: loadingInvoices } = useQuery({
-    queryKey: ["dashboard_invoices", agency?.id],
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await (supabase as any)
-        .from("booking_invoices")
-        .select("*, party:parties!party_id(name)")
-        .eq("agency_id", agency.id)
-        .order("invoice_date", { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!agency?.id,
+  // 3. Canonical Underlying Tables (shared query keys across Dashboard, SalesExpensesHub, ReportsHub, Alerts)
+  const {
+    data: rawInvoices = [],
+    isLoading: loadingInvoices,
+    isFetched: invoicesFetched,
+  } = useQuery({
+    queryKey: ["booking_invoices", agencyId],
+    queryFn: () => fetchAgencyBookingInvoices(agencyId!),
+    enabled: !!agencyId,
   });
 
   const { data: rawVouchers = [] } = useQuery({
-    queryKey: ["payment_vouchers", agency?.id],
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await (supabase as any)
-        .from("payment_vouchers")
-        .select("id, party_id, direction, amount, is_void")
-        .eq("agency_id", agency.id);
-      if (error) return [];
-      return data || [];
-    },
-    enabled: !!agency?.id,
+    queryKey: ["payment_vouchers", agencyId],
+    queryFn: () => fetchAgencyPaymentVouchers(agencyId!),
+    enabled: !!agencyId,
   });
 
   const { data: rawExpenses = [] } = useQuery({
-    queryKey: ["expenses", agency?.id],
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("id, amount, expense_date, created_at")
-        .eq("agency_id", agency.id);
-      if (error) return [];
-      return data || [];
-    },
-    enabled: !!agency?.id,
+    queryKey: ["expenses", agencyId],
+    queryFn: () => fetchAgencyExpenses(agencyId!),
+    enabled: !!agencyId,
   });
 
   const { data: rawRefunds = [] } = useQuery({
-    queryKey: ["refunds", agency?.id],
-    queryFn: async () => {
-      if (!agency?.id) return [];
-      const { data, error } = await supabase
-        .from("refunds")
-        .select("id, booking_id, vendor_refund_amount, client_refund_amount, refund_amount")
-        .eq("agency_id", agency.id);
-      if (error) return [];
-      return data || [];
-    },
-    enabled: !!agency?.id,
+    queryKey: ["refunds", agencyId],
+    queryFn: () => fetchAgencyRefunds(agencyId!),
+    enabled: !!agencyId,
   });
 
   const { data: legacyClients = [] } = useQuery({
-    queryKey: ["clients", agency?.id, "dashboard-legacy"],
-    queryFn: async () => {
-      if (!agency?.id || rawInvoices.length > 0) return [];
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("agency_id", agency.id)
-        .order("created_at", { ascending: false });
-      return data || [];
-    },
-    enabled: !!agency?.id && rawInvoices.length === 0,
+    queryKey: ["clients", agencyId],
+    queryFn: () => fetchAgencyClients(agencyId!),
+    enabled: !!agencyId && invoicesFetched && rawInvoices.length === 0,
   });
 
   const { data: legacyVendors = [] } = useQuery({
-    queryKey: ["vendors", agency?.id, "dashboard-legacy"],
+    queryKey: ["vendors", agencyId, "dashboard-legacy"],
     queryFn: async () => {
-      if (!agency?.id || rawInvoices.length > 0) return [];
+      if (!agencyId || rawInvoices.length > 0) return [];
       const { data } = await supabase
         .from("vendors")
         .select("id, payment_amount, amount_paid")
-        .eq("agency_id", agency.id);
+        .eq("agency_id", agencyId);
       return data || [];
     },
-    enabled: !!agency?.id && rawInvoices.length === 0,
+    enabled: !!agencyId && invoicesFetched && rawInvoices.length === 0,
   });
 
   const localSummary = useMemo(
@@ -210,13 +181,15 @@ export default function Dashboard() {
   const todayBookingsCount = rpcSummary?.todays_bookings ?? localSummary.todaysBookings;
   const overdueInvoicesCount = rpcSummary?.overdue_count ?? localSummary.overdueCount;
 
-  // 4. Unified Alerts for Notification Center (shared single source of truth)
+  const isLoading = loadingParties || loadingAccounts || loadingInvoices;
+
+  // 4. Unified Alerts for Notification Center (lazy: loads after main dashboard data or 1.5s delay)
   const {
     activeAlerts,
     unreadCount,
     markAsDone,
     markAsRead,
-  } = useUnifiedAlerts();
+  } = useUnifiedAlerts({ enabled: !isLoading });
 
   const topDashboardAlerts = useMemo(() => {
     const unread = activeAlerts.filter((a) => !a.isRead);
@@ -226,7 +199,7 @@ export default function Dashboard() {
 
   // Pull-to-refresh
   const handleRefresh = async () => {
-    await invalidateAllFinancialQueries(queryClient, agency?.id);
+    await invalidateAllFinancialQueries(queryClient, agencyId);
     toast.success("Dashboard refreshed");
   };
 
@@ -235,12 +208,12 @@ export default function Dashboard() {
   });
 
   // Real-time multi-table sync strictly filtered by agency_id (coalesced to avoid refetch storms)
-  const agencyRealtimeFilter = agency?.id ? `agency_id=eq.${agency.id}` : undefined;
+  const agencyRealtimeFilter = agencyId ? `agency_id=eq.${agencyId}` : undefined;
   const triggerDashboardSync = () =>
     scheduleCoalescedFinancialRefresh(queryClient, "dashboard-rt", "all", 350);
   useRealtimeMultiTable({
     channelPrefix: "dashboard-live-sync",
-    enabled: !!agency?.id,
+    enabled: !!agencyId,
     subscriptions: [
       { table: "booking_invoices", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
       { table: "parties", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
@@ -259,8 +232,6 @@ export default function Dashboard() {
     }
     return `Rs ${Math.round(num).toLocaleString()}`;
   };
-
-  const isLoading = loadingParties || loadingAccounts || loadingInvoices;
 
   if (isLoading) {
     return <DashboardSkeleton />;

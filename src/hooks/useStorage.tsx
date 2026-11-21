@@ -15,7 +15,7 @@ export function useClients() {
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ['clients', userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: () => cloudStorage.getClients(),
+    queryFn: () => cloudStorage.getClients(userAgencyId!),
   });
 
   // Smart real-time sync for clients
@@ -66,7 +66,7 @@ export function useClients() {
       if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      return cloudStorage.addClient(client);
+      return cloudStorage.addClient(client, userAgencyId ?? undefined);
     },
     onSuccess: () => {
       refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
@@ -173,7 +173,7 @@ export function useBookings() {
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ['bookings', userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: () => cloudStorage.getBookings(),
+    queryFn: () => cloudStorage.getBookings(userAgencyId!),
   });
 
   // Real-time sync for bookings
@@ -199,7 +199,7 @@ export function useBookings() {
       if (!isOnlineBooking || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      return cloudStorage.addBooking(booking);
+      return cloudStorage.addBooking(booking, userAgencyId ?? undefined);
     },
     onSuccess: () => {
       refreshAffectedFinancialQueries(queryClient, 'invoice', userAgencyId);
@@ -274,7 +274,7 @@ export function useExpenses() {
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expenses', userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: () => cloudStorage.getExpenses(),
+    queryFn: () => cloudStorage.getExpenses(userAgencyId!),
   });
 
   // Smart real-time sync for expenses
@@ -325,7 +325,7 @@ export function useExpenses() {
       if (!isOnlineExpense || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      return cloudStorage.addExpense(expense);
+      return cloudStorage.addExpense(expense, userAgencyId ?? undefined);
     },
     onSuccess: () => {
       refreshAffectedFinancialQueries(queryClient, 'expense', userAgencyId);
@@ -397,7 +397,7 @@ export function useVendors() {
   const { data: vendors = [], isLoading } = useQuery({
     queryKey: ['vendors', userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: () => cloudStorage.getVendors(),
+    queryFn: () => cloudStorage.getVendors(userAgencyId!),
   });
 
   // Smart real-time sync for vendors
@@ -448,7 +448,7 @@ export function useVendors() {
       if (!isOnlineVendor || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      return cloudStorage.addVendor(vendor);
+      return cloudStorage.addVendor(vendor, userAgencyId ?? undefined);
     },
     onSuccess: () => {
       refreshAffectedFinancialQueries(queryClient, 'party', userAgencyId);
@@ -522,11 +522,8 @@ export function useQueries() {
     queryKey: ['queries', userAgencyId],
     enabled: !!userAgencyId,
     queryFn: async () => {
-      return await cloudStorage.getQueries();
+      return await cloudStorage.getQueries(userAgencyId!);
     },
-    staleTime: 60 * 1000,
-    gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
   });
 
   // Setup realtime listener
@@ -552,7 +549,7 @@ export function useQueries() {
       if (!isOnlineQuery || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         throw new Error('You are offline. Connect to the internet to save changes.');
       }
-      return await cloudStorage.addQuery(query);
+      return await cloudStorage.addQuery(query, userAgencyId ?? undefined);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queries'] });

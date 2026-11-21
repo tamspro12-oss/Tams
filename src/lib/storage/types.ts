@@ -13,43 +13,43 @@ export interface DataRecord {
 
 export interface StorageProvider {
   // Clients
-  getClients(): Promise<any[]>;
-  addClient(client: any): Promise<any>;
+  getClients(agencyId?: string): Promise<any[]>;
+  addClient(client: any, agencyId?: string): Promise<any>;
   updateClient(id: string, client: any): Promise<void>;
   deleteClient(id: string): Promise<void>;
   
   // Bookings
-  getBookings(): Promise<any[]>;
-  addBooking(booking: any): Promise<void>;
+  getBookings(agencyId?: string): Promise<any[]>;
+  addBooking(booking: any, agencyId?: string): Promise<void>;
   updateBooking(id: string, booking: any): Promise<void>;
   deleteBooking(id: string): Promise<void>;
   
   // Expenses
-  getExpenses(): Promise<any[]>;
-  addExpense(expense: any): Promise<void>;
+  getExpenses(agencyId?: string): Promise<any[]>;
+  addExpense(expense: any, agencyId?: string): Promise<void>;
   updateExpense(id: string, expense: any): Promise<void>;
   deleteExpense(id: string): Promise<void>;
   
   // Vendors
-  getVendors(): Promise<any[]>;
-  addVendor(vendor: any): Promise<any>;
+  getVendors(agencyId?: string): Promise<any[]>;
+  addVendor(vendor: any, agencyId?: string): Promise<any>;
   updateVendor(id: string, vendor: any): Promise<void>;
   deleteVendor(id: string): Promise<void>;
   
   // Queries
-  getQueries(): Promise<any[]>;
-  addQuery(query: any): Promise<any>;
+  getQueries(agencyId?: string): Promise<any[]>;
+  addQuery(query: any, agencyId?: string): Promise<any>;
   updateQuery(id: string, query: any): Promise<void>;
   deleteQuery(id: string): Promise<void>;
   
   // Client Payment History
   getClientPaymentHistory(clientId: string): Promise<any[]>;
-  addClientPaymentHistory(payment: any): Promise<void>;
+  addClientPaymentHistory(payment: any, agencyId?: string): Promise<void>;
   
   // Vendor Payment History
   getVendorPaymentHistory(vendorId: string): Promise<any[]>;
-  addVendorPaymentHistory(payment: any): Promise<void>;
+  addVendorPaymentHistory(payment: any, agencyId?: string): Promise<void>;
   
   // Cleanup
-  cleanupOldData(): Promise<void>;
+  cleanupOldData(agencyId?: string): Promise<void>;
 }

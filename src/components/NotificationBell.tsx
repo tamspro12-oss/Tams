@@ -25,7 +25,9 @@ import { cn } from "@/lib/utils";
 export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const { activeAlerts = [], unreadCount = 0, markAsRead, markAllAsRead, markAsDone } = useUnifiedAlerts();
+  const { activeAlerts = [], unreadCount = 0, markAsRead, markAllAsRead, markAsDone } = useUnifiedAlerts({
+    immediate: open,
+  });
 
   // Latest 5 alerts
   const latestAlerts = activeAlerts.slice(0, 5);

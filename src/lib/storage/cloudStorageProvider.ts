@@ -1,9 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 import { StorageProvider } from './types';
 import { getAuthenticatedAgencyId } from '@/lib/agencyContext';
+import { getCachedAgencyId } from '@/lib/cacheManager';
 
 export class CloudStorageProvider implements StorageProvider {
-  private async getAgencyId(): Promise<string> {
+  private async getAgencyId(explicitAgencyId?: string): Promise<string> {
+    const cached = explicitAgencyId || getCachedAgencyId();
+    if (cached) {
+      return cached;
+    }
     const agencyId = await getAuthenticatedAgencyId();
     if (!agencyId) {
       throw new Error('No active agency context found for authenticated user');
@@ -12,8 +17,8 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Clients
-  async getClients(): Promise<any[]> {
-    const agencyId = await this.getAgencyId();
+  async getClients(explicitAgencyId?: string): Promise<any[]> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('clients')
       .select('*')
@@ -24,8 +29,8 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addClient(client: any): Promise<any> {
-    const agencyId = await this.getAgencyId();
+  async addClient(client: any, explicitAgencyId?: string): Promise<any> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('clients')
       .insert({ ...client, agency_id: agencyId })
@@ -46,8 +51,8 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Bookings
-  async getBookings(): Promise<any[]> {
-    const agencyId = await this.getAgencyId();
+  async getBookings(explicitAgencyId?: string): Promise<any[]> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
@@ -58,8 +63,8 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addBooking(booking: any): Promise<void> {
-    const agencyId = await this.getAgencyId();
+  async addBooking(booking: any, explicitAgencyId?: string): Promise<void> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { error } = await supabase.from('bookings').insert({ ...booking, agency_id: agencyId });
     if (error) throw new Error(`Failed to add booking: ${error.message}`);
   }
@@ -75,20 +80,21 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Expenses
-  async getExpenses(): Promise<any[]> {
-    const agencyId = await this.getAgencyId();
+  async getExpenses(explicitAgencyId?: string): Promise<any[]> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
       .eq('agency_id', agencyId)
+      .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false });
     
     if (error) throw new Error(`Failed to fetch expenses: ${error.message}`);
     return data || [];
   }
 
-  async addExpense(expense: any): Promise<void> {
-    const agencyId = await this.getAgencyId();
+  async addExpense(expense: any, explicitAgencyId?: string): Promise<void> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase.from('expenses').insert({ ...expense, agency_id: agencyId }).select().single();
     if (error) throw new Error(`Failed to add expense: ${error.message}`);
 
@@ -122,8 +128,8 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Vendors
-  async getVendors(): Promise<any[]> {
-    const agencyId = await this.getAgencyId();
+  async getVendors(explicitAgencyId?: string): Promise<any[]> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('vendors')
       .select('*')
@@ -134,8 +140,8 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addVendor(vendor: any): Promise<any> {
-    const agencyId = await this.getAgencyId();
+  async addVendor(vendor: any, explicitAgencyId?: string): Promise<any> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('vendors')
       .insert({ ...vendor, agency_id: agencyId })
@@ -156,8 +162,8 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Queries
-  async getQueries(): Promise<any[]> {
-    const agencyId = await this.getAgencyId();
+  async getQueries(explicitAgencyId?: string): Promise<any[]> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { data, error } = await supabase
       .from('queries')
       .select('*')
@@ -167,9 +173,9 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addQuery(query: any): Promise<any> {
+  async addQuery(query: any, explicitAgencyId?: string): Promise<any> {
     console.log('CloudStorageProvider: addQuery called', query);
-    const agencyId = await this.getAgencyId();
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     console.log('CloudStorageProvider: Agency ID retrieved', agencyId);
     
     const queryWithAgency = { ...query, agency_id: agencyId };
@@ -215,8 +221,8 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addClientPaymentHistory(payment: any): Promise<void> {
-    const agencyId = await this.getAgencyId();
+  async addClientPaymentHistory(payment: any, explicitAgencyId?: string): Promise<void> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { error } = await supabase
       .from('client_payment_history')
       .insert({ ...payment, agency_id: agencyId });
@@ -236,8 +242,8 @@ export class CloudStorageProvider implements StorageProvider {
     return data || [];
   }
 
-  async addVendorPaymentHistory(payment: any): Promise<void> {
-    const agencyId = await this.getAgencyId();
+  async addVendorPaymentHistory(payment: any, explicitAgencyId?: string): Promise<void> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const { error } = await supabase
       .from('vendor_payment_history')
       .insert({ ...payment, agency_id: agencyId });
@@ -246,8 +252,8 @@ export class CloudStorageProvider implements StorageProvider {
   }
 
   // Cleanup old data (older than 1 year)
-  async cleanupOldData(): Promise<void> {
-    const agencyId = await this.getAgencyId();
+  async cleanupOldData(explicitAgencyId?: string): Promise<void> {
+    const agencyId = await this.getAgencyId(explicitAgencyId);
     const oneYearAgo = new Date();
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     const dateStr = oneYearAgo.toISOString();

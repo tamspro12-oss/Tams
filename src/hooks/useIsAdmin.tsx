@@ -1,60 +1,40 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { verifySuperAdminStatus } from '@/lib/adminAuth';
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export const useIsAdmin = () => {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkAdminRole = async () => {
+  const { data: isAdmin = false, isLoading } = useQuery({
+    queryKey: ["is-super-admin", user?.id],
+    enabled: !!user?.id,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    queryFn: async () => {
+      if (!user?.id) return false;
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "super_admin" as any)
+          .maybeSingle();
 
-        if (error || !user || !isMounted) {
-          if (isMounted) {
-            setIsAdmin(false);
-            setLoading(false);
-          }
-          return;
+        if (error) {
+          console.error("[useIsAdmin] Role verification failed:", error);
+          return false;
         }
-
-        const isSuperAdmin = await verifySuperAdminStatus(user.id);
-        if (isMounted) {
-          setIsAdmin(isSuperAdmin);
-        }
+        return data?.role === ("super_admin" as any);
       } catch (error) {
-        console.error('[useIsAdmin] Role verification failed:', error);
-        if (isMounted) {
-          setIsAdmin(false);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        console.error("[useIsAdmin] Role verification failed:", error);
+        return false;
       }
-    };
+    },
+  });
 
-    checkAdminRole();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      if (!session?.user) {
-        setIsAdmin(false);
-        setLoading(false);
-      } else {
-        setLoading(true);
-        checkAdminRole();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  return { isAdmin, isMasterAdmin: isAdmin, loading };
+  return {
+    isAdmin,
+    isMasterAdmin: isAdmin,
+    loading: authLoading || (!!user?.id && isLoading),
+  };
 };

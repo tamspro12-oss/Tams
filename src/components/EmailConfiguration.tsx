@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Key, ShieldCheck, CheckCircle2, AlertCircle, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgency, useAgencySmtpConfigured } from "@/hooks/useAgency";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,7 @@ const APP_PASSWORD_PATTERN = /^[a-zA-Z0-9]{16}$/;
 
 export function EmailConfiguration() {
   const { data: agency } = useAgency();
+  const { data: smtpConfigured = false } = useAgencySmtpConfigured();
   const { isSubUser } = useUserPermissions();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -104,7 +105,7 @@ export function EmailConfiguration() {
 
         if (savedPwd) {
           toast.success("Email configuration saved");
-        } else if (agency?.smtp_configured) {
+        } else if (smtpConfigured) {
           toast.success("Agency email updated");
         } else {
           toast.success("Agency email saved. Add a 16-character Gmail App Password to enable email sending.");
@@ -112,6 +113,7 @@ export function EmailConfiguration() {
 
         runBackgroundTask("EmailConfiguration.refresh", () => {
           queryClient.invalidateQueries({ queryKey: ["agency"] });
+          queryClient.invalidateQueries({ queryKey: ["agency-smtp-configured"] });
         });
       },
     });
@@ -127,7 +129,7 @@ export function EmailConfiguration() {
   });
 
   const savedEmail = (agency?.email || "").trim();
-  const isConfigured = Boolean(EMAIL_PATTERN.test(savedEmail) && agency?.smtp_configured);
+  const isConfigured = Boolean(EMAIL_PATTERN.test(savedEmail) && smtpConfigured);
 
   if (isSubUser) {
     return (
@@ -232,7 +234,7 @@ export function EmailConfiguration() {
                   type={showPassword ? "text" : "password"}
                   value={agencyEmailPassword}
                   onChange={(e) => setAgencyEmailPassword(e.target.value)}
-                  placeholder={agency?.smtp_configured ? "Saved · type a new one to replace" : "abcd efgh ijkl mnop"}
+                  placeholder={smtpConfigured ? "Saved · type a new one to replace" : "abcd efgh ijkl mnop"}
                   maxLength={19}
                   autoComplete="new-password"
                   data-lpignore="true"

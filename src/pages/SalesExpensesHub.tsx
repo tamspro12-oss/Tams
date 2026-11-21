@@ -21,12 +21,18 @@ import { isDateWithinPreset } from "@/lib/dateFilterUtils";
 import {
   isInvoiceVoidedOrRefunded,
   scheduleCoalescedFinancialRefresh,
-  getKarachiYmd,
 } from "@/lib/accountingEngine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import {
+  fetchAgencyBookingInvoices,
+  fetchAgencyClients,
+  fetchAgencyExpenses,
+  fetchAgencyPaymentVouchers,
+  fetchAgencyRefunds,
+  mapLegacyClientsToInvoices,
+} from "@/lib/agencyQueries";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import {
   generateBookingConfirmationPdf,
@@ -237,94 +243,39 @@ export default function SalesExpensesHub() {
     }
   };
 
-  // 1. Fetch Invoices (Strictly scoped by agency_id with unambiguous relations)
-  const { data: invoices = [], refetch: refetchInvoices } = useQuery({
+  // 1. Fetch Invoices (canonical shared cache key)
+  const {
+    data: rawInvoices = [],
+    isFetched: invoicesFetched,
+    refetch: refetchInvoices,
+  } = useQuery({
     queryKey: ["booking_invoices", userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [];
-
-      let query = (supabase as any)
-        .from("booking_invoices")
-        .select("*, party:parties!party_id(name, phone), vendor:parties!vendor_id(name)")
-        .order("invoice_date", { ascending: false })
-        .order("created_at", { ascending: false });
-
-      if (activeAgencyId) {
-        query = query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data && data.length > 0) return data;
-
-      // Fallback: read from clients table for this agency
-      let clientQuery = supabase
-        .from("clients")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (activeAgencyId) {
-        clientQuery = clientQuery.eq("agency_id", activeAgencyId);
-      }
-
-      const { data: clientsData } = await clientQuery;
-
-      return (clientsData || []).map((c: any) => ({
-        id: c.id,
-        invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
-        invoice_date: c.flight_date || (c.created_at ? getKarachiYmd(c.created_at) : ""),
-        created_at: c.created_at,
-        service: c.travel_type || "Ticket",
-        client_name: c.name,
-        party: { name: c.name },
-        client_amount: c.selling_price || 0,
-        vendor_payable: c.purchasing_price || 0,
-        profit: (c.selling_price || 0) - (c.purchasing_price || 0),
-        paid_amount: c.amount_paid || 0,
-        payment_status: (c.payment_status || "Pending").toLowerCase(),
-        is_void: ["void", "refunded", "cancelled"].includes((c.payment_status || "").toLowerCase()),
-        pnr: c.pnr,
-        ticket_no: c.passport_number,
-      }));
-    },
+    queryFn: () => fetchAgencyBookingInvoices(userAgencyId!),
   });
 
-  // 2. Fetch Vouchers (Strictly scoped by agency_id)
-  const { data: vouchers = [], refetch: refetchVouchers } = useQuery({
+  // 2. Fetch Vouchers (canonical shared cache key + legacy transactions fallback only when empty)
+  const {
+    data: rawVouchers = [],
+    isFetched: vouchersFetched,
+    refetch: refetchVouchers,
+  } = useQuery({
     queryKey: ["payment_vouchers", userAgencyId],
     enabled: !!userAgencyId,
+    queryFn: () => fetchAgencyPaymentVouchers(userAgencyId!),
+  });
+
+  const { data: fallbackTxVouchers = [] } = useQuery({
+    queryKey: ["payment_vouchers_tx_fallback", userAgencyId],
+    enabled: !!userAgencyId && vouchersFetched && rawVouchers.length === 0,
     queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [];
-
-      let query = (supabase as any)
-        .from("payment_vouchers")
-        .select("*, party:parties!party_id(name, phone)")
-        .order("voucher_date", { ascending: false })
-        .order("created_at", { ascending: false });
-
-      if (activeAgencyId) {
-        query = query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data && data.length > 0) return data;
-
-      // Fallback: read from transactions table
-      let txQuery = (supabase as any)
+      if (!userAgencyId) return [];
+      const { data: txData } = await (supabase as any)
         .from("transactions")
         .select("*")
+        .eq("agency_id", userAgencyId)
         .in("type", ["payment_in", "payment_out"])
         .order("date", { ascending: false });
-
-      if (activeAgencyId) {
-        txQuery = txQuery.eq("agency_id", activeAgencyId);
-      }
-
-      const { data: txData } = await txQuery;
 
       return (txData || []).map((t: any) => ({
         id: t.id,
@@ -339,6 +290,31 @@ export default function SalesExpensesHub() {
       }));
     },
   });
+
+  const vouchers = useMemo(
+    () => (rawVouchers.length > 0 ? rawVouchers : fallbackTxVouchers),
+    [rawVouchers, fallbackTxVouchers]
+  );
+
+  // 3. Fetch Expenses (canonical shared cache key)
+  const { data: expenses = [], refetch: refetchExpenses } = useQuery({
+    queryKey: ["expenses", userAgencyId],
+    enabled: !!userAgencyId,
+    queryFn: () => fetchAgencyExpenses(userAgencyId!),
+  });
+
+  // 4. Fetch Clients (canonical shared cache key for refund lookup + legacy invoice fallback)
+  const { data: clientsData = [] } = useQuery({
+    queryKey: ["clients", userAgencyId],
+    enabled: !!userAgencyId,
+    queryFn: () => fetchAgencyClients(userAgencyId!),
+  });
+
+  const invoices = useMemo(() => {
+    if (rawInvoices.length > 0) return rawInvoices;
+    if (invoicesFetched) return mapLegacyClientsToInvoices(clientsData);
+    return [];
+  }, [rawInvoices, invoicesFetched, clientsData]);
 
   // Open deep-linked record when navigated from Global Search (?highlightId=...)
   const highlightId = searchParams.get("highlightId");
@@ -363,43 +339,6 @@ export default function SalesExpensesHub() {
     }
   }, [highlightId, currentTab, invoices, vouchers, searchParams, setSearchParams]);
 
-  // 3. Fetch Expenses (Strictly scoped by agency_id)
-  const { data: expenses = [], refetch: refetchExpenses } = useQuery({
-    queryKey: ["sales_expenses", userAgencyId],
-    enabled: !!userAgencyId,
-    queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [];
-
-      let query = supabase
-        .from("expenses")
-        .select("*")
-        .order("expense_date", { ascending: false });
-
-      if (activeAgencyId) {
-        query = query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data } = await query;
-      return data || [];
-    },
-  });
-
-  // 4. Fetch Clients Lookup (for refund party / pnr resolution)
-  const { data: clientsData = [] } = useQuery({
-    queryKey: ["clients_refund_lookup", userAgencyId],
-    enabled: !!userAgencyId,
-    queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [];
-      const { data } = await supabase
-        .from("clients")
-        .select("id, name, pnr, passport_number")
-        .eq("agency_id", activeAgencyId);
-      return data || [];
-    },
-  });
-
   const clientsLookup = useMemo(() => {
     const map: Record<string, { name: string; pnr?: string; passport_number?: string }> = {};
     clientsData.forEach((c: any) => {
@@ -408,26 +347,11 @@ export default function SalesExpensesHub() {
     return map;
   }, [clientsData]);
 
-  // 5. Fetch Refunds (Strictly scoped by agency_id)
+  // 5. Fetch Refunds (canonical shared cache key)
   const { data: refunds = [], refetch: refetchRefunds } = useQuery({
-    queryKey: ["sales_refunds", userAgencyId],
+    queryKey: ["refunds", userAgencyId],
     enabled: !!userAgencyId,
-    queryFn: async () => {
-      const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
-      if (!activeAgencyId) return [];
-
-      let query = supabase
-        .from("refunds")
-        .select("*")
-        .order("refund_date", { ascending: false });
-
-      if (activeAgencyId) {
-        query = query.eq("agency_id", activeAgencyId);
-      }
-
-      const { data } = await query;
-      return data || [];
-    },
+    queryFn: () => fetchAgencyRefunds(userAgencyId!),
   });
 
   // Helper resolvers for refund party & reference info

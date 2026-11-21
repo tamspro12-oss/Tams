@@ -8,8 +8,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Mail, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { z } from "zod";
-import { useQueryClient } from "@tanstack/react-query";
-import { preloadEssentialData } from "@/lib/dataPreloader";
 import { getAuthCallbackUrl } from "@/lib/authRedirect";
 import { getResendCooldownRemaining, RESEND_COOLDOWN_SECONDS } from "@/lib/authFlowState";
 import { logAndFriendlyMessage } from "@/lib/friendlyError";
@@ -40,7 +38,6 @@ const signupSchema = z.object({
 export default function SignupPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -188,7 +185,6 @@ export default function SignupPage() {
           import("@/lib/sessionManager").then(({ sessionManager }) => {
             sessionManager.startSession(activeUser.id);
           });
-          preloadEssentialData(queryClient);
 
           const { data: profile } = await supabase
             .from("profiles")

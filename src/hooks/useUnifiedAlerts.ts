@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
-import { useParties, type Party } from "@/hooks/useParties";
+import { useParties } from "@/hooks/useParties";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
-import { format, isToday, isTomorrow, addDays, parseISO } from "date-fns";
+import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
 import {
@@ -12,6 +12,12 @@ import {
   getKarachiYmd,
   isInvoiceVoidedOrRefunded,
 } from "@/lib/accountingEngine";
+import {
+  fetchAgencyBookingInvoices,
+  fetchAgencyClients,
+  fetchAgencyExpenses,
+  fetchAgencyRefunds,
+} from "@/lib/agencyQueries";
 
 export interface PortalAlertItem {
   id: string;
@@ -98,11 +104,33 @@ const STORAGE_SNOOZE_KEY = "tams_alert_snooze_map";
 const scopedAlertKey = (base: string, agencyId?: string | null) =>
   agencyId ? `${base}_${agencyId}` : base;
 
-export function useUnifiedAlerts() {
-  const queryClient = useQueryClient();
+export interface UseUnifiedAlertsOptions {
+  enabled?: boolean;
+  immediate?: boolean;
+  delayMs?: number;
+}
+
+export function useUnifiedAlerts(options?: UseUnifiedAlertsOptions) {
   const { data: agencyId } = useCurrentAgencyId();
-  const { parties = [] } = useParties();
-  const { accounts = [], cashAccount } = useAccounts();
+  const [delayedReady, setDelayedReady] = useState<boolean>(() => Boolean(options?.immediate));
+
+  useEffect(() => {
+    if (!agencyId || options?.immediate) {
+      if (options?.immediate) setDelayedReady(true);
+      return;
+    }
+    setDelayedReady(false);
+    const timer = setTimeout(() => {
+      setDelayedReady(true);
+    }, options?.delayMs ?? 1500);
+    return () => clearTimeout(timer);
+  }, [agencyId, options?.immediate, options?.delayMs]);
+
+  const alertsEnabled =
+    !!agencyId && (Boolean(options?.immediate) || options?.enabled === true || delayedReady);
+
+  const { parties = [] } = useParties({ enabled: alertsEnabled });
+  const { cashAccount } = useAccounts({ enabled: alertsEnabled });
 
   // 1. UI Preferences State (strictly scoped by agencyId)
   const [preferences, setPreferences] = useState<AlertPreferences>(DEFAULT_PREFERENCES);
@@ -159,132 +187,80 @@ export function useUnifiedAlerts() {
     toast.success("Preferences saved successfully");
   }, [agencyId]);
 
-  // 3. Query Invoices
+  // 3. Shared canonical queries (reuses cached data from Dashboard / SalesExpensesHub / ReportsHub)
   const { data: bookingInvoices = [] } = useQuery({
-    queryKey: ["alert_booking_invoices", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await (supabase as any)
-        .from("booking_invoices")
-        .select("*, party:parties!party_id(name, phone), vendor:parties!vendor_id(name)")
-        .eq("agency_id", agencyId)
-        .order("invoice_date", { ascending: false });
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
+    queryKey: ["booking_invoices", agencyId],
+    queryFn: () => fetchAgencyBookingInvoices(agencyId!),
+    enabled: alertsEnabled,
   });
 
-  // Fallback / legacy clients
   const { data: clientsData = [] } = useQuery({
-    queryKey: ["alert_clients", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("created_at", { ascending: false });
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
+    queryKey: ["clients", agencyId],
+    queryFn: () => fetchAgencyClients(agencyId!),
+    enabled: alertsEnabled,
   });
 
-  // 4. Query Expenses
   const { data: expenses = [] } = useQuery({
-    queryKey: ["alert_expenses", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("expense_date", { ascending: false })
-        .limit(50);
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
+    queryKey: ["expenses", agencyId],
+    queryFn: () => fetchAgencyExpenses(agencyId!),
+    enabled: alertsEnabled,
   });
 
-  // 5. Query Refunds
   const { data: refunds = [] } = useQuery({
-    queryKey: ["alert_refunds", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase
-        .from("refunds")
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("refund_date", { ascending: false })
-        .limit(30);
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
+    queryKey: ["refunds", agencyId],
+    queryFn: () => fetchAgencyRefunds(agencyId!),
+    enabled: alertsEnabled,
   });
 
-  // 6. Query Queries
-  const { data: queries = [] } = useQuery({
-    queryKey: ["alert_queries", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase
-        .from("queries")
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
-  });
-
-  // 7. Query Quotations
-  const { data: quotations = [] } = useQuery({
-    queryKey: ["alert_quotations", agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase
-        .from("quotations")
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data || [];
-    },
-    enabled: !!agencyId,
-    staleTime: 60 * 1000,
-  });
-
-  // 8. Query Reminders table
+  // 4. Independent alert-specific fetches executed in parallel via Promise.all
   const {
-    data: customReminders = [],
+    data: alertRecords = { queries: [], quotations: [], reminders: [] },
     isError: remindersError,
     refetch: refetchReminders,
   } = useQuery({
     queryKey: ["alert_custom_reminders", agencyId],
     queryFn: async () => {
-      if (!agencyId) return [];
-      const { data, error } = await supabase
-        .from("reminders" as any)
-        .select("*")
-        .eq("agency_id", agencyId)
-        .eq("is_completed", false)
-        .order("remind_date", { ascending: true });
-      if (error) {
-        console.error("Failed to fetch custom reminders:", error);
-        throw error;
+      if (!agencyId) return { queries: [], quotations: [], reminders: [] };
+      const [queriesRes, quotationsRes, remindersRes] = await Promise.all([
+        supabase
+          .from("queries")
+          .select("*")
+          .eq("agency_id", agencyId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("quotations")
+          .select("*")
+          .eq("agency_id", agencyId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("reminders" as any)
+          .select("*")
+          .eq("agency_id", agencyId)
+          .eq("is_completed", false)
+          .order("remind_date", { ascending: true }),
+      ]);
+
+      if (remindersRes.error) {
+        console.error("Failed to fetch custom reminders:", remindersRes.error);
+        throw remindersRes.error;
       }
-      return data || [];
+
+      return {
+        queries: queriesRes.data || [],
+        quotations: quotationsRes.data || [],
+        reminders: remindersRes.data || [],
+      };
     },
-    enabled: !!agencyId,
-    staleTime: 30 * 1000,
+    enabled: alertsEnabled,
   });
 
-  // 9. GENERATE DYNAMIC ALERTS (100% aligned with Dashboard & Overdue Single Source of Truth)
+  const queries = alertRecords.queries;
+  const quotations = alertRecords.quotations;
+  const customReminders = alertRecords.reminders;
+
+  // 5. GENERATE DYNAMIC ALERTS (100% aligned with Dashboard & Overdue Single Source of Truth)
   const generatedAlerts = useMemo<PortalAlertItem[]>(() => {
     const list: PortalAlertItem[] = [];
     const now = getKarachiTodayNoon();
@@ -294,7 +270,6 @@ export function useUnifiedAlerts() {
     const dueWindowDate = format(addDays(now, preferences.daysBeforeDueDate || 3), "yyyy-MM-dd");
 
     // A. CLIENT PAYMENT & OVERDUE INVOICES
-    // Primary source: booking_invoices (legacy clients checked ONLY if booking_invoices is empty)
     const processedInvoiceNos = new Set<string>();
 
     bookingInvoices.forEach((inv: any) => {
@@ -475,7 +450,6 @@ export function useUnifiedAlerts() {
 
     // C. UPCOMING FLIGHT & UMRAH DEPARTURES (within daysBeforeDeparture)
     if (preferences.upcomingDeparture) {
-      // Check from booking_invoices
       bookingInvoices.forEach((inv: any) => {
         const details = inv.more_details || {};
         const flightDate = details.flight_date || details.departure_date;
@@ -513,7 +487,6 @@ export function useUnifiedAlerts() {
         }
       });
 
-      // Check from clients table
       clientsData.forEach((c: any) => {
         if (!c.flight_date) return;
         const dateStr = c.flight_date.slice(0, 10);
@@ -553,6 +526,7 @@ export function useUnifiedAlerts() {
     if (preferences.recurringExpenseDue) {
       expenses
         .filter((e: any) => e.is_recurring)
+        .slice(0, 50)
         .forEach((exp: any) => {
           const id = `rec-exp-${exp.id}`;
           list.push({
@@ -608,7 +582,6 @@ export function useUnifiedAlerts() {
 
     // F. QUERY & QUOTE FOLLOW-UPS DUE
     if (preferences.queryQuoteFollowUp) {
-      // Pending queries
       queries
         .filter((q: any) => q.status === "pending" || q.status === "in_progress")
         .slice(0, 5)
@@ -638,7 +611,6 @@ export function useUnifiedAlerts() {
           });
         });
 
-      // Expiring quotations
       quotations
         .filter((q: any) => q.status === "sent" && q.valid_until)
         .forEach((qt: any) => {
@@ -831,7 +803,6 @@ export function useUnifiedAlerts() {
       }
       return next;
     });
-    // Also mark read
     markAsRead(id);
     toast.success("Alert marked as completed");
   }, [markAsRead, agencyId]);

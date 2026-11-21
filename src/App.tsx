@@ -6,14 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { AdminRoute } from "@/components/AdminRoute";
+import { AdminOnlyGuard } from "@/components/AdminRoute";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 
+import { AuthProvider } from "@/contexts/AuthContext";
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
 import { SyncProvider } from "@/contexts/SyncContext";
-import { sessionManager } from "@/lib/sessionManager";
-import { preloadEssentialData } from "@/lib/dataPreloader";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { getLastAppRoute } from "@/lib/lastRouteStorage";
 import { versionManager } from "@/lib/versionManager";
 import { errorLogger } from "@/lib/errorLogger";
 import { useAutoUpdate } from "@/hooks/useAutoUpdate";
@@ -54,6 +54,24 @@ const RouteLoadingFallback = () => (
   </div>
 );
 
+const PublicHomeRoute = () => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user) {
+    return <Navigate to={getLastAppRoute(user.id)} replace />;
+  }
+  return (
+    <RouteErrorBoundary routeName="Homepage">
+      <PublicHomepage />
+    </RouteErrorBoundary>
+  );
+};
+
+const AppIndexRedirect = () => {
+  const { user } = useAuth();
+  return <Navigate to={getLastAppRoute(user?.id)} replace />;
+};
+
 // Lazy-loaded Public Pages
 const PublicHomepage = lazyWithRetry(() => import("./pages/PublicHomepage"));
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
@@ -92,14 +110,14 @@ const PwaOnboardModal = lazyWithRetry(() =>
   import("@/components/PwaOnboardModal").then((m) => ({ default: m.PwaOnboardModal }))
 );
 
-import { registerGlobalQueryClient, clearAllAgencyDataCache } from "@/lib/cacheManager";
+import { registerGlobalQueryClient } from "@/lib/cacheManager";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000,
+      staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
       retry: 1,
       refetchOnReconnect: true,
     },
@@ -129,21 +147,9 @@ const App = () => {
       void errorLogger;
     });
 
-    sessionManager.setOnTimeout(async () => {
-      await supabase.auth.signOut({ scope: 'local' });
-      sessionManager.endSession();
-      clearAllAgencyDataCache();
-      window.location.href = '/login';
-    });
-
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       idle(() => {
-        const lastSync = queryClient.getQueryState(['clients'])?.dataUpdatedAt;
-        const fiveMinutes = 5 * 60 * 1000;
-        if (!lastSync || (Date.now() - lastSync) > fiveMinutes) {
-          preloadEssentialData(queryClient);
-        }
         versionManager.checkVersionAPI().catch(() => { });
       });
     };
@@ -171,65 +177,77 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SyncProvider>
-        <DateFilterProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <Suspense fallback={null}>
-              <UpdateNotification />
-              <PwaOnboardModal />
-            </Suspense>
-            <BrowserRouter>
-              <Suspense fallback={<RouteLoadingFallback />}>
-
-                <Routes>
-                  {/* ========== PUBLIC ROUTES (No Login Required) ========== */}
-                  <Route path="/" element={<RouteErrorBoundary routeName="Homepage"><PublicHomepage /></RouteErrorBoundary>} />
-                  <Route path="/features" element={<RouteErrorBoundary routeName="Features"><FeaturesPage /></RouteErrorBoundary>} />
-                  <Route path="/pricing" element={<RouteErrorBoundary routeName="Pricing"><PricingPage /></RouteErrorBoundary>} />
-                  <Route path="/contact" element={<RouteErrorBoundary routeName="Contact"><ContactPage /></RouteErrorBoundary>} />
-                  <Route path="/login" element={<RouteErrorBoundary routeName="Login"><LoginPage /></RouteErrorBoundary>} />
-                  <Route path="/signup" element={<RouteErrorBoundary routeName="Sign Up"><SignupPage /></RouteErrorBoundary>} />
-                  <Route path="/privacy" element={<RouteErrorBoundary routeName="Privacy Policy"><PrivacyPolicy /></RouteErrorBoundary>} />
-                  <Route path="/terms" element={<RouteErrorBoundary routeName="Terms of Service"><TermsOfService /></RouteErrorBoundary>} />
-                  <Route path="/install" element={<RouteErrorBoundary routeName="Install"><Install /></RouteErrorBoundary>} />
-                  <Route path="/subscription-expired" element={<RouteErrorBoundary routeName="Subscription Expired"><SubscriptionExpired /></RouteErrorBoundary>} />
-                  <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
-                  <Route path="/auth/callback" element={<RouteErrorBoundary routeName="Auth Callback"><AuthCallbackPage /></RouteErrorBoundary>} />
-                  <Route path="/verify-email" element={<RouteErrorBoundary routeName="Verify Email"><AuthCallbackPage /></RouteErrorBoundary>} />
-
-                  <Route path="/auth" element={<Navigate to="/login" replace />} />
-                  <Route path="/public" element={<Navigate to="/" replace />} />
-
-                  {/* ========== TAMS PRO CANONICAL MENU (Login Required) ========== */}
-                  <Route path="/app/dashboard" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Dashboard"><Index /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/sales-expenses" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Sales & Expenses"><SalesExpensesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/clients-vendors" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Clients & Vendors"><ClientsVendors /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/reports" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Reports"><ReportsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/admin" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
-                  <Route path="/app/admin/*" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
-                  <Route path="/admin" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
-                  <Route path="/admin/*" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
-                  <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/queries/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/quotations/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/leads-quotes/quotations/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/b2b-agents" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agents"><ClientBookings initialFilter="b2b" /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Umrah Calculator"><UmrahCalculator /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Notifications"><NotificationsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Settings"><SettingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-
-                  <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+      <AuthProvider>
+        <SyncProvider>
+          <DateFilterProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <Suspense fallback={null}>
+                <UpdateNotification />
+                <PwaOnboardModal />
               </Suspense>
-            </BrowserRouter>
-          </TooltipProvider>
-        </DateFilterProvider>
-      </SyncProvider>
+              <BrowserRouter>
+                <Suspense fallback={<RouteLoadingFallback />}>
+
+                  <Routes>
+                    {/* ========== PUBLIC ROUTES (No Login Required) ========== */}
+                    <Route path="/" element={<PublicHomeRoute />} />
+                    <Route path="/features" element={<RouteErrorBoundary routeName="Features"><FeaturesPage /></RouteErrorBoundary>} />
+                    <Route path="/pricing" element={<RouteErrorBoundary routeName="Pricing"><PricingPage /></RouteErrorBoundary>} />
+                    <Route path="/contact" element={<RouteErrorBoundary routeName="Contact"><ContactPage /></RouteErrorBoundary>} />
+                    <Route path="/login" element={<RouteErrorBoundary routeName="Login"><LoginPage /></RouteErrorBoundary>} />
+                    <Route path="/signup" element={<RouteErrorBoundary routeName="Sign Up"><SignupPage /></RouteErrorBoundary>} />
+                    <Route path="/privacy" element={<RouteErrorBoundary routeName="Privacy Policy"><PrivacyPolicy /></RouteErrorBoundary>} />
+                    <Route path="/terms" element={<RouteErrorBoundary routeName="Terms of Service"><TermsOfService /></RouteErrorBoundary>} />
+                    <Route path="/install" element={<RouteErrorBoundary routeName="Install"><Install /></RouteErrorBoundary>} />
+                    <Route path="/subscription-expired" element={<RouteErrorBoundary routeName="Subscription Expired"><SubscriptionExpired /></RouteErrorBoundary>} />
+                    <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
+                    <Route path="/auth/callback" element={<RouteErrorBoundary routeName="Auth Callback"><AuthCallbackPage /></RouteErrorBoundary>} />
+                    <Route path="/verify-email" element={<RouteErrorBoundary routeName="Verify Email"><AuthCallbackPage /></RouteErrorBoundary>} />
+
+                    <Route path="/auth" element={<Navigate to="/login" replace />} />
+                    <Route path="/public" element={<Navigate to="/" replace />} />
+                    <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
+                    <Route path="/admin/*" element={<Navigate to="/app/admin" replace />} />
+
+                    {/* ========== TAMS PRO CANONICAL MENU (Persistent Layout Shell) ========== */}
+                    <Route
+                      path="/app"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardLayout />
+                        </ProtectedRoute>
+                      }
+                    >
+                      <Route index element={<AppIndexRedirect />} />
+                      <Route path="dashboard" element={<RouteErrorBoundary routeName="Dashboard"><Index /></RouteErrorBoundary>} />
+                      <Route path="sales-expenses" element={<RouteErrorBoundary routeName="Sales & Expenses"><SalesExpensesHub /></RouteErrorBoundary>} />
+                      <Route path="clients-vendors" element={<RouteErrorBoundary routeName="Clients & Vendors"><ClientsVendors /></RouteErrorBoundary>} />
+                      <Route path="reports" element={<RouteErrorBoundary routeName="Reports"><ReportsHub /></RouteErrorBoundary>} />
+                      <Route path="admin" element={<AdminOnlyGuard><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></AdminOnlyGuard>} />
+                      <Route path="admin/*" element={<AdminOnlyGuard><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></AdminOnlyGuard>} />
+                      <Route path="leads-quotes" element={<RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary>} />
+                      <Route path="leads-quotes/queries/new" element={<RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary>} />
+                      <Route path="leads-quotes/queries/:id/edit" element={<RouteErrorBoundary routeName="Edit Query"><QueryFormPage /></RouteErrorBoundary>} />
+                      <Route path="leads-quotes/quotations/new" element={<RouteErrorBoundary routeName="New Quotation"><QuotationFormPage /></RouteErrorBoundary>} />
+                      <Route path="leads-quotes/quotations/:id/edit" element={<RouteErrorBoundary routeName="Edit Quotation"><QuotationFormPage /></RouteErrorBoundary>} />
+                      <Route path="b2b-agents" element={<RouteErrorBoundary routeName="B2B Agents"><ClientBookings initialFilter="b2b" /></RouteErrorBoundary>} />
+                      <Route path="b2b-agents/:agentId" element={<RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary>} />
+                      <Route path="umrah-calculator" element={<RouteErrorBoundary routeName="Umrah Calculator"><UmrahCalculator /></RouteErrorBoundary>} />
+                      <Route path="notifications" element={<RouteErrorBoundary routeName="Notifications"><NotificationsHub /></RouteErrorBoundary>} />
+                      <Route path="settings" element={<RouteErrorBoundary routeName="Settings"><SettingsHub /></RouteErrorBoundary>} />
+                      <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
+                    </Route>
+
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </BrowserRouter>
+            </TooltipProvider>
+          </DateFilterProvider>
+        </SyncProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

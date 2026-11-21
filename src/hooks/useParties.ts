@@ -34,13 +34,14 @@ export interface Party {
   isLegacyRecord?: boolean;
 }
 
-export function useParties() {
+export function useParties(options?: { enabled?: boolean }) {
   const queryClient = useQueryClient();
   const { data: userAgencyId } = useCurrentAgencyId();
+  const isEnabled = (options?.enabled ?? true) && !!userAgencyId;
 
   const { data: parties = [], isLoading, error } = useQuery({
     queryKey: ["parties", userAgencyId],
-    enabled: !!userAgencyId,
+    enabled: isEnabled,
     queryFn: async () => {
       const activeAgencyId = userAgencyId || (await getAuthenticatedAgencyId());
       if (!activeAgencyId) return [];
@@ -123,7 +124,7 @@ export function useParties() {
   useRealtimeTable({
     table: "parties",
     filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
-    enabled: !!userAgencyId,
+    enabled: isEnabled,
     channelPrefix: "parties-changes",
     onChange: (payload) => {
       const data = payload.new || payload.old || {};

@@ -7,6 +7,23 @@ export function registerGlobalQueryClient(client: QueryClient) {
   globalQueryClient = client;
 }
 
+export function getCachedAgencyId(): string | null {
+  if (!globalQueryClient) return null;
+  try {
+    const entries = globalQueryClient.getQueriesData<string | null>({
+      queryKey: ["current-agency-id"],
+    });
+    for (const [, value] of entries) {
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+  } catch {
+    // Ignore cache read errors
+  }
+  return null;
+}
+
 const PRESERVED_UI_PREF_KEYS = new Set([
   "theme",
   "tams_theme",

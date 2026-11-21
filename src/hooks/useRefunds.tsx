@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { fetchAgencyRefunds } from "@/lib/agencyQueries";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 
@@ -29,13 +30,8 @@ export function useRefunds() {
     queryKey: ["refunds", agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
-      const { data, error } = await supabase
-        .from("refunds" as any)
-        .select("*")
-        .eq("agency_id", agencyId)
-        .order("refund_date", { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as Refund[];
+      const data = await fetchAgencyRefunds(agencyId);
+      return data as unknown as Refund[];
     },
     enabled: !!agencyId,
   });

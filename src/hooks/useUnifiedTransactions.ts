@@ -116,9 +116,10 @@ export interface RecordTransferPayload {
 }
 
 // 1. Hook to get and manage Cash & Bank Accounts
-export function useAccounts() {
+export function useAccounts(options?: { enabled?: boolean }) {
   const queryClient = useQueryClient();
   const { data: agencyId } = useCurrentAgencyId();
+  const isEnabled = (options?.enabled ?? true) && !!agencyId;
 
   // Fetch accounts with calculated balances
   const { data: accounts = [], isLoading, error, refetch } = useQuery({
@@ -183,7 +184,7 @@ export function useAccounts() {
         current_balance: Number(a.opening_balance) || 0,
       })) as AccountItem[];
     },
-    enabled: !!agencyId,
+    enabled: isEnabled,
   });
 
   const createAccount = useMutation({

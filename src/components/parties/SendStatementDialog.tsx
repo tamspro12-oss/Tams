@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useAgency } from "@/hooks/useAgency";
+import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
 import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import { sendEmail } from "@/lib/emailService";
 import { logAndFriendlyMessage, toFriendlyMessage } from "@/lib/friendlyError";
@@ -61,6 +62,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
   initialCustomTo,
 }) => {
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<StatementPeriodPreset>("this_month");
   const [customFrom, setCustomFrom] = useState<string>(initialCustomFrom || "");
@@ -246,7 +248,15 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
       return;
     }
 
-    if (!agency?.email || !agency?.smtp_configured) {
+    const smtpConfigured = agency?.email
+      ? await queryClient.fetchQuery({
+          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+          queryFn: fetchAgencySmtpConfigured,
+          staleTime: 10 * 60 * 1000,
+        })
+      : false;
+
+    if (!agency?.email || !smtpConfigured) {
       const msg =
         "Email sending is not set up yet. Add your Gmail App Password in Settings → Email Integration, or download PDF.";
       setSendError(msg);

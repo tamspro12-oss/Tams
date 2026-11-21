@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, createInvoiceEmailBody } from "@/lib/emailService";
-import { useAgency } from "@/hooks/useAgency";
+import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
@@ -21,6 +22,7 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
 
   const handleEmailInvoice = async () => {
     if (isSending) return;
@@ -42,12 +44,20 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
       return;
     }
 
+    const smtpConfigured = agency?.email
+      ? await queryClient.fetchQuery({
+          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+          queryFn: fetchAgencySmtpConfigured,
+          staleTime: 10 * 60 * 1000,
+        })
+      : false;
+
     console.log('[EmailInvoiceButton] Validating agency SMTP config:', {
       hasEmail: !!agency?.email,
-      hasPassword: !!agency?.smtp_configured
+      hasPassword: smtpConfigured
     });
 
-    if (!agency?.email || !agency?.smtp_configured) {
+    if (!agency?.email || !smtpConfigured) {
       console.error('[EmailInvoiceButton] Agency SMTP credentials missing');
       toast({
         title: "Email Not Configured",

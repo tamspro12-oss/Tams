@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { preloadEssentialData } from '@/lib/dataPreloader';
 
 type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline';
 
@@ -66,11 +65,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     setStatus('syncing');
     
     try {
-      // Invalidate all queries to force fresh fetch
+      // Invalidate active queries to force fresh fetch
       await queryClient.invalidateQueries();
-      
-      // Preload essential data
-      await preloadEssentialData(queryClient);
       
       setStatus('synced');
       setLastSyncTime(new Date());

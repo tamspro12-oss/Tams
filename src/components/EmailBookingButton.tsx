@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { sendEmail, createBookingEmailBody } from "@/lib/emailService";
-import { useAgency } from "@/hooks/useAgency";
+import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import {
@@ -23,6 +24,7 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const queryClient = useQueryClient();
 
   const handleEmailBooking = async () => {
     if (isSending) return;
@@ -44,12 +46,20 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
       return;
     }
 
+    const smtpConfigured = agency?.email
+      ? await queryClient.fetchQuery({
+          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+          queryFn: fetchAgencySmtpConfigured,
+          staleTime: 10 * 60 * 1000,
+        })
+      : false;
+
     console.log('[EmailBookingButton] Validating agency SMTP config:', {
       hasEmail: !!agency?.email,
-      hasPassword: !!agency?.smtp_configured
+      hasPassword: smtpConfigured
     });
 
-    if (!agency?.email || !agency?.smtp_configured) {
+    if (!agency?.email || !smtpConfigured) {
       console.error('[EmailBookingButton] Agency SMTP credentials missing');
       toast({
         title: "Email Not Configured",
