@@ -299,6 +299,11 @@ export default function ReportsHub() {
         filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
         callback: triggerReportsSync,
       },
+      {
+        table: "document_edit_history",
+        filter: agencyId ? `agency_id=eq.${agencyId}` : undefined,
+        callback: triggerReportsSync,
+      },
     ],
   });
 
@@ -355,6 +360,7 @@ export default function ReportsHub() {
         .from("transactions")
         .select("*")
         .eq("agency_id", agencyId)
+        .is("reversed_of", null)
         .order("date", { ascending: false });
       if (error) {
         console.error("Failed to fetch report transactions:", error);
@@ -407,8 +413,9 @@ export default function ReportsHub() {
       if (!agencyId) return null;
       const nowAnchor = getKarachiTodayNoon();
       const { data, error } = await (supabase as any).rpc("get_agency_financial_summary", {
-        p_period_start: format(startOfMonth(nowAnchor), "yyyy-MM-dd"),
-        p_period_end: format(endOfMonth(nowAnchor), "yyyy-MM-dd"),
+        p_start_date: format(startOfMonth(nowAnchor), "yyyy-MM-dd"),
+        p_end_date: format(endOfMonth(nowAnchor), "yyyy-MM-dd"),
+        p_agency_id: agencyId,
       });
       if (error) return null;
       return data as Record<string, any> | null;

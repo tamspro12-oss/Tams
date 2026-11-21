@@ -1,4 +1,4 @@
-import { getTodayDateString } from "@/components/ui/LockedDateField";
+import { getKarachiYmd } from "@/lib/karachiTime";
 
 export type ServiceType = "Ticket" | "Umrah" | "Visa" | "Insurance" | "Hotel" | "Other";
 export type TripType = "One Way" | "Return" | "Multicity";
@@ -144,7 +144,7 @@ export function createDefaultPassenger(): Passenger {
 }
 
 export function createDefaultServiceDetails(defaultDate?: string): ServiceDetailsState {
-  const today = defaultDate || getTodayDateString();
+  const today = defaultDate || getKarachiYmd();
   return {
     tripType: "One Way",
     origin: "KHI",
@@ -397,7 +397,7 @@ export function validateServiceAndPassengers(
   details: ServiceDetailsState,
   passengers: Passenger[]
 ): string | null {
-  const today = getTodayDateString();
+  const today = getKarachiYmd();
 
   if (serviceType === "Ticket") {
     if (

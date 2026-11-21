@@ -1,11 +1,12 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatPdfEditedNote } from "@/lib/documentEditHelpers";
 
 export interface VoucherPdfData {
   voucherNo: string;
   voucherDate: string;
   direction: "received" | "paid";
-  paymentMode: "cash" | "bank" | "transfer";
+  paymentMode: string;
   partyName: string;
   partyPhone?: string;
   amount: number;
@@ -13,6 +14,8 @@ export interface VoucherPdfData {
   referenceNo?: string;
   notes?: string;
   isAdjustment?: boolean;
+  isEdited?: boolean;
+  lastEditedAt?: string | null;
   allocations?: { invoiceNo: string; amount: number }[];
   agency?: {
     name?: string;
@@ -130,6 +133,14 @@ export function generateVoucherPdf(data: VoucherPdfData) {
   doc.setTextColor(...BRAND.muted);
   doc.text("Prepared By", 14, y + 5);
   doc.text("Received / Authorized By", 140, y + 5);
+
+  const editedNote = formatPdfEditedNote(data.isEdited, data.lastEditedAt);
+  if (editedNote) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.text(editedNote, pageWidth - 14, 280, { align: "right" });
+    doc.setFont("helvetica", "normal");
+  }
 
   doc.save(`Voucher_${data.voucherNo}.pdf`);
 }

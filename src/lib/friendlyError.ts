@@ -108,6 +108,38 @@ const KNOWN_FRIENDLY_RPC_PATTERNS: Array<{ test: RegExp; message: string }> = [
     test: /does not have an assigned agency/i,
     message: "No agency is assigned to your account. Please contact support.",
   },
+  {
+    test: /edit reason is required/i,
+    message: "Please enter a reason for this edit.",
+  },
+  {
+    test: /voided or refunded invoices cannot be edited/i,
+    message: "Voided or refunded invoices cannot be edited.",
+  },
+  {
+    test: /voided payment vouchers cannot be edited/i,
+    message: "Voided payment vouchers cannot be edited.",
+  },
+  {
+    test: /cannot change amount on a voucher linked to a voided invoice/i,
+    message: "Cannot change the amount of a voucher linked to a voided invoice.",
+  },
+  {
+    test: /payment voucher not found/i,
+    message: "Selected payment voucher was not found for your agency.",
+  },
+  {
+    test: /refund record not found/i,
+    message: "Selected refund record was not found for your agency.",
+  },
+  {
+    test: /audit history is append-only/i,
+    message: "Audit history cannot be modified or deleted.",
+  },
+  {
+    test: /could not find the function.*edit_(booking_invoice|payment_voucher|refund)_atomic/i,
+    message: "The edit feature is waiting for the latest database update. Please apply the migration and try again.",
+  },
 ];
 
 export function extractRawErrorDetails(error: unknown): {

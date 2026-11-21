@@ -95,8 +95,12 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
                       paymentMode: voucher.payment_mode,
                       partyName: displayPartyName,
                       amount: voucher.amount,
-                      accountName: `${String(voucher.payment_mode || "cash").toUpperCase()} Account`,
+                      accountName: voucher.bank_name
+                        ? `${String(voucher.payment_mode || "cash").toUpperCase()} (${voucher.bank_name})`
+                        : `${String(voucher.payment_mode || "cash").toUpperCase()} Account`,
                       notes: voucher.notes,
+                      isEdited: voucher.is_edited,
+                      lastEditedAt: voucher.last_edited_at,
                     });
                   }}
                 >

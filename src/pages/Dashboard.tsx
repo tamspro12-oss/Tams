@@ -221,6 +221,8 @@ export default function Dashboard() {
       { table: "payment_vouchers", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
       { table: "expenses", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
       { table: "refunds", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "transactions", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
+      { table: "document_edit_history", filter: agencyRealtimeFilter, callback: triggerDashboardSync },
     ],
   });
 

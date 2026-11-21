@@ -65,7 +65,14 @@ import {
   FileCheck,
   Search,
   X,
+  Pencil,
 } from "lucide-react";
+import { EditedBadge } from "@/components/audit/EditedBadge";
+import { DocumentEditHistoryDialog } from "@/components/audit/DocumentEditHistoryDialog";
+import {
+  canEditSalesDocument,
+  type EditableDocumentType,
+} from "@/lib/documentEditHelpers";
 
 export default function SalesExpensesHub() {
   const queryClient = useQueryClient();
@@ -78,6 +85,14 @@ export default function SalesExpensesHub() {
   const [isVoucherOpen, setIsVoucherOpen] = useState(false);
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const [editingVoucher, setEditingVoucher] = useState<any | null>(null);
+  const [editingRefund, setEditingRefund] = useState<any | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<{
+    documentType: EditableDocumentType;
+    documentId: string;
+    documentNo: string;
+  } | null>(null);
   const [inspectedInvoice, setInspectedInvoice] = useState<any | null>(null);
   const [inspectedVoucher, setInspectedVoucher] = useState<any | null>(null);
   const {
@@ -92,6 +107,18 @@ export default function SalesExpensesHub() {
     permissions,
     isLoading: isLoadingPerms,
   });
+  const canEditInvoice = canEditSalesDocument(
+    { isSubUser, isActive, permissions, isLoading: isLoadingPerms },
+    "booking_invoice"
+  );
+  const canEditVoucher = canEditSalesDocument(
+    { isSubUser, isActive, permissions, isLoading: isLoadingPerms },
+    "payment_voucher"
+  );
+  const canEditRefund = canEditSalesDocument(
+    { isSubUser, isActive, permissions, isLoading: isLoadingPerms },
+    "refund"
+  );
   const [voucherPrefill, setVoucherPrefill] = useState<{
     partyId?: string;
     direction?: VoucherDirection;
@@ -163,6 +190,11 @@ export default function SalesExpensesHub() {
       },
       {
         table: "transactions",
+        filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
+        callback: triggerSalesHubSync,
+      },
+      {
+        table: "document_edit_history",
         filter: userAgencyId ? `agency_id=eq.${userAgencyId}` : undefined,
         callback: triggerSalesHubSync,
       },
@@ -287,6 +319,7 @@ export default function SalesExpensesHub() {
         party: { name: t.notes || "Party" },
         reference_no: t.reference_no,
         notes: t.notes,
+        _isLegacyTxFallback: true,
       }));
     },
   });
@@ -360,6 +393,7 @@ export default function SalesExpensesHub() {
       (r.client_id && clientsLookup[r.client_id]) ||
       (r.booking_id && clientsLookup[r.booking_id]);
     if (client?.name) return client.name;
+    if (r.party_name) return String(r.party_name).trim();
     const match = r.notes?.match(/Party:\s*([^|]+)/);
     if (match) return match[1].trim();
     return "Customer";
@@ -371,6 +405,7 @@ export default function SalesExpensesHub() {
       (r.booking_id && clientsLookup[r.booking_id]);
     if (client?.pnr) return client.pnr;
     if (client?.passport_number) return client.passport_number;
+    if (r.invoice_search) return String(r.invoice_search).trim();
     const matchInv = r.notes?.match(/Ref Invoice:\s*([^|]+)/);
     if (matchInv) return matchInv[1].trim();
     if (r.invoice_no) return r.invoice_no;
@@ -618,18 +653,32 @@ export default function SalesExpensesHub() {
   // -------------------------------------------------------------
 
   // 1. Booking Invoices (Single-Screen Viewport Fit):
-  // Invoice # | Date | Service | Client | PDF | Status | Remaining Amount (PKR) | Paid Amount (PKR) | Total Amount (PKR)
+  // Invoice # | Date | Service | Client | PDF / Edit | Status | Remaining Amount (PKR) | Paid Amount (PKR) | Total Amount (PKR)
   const invoiceColumns: GridColumn[] = [
     {
       key: "invoice_no",
       header: "Invoice #",
-      width: 115,
+      width: 150,
       render: (inv) => (
-        <CopyValue
-          value={inv.invoice_no}
-          label="invoice number"
-          className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200"
-        />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <CopyValue
+            value={inv.invoice_no}
+            label="invoice number"
+            className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200"
+          />
+          <EditedBadge
+            isEdited={inv.is_edited}
+            editCount={inv.edit_count}
+            lastEditedAt={inv.last_edited_at}
+            onClick={() =>
+              setHistoryTarget({
+                documentType: "booking_invoice",
+                documentId: inv.id,
+                documentNo: inv.invoice_no,
+              })
+            }
+          />
+        </div>
       ),
     },
     {
@@ -661,14 +710,15 @@ export default function SalesExpensesHub() {
     },
     {
       key: "actions",
-      header: "PDF",
-      width: 80,
+      header: "PDF / Edit",
+      width: 105,
       align: "center",
       sortable: false,
       filterable: false,
       render: (inv) => (
         <div className="flex items-center justify-center gap-1">
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               generateBookingConfirmationPdf({
@@ -680,6 +730,8 @@ export default function SalesExpensesHub() {
                 clientAmount: inv.client_amount || 0,
                 paidAmount: inv.paid_amount || 0,
                 balanceDue: inv.remaining_amount || 0,
+                isEdited: inv.is_edited,
+                lastEditedAt: inv.last_edited_at,
               });
             }}
             title="Download Confirmation"
@@ -688,6 +740,7 @@ export default function SalesExpensesHub() {
             <FileCheck className="w-3.5 h-3.5" />
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               generateBookingInvoicePdf({
@@ -699,6 +752,8 @@ export default function SalesExpensesHub() {
                 clientAmount: inv.client_amount || 0,
                 paidAmount: inv.paid_amount || 0,
                 balanceDue: inv.remaining_amount || 0,
+                isEdited: inv.is_edited,
+                lastEditedAt: inv.last_edited_at,
               });
             }}
             title="Download Invoice"
@@ -706,6 +761,20 @@ export default function SalesExpensesHub() {
           >
             <FileText className="w-3.5 h-3.5" />
           </button>
+          {canEditInvoice && !inv._isLegacyClientFallback && !isInvoiceVoidedOrRefunded(inv) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingInvoice(inv);
+              }}
+              title="Edit Booking Invoice"
+              aria-label={`Edit invoice ${inv.invoice_no}`}
+              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600 hover:text-amber-700 cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -872,6 +941,8 @@ export default function SalesExpensesHub() {
                   clientAmount: inv.client_amount || 0,
                   paidAmount: inv.paid_amount || 0,
                   balanceDue: inv.remaining_amount || 0,
+                  isEdited: inv.is_edited,
+                  lastEditedAt: inv.last_edited_at,
                 });
               }}
               className="h-7 text-xs gap-1.5 text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 cursor-pointer"
@@ -893,6 +964,8 @@ export default function SalesExpensesHub() {
                   clientAmount: inv.client_amount || 0,
                   paidAmount: inv.paid_amount || 0,
                   balanceDue: inv.remaining_amount || 0,
+                  isEdited: inv.is_edited,
+                  lastEditedAt: inv.last_edited_at,
                 });
               }}
               className="h-7 text-xs gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 hover:bg-slate-100 cursor-pointer"
@@ -910,13 +983,27 @@ export default function SalesExpensesHub() {
     {
       key: "voucher_no",
       header: "Voucher #",
-      width: 125,
+      width: 155,
       render: (v) => (
-        <CopyValue
-          value={v.voucher_no}
-          label="voucher number"
-          className="font-mono font-bold text-xs"
-        />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <CopyValue
+            value={v.voucher_no}
+            label="voucher number"
+            className="font-mono font-bold text-xs"
+          />
+          <EditedBadge
+            isEdited={v.is_edited}
+            editCount={v.edit_count}
+            lastEditedAt={v.last_edited_at}
+            onClick={() =>
+              setHistoryTarget({
+                documentType: "payment_voucher",
+                documentId: v.id,
+                documentNo: v.voucher_no,
+              })
+            }
+          />
+        </div>
       ),
     },
     {
@@ -962,6 +1049,31 @@ export default function SalesExpensesHub() {
       ),
     },
     {
+      key: "edit",
+      header: "Edit",
+      width: 56,
+      align: "center",
+      sortable: false,
+      filterable: false,
+      render: (v) =>
+        canEditVoucher && !v.is_void && !v._isLegacyTxFallback ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingVoucher(v);
+            }}
+            title="Edit Payment Voucher"
+            aria-label={`Edit voucher ${v.voucher_no}`}
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600 hover:text-amber-700 cursor-pointer"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">—</span>
+        ),
+    },
+    {
       key: "payment_mode",
       header: "Mode",
       width: 80,
@@ -1001,17 +1113,22 @@ export default function SalesExpensesHub() {
       sortable: false,
       render: (v) => (
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
+            const modeStr = String(v.payment_mode || "cash").toUpperCase();
             generateVoucherPdf({
               voucherNo: v.voucher_no,
               voucherDate: v.voucher_date,
               direction: v.direction,
-              paymentMode: v.payment_mode,
+              paymentMode: v.payment_mode || "cash",
               partyName: v.party?.name || "Customer",
               amount: v.amount,
-              accountName: `${v.payment_mode.toUpperCase()} Account`,
+              accountName: v.bank_name ? `${modeStr} (${v.bank_name})` : `${modeStr} Account`,
+              referenceNo: v.reference_no,
               notes: v.notes,
+              isEdited: v.is_edited,
+              lastEditedAt: v.last_edited_at,
             });
           }}
           className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
@@ -1033,15 +1150,29 @@ export default function SalesExpensesHub() {
     {
       key: "refund_no",
       header: "Refund #",
-      width: 125,
+      width: 155,
       render: (r) => {
         const rNo = r.refund_no || r.reference_no || `REF-${r.id.slice(0, 6).toUpperCase()}`;
         return (
-          <CopyValue
-            value={rNo}
-            label="refund number"
-            className="font-mono font-bold text-xs"
-          />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <CopyValue
+              value={rNo}
+              label="refund number"
+              className="font-mono font-bold text-xs"
+            />
+            <EditedBadge
+              isEdited={r.is_edited}
+              editCount={r.edit_count}
+              lastEditedAt={r.last_edited_at}
+              onClick={() =>
+                setHistoryTarget({
+                  documentType: "refund",
+                  documentId: r.id,
+                  documentNo: rNo,
+                })
+              }
+            />
+          </div>
         );
       },
     },
@@ -1084,6 +1215,31 @@ export default function SalesExpensesHub() {
           )}
         </div>
       ),
+    },
+    {
+      key: "edit",
+      header: "Edit",
+      width: 56,
+      align: "center",
+      sortable: false,
+      filterable: false,
+      render: (r) =>
+        canEditRefund ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingRefund(r);
+            }}
+            title="Edit Refund / Void"
+            aria-label={`Edit refund ${r.refund_no || r.id}`}
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600 hover:text-amber-700 cursor-pointer"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">—</span>
+        ),
     },
     {
       key: "payment_mode",
@@ -1629,13 +1785,29 @@ export default function SalesExpensesHub() {
 
       {/* Modals */}
       <BookingInvoiceForm
-        open={isInvoiceOpen}
-        onOpenChange={handleModalClose(setIsInvoiceOpen)}
+        open={isInvoiceOpen || Boolean(editingInvoice)}
+        editingInvoice={editingInvoice}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingInvoice(null);
+            handleModalClose(setIsInvoiceOpen)(false);
+          } else {
+            setIsInvoiceOpen(true);
+          }
+        }}
         onSuccess={refetchInvoices}
       />
       <PaymentVoucherForm
-        open={isVoucherOpen}
-        onOpenChange={handleVoucherClose}
+        open={isVoucherOpen || Boolean(editingVoucher)}
+        editingVoucher={editingVoucher}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingVoucher(null);
+            handleVoucherClose(false);
+          } else {
+            setIsVoucherOpen(true);
+          }
+        }}
         onSuccess={refetchVouchers}
         initialPartyId={voucherPrefill.partyId}
         initialDirection={voucherPrefill.direction}
@@ -1643,14 +1815,33 @@ export default function SalesExpensesHub() {
         initialAmount={voucherPrefill.amount}
       />
       <RefundVoidForm
-        open={isRefundOpen}
-        onOpenChange={handleModalClose(setIsRefundOpen)}
+        open={isRefundOpen || Boolean(editingRefund)}
+        editingRefund={editingRefund}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingRefund(null);
+            handleModalClose(setIsRefundOpen)(false);
+          } else {
+            setIsRefundOpen(true);
+          }
+        }}
         onSuccess={refetchRefunds}
       />
       <ExpenseFormModal
         open={isExpenseOpen}
         onOpenChange={handleModalClose(setIsExpenseOpen)}
         onSuccess={refetchExpenses}
+      />
+
+      {/* Document Edit Audit History Panel */}
+      <DocumentEditHistoryDialog
+        open={Boolean(historyTarget)}
+        onOpenChange={(open) => {
+          if (!open) setHistoryTarget(null);
+        }}
+        documentType={historyTarget?.documentType || null}
+        documentId={historyTarget?.documentId || null}
+        documentNo={historyTarget?.documentNo || null}
       />
 
       {/* Global Search Deep-Link Quick View: Invoice */}

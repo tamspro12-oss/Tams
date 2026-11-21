@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatPdfEditedNote } from "@/lib/documentEditHelpers";
 
 export interface BookingPdfData {
   invoiceNo: string;
@@ -17,6 +18,8 @@ export interface BookingPdfData {
   balanceDue: number;
   currency?: string;
   notes?: string;
+  isEdited?: boolean;
+  lastEditedAt?: string | null;
   agency?: {
     name?: string;
     phone?: string;
@@ -134,6 +137,13 @@ export function generateBookingConfirmationPdf(data: BookingPdfData) {
   doc.setFontSize(8);
   doc.setTextColor(...BRAND.muted);
   doc.text("Thank you for choosing our travel services. Have a safe journey!", 14, 280);
+  const editedNote = formatPdfEditedNote(data.isEdited, data.lastEditedAt);
+  if (editedNote) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.text(editedNote, pageWidth - 14, 280, { align: "right" });
+    doc.setFont("helvetica", "normal");
+  }
 
   doc.save(`Confirmation_${data.invoiceNo}.pdf`);
 }
@@ -243,6 +253,13 @@ export function generateBookingInvoicePdf(data: BookingPdfData) {
 
   // Bottom Footer
   doc.text("TAMS Pro Travel Management System", 14, 280);
+  const editedNote = formatPdfEditedNote(data.isEdited, data.lastEditedAt);
+  if (editedNote) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.text(editedNote, pageWidth - 14, 280, { align: "right" });
+    doc.setFont("helvetica", "normal");
+  }
 
   doc.save(`Invoice_${data.invoiceNo}.pdf`);
 }

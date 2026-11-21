@@ -13,6 +13,7 @@ interface LockedDateFieldProps {
   label?: string;
   name?: string;
   value?: string;
+  lockedDate?: string;
   onChange?: (date: string) => void;
   required?: boolean;
   className?: string;
@@ -24,20 +25,21 @@ export const LockedDateField: React.FC<LockedDateFieldProps> = ({
   label = "Transaction Date",
   name,
   value,
+  lockedDate,
   onChange,
   required = true,
   className = "",
   helperText = "Locked to current system date for audit integrity",
 }) => {
-  // Always lock to current system date YYYY-MM-DD
+  // Lock to provided original entry date (in edit mode) or current system date YYYY-MM-DD
   const todayStr = getTodayDateString();
-  const currentDate = todayStr;
+  const currentDate = lockedDate ? lockedDate.slice(0, 10) : todayStr;
 
   React.useEffect(() => {
-    if (onChange && value !== todayStr) {
+    if (!lockedDate && onChange && value !== todayStr) {
       onChange(todayStr);
     }
-  }, [value, onChange, todayStr]);
+  }, [lockedDate, value, onChange, todayStr]);
 
   return (
     <div className={`space-y-1 ${className}`} data-locked-date="true">

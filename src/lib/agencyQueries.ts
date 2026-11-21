@@ -79,6 +79,7 @@ export function mapLegacyClientsToInvoices(clientsData: any[]): any[] {
     ticket_no: c.passport_number,
     more_details: { remaining_due_date: c.remaining_payment_date },
     remaining_payment_date: c.remaining_payment_date,
+    _isLegacyClientFallback: true,
   }));
 }
 

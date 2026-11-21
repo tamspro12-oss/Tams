@@ -120,6 +120,8 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                       balanceDue: remaining,
                       passengers: invoice.passengers || [],
                       currency: invoice.currency,
+                      isEdited: invoice.is_edited,
+                      lastEditedAt: invoice.last_edited_at,
                     });
                   }}
                 >
@@ -148,6 +150,8 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                       passportNo: invoice.passport_no,
                       passengers: invoice.passengers || [],
                       currency: invoice.currency,
+                      isEdited: invoice.is_edited,
+                      lastEditedAt: invoice.last_edited_at,
                     });
                   }}
                 >

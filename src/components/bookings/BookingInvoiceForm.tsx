@@ -50,7 +50,14 @@ import {
   FileText,
   Plus,
   TrendingUp,
+  Lock,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  hydrateInvoiceForEdit,
+  evaluateInvoiceEdit,
+  type InvoiceEditSnapshot,
+} from "@/lib/documentEditHelpers";
 
 export type { ServiceType, TripType };
 
@@ -58,12 +65,14 @@ interface BookingInvoiceFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  editingInvoice?: any | null;
 }
 
 export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   open,
   onOpenChange,
   onSuccess,
+  editingInvoice,
 }) => {
   const { parties } = useParties();
   const { data: agency } = useAgency();
@@ -158,12 +167,15 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   );
   const [paymentMode, setPaymentMode] = useState<"cash" | "bank">("cash");
 
-  // Booking Remarks
+  // Booking Remarks & Edit Audit Reason
   const [notes, setNotes] = useState<string>("");
+  const [editReason, setEditReason] = useState<string>("");
+  const [initialEditSnapshot, setInitialEditSnapshot] = useState<InvoiceEditSnapshot | null>(null);
 
+  const isEditMode = Boolean(editingInvoice?.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Compute Auto Next Invoice Number preview on Open (DB assigns final atomic number on save)
+  // Hydrate form in Edit mode OR initialize clean defaults in Create mode
   useEffect(() => {
     async function fetchNextInvoiceNo() {
       try {
@@ -181,14 +193,55 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       setAutoInvoiceNo("Auto-assigned");
     }
 
-    if (open) {
-      requestIdRef.current = createRequestId();
-      setInvoiceDate(getTodayDateString());
+    if (!open) return;
+
+    requestIdRef.current = createRequestId();
+
+    if (editingInvoice?.id) {
+      const hydrated = hydrateInvoiceForEdit(editingInvoice);
+      setInvoiceDate(String(editingInvoice.invoice_date || getTodayDateString()).slice(0, 10));
+      setService(hydrated.service);
+      setPartyId(editingInvoice.party_id || "");
+      setVendorId(editingInvoice.vendor_id || "");
+      setContactNumber(editingInvoice.party?.phone || "");
+      setEmail("");
+      setSelectedBank("");
+      setServiceDetails(hydrated.serviceDetails);
+      setPassengers(hydrated.passengers);
+      setVendorPayable(hydrated.vendorPayable);
+      setTotalAmount(hydrated.totalAmount);
+      setAmountPaid(String(Number(editingInvoice.paid_amount) || 0));
+      setRemainingDueDate(hydrated.dueDate);
+      setPaymentMode("cash");
+      setNotes(hydrated.notes);
+      setEditReason("");
+      setInitialEditSnapshot(hydrated.initialSnapshot);
       setIsManualInvoiceNo(false);
       setManualInvoiceNo("");
-      fetchNextInvoiceNo();
+      return;
     }
-  }, [open]);
+
+    setInvoiceDate(getTodayDateString());
+    setService("Ticket");
+    setPartyId("");
+    setVendorId("");
+    setContactNumber("");
+    setEmail("");
+    setSelectedBank("");
+    setServiceDetails(createDefaultServiceDetails());
+    setPassengers([createDefaultPassenger()]);
+    setVendorPayable("0");
+    setTotalAmount("0");
+    setAmountPaid("0");
+    setRemainingDueDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setPaymentMode("cash");
+    setNotes("");
+    setEditReason("");
+    setInitialEditSnapshot(null);
+    setIsManualInvoiceNo(false);
+    setManualInvoiceNo("");
+    fetchNextInvoiceNo();
+  }, [open, editingInvoice]);
 
   // Filter clients and vendors
   const clientsList = useMemo(
@@ -240,6 +293,65 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const liveProfit = clientAmtNum - vendorPayNum;
 
   const selectedParty = parties.find((p) => p.id === partyId);
+  const existingPaidNum = Number(editingInvoice?.paid_amount) || 0;
+  const effectiveRemainingNum = isEditMode
+    ? Math.max(0, clientAmtNum - existingPaidNum)
+    : remainingAmountNum;
+  const invoiceAmountChanged = Boolean(
+    isEditMode &&
+      initialEditSnapshot &&
+      (clientAmtNum !== initialEditSnapshot.clientAmount ||
+        vendorPayNum !== initialEditSnapshot.vendorPayable)
+  );
+  const invoiceUnderPaidError =
+    isEditMode && clientAmtNum > 0 && clientAmtNum < existingPaidNum;
+
+  const buildNormalizedMoreDetails = () => ({
+    ...(editingInvoice?.more_details && typeof editingInvoice.more_details === "object"
+      ? editingInvoice.more_details
+      : {}),
+    remaining_due_date:
+      (isEditMode ? effectiveRemainingNum : remainingAmountNum) > 0
+        ? remainingDueDate || null
+        : null,
+    selected_bank: !isEditMode && paymentMode === "bank" ? selectedBank || null : editingInvoice?.more_details?.selected_bank || null,
+    client_name: selectedParty?.name || passengers[0]?.name || editingInvoice?.more_details?.client_name || null,
+    trip_type: service === "Ticket" ? tripType : null,
+    origin: service === "Ticket" ? origin : null,
+    destination: service === "Ticket" ? destination : null,
+    flight_date: service === "Ticket" ? flightDate : null,
+    flight_time: service === "Ticket" ? flightTime : null,
+    return_date: service === "Ticket" ? returnDate : null,
+    return_time: service === "Ticket" ? returnTime : null,
+    multicity_legs: service === "Ticket" && tripType === "Multicity" ? multicityLegs : null,
+    airline: service === "Ticket" ? airline : null,
+    pnr: pnr || null,
+    ticket_no: ticketNo || null,
+    ziyarat_included: service === "Umrah" ? ziyaratIncluded : null,
+    umrah_departure_city: service === "Umrah" ? umrahDepartureCity : null,
+    umrah_arrival_city: service === "Umrah" ? umrahArrivalCity : null,
+    umrah_airline: service === "Umrah" ? umrahAirline : null,
+    umrah_flight_date: service === "Umrah" ? umrahFlightDate : null,
+    umrah_flight_time: service === "Umrah" ? umrahFlightTime : null,
+    umrah_return_date: service === "Umrah" ? umrahReturnDate : null,
+    umrah_return_time: service === "Umrah" ? umrahReturnTime : null,
+    umrah_transport: service === "Umrah" ? umrahTransport : null,
+    makkah_hotel: service === "Umrah" ? makkahHotel : null,
+    makkah_nights: service === "Umrah" ? makkahNights : null,
+    madinah_hotel: service === "Umrah" ? madinahHotel : null,
+    madinah_nights: service === "Umrah" ? madinahNights : null,
+    visa_country: service === "Visa" ? visaCountry : null,
+    visa_type: service === "Visa" ? visaType : null,
+    visa_validity: service === "Visa" ? visaValidity : null,
+    insurance_plan: service === "Insurance" ? insurancePlan : null,
+    insurance_duration: service === "Insurance" ? insuranceDuration : null,
+    hotel_name: service === "Hotel" ? hotelName : null,
+    hotel_city: service === "Hotel" ? hotelCity : null,
+    hotel_check_in: service === "Hotel" ? hotelCheckIn : null,
+    hotel_check_out: service === "Hotel" ? hotelCheckOut : null,
+    hotel_room_type: service === "Hotel" ? hotelRoomType : null,
+    general_description: service === "Other" ? generalDescription : null,
+  });
 
   // PDF Data generator helper
   const getPdfData = (invNo: string): BookingPdfData => ({
@@ -254,10 +366,12 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     passportNo: passengers[0]?.passport || undefined,
     passengers: passengers.filter((p) => p.name.trim()),
     clientAmount: clientAmtNum,
-    paidAmount: amountPaidNum,
-    balanceDue: remainingAmountNum,
+    paidAmount: isEditMode ? existingPaidNum : amountPaidNum,
+    balanceDue: isEditMode ? effectiveRemainingNum : remainingAmountNum,
     currency: "PKR",
     notes: notes || undefined,
+    isEdited: isEditMode ? true : undefined,
+    lastEditedAt: isEditMode ? new Date().toISOString() : undefined,
     agency: {
       name: agency?.name,
       phone: agency?.contact_info,
@@ -273,6 +387,115 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       return;
     }
 
+    const serviceError = validateServiceAndPassengers(service, serviceDetails, passengers);
+    if (serviceError) {
+      toast.error(serviceError);
+      return;
+    }
+
+    // Build composite notes summarizing service details
+    const serviceDetailsSummary = [
+      service === "Ticket"
+        ? `[Air Ticket - ${tripType}] ${origin}->${destination} | Date: ${flightDate} ${flightTime} | PNR: ${pnr} | Airline: ${airline}`
+        : null,
+      service === "Umrah"
+        ? `[Umrah Package] Route: ${umrahDepartureCity}->${umrahArrivalCity} | Dates: ${umrahFlightDate} to ${umrahReturnDate} | Transport: ${umrahTransport} | Makkah: ${makkahHotel} (${makkahNights}N) | Madinah: ${madinahHotel} (${madinahNights}N) | Ziyarat: ${ziyaratIncluded ? "Yes" : "No"}`
+        : null,
+      service === "Visa"
+        ? `[Visa] Country: ${visaCountry} | Type: ${visaType} | Validity: ${visaValidity}`
+        : null,
+      service === "Hotel"
+        ? `[Hotel] ${hotelName} (${hotelCity}) | In: ${hotelCheckIn} Out: ${hotelCheckOut} | Room: ${hotelRoomType}`
+        : null,
+      service === "Insurance"
+        ? `[Insurance] ${insurancePlan} (${insuranceDuration} Days)`
+        : null,
+      service === "Other" && generalDescription ? `[Other Service] ${generalDescription}` : null,
+      notes ? `Remarks: ${notes}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const agencyIdForRefresh = currentAgencyId || agency?.id;
+
+    // EDIT MODE PATH (atomic ledger correction + audit trail)
+    if (isEditMode && editingInvoice && initialEditSnapshot) {
+      const evaluation = evaluateInvoiceEdit(
+        initialEditSnapshot,
+        {
+          clientAmount: clientAmtNum,
+          vendorPayable: vendorPayNum,
+          dueDate: remainingDueDate,
+          serviceDetails,
+          passengers,
+          notes,
+        },
+        existingPaidNum,
+        editReason
+      );
+
+      if (evaluation.noChanges) {
+        toast.info("No changes were made.");
+        onOpenChange(false);
+        return;
+      }
+
+      if (!evaluation.ok) {
+        toast.error(evaluation.error || "Please review your changes.");
+        return;
+      }
+
+      const nextMoreDetails = buildNormalizedMoreDetails();
+      const changed = new Set(evaluation.changedFields);
+
+      await runUiAtomicSave({
+        requestIdRef,
+        isLockedRef: isSubmittingRef,
+        setIsSubmitting,
+        contextLabel: "BookingInvoiceForm.handleEditSave",
+        fallbackErrorMessage: "Failed to update booking invoice. Please try again.",
+        execute: async (requestId) => {
+          const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+            "edit_booking_invoice_atomic",
+            {
+              p_invoice_id: editingInvoice.id,
+              p_reason: editReason.trim(),
+              p_client_amount: changed.has("client_amount") ? clientAmtNum : null,
+              p_vendor_payable: changed.has("vendor_payable") ? vendorPayNum : null,
+              p_due_date: changed.has("due_date") ? (remainingDueDate || editingInvoice.invoice_date) : null,
+              p_pnr: changed.has("pnr") ? (pnr || "") : null,
+              p_ticket_no: changed.has("ticket_no") ? (ticketNo || "") : null,
+              p_passport_no: changed.has("passport_no") ? (passengers[0]?.passport || "") : null,
+              p_passengers: changed.has("passengers") ? passengers : null,
+              p_more_details: changed.has("more_details") || changed.has("due_date") ? nextMoreDetails : null,
+              p_notes: changed.has("notes") || changed.has("more_details") ? (serviceDetailsSummary || "") : null,
+              p_request_id: requestId,
+            }
+          );
+          if (rpcErr) throw rpcErr;
+          if (rpcData && rpcData.success === false) {
+            throw new Error(rpcData.error || "Failed to update booking invoice");
+          }
+          return rpcData;
+        },
+        onSuccess: (rpcData) => {
+          onOpenChange(false);
+          toast.success(
+            rpcData?.affected_ledger
+              ? `Invoice ${editingInvoice.invoice_no} updated & ledger corrected`
+              : `Invoice ${editingInvoice.invoice_no} updated`
+          );
+
+          runBackgroundTask("booking-invoice-post-edit", () => {
+            refreshAffectedFinancialQueries(queryClient, "all", agencyIdForRefresh);
+            if (onSuccess) onSuccess();
+          });
+        },
+      });
+      return;
+    }
+
+    // CREATE MODE PATH
     if (!partyId && !passengers[0]?.name.trim()) {
       toast.error("Please select a client or enter a passenger name");
       return;
@@ -298,12 +521,6 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       return;
     }
 
-    const serviceError = validateServiceAndPassengers(service, serviceDetails, passengers);
-    if (serviceError) {
-      toast.error(serviceError);
-      return;
-    }
-
     if (isManualInvoiceNo) {
       const customNo = manualInvoiceNo.trim();
       if (!customNo) {
@@ -316,29 +533,6 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       amountPaidNum > 0
         ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
         : null;
-
-    // Build composite notes summarizing service details
-    const serviceDetailsSummary = [
-      service === "Ticket"
-        ? `[Air Ticket - ${tripType}] ${origin}->${destination} | Date: ${flightDate} ${flightTime} | PNR: ${pnr} | Airline: ${airline}`
-        : null,
-      service === "Umrah"
-        ? `[Umrah Package] Route: ${umrahDepartureCity}->${umrahArrivalCity} | Dates: ${umrahFlightDate} to ${umrahReturnDate} | Transport: ${umrahTransport} | Makkah: ${makkahHotel} (${makkahNights}N) | Madinah: ${madinahHotel} (${madinahNights}N) | Ziyarat: ${ziyaratIncluded ? "Yes" : "No"}`
-        : null,
-      service === "Visa"
-        ? `[Visa] Country: ${visaCountry} | Type: ${visaType} | Validity: ${visaValidity}`
-        : null,
-      service === "Hotel"
-        ? `[Hotel] ${hotelName} (${hotelCity}) | In: ${hotelCheckIn} Out: ${hotelCheckOut} | Room: ${hotelRoomType}`
-        : null,
-      service === "Insurance"
-        ? `[Insurance] ${insurancePlan} (${insuranceDuration} Days)`
-        : null,
-      service === "Other" && generalDescription ? `[Other Service] ${generalDescription}` : null,
-      notes ? `Remarks: ${notes}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
 
     const legacyParams = {
       p_invoice_no: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
@@ -357,20 +551,10 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       p_passport_no: passengers[0]?.passport || null,
       p_passengers: passengers,
       p_currency: "PKR",
-      p_more_details: {
-        remaining_due_date: remainingAmountNum > 0 ? remainingDueDate || null : null,
-        selected_bank: paymentMode === "bank" ? selectedBank || null : null,
-        client_name: selectedParty?.name || passengers[0]?.name || null,
-        trip_type: service === "Ticket" ? tripType : null,
-        origin: service === "Ticket" ? origin : null,
-        destination: service === "Ticket" ? destination : null,
-        airline: service === "Ticket" ? airline : null,
-      },
+      p_more_details: buildNormalizedMoreDetails(),
       p_notes: serviceDetailsSummary || null,
       p_is_manual: isManualInvoiceNo,
     };
-
-    const agencyIdForRefresh = currentAgencyId || agency?.id;
 
     await runUiAtomicSave({
       requestIdRef,
@@ -416,6 +600,22 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   };
 
   const isDirty = useMemo(() => {
+    if (isEditMode && initialEditSnapshot) {
+      const ev = evaluateInvoiceEdit(
+        initialEditSnapshot,
+        {
+          clientAmount: clientAmtNum,
+          vendorPayable: vendorPayNum,
+          dueDate: remainingDueDate,
+          serviceDetails,
+          passengers,
+          notes,
+        },
+        existingPaidNum,
+        editReason
+      );
+      return Boolean(editReason.trim() || !ev.noChanges);
+    }
     return Boolean(
       partyId ||
         vendorId ||
@@ -428,7 +628,24 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         amountPaidNum > 0 ||
         passengers.some((p) => p.name.trim() || (p.passport && p.passport.trim()))
     );
-  }, [partyId, vendorId, pnr, ticketNo, airline, notes, clientAmtNum, vendorPayNum, amountPaidNum, passengers]);
+  }, [
+    isEditMode,
+    initialEditSnapshot,
+    remainingDueDate,
+    serviceDetails,
+    existingPaidNum,
+    editReason,
+    partyId,
+    vendorId,
+    pnr,
+    ticketNo,
+    airline,
+    notes,
+    clientAmtNum,
+    vendorPayNum,
+    amountPaidNum,
+    passengers,
+  ]);
 
   useFormKeyboardNav({
     containerRef: formRef,
@@ -449,20 +666,27 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
           <div className="flex items-center gap-2.5">
             <FileText className="w-4 h-4 text-blue-600 shrink-0" />
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
-              New Booking Invoice
+              {isEditMode ? "Edit Booking Invoice" : "New Booking Invoice"}
             </DialogTitle>
           </div>
 
-          <DocumentNumberControl
-            label="Invoice #:"
-            docType="invoice"
-            previewNumber={autoInvoiceNo}
-            isManual={isManualInvoiceNo}
-            manualValue={manualInvoiceNo}
-            onManualModeChange={setIsManualInvoiceNo}
-            onManualValueChange={setManualInvoiceNo}
-            accentClassName="text-blue-600 dark:text-blue-400"
-          />
+          {isEditMode && editingInvoice ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+              <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+              <span>Invoice #: {editingInvoice.invoice_no}</span>
+            </div>
+          ) : (
+            <DocumentNumberControl
+              label="Invoice #:"
+              docType="invoice"
+              previewNumber={autoInvoiceNo}
+              isManual={isManualInvoiceNo}
+              manualValue={manualInvoiceNo}
+              onManualModeChange={setIsManualInvoiceNo}
+              onManualValueChange={setManualInvoiceNo}
+              accentClassName="text-blue-600 dark:text-blue-400"
+            />
+          )}
         </div>
 
         {/* BODY + FOOTER wrapped in ref for keyboard navigation */}
@@ -474,82 +698,123 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             <LockedDateField
               label="Date"
               value={invoiceDate}
-              onChange={setInvoiceDate}
+              lockedDate={isEditMode ? invoiceDate : undefined}
+              onChange={isEditMode ? undefined : setInvoiceDate}
+              helperText={
+                isEditMode
+                  ? "Original entry date is locked"
+                  : "Locked to current system date for audit integrity"
+              }
               required
             />
 
-            {/* 2. Service Type */}
+            {/* 2. Service Type (locked in Edit mode) */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Service Type <span className="text-red-500">*</span>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <span>Service Type <span className="text-red-500">*</span></span>
+                {isEditMode && <Lock className="w-2.5 h-2.5 text-amber-600" />}
               </Label>
               <ServiceTypeSelect
                 value={service}
                 onChange={setService}
+                disabled={isEditMode}
                 className="h-8 text-xs"
               />
             </div>
 
-            {/* 3. Client (with + Quick Add) */}
+            {/* 3. Client (locked in Edit mode, with + Quick Add in Create mode) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Client <span className="text-red-500">*</span>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <span>Client <span className="text-red-500">*</span></span>
+                  {isEditMode && <Lock className="w-2.5 h-2.5 text-amber-600" />}
                 </Label>
-                <button
-                  type="button"
-                  data-quick-add-btn="true"
-                  onClick={() => setIsAddClientOpen(true)}
-                  className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                >
-                  <Plus className="w-2.5 h-2.5" /> Quick Add
-                </button>
+                {!isEditMode && (
+                  <button
+                    type="button"
+                    data-quick-add-btn="true"
+                    onClick={() => setIsAddClientOpen(true)}
+                    className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Quick Add
+                  </button>
+                )}
               </div>
-              <div>
-                <SearchableSelect
-                  value={partyId}
-                  onChange={handleClientSelect}
-                  items={clientSelectItems}
-                  placeholder="Select Client"
-                  searchPlaceholder="Search clients by name, code, phone..."
-                  emptyText="No clients found"
-                  required={!passengers[0]?.name.trim()}
-                  requiredMessage="Please select a Client or enter a Passenger Name"
-                  onQuickAdd={() => setIsAddClientOpen(true)}
-                  quickAddLabel="Add New Client"
+              {isEditMode ? (
+                <Input
+                  value={
+                    editingInvoice?.party?.name ||
+                    editingInvoice?.client_name ||
+                    selectedParty?.name ||
+                    "Walk-in Client"
+                  }
+                  readOnly
+                  tabIndex={-1}
+                  className="h-8 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-not-allowed font-medium"
                 />
-              </div>
+              ) : (
+                <div>
+                  <SearchableSelect
+                    value={partyId}
+                    onChange={handleClientSelect}
+                    items={clientSelectItems}
+                    placeholder="Select Client"
+                    searchPlaceholder="Search clients by name, code, phone..."
+                    emptyText="No clients found"
+                    required={!passengers[0]?.name.trim()}
+                    requiredMessage="Please select a Client or enter a Passenger Name"
+                    onQuickAdd={() => setIsAddClientOpen(true)}
+                    quickAddLabel="Add New Client"
+                  />
+                </div>
+              )}
             </div>
 
-            {/* 4. Vendor (with + Quick Add) */}
+            {/* 4. Vendor (locked in Edit mode, with + Quick Add in Create mode) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Vendor
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <span>Vendor</span>
+                  {isEditMode && <Lock className="w-2.5 h-2.5 text-amber-600" />}
                 </Label>
-                <button
-                  type="button"
-                  data-quick-add-btn="true"
-                  onClick={() => setIsAddVendorOpen(true)}
-                  className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                >
-                  <Plus className="w-2.5 h-2.5" /> Quick Add
-                </button>
+                {!isEditMode && (
+                  <button
+                    type="button"
+                    data-quick-add-btn="true"
+                    onClick={() => setIsAddVendorOpen(true)}
+                    className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-0.5 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Quick Add
+                  </button>
+                )}
               </div>
-              <div>
-                <SearchableSelect
-                  value={vendorId}
-                  onChange={(val) => setVendorId(val)}
-                  items={vendorSelectItems}
-                  placeholder="Select Vendor"
-                  searchPlaceholder="Search vendors by name, code, phone..."
-                  emptyText="No vendors found"
-                  allowClear
-                  clearLabel="Clear Vendor (None)"
-                  onQuickAdd={() => setIsAddVendorOpen(true)}
-                  quickAddLabel="Add New Vendor"
+              {isEditMode ? (
+                <Input
+                  value={
+                    editingInvoice?.vendor?.name ||
+                    parties.find((p) => p.id === vendorId)?.name ||
+                    "None"
+                  }
+                  readOnly
+                  tabIndex={-1}
+                  className="h-8 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-not-allowed font-medium"
                 />
-              </div>
+              ) : (
+                <div>
+                  <SearchableSelect
+                    value={vendorId}
+                    onChange={(val) => setVendorId(val)}
+                    items={vendorSelectItems}
+                    placeholder="Select Vendor"
+                    searchPlaceholder="Search vendors by name, code, phone..."
+                    emptyText="No vendors found"
+                    allowClear
+                    clearLabel="Clear Vendor (None)"
+                    onQuickAdd={() => setIsAddVendorOpen(true)}
+                    quickAddLabel="Add New Vendor"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Service-Specific Top Row Field */}
@@ -599,7 +864,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             requireFirstPassenger={!partyId}
           />
           {/* MONEY: One single row with Profit Preview badge */}
-          <div className="pt-1 border-t space-y-1">
+          <div className="pt-1 border-t space-y-1.5">
             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
               {/* Purchasing Cost */}
               <div>
@@ -634,19 +899,31 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 />
               </div>
 
-              {/* Amount Paid */}
+              {/* Amount Paid (locked in Edit mode — edited via Vouchers) */}
               <div>
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Amount Paid
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <span>Amount Paid</span>
+                  {isEditMode && <Lock className="w-2.5 h-2.5 text-amber-600" />}
                 </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  placeholder="0"
-                  className="h-8 text-xs font-mono font-bold text-teal-600 dark:text-teal-400 text-right mt-0.5"
-                />
+                {isEditMode ? (
+                  <Input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    value={`PKR ${existingPaidNum.toLocaleString()}`}
+                    title="Paid amount comes from linked payment vouchers. Edit payment vouchers to change paid amount."
+                    className="h-8 text-xs font-mono font-bold text-teal-700 dark:text-teal-300 bg-slate-100 dark:bg-slate-800 text-right mt-0.5 cursor-not-allowed"
+                  />
+                ) : (
+                  <Input
+                    type="number"
+                    min={0}
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs font-mono font-bold text-teal-600 dark:text-teal-400 text-right mt-0.5"
+                  />
+                )}
               </div>
 
               {/* Remaining (auto) */}
@@ -658,7 +935,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                   type="text"
                   readOnly
                   tabIndex={-1}
-                  value={`PKR ${remainingAmountNum.toLocaleString()}`}
+                  value={`PKR ${(isEditMode ? effectiveRemainingNum : remainingAmountNum).toLocaleString()}`}
                   className="h-8 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 text-right mt-0.5 cursor-not-allowed"
                 />
               </div>
@@ -676,24 +953,26 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 />
               </div>
 
-              {/* Payment Mode */}
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Payment Mode
-                </Label>
-                <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
-                  <SelectTrigger className="h-8 text-xs mt-0.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash in Hand</SelectItem>
-                    <SelectItem value="bank">Bank Account</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Payment Mode (only on initial creation; existing payments live on Vouchers) */}
+              {!isEditMode && (
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Payment Mode
+                  </Label>
+                  <Select value={paymentMode} onValueChange={(val: any) => setPaymentMode(val)}>
+                    <SelectTrigger className="h-8 text-xs mt-0.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash in Hand</SelectItem>
+                      <SelectItem value="bank">Bank Account</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Agency Bank Select inline when Bank is selected */}
-              {paymentMode === "bank" && (
+              {!isEditMode && paymentMode === "bank" && (
                 <div>
                   <AgencyBankSelect
                     value={selectedBank}
@@ -722,19 +1001,55 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </div>
               </div>
             </div>
+
+            {invoiceUnderPaidError && (
+              <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Total amount (PKR {clientAmtNum.toLocaleString()}) cannot be less than the amount already paid (PKR {existingPaidNum.toLocaleString()}).
+                </span>
+              </div>
+            )}
+
+            {!invoiceUnderPaidError && invoiceAmountChanged && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Amount changed — the previous accounting entries will be reversed and new corrected entries will be posted automatically, updating dues, profit, dashboard, and reports.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* NOTES: Single-line input labelled "Remarks" (grows if user types more) */}
-          <div className="pt-1 border-t">
-            <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-              Remarks
-            </Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Itinerary remarks, hotel room info, meal preferences, special requests..."
-              className="w-full min-h-[32px] h-8 max-h-[80px] text-xs resize-y mt-0.5 py-1.5 leading-snug"
-            />
+          <div className="pt-1 border-t grid grid-cols-1 md:grid-cols-12 gap-2.5 items-start">
+            <div className={isEditMode ? "md:col-span-7" : "md:col-span-12"}>
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Remarks
+              </Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Itinerary remarks, hotel room info, meal preferences, special requests..."
+                className="w-full min-h-[32px] h-8 max-h-[80px] text-xs resize-y mt-0.5 py-1.5 leading-snug"
+              />
+            </div>
+
+            {isEditMode && (
+              <div className="md:col-span-5">
+                <Label className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                  Reason for Edit <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  placeholder="e.g. Corrected ticket fare, added PNR, updated due date..."
+                  required
+                  data-required-message="Please enter a reason for this edit"
+                  className="h-8 text-xs mt-0.5 border-amber-300 dark:border-amber-800 focus-visible:ring-amber-500"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -758,7 +1073,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             onClick={() => handleSave(false, false)}
             className="h-8 text-xs bg-[#0B192C] hover:bg-[#1E3E62] text-white cursor-pointer w-full sm:w-auto min-w-[90px] focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Save Changes" : "Save"}
           </Button>
         </div>
         </div>
