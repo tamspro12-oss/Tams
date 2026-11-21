@@ -735,7 +735,7 @@ export default function UmrahCalculator() {
       return;
     }
     const perPerson = Math.round(result.perPerson);
-    navigate("/app/bookings?tab=clients", {
+    navigate("/app/sales-expenses?tab=booking-invoice&new=1", {
       state: {
         openAddClient: true,
         prefill: {

@@ -100,7 +100,13 @@ export default function ReportsHub() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Tab from URL (default to Daily Report: daily-report)
-  const currentTab = (searchParams.get("tab") as ReportTab) || "daily-report";
+  const rawTab = searchParams.get("tab");
+  const currentTab: ReportTab =
+    rawTab === "account-statement" ||
+    rawTab === "booking-report" ||
+    rawTab === "financial-reports"
+      ? rawTab
+      : "daily-report";
 
   const handleTabChange = (val: string) => {
     const next = new URLSearchParams(searchParams);

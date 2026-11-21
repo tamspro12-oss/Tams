@@ -22,27 +22,11 @@ import { MobileInstallButton } from "@/components/MobileInstallButton";
 import { PaymentVoucherHost } from "@/components/vouchers/PaymentVoucherHost";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  LayoutDashboard,
-  Calendar,
-  Receipt,
-  BarChart3,
-  Settings,
-  Plane,
-  Calculator,
-  MessageSquare,
   Menu,
-  Mail,
-  Shield,
-  BookOpen,
-  Users,
-  Wallet,
-  RotateCcw,
-  Scale,
+  Plane,
   LogOut,
-  FileText,
-  Ticket,
-  Bell,
 } from "lucide-react";
+import { getDesktopSidebarItems, isNavItemActive } from "@/config/navigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,7 +52,6 @@ import {
 } from "@/components/ui/sidebar";
 
 
-import { useReminders } from "@/hooks/useReminders";
 import { useUnifiedAlerts } from "@/hooks/useUnifiedAlerts";
 
 interface DashboardLayoutProps {
@@ -122,32 +105,7 @@ function AppSidebar() {
     }
   };
 
-  // Exactly Final Menu from Part D
-  const navigation = [
-    ...(isAdmin ? [{ name: "Admin Panel", href: "/app/admin", icon: Shield, badge: null }] : []),
-    { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard, badge: null },
-    { name: "Sales & Expenses", href: "/app/sales-expenses", icon: Receipt, badge: null },
-    { name: "Clients & Vendors", href: "/app/clients-vendors", icon: Users, badge: null },
-    { name: "Reports", href: "/app/reports", icon: BarChart3, badge: null },
-    { name: "Queries & Quotes", href: "/app/leads-quotes", icon: MessageSquare, badge: null },
-    { name: "Umrah Calculator", href: "/app/umrah-calculator", icon: Calculator, badge: null },
-    { name: "Notifications", href: "/app/notifications", icon: Bell, badge: unreadAlertsCount > 0 ? unreadAlertsCount : null },
-    { name: "Settings", href: "/app/settings", icon: Settings, badge: null },
-  ];
-
-  const isNavActive = (href: string) => {
-    const p = location.pathname;
-    if (href === "/app/dashboard") return p === "/app/dashboard";
-    if (href === "/app/sales-expenses") return p.startsWith("/app/sales-expenses") || p.startsWith("/app/bookings") || p.startsWith("/app/vouchers") || p.startsWith("/app/expenses") || p.startsWith("/app/refunds");
-    if (href === "/app/clients-vendors") return p.startsWith("/app/clients-vendors") || p.startsWith("/app/clients") || p.startsWith("/app/b2b-agents") || p.startsWith("/app/vendors");
-    if (href === "/app/reports") return p.startsWith("/app/reports") || p.startsWith("/app/accounts");
-    if (href === "/app/leads-quotes") return p.startsWith("/app/leads-quotes") || p.startsWith("/app/queries") || p.startsWith("/app/quotations");
-    if (href === "/app/umrah-calculator") return p.startsWith("/app/umrah-calculator");
-    if (href === "/app/notifications") return p.startsWith("/app/notifications") || p.startsWith("/app/reminders");
-    if (href === "/app/settings") return p.startsWith("/app/settings") || p.startsWith("/app/email-history") || p.startsWith("/app/user-manual");
-    if (href === "/app/admin") return p.startsWith("/app/admin");
-    return p === href;
-  };
+  const navigation = getDesktopSidebarItems({ isAdmin });
 
   const handleNavClick = () => {
     if (isMobile && openMobile) {
@@ -198,9 +156,13 @@ function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
               {navigation.map((item) => {
-                const isActive = isNavActive(item.href);
+                const isActive = isNavItemActive(item, location.pathname, location.search);
+                const badge =
+                  item.badgeKey === "unreadAlerts" && unreadAlertsCount > 0
+                    ? unreadAlertsCount
+                    : null;
                 return (
-                  <SidebarMenuItem key={item.name}>
+                  <SidebarMenuItem key={item.id}>
                     <Link
                       to={item.href}
                       onClick={handleNavClick}
@@ -228,13 +190,13 @@ function AppSidebar() {
                         />
 
                         <span className="text-[13px] leading-tight truncate">
-                          {item.name}
+                          {item.label}
                         </span>
                       </div>
 
-                      {item.badge != null && (
+                      {badge != null && (
                         <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-white shrink-0">
-                          {item.badge}
+                          {badge}
                         </span>
                       )}
                     </Link>

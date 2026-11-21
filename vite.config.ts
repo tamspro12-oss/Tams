@@ -7,9 +7,9 @@ function readPackageVersion(): string {
   try {
     const pkgPath = path.resolve(__dirname, "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    return typeof pkg.version === "string" && pkg.version ? pkg.version : "3.6.0";
+    return typeof pkg.version === "string" && pkg.version ? pkg.version : "3.7.0";
   } catch {
-    return "3.6.0";
+    return "3.7.0";
   }
 }
 

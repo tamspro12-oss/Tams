@@ -285,7 +285,7 @@ export default function Quotations() {
       console.warn("Could not pre-mark quotation as accepted", e);
     }
 
-    navigate("/app/bookings?tab=clients", {
+    navigate("/app/sales-expenses?tab=booking-invoice&new=1", {
       state: {
         openAddClient: true,
         prefill: {

@@ -209,7 +209,7 @@ export function QuickPaymentDialog({
                 className="h-auto p-0 text-xs gap-1"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate("/app/bookings?tab=clients");
+                  navigate("/app/clients-vendors?tab=parties&type=client");
                 }}
               >
                 Go to Direct Clients Ledger <ExternalLink className="w-3 h-3" />
@@ -286,7 +286,7 @@ export function QuickPaymentDialog({
                 className="h-auto p-0 text-xs gap-1"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate("/app/bookings?tab=vendors");
+                  navigate("/app/clients-vendors?tab=parties&type=vendor");
                 }}
               >
                 Go to Vendors & Payables <ExternalLink className="w-3 h-3" />

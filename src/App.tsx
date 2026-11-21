@@ -75,16 +75,14 @@ const Admin = lazyWithRetry(() => import("./pages/Admin"));
 const SalesExpensesHub = lazyWithRetry(() => import("./pages/SalesExpensesHub"));
 const ClientsVendors = lazyWithRetry(() => import("./pages/ClientsVendors"));
 const ReportsHub = lazyWithRetry(() => import("./pages/ReportsHub"));
-const BookingsHub = lazyWithRetry(() => import("./pages/BookingsHub"));
 const LeadsQuotesHub = lazyWithRetry(() => import("./pages/LeadsQuotesHub"));
 const QueryFormPage = lazyWithRetry(() => import("./pages/QueryFormPage"));
 const QuotationFormPage = lazyWithRetry(() => import("./pages/QuotationFormPage"));
-const AccountsHub = lazyWithRetry(() => import("./pages/AccountsHub"));
 const NotificationsHub = lazyWithRetry(() => import("./pages/NotificationsHub"));
 const SettingsHub = lazyWithRetry(() => import("./pages/SettingsHub"));
 const UmrahCalculator = lazyWithRetry(() => import("./pages/UmrahCalculator"));
+const ClientBookings = lazyWithRetry(() => import("./pages/ClientBookings"));
 const B2BAgentDashboard = lazyWithRetry(() => import("./pages/B2BAgentDashboard"));
-const VendorDashboard = lazyWithRetry(() => import("./pages/VendorDashboard"));
 
 // Lazy non-critical overlays (kept out of the initial bundle)
 const UpdateNotification = lazyWithRetry(() =>
@@ -213,39 +211,16 @@ const App = () => {
                   <Route path="/app/admin/*" element={<AdminRoute><DashboardLayout><RouteErrorBoundary routeName="Admin"><Admin /></RouteErrorBoundary></DashboardLayout></AdminRoute>} />
                   <Route path="/admin" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
                   <Route path="/admin/*" element={<AdminRoute><Navigate to="/app/admin" replace /></AdminRoute>} />
-                  <Route path="/app/bookings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Bookings"><BookingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Queries & Quotes"><LeadsQuotesHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/queries/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/queries/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Query"><QueryFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/quotations/new" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="New Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/leads-quotes/quotations/:id/edit" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Edit Quotation"><QuotationFormPage /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/accounts" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Accounts"><AccountsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/b2b-agents" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agents"><ClientBookings initialFilter="b2b" /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
+                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/umrah-calculator" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Umrah Calculator"><UmrahCalculator /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/notifications" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Notifications"><NotificationsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
                   <Route path="/app/settings" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Settings"><SettingsHub /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-
-                  {/* Detail Routes */}
-                  <Route path="/app/b2b-agents/:agentId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-                  <Route path="/app/vendors/:vendorId" element={<ProtectedRoute><DashboardLayout><RouteErrorBoundary routeName="Vendor Dashboard"><VendorDashboard /></RouteErrorBoundary></DashboardLayout></ProtectedRoute>} />
-
-                  {/* ========== 100% SEAMLESS LEGACY ROUTE REDIRECTS ========== */}
-                  <Route path="/app/clients" element={<Navigate to="/app/bookings?tab=clients" replace />} />
-                  <Route path="/app/b2b-agents" element={<Navigate to="/app/bookings?tab=b2b-agents" replace />} />
-                  <Route path="/app/vendors" element={<Navigate to="/app/bookings?tab=vendors" replace />} />
-                  <Route path="/app/vouchers" element={<Navigate to="/app/bookings?tab=vouchers" replace />} />
-
-                  <Route path="/app/queries" element={<Navigate to="/app/leads-quotes?tab=queries" replace />} />
-                  <Route path="/app/client-queries" element={<Navigate to="/app/leads-quotes?tab=queries" replace />} />
-                  <Route path="/app/quotations" element={<Navigate to="/app/leads-quotes?tab=quotations" replace />} />
-
-                  <Route path="/app/bank-cash" element={<Navigate to="/app/accounts?tab=bank-cash" replace />} />
-                  <Route path="/app/expenses" element={<Navigate to="/app/accounts?tab=expenses" replace />} />
-                  <Route path="/app/refunds" element={<Navigate to="/app/accounts?tab=refunds" replace />} />
-                  <Route path="/app/opening-balances" element={<Navigate to="/app/accounts?tab=opening-balances" replace />} />
-
-                  <Route path="/app/reminders" element={<Navigate to="/app/notifications?tab=reminders" replace />} />
-                  <Route path="/app/email-history" element={<Navigate to="/app/settings?tab=email-integration" replace />} />
-                  <Route path="/app/user-manual" element={<Navigate to="/app/settings?tab=manual" replace />} />
 
                   <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />

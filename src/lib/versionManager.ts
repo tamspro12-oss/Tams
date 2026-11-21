@@ -1,7 +1,7 @@
 /* global __APP_VERSION__, __APP_BUILD_ID__ */
 // Version control and update management
 const CURRENT_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "3.6.0";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "3.7.0";
 const CURRENT_BUILD_ID =
   typeof __APP_BUILD_ID__ !== "undefined" ? __APP_BUILD_ID__ : "dev";
 
@@ -16,6 +16,7 @@ export interface VersionCheckResult {
   currentVersion: string;
   currentBuildId?: string;
   builtAt?: string;
+  checkFailed?: boolean;
 }
 
 export interface RemoteVersionManifest {
@@ -25,6 +26,12 @@ export interface RemoteVersionManifest {
 }
 
 export const VERSION_CHANGELOG = {
+  "3.7.0": [
+    "Unified shared navigation config across desktop sidebar, mobile bottom bar, and mobile More menu",
+    "Updated mobile More menu routes: Vendors & Airlines opens Parties (Vendors), Financial Reports opens Reports, and Sales & Expenses exposes Invoice, Voucher, Refund, and Expense sub-sections",
+    "Removed legacy routes and unused pages for a cleaner, faster app",
+    "Improved Check Update button to compare versions and force-reload cleanly",
+  ],
   "3.6.0": [
     "Mobile-only Install App button on public pages, header, and mobile navigation for instant home-screen installation",
     "Automatic zero-config build update detection across every deployment without disturbing saved data or login sessions",
@@ -132,10 +139,12 @@ export function isNewerVersion(version1: string, version2: string): boolean {
  */
 export function compareUpdateManifest(
   current: { version: string; buildId: string },
-  remote: RemoteVersionManifest | null | undefined
+  remote: RemoteVersionManifest | null | undefined,
+  options?: { manual?: boolean }
 ): boolean {
   if (!remote || typeof remote !== "object") return false;
-  if (!current.buildId || current.buildId === "dev") return false;
+  const isManual = Boolean(options?.manual);
+  if (!isManual && (!current.buildId || current.buildId === "dev")) return false;
 
   const remoteBuildId =
     typeof remote.buildId === "string" ? remote.buildId.trim() : "";
@@ -144,11 +153,21 @@ export function compareUpdateManifest(
 
   if (!remoteBuildId && !remoteVersion) return false;
 
-  if (remoteBuildId && remoteBuildId !== "dev" && remoteBuildId !== current.buildId) {
+  if (remoteVersion && isNewerVersion(remoteVersion, current.version)) {
     return true;
   }
 
-  if (remoteVersion && isNewerVersion(remoteVersion, current.version)) {
+  if (
+    remoteBuildId &&
+    remoteBuildId !== "dev" &&
+    current.buildId &&
+    current.buildId !== "dev" &&
+    remoteBuildId !== current.buildId
+  ) {
+    return true;
+  }
+
+  if (isManual && remoteVersion && remoteVersion !== current.version) {
     return true;
   }
 
@@ -225,66 +244,31 @@ export class VersionManager {
 
   private static edgeApiFailed = false;
 
-  // Check version against deployed /version.json manifest first, with edge fallback
-  async checkVersionAPI(): Promise<VersionCheckResult> {
-    const currentVersion = this.getCurrentVersion();
-    const currentBuildId = this.getCurrentBuildId();
+  private static isCapacitorNative(): boolean {
+    if (typeof window === "undefined") return false;
+    const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return Boolean(cap?.isNativePlatform?.());
+  }
 
-    try {
-      const response = await fetch(`/version.json?t=${Date.now()}`, {
-        cache: "no-store",
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as RemoteVersionManifest;
-        const latestVersion =
-          typeof data?.version === "string" && data.version
-            ? data.version
-            : currentVersion;
-        const latestBuildId =
-          typeof data?.buildId === "string" && data.buildId
-            ? data.buildId
-            : latestVersion;
-        const hasUpdate = compareUpdateManifest(
-          { version: currentVersion, buildId: currentBuildId },
-          data
-        );
-
-        getSafeLocalStorage()?.setItem(LAST_CHECK_KEY, new Date().toISOString());
-
-        const result: VersionCheckResult = {
-          hasUpdate,
-          latestVersion,
-          latestBuildId,
-          currentVersion,
-          currentBuildId,
-          builtAt: typeof data?.builtAt === "string" ? data.builtAt : undefined,
-        };
-
-        if (hasUpdate && typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("tams:update-available", { detail: result })
-          );
-        }
-
-        return result;
-      }
-    } catch {
-      // Fallback to edge function below
-    }
-
-    if (VersionManager.edgeApiFailed) {
+  private async checkEdgeVersion(
+    currentVersion: string,
+    currentBuildId: string,
+    options?: { manual?: boolean }
+  ): Promise<VersionCheckResult> {
+    const isManual = Boolean(options?.manual);
+    if (!isManual && VersionManager.edgeApiFailed) {
       return {
         hasUpdate: false,
         latestVersion: currentVersion,
         latestBuildId: currentBuildId,
         currentVersion,
         currentBuildId,
+        checkFailed: true,
       };
     }
 
     try {
-      const env = (import.meta as any).env;
+      const env = (import.meta as { env?: Record<string, string | undefined> }).env;
       const supabaseUrl = env?.VITE_SUPABASE_URL;
       const publishableKey = env?.VITE_SUPABASE_PUBLISHABLE_KEY;
       if (!supabaseUrl || !publishableKey) {
@@ -294,13 +278,17 @@ export class VersionManager {
           latestBuildId: currentBuildId,
           currentVersion,
           currentBuildId,
+          checkFailed: true,
         };
       }
 
       const url = `${supabaseUrl}/functions/v1/app-version?t=${Date.now()}`;
       const response = await fetch(url, {
+        cache: "no-store",
         headers: {
           apikey: publishableKey,
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
         },
       });
 
@@ -308,8 +296,14 @@ export class VersionManager {
 
       const data = await response.json();
       const latestVersion =
-        typeof data?.version === "string" ? data.version : currentVersion;
-      const hasUpdate = isNewerVersion(latestVersion, currentVersion);
+        typeof data?.version === "string" && data.version
+          ? data.version.trim()
+          : currentVersion;
+      const hasUpdate =
+        isNewerVersion(latestVersion, currentVersion) ||
+        (isManual && latestVersion !== currentVersion);
+
+      VersionManager.edgeApiFailed = false;
       getSafeLocalStorage()?.setItem(LAST_CHECK_KEY, new Date().toISOString());
 
       const result: VersionCheckResult = {
@@ -318,9 +312,10 @@ export class VersionManager {
         latestBuildId: latestVersion,
         currentVersion,
         currentBuildId,
+        checkFailed: false,
       };
 
-      if (hasUpdate && typeof window !== "undefined") {
+      if (hasUpdate && !isManual && typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("tams:update-available", { detail: result })
         );
@@ -335,12 +330,82 @@ export class VersionManager {
         latestBuildId: currentBuildId,
         currentVersion,
         currentBuildId,
+        checkFailed: true,
       };
     }
   }
 
-  checkForAppUpdate(): Promise<VersionCheckResult> {
-    return this.checkVersionAPI();
+  // Check version against deployed /version.json manifest first, with edge fallback
+  async checkVersionAPI(options?: { manual?: boolean }): Promise<VersionCheckResult> {
+    const currentVersion = this.getCurrentVersion();
+    const currentBuildId = this.getCurrentBuildId();
+    const isManual = Boolean(options?.manual);
+
+    try {
+      const response = await fetch(`/version.json?t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as RemoteVersionManifest;
+        const latestVersion =
+          typeof data?.version === "string" && data.version
+            ? data.version.trim()
+            : currentVersion;
+        const latestBuildId =
+          typeof data?.buildId === "string" && data.buildId
+            ? data.buildId.trim()
+            : latestVersion;
+        const hasUpdate = compareUpdateManifest(
+          { version: currentVersion, buildId: currentBuildId },
+          data,
+          options
+        );
+
+        getSafeLocalStorage()?.setItem(LAST_CHECK_KEY, new Date().toISOString());
+
+        const result: VersionCheckResult = {
+          hasUpdate,
+          latestVersion,
+          latestBuildId,
+          currentVersion,
+          currentBuildId,
+          builtAt: typeof data?.builtAt === "string" ? data.builtAt : undefined,
+          checkFailed: false,
+        };
+
+        if (!hasUpdate && isManual && VersionManager.isCapacitorNative()) {
+          const edgeResult = await this.checkEdgeVersion(
+            currentVersion,
+            currentBuildId,
+            options
+          );
+          if (!edgeResult.checkFailed) {
+            return edgeResult;
+          }
+        }
+
+        if (hasUpdate && !isManual && typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("tams:update-available", { detail: result })
+          );
+        }
+
+        return result;
+      }
+    } catch {
+      // Fallback to edge function below
+    }
+
+    return this.checkEdgeVersion(currentVersion, currentBuildId, options);
+  }
+
+  checkForAppUpdate(options?: { manual?: boolean }): Promise<VersionCheckResult> {
+    return this.checkVersionAPI(options);
   }
 
   getLastCheckTime(): Date | null {

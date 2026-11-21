@@ -91,7 +91,7 @@ export const AdminAccountInfo = () => {
       
       // Sign out current session (use local scope to only logout this device)
       await supabase.auth.signOut({ scope: 'local' });
-      navigate('/auth');
+      navigate('/login');
     } catch (error: unknown) {
       handleSupabaseError(error, 'Failed to logout all devices', 'AdminAccountInfo.handleLogoutAll');
     } finally {

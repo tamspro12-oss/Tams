@@ -47,7 +47,7 @@ export default function Install() {
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Link to="/auth">
+            <Link to="/login">
               <Button variant="outline" size="sm" className="gap-2 h-11 md:h-9 px-3 md:px-3.5">
                 Login
               </Button>
@@ -72,7 +72,7 @@ export default function Install() {
             Install TAMS on Your Device
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Get the full app experience with offline access, faster loading, and native-like features. 
+            Get the full app experience with offline access, faster loading, and native-like features.
             Choose your device below for step-by-step instructions.
           </p>
 
@@ -130,7 +130,7 @@ export default function Install() {
               <CardContent className="pt-6 space-y-6">
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
                   <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
-                    ⚠️ Important: You must use Safari browser on iOS to install the app. 
+                    ⚠️ Important: You must use Safari browser on iOS to install the app.
                     Chrome or other browsers don't support PWA installation on iOS.
                   </p>
                 </div>
@@ -301,7 +301,7 @@ export default function Install() {
                 <div className="bg-muted/30 rounded-lg p-4 mt-4">
                   <h4 className="font-medium mb-2">💡 Quick Tip</h4>
                   <p className="text-sm text-muted-foreground">
-                    Some Android phones show an "Install" banner at the bottom of the screen automatically. 
+                    Some Android phones show an "Install" banner at the bottom of the screen automatically.
                     Just tap it for instant installation!
                   </p>
                 </div>
@@ -405,7 +405,7 @@ export default function Install() {
                 {/* Note */}
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
                   <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
-                    ⚠️ Note: Firefox and Safari on Mac don't fully support PWA installation. 
+                    ⚠️ Note: Firefox and Safari on Mac don't fully support PWA installation.
                     Use Chrome, Edge, or Brave for the best experience.
                   </p>
                 </div>

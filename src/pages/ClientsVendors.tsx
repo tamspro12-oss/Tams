@@ -58,6 +58,30 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+function normalizePartyTab(tab: string | null): "parties" | "banks" {
+  return tab === "banks" ? "banks" : "parties";
+}
+
+function normalizePartyType(
+  tab: string | null,
+  type: string | null
+): "all" | "client" | "vendor" | "both" {
+  if (tab === "vendors") return "vendor";
+  if (type === "client" || type === "vendor" || type === "both" || type === "all") {
+    return type;
+  }
+  return "all";
+}
+
+function normalizePartyBalance(
+  balance: string | null
+): "all" | "has_dues" | "zero" {
+  if (balance === "has_dues" || balance === "zero" || balance === "all") {
+    return balance;
+  }
+  return "all";
+}
+
 export default function ClientsVendors() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { parties, updateParty, isSaving } = useParties();
@@ -88,12 +112,13 @@ export default function ClientsVendors() {
     );
 
   // Filters from URL
-  const urlType = searchParams.get("type") as "client" | "vendor" | "both" | "all" | null;
-  const urlBalance = searchParams.get("balance") as "has_dues" | "zero" | "all" | null;
-
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">(urlType || "all");
-  const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">(urlBalance || "all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "client" | "vendor" | "both">(() =>
+    normalizePartyType(searchParams.get("tab"), searchParams.get("type"))
+  );
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "has_dues" | "zero">(() =>
+    normalizePartyBalance(searchParams.get("balance"))
+  );
   const partiesFilterRef = useRef<HTMLDivElement>(null);
   const banksFilterRef = useRef<HTMLDivElement>(null);
 
@@ -110,8 +135,9 @@ export default function ClientsVendors() {
   });
 
   // Tabs: Parties vs Banks
-  const urlTab = searchParams.get("tab") as "parties" | "banks" | null;
-  const [activeTab, setActiveTab] = useState<"parties" | "banks">(urlTab || "parties");
+  const [activeTab, setActiveTab] = useState<"parties" | "banks">(() =>
+    normalizePartyTab(searchParams.get("tab"))
+  );
 
   // Banks data & state
   const { banks = [], deleteBank } = useAgencyBanks();
@@ -347,19 +373,39 @@ export default function ClientsVendors() {
   ];
 
   useEffect(() => {
-    if (urlType) setTypeFilter(urlType);
-    if (urlBalance) setBalanceFilter(urlBalance);
-
+    const rawTab = searchParams.get("tab");
+    const rawType = searchParams.get("type");
+    const rawBalance = searchParams.get("balance");
     const urlSearch = searchParams.get("search");
-    if (urlSearch) {
+
+    setActiveTab(normalizePartyTab(rawTab));
+    setTypeFilter(normalizePartyType(rawTab, rawType));
+    setBalanceFilter(normalizePartyBalance(rawBalance));
+
+    if (urlSearch !== null) {
       setSearchQuery(cleanPastedSearch(urlSearch));
     }
+  }, [searchParams]);
 
-    const urlTabParam = searchParams.get("tab");
-    if (urlTabParam === "parties" || urlTabParam === "banks") {
-      setActiveTab(urlTabParam);
+  const updateFilterParams = (updates: {
+    tab?: "parties" | "banks";
+    type?: "all" | "client" | "vendor" | "both";
+    balance?: "all" | "has_dues" | "zero";
+  }) => {
+    const next = new URLSearchParams(searchParams);
+    if (updates.tab !== undefined) {
+      next.set("tab", updates.tab);
     }
-  }, [urlType, urlBalance, searchParams]);
+    if (updates.type !== undefined) {
+      if (updates.type === "all") next.delete("type");
+      else next.set("type", updates.type);
+    }
+    if (updates.balance !== undefined) {
+      if (updates.balance === "all") next.delete("balance");
+      else next.set("balance", updates.balance);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   // Open deep-linked ledger drawer when navigating from Global Search or Reports (?partyId=... or ?party=...)
   const urlPartyId = searchParams.get("partyId") || searchParams.get("party");
@@ -673,7 +719,11 @@ export default function ClientsVendors() {
       {/* Top Tabs: Parties & Banks */}
       <Tabs
         value={activeTab}
-        onValueChange={(val: any) => setActiveTab(val)}
+        onValueChange={(val: string) => {
+          const nextTab = normalizePartyTab(val);
+          setActiveTab(nextTab);
+          updateFilterParams({ tab: nextTab });
+        }}
         className="w-full"
       >
         <TabsList className="mb-3 w-full md:w-auto justify-start overflow-x-auto max-w-full bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-none border border-slate-200 dark:border-slate-700">
@@ -734,7 +784,13 @@ export default function ClientsVendors() {
               />
             </div>
 
-            <Select value={typeFilter} onValueChange={(val: any) => setTypeFilter(val)}>
+            <Select
+              value={typeFilter}
+              onValueChange={(val: "all" | "client" | "vendor" | "both") => {
+                setTypeFilter(val);
+                updateFilterParams({ type: val });
+              }}
+            >
               <SelectTrigger className="h-11 md:h-9 w-full md:w-[120px] text-sm md:text-xs rounded-none">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -746,7 +802,13 @@ export default function ClientsVendors() {
               </SelectContent>
             </Select>
 
-            <Select value={balanceFilter} onValueChange={(val: any) => setBalanceFilter(val)}>
+            <Select
+              value={balanceFilter}
+              onValueChange={(val: "all" | "has_dues" | "zero") => {
+                setBalanceFilter(val);
+                updateFilterParams({ balance: val });
+              }}
+            >
               <SelectTrigger className="h-11 md:h-9 w-full md:w-[130px] text-sm md:text-xs rounded-none">
                 <SelectValue placeholder="Balance" />
               </SelectTrigger>
@@ -778,11 +840,10 @@ export default function ClientsVendors() {
                       <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
                     </div>
                     <span
-                      className={`font-mono font-bold shrink-0 ${
-                        bal === 0
+                      className={`font-mono font-bold shrink-0 ${bal === 0
                           ? "text-emerald-600 dark:text-emerald-400"
                           : "text-red-600 dark:text-red-400"
-                      }`}
+                        }`}
                     >
                       PKR {Math.abs(bal).toLocaleString()} {drCr}
                     </span>

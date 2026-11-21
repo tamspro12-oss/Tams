@@ -1,164 +1,74 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Calendar,
-  MessageSquare,
-  Wallet,
-  MoreHorizontal,
-  Bell,
-  Calculator,
-  Ticket,
-  Users,
-  Plane,
-  BarChart3,
-  Settings,
-  Mail,
-  BookOpen,
-  Shield,
-  X,
-  RefreshCw,
-} from "lucide-react";
+import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { MobileInstallButton } from "@/components/MobileInstallButton";
 import { versionManager } from "@/lib/versionManager";
-import { useReminders } from "@/hooks/useReminders";
+import { forceRefresh } from "@/lib/forceRefresh";
+import { useUnifiedAlerts } from "@/hooks/useUnifiedAlerts";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-
-const navItems = [
-  {
-    icon: LayoutDashboard,
-    label: "Dashboard",
-    href: "/app/dashboard",
-    matches: (p: string) => p === "/app/dashboard",
-  },
-  {
-    icon: Calendar,
-    label: "Sales & Exp",
-    href: "/app/sales-expenses",
-    matches: (p: string) =>
-      p.startsWith("/app/sales-expenses") ||
-      p.startsWith("/app/bookings") ||
-      p.startsWith("/app/vouchers") ||
-      p.startsWith("/app/expenses") ||
-      p.startsWith("/app/refunds"),
-  },
-  {
-    icon: Users,
-    label: "Parties",
-    href: "/app/clients-vendors",
-    matches: (p: string) =>
-      p.startsWith("/app/clients-vendors") ||
-      p.startsWith("/app/clients") ||
-      p.startsWith("/app/vendors") ||
-      p.startsWith("/app/b2b-agents"),
-  },
-  {
-    icon: BarChart3,
-    label: "Reports",
-    href: "/app/reports",
-    matches: (p: string) =>
-      p.startsWith("/app/reports") ||
-      p.startsWith("/app/accounts"),
-  },
-];
+import {
+  SALES_SUB_SECTIONS,
+  getMobileBottomBarItems,
+  getMobileMoreItems,
+  isMoreMenuRouteActive,
+  isNavItemActive,
+  normalizeSalesTab,
+} from "@/config/navigation";
 
 export function MobileBottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const { pendingRemindersCount } = useReminders();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const { unreadCount: unreadAlertsCount } = useUnifiedAlerts();
   const { isAdmin } = useIsAdmin();
+
+  const bottomBarItems = getMobileBottomBarItems();
+  const moreItems = getMobileMoreItems({ isAdmin });
+  const isMoreActive = isMoreMenuRouteActive(
+    location.pathname,
+    location.search,
+    isAdmin
+  );
+  const activeSalesTab = location.pathname.startsWith("/app/sales-expenses")
+    ? normalizeSalesTab(new URLSearchParams(location.search).get("tab"))
+    : null;
 
   const handleMoreItemClick = (href: string) => {
     setSheetOpen(false);
     navigate(href);
   };
 
-  const moreItems = [
-    ...(isAdmin ? [{
-      icon: Shield,
-      label: "Admin Panel",
-      desc: "User management & system controls",
-      href: "/app/admin",
-      badge: null,
-      color: "text-red-500 bg-red-50 dark:bg-red-950/40",
-    }] : []),
-    {
-      icon: Bell,
-      label: "Notifications & Alerts",
-      desc: "Live departures & reminders",
-      href: "/app/notifications",
-      badge: pendingRemindersCount > 0 ? pendingRemindersCount : null,
-      color: "text-amber-500 bg-amber-50 dark:bg-amber-950/40",
-    },
-    {
-      icon: Calculator,
-      label: "Umrah Calculator",
-      desc: "Instant per-person packages",
-      href: "/app/umrah-calculator",
-      badge: null,
-      color: "text-blue-500 bg-blue-50 dark:bg-blue-950/40",
-    },
-    {
-      icon: Ticket,
-      label: "Vouchers Hub",
-      desc: "Umrah, Hotel & Flight vouchers",
-      href: "/app/bookings?tab=vouchers",
-      badge: null,
-      color: "text-purple-500 bg-purple-50 dark:bg-purple-950/40",
-    },
-    {
-      icon: Users,
-      label: "B2B Agents",
-      desc: "Agent network & ledgers",
-      href: "/app/bookings?tab=b2b-agents",
-      badge: null,
-      color: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40",
-    },
-    {
-      icon: Plane,
-      label: "Vendors & Airlines",
-      desc: "Payable statements & ledgers",
-      href: "/app/bookings?tab=vendors",
-      badge: null,
-      color: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40",
-    },
-    {
-      icon: BarChart3,
-      label: "Financial Reports",
-      desc: "P&L, sales & aging reports",
-      href: "/app/accounts?tab=reports",
-      badge: null,
-      color: "text-teal-500 bg-teal-50 dark:bg-teal-950/40",
-    },
-    {
-      icon: Settings,
-      label: "Settings",
-      desc: "Account, branding & templates",
-      href: "/app/settings",
-      badge: null,
-      color: "text-slate-600 bg-slate-100 dark:bg-slate-800",
-    },
-    {
-      icon: Mail,
-      label: "Email Integration",
-      desc: "Configuration, logs & cleanup",
-      href: "/app/settings?tab=email-integration",
-      badge: null,
-      color: "text-cyan-500 bg-cyan-50 dark:bg-cyan-950/40",
-    },
-    {
-      icon: BookOpen,
-      label: "User Manual",
-      desc: "Complete documentation & guides",
-      href: "/app/settings?tab=manual",
-      badge: null,
-      color: "text-rose-500 bg-rose-50 dark:bg-rose-950/40",
-    },
-  ];
+  const handleCheckUpdate = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      const res = await versionManager.checkVersionAPI({ manual: true });
+      if (res.hasUpdate) {
+        toast.info(`Updating to v${res.latestVersion}...`, {
+          description: "Reloading latest version. Your saved data stays safe.",
+        });
+        setSheetOpen(false);
+        try {
+          await forceRefresh();
+        } catch {
+          window.location.reload();
+        }
+        return;
+      }
+
+      if (res.checkFailed) {
+        toast.error("Could not check for updates. Please check your internet connection.");
+      } else {
+        toast.success(`You're on the latest version (v${res.currentVersion})`);
+      }
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   return (
     <>
@@ -167,11 +77,12 @@ export function MobileBottomNav() {
         <div className="absolute inset-0 bg-background/90 backdrop-blur-xl border-t border-border/50" />
 
         <div className="relative flex items-center justify-around px-1 sm:px-2 py-1.5 gap-0.5">
-          {navItems.map((item) => {
-            const isActive = item.matches(location.pathname);
+          {bottomBarItems.map((item) => {
+            const isActive = isNavItemActive(item, location.pathname, location.search);
+            const displayLabel = item.mobileLabel || item.label;
             return (
               <Link
-                key={item.href}
+                key={item.id}
                 to={item.href}
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 rounded-xl flex-1 min-w-0 min-h-[48px] transition-all duration-200 touch-manipulation select-none",
@@ -188,7 +99,7 @@ export function MobileBottomNav() {
                   <item.icon className={cn("w-5 h-5", isActive && "stroke-[2.5px]")} />
                 </div>
                 <span className={cn("text-[10px] leading-tight truncate max-w-full", isActive ? "font-bold" : "font-medium")}>
-                  {item.label}
+                  {displayLabel}
                 </span>
               </Link>
             );
@@ -200,16 +111,24 @@ export function MobileBottomNav() {
             onClick={() => setSheetOpen(true)}
             className={cn(
               "flex flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 rounded-xl flex-1 min-w-0 min-h-[48px] transition-all duration-200 touch-manipulation select-none relative",
-              "active:scale-95 text-muted-foreground"
+              "active:scale-95",
+              isMoreActive ? "text-accent" : "text-muted-foreground"
             )}
           >
-            <div className="flex items-center justify-center w-9 sm:w-10 h-7 sm:h-8 rounded-xl relative">
-              <MoreHorizontal className="w-5 h-5" />
-              {pendingRemindersCount > 0 && (
+            <div
+              className={cn(
+                "flex items-center justify-center w-9 sm:w-10 h-7 sm:h-8 rounded-xl relative transition-all duration-200",
+                isMoreActive && "bg-accent/12"
+              )}
+            >
+              <MoreHorizontal className={cn("w-5 h-5", isMoreActive && "stroke-[2.5px]")} />
+              {unreadAlertsCount > 0 && (
                 <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-amber-500" />
               )}
             </div>
-            <span className="text-[10px] font-medium leading-tight truncate max-w-full">More</span>
+            <span className={cn("text-[10px] leading-tight truncate max-w-full", isMoreActive ? "font-bold" : "font-medium")}>
+              More
+            </span>
           </button>
         </div>
       </nav>
@@ -229,30 +148,79 @@ export function MobileBottomNav() {
             onActionStart={() => setSheetOpen(false)}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-3">
-            {moreItems.map((item) => (
+          {/* Sales & Expenses quick sub-sections (Invoice, Voucher, Refund, Expense) */}
+          <div className="pt-3 space-y-1.5">
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Sales &amp; Expenses
+              </span>
               <button
-                key={item.label}
-                onClick={() => handleMoreItemClick(item.href)}
-                className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/40 transition-colors text-left"
+                type="button"
+                onClick={() => handleMoreItemClick("/app/sales-expenses")}
+                className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", item.color)}>
-                    <item.icon className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-xs text-foreground truncate">{item.label}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{item.desc}</p>
-                  </div>
-                </div>
-
-                {item.badge != null && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-white shrink-0">
-                    {item.badge}
-                  </span>
-                )}
+                Open Hub →
               </button>
-            ))}
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {SALES_SUB_SECTIONS.map((sub) => {
+                const isSubActive = activeSalesTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => handleMoreItemClick(sub.href)}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border bg-card hover:bg-muted/40 transition-colors min-h-[54px] touch-manipulation cursor-pointer",
+                      isSubActive && "border-accent bg-accent/10"
+                    )}
+                  >
+                    <sub.icon className={cn("w-4 h-4", sub.iconColorClass)} />
+                    <span className="text-[11px] font-semibold text-foreground leading-tight">
+                      {sub.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-3">
+            {moreItems.map((item) => {
+              const isActive = isNavItemActive(item, location.pathname, location.search);
+              const displayLabel = item.mobileLabel || item.label;
+              const badge =
+                item.badgeKey === "unreadAlerts" && unreadAlertsCount > 0
+                  ? unreadAlertsCount
+                  : null;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleMoreItemClick(item.href)}
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/40 transition-colors text-left cursor-pointer",
+                    isActive && "border-accent bg-accent/5"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", item.colorClass)}>
+                      <item.icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-foreground truncate">{displayLabel}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{item.description}</p>
+                    </div>
+                  </div>
+
+                  {badge != null && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-white shrink-0">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div className="mt-3 pt-3 border-t flex items-center justify-between gap-3">
@@ -266,21 +234,12 @@ export function MobileBottomNav() {
             </div>
             <button
               type="button"
-              onClick={async () => {
-                const res = await versionManager.checkVersionAPI();
-                if (res.hasUpdate) {
-                  setSheetOpen(false);
-                  window.dispatchEvent(
-                    new CustomEvent("tams:update-available", { detail: res })
-                  );
-                } else {
-                  toast.success(`You're on the latest version (v${res.currentVersion})`);
-                }
-              }}
-              className="min-h-[44px] px-3 rounded-xl border bg-muted/40 hover:bg-muted/70 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-colors"
+              disabled={checkingUpdate}
+              onClick={() => void handleCheckUpdate()}
+              className="min-h-[44px] px-3 rounded-xl border bg-muted/40 hover:bg-muted/70 disabled:opacity-60 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Check Update</span>
+              <RefreshCw className={cn("w-3.5 h-3.5", checkingUpdate && "animate-spin")} />
+              <span>{checkingUpdate ? "Checking..." : "Check Update"}</span>
             </button>
           </div>
         </SheetContent>

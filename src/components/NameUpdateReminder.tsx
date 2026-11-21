@@ -114,7 +114,7 @@ export function NameUpdateReminder() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => navigate('/app/clients')}
+                onClick={() => navigate('/app/sales-expenses?tab=booking-invoice')}
                 className="flex-shrink-0"
               >
                 <ArrowRight className="w-4 h-4" />
@@ -126,7 +126,7 @@ export function NameUpdateReminder() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => navigate('/app/clients')}
+                onClick={() => navigate('/app/sales-expenses?tab=booking-invoice')}
               >
                 View All Reminders
               </Button>

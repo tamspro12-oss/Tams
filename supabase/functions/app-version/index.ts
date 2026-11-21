@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.5.1'; // Update this with each deployment
+const CURRENT_VERSION = '3.7.0'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,17 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.7.0': [
+          'Unified shared navigation config across desktop sidebar, mobile bottom bar, and mobile More menu',
+          'Updated mobile More menu routes: Vendors & Airlines opens Parties (Vendors), Financial Reports opens Reports, and Sales & Expenses exposes Invoice, Voucher, Refund, and Expense sub-sections',
+          'Removed legacy routes and unused pages',
+          'Improved Check Update to compare versions and force reload',
+        ],
+        '3.6.0': [
+          'Mobile-only Install App button on public pages, header, and mobile navigation for instant home-screen installation',
+          'Automatic zero-config build update detection across every deployment without disturbing saved data or login sessions',
+          'Full mobile responsiveness optimization across all screens (320px-767px)',
+        ],
         '3.5.1': [
           'Refactored Dashboard to ultra-clean, high-contrast SaaS layout (Linear/Stripe standard)',
           'Top KPI Metric Cards: balanced 3-column row (Total Bookings, Clients Pending Payment, Vendors Pending Payment) with aggregated B2C + B2B totals',

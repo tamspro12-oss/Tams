@@ -47,9 +47,12 @@ import {
 import { matchesMultipleFields, cleanPastedSearch } from "@/lib/searchUtils";
 import { cn } from "@/lib/utils";
 import {
+  SALES_SUB_SECTIONS,
+  normalizeSalesTab,
+  type SalesSubSectionId,
+} from "@/config/navigation";
+import {
   FileText,
-  CreditCard,
-  RotateCcw,
   Receipt,
   Plus,
   Printer,
@@ -58,13 +61,11 @@ import {
   X,
 } from "lucide-react";
 
-type SalesTab = "booking-invoice" | "payment-vouchers" | "refunds-voids" | "expenses";
-
 export default function SalesExpensesHub() {
   const queryClient = useQueryClient();
   const { data: userAgencyId } = useCurrentAgencyId();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = (searchParams.get("tab") as SalesTab) || "booking-invoice";
+  const currentTab: SalesSubSectionId = normalizeSalesTab(searchParams.get("tab"));
 
   // Modals state
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
@@ -1368,34 +1369,16 @@ export default function SalesExpensesHub() {
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/50">
         <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto h-11 p-1 bg-muted/60 border">
-            <TabsTrigger
-              value="booking-invoice"
-              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-blue-600" />
-              Booking Invoice
-            </TabsTrigger>
-            <TabsTrigger
-              value="payment-vouchers"
-              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
-            >
-              <CreditCard className="w-4 h-4 text-emerald-600" />
-              Payment Vouchers
-            </TabsTrigger>
-            <TabsTrigger
-              value="refunds-voids"
-              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4 text-purple-600" />
-              Refunds / Voids
-            </TabsTrigger>
-            <TabsTrigger
-              value="expenses"
-              className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
-            >
-              <Receipt className="w-4 h-4 text-amber-600" />
-              Expenses
-            </TabsTrigger>
+            {SALES_SUB_SECTIONS.map((sub) => (
+              <TabsTrigger
+                key={sub.id}
+                value={sub.id}
+                className="gap-2 text-xs sm:text-sm font-semibold shrink-0 cursor-pointer"
+              >
+                <sub.icon className={cn("w-4 h-4", sub.iconColorClass)} />
+                {sub.fullLabel}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       </div>

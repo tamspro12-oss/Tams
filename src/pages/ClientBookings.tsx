@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { SeoHead } from "@/components/SeoHead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -49,10 +50,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function ClientBookings() {
+interface ClientBookingsProps {
+  initialFilter?: "all" | "direct" | "b2b" | "agents";
+}
+
+export default function ClientBookings({ initialFilter = "b2b" }: ClientBookingsProps = {}) {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterChip, setFilterChip] = useState<"all" | "direct" | "b2b" | "agents">("all");
+  const [filterChip, setFilterChip] = useState<"all" | "direct" | "b2b" | "agents">(initialFilter);
   const { filter } = useDateFilter();
 
   // Modals
@@ -448,6 +453,11 @@ export default function ClientBookings() {
 
   return (
     <div className="space-y-4 pb-12 animate-in fade-in duration-150">
+      <SeoHead
+        title="B2B Agents - TAMS Pro"
+        description="Manage B2B travel agents, bookings, and ledgers."
+        path="/app/b2b-agents"
+      />
       {/* ===================== 1. TOP CONTROLS & STATS ===================== */}
 
       {/* Top Toolbar: One row, all items same height & radius */}
@@ -551,7 +561,11 @@ export default function ClientBookings() {
         {/* 5. Add Booking (Primary button, far right) */}
         <Button
           size="sm"
-          onClick={() => handleOpenAddBooking("direct")}
+          onClick={() =>
+            handleOpenAddBooking(
+              filterChip === "b2b" || filterChip === "agents" ? "b2b" : "direct"
+            )
+          }
           className="h-11 md:h-9 w-full lg:w-auto text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-1.5 shadow-sm shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
@@ -649,8 +663,8 @@ export default function ClientBookings() {
                               booking.payment_status === "Paid" || booking.payment_status === "paid"
                                 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                                 : booking.payment_status === "Partial" || booking.payment_status === "partial"
-                                ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                : "bg-red-500/10 text-red-600 border-red-500/20"
+                                  ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                  : "bg-red-500/10 text-red-600 border-red-500/20"
                             )}
                           >
                             ● {booking.payment_status}
@@ -668,8 +682,8 @@ export default function ClientBookings() {
                         {booking.flight_date
                           ? format(parseISO(booking.flight_date), "dd MMM yyyy")
                           : booking.created_at
-                          ? format(parseISO(booking.created_at), "dd MMM")
-                          : "-"}
+                            ? format(parseISO(booking.created_at), "dd MMM")
+                            : "-"}
                       </span>
                     </div>
                   </div>
@@ -833,8 +847,8 @@ export default function ClientBookings() {
                           outstanding > 0
                             ? "text-destructive"
                             : outstanding < 0
-                            ? "text-emerald-600"
-                            : "text-muted-foreground"
+                              ? "text-emerald-600"
+                              : "text-muted-foreground"
                         )}
                       >
                         PKR {Math.abs(outstanding).toLocaleString()}{" "}
@@ -861,7 +875,11 @@ export default function ClientBookings() {
             </p>
             <Button
               size="sm"
-              onClick={() => handleOpenAddBooking("direct")}
+              onClick={() =>
+                handleOpenAddBooking(
+                  filterChip === "b2b" || filterChip === "agents" ? "b2b" : "direct"
+                )
+              }
               className="text-xs font-semibold gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />

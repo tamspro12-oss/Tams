@@ -158,7 +158,7 @@ export default function Queries() {
   // Convert to Booking handler
   const handleConvertToBooking = useCallback(
     (query: any) => {
-      navigate("/app/bookings?tab=clients", {
+      navigate("/app/sales-expenses?tab=booking-invoice&new=1", {
         state: {
           openAddClient: true,
           prefill: {

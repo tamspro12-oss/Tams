@@ -541,7 +541,7 @@ export function useUnifiedAlerts() {
               createdAt: c.created_at || dateStr,
               mainAction: {
                 label: "View Booking",
-                url: `/app/bookings?tab=clients&search=${encodeURIComponent(c.pnr || c.name || "")}`,
+                url: `/app/sales-expenses?tab=booking-invoice&search=${encodeURIComponent(c.pnr || c.name || "")}`,
               },
             });
           }

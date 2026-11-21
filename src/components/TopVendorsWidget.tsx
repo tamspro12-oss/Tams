@@ -113,7 +113,7 @@ export function TopVendorsWidget({ onPayVendor }: TopVendorsWidgetProps = {}) {
             size="sm"
             variant="outline"
             className="mt-3 text-xs gap-1.5 h-8 border-dashed"
-            onClick={() => (onPayVendor ? onPayVendor() : navigate("/app/bookings?tab=vendors"))}
+            onClick={() => (onPayVendor ? onPayVendor() : navigate("/app/clients-vendors?tab=parties&type=vendor"))}
           >
             <Plus className="w-3.5 h-3.5" />
             + Pay Vendor
@@ -174,7 +174,7 @@ export function TopVendorsWidget({ onPayVendor }: TopVendorsWidgetProps = {}) {
           variant="ghost"
           size="sm"
           className="w-full mt-2 gap-2"
-          onClick={() => navigate("/app/vendors")}
+          onClick={() => navigate("/app/clients-vendors?tab=parties&type=vendor")}
         >
           View All Vendors
           <ArrowRight className="w-4 h-4" />
