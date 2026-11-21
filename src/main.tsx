@@ -7,9 +7,17 @@ import { initPwaInstall } from "./lib/pwaInstall";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initDesignEnhancer } from "./lib/designEnhancer";
 import { initMobileViewport } from "./lib/mobileViewport";
+import { cleanUpdateQueryParam } from "./lib/forceRefresh";
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/mobile.css";
+
+// Strip transient update query parameter after an in-app update reload
+try {
+  cleanUpdateQueryParam();
+} catch {
+  // Ignore URL cleanup errors
+}
 
 // Initialize Global Design Enhancer (Save buttons, customer search boxes, balance & receivable colors)
 try {

@@ -1,87 +1,136 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, X, Smartphone } from "lucide-react";
-import { versionManager } from "@/lib/versionManager";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, X, Smartphone, ShieldCheck } from "lucide-react";
+import { versionManager, type VersionCheckResult } from "@/lib/versionManager";
 import { forceRefresh, isIOSPWA } from "@/lib/forceRefresh";
 import { useToast } from "@/hooks/use-toast";
+
+const DISMISSED_BUILD_KEY = "tams_dismissed_update_build";
+
+function getDismissedBuild(): string | null {
+  try {
+    return sessionStorage.getItem(DISMISSED_BUILD_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setDismissedBuild(buildId: string) {
+  try {
+    sessionStorage.setItem(DISMISSED_BUILD_KEY, buildId);
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export function UpdateNotification() {
   const [showNotification, setShowNotification] = useState(false);
   const [newVersion, setNewVersion] = useState<string>("");
+  const [latestBuildId, setLatestBuildId] = useState<string>("");
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Check version on load using API
-    const checkVersion = async () => {
+  const surfaceUpdate = useCallback((result: VersionCheckResult, forceShow = false) => {
+    if (!result.hasUpdate) return;
+    const candidateId = result.latestBuildId || result.latestVersion;
+    if (!forceShow && candidateId && getDismissedBuild() === candidateId) {
+      return;
+    }
+    setNewVersion(result.latestVersion);
+    setLatestBuildId(candidateId);
+    setShowNotification(true);
+  }, []);
+
+  const checkVersion = useCallback(
+    async (forceShow = false) => {
       try {
         const result = await versionManager.checkVersionAPI();
         if (result.hasUpdate) {
-          setNewVersion(result.latestVersion);
-          setShowNotification(true);
+          surfaceUpdate(result, forceShow);
         }
       } catch (error) {
-        console.error('Version check failed:', error);
+        console.error("Version check failed:", error);
+      }
+    },
+    [surfaceUpdate]
+  );
+
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      void checkVersion(false);
+    }, 1500);
+
+    // Periodic check every 3 minutes for new Vercel deployments / features / bugfixes
+    const versionCheckInterval = setInterval(() => {
+      void checkVersion(false);
+    }, 3 * 60 * 1000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkVersion(false);
       }
     };
 
-    checkVersion();
+    const handleOnline = () => {
+      void checkVersion(false);
+    };
 
-    // Periodic version check every 5 minutes for backend updates
-    const versionCheckInterval = setInterval(checkVersion, 5 * 60 * 1000);
+    const handleUpdateAvailable = (event: Event) => {
+      const detail = (event as CustomEvent<VersionCheckResult>).detail;
+      if (detail?.hasUpdate) {
+        surfaceUpdate(detail, true);
+      }
+    };
 
-    // Check if service worker has an update
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(registration => {
-        // Check for updates immediately
-        registration.update();
+    const handleCheckEvent = () => {
+      void checkVersion(true);
+    };
 
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                checkVersion();
-              }
-            });
-          }
-        });
-      });
-    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("tams:update-available", handleUpdateAvailable);
+    window.addEventListener("tams:check-update", handleCheckEvent);
 
-    return () => clearInterval(versionCheckInterval);
-  }, []);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(versionCheckInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("tams:update-available", handleUpdateAvailable);
+      window.removeEventListener("tams:check-update", handleCheckEvent);
+    };
+  }, [checkVersion, surfaceUpdate]);
 
   const handleForceUpdate = async () => {
     setIsUpdating(true);
     try {
       if (isIOSPWA()) {
-        // Show iOS-specific instructions
         toast({
-          title: "Updating iOS App",
-          description: "Clearing caches... Please close and reopen the app after this completes.",
+          title: "Updating App",
+          description:
+            "Refreshing to the latest version. Your saved data and login remain intact.",
           duration: 3000,
         });
       }
-      
+
       await forceRefresh();
     } catch (error) {
-      console.error('Force update failed:', error);
+      console.error("Update failed:", error);
       toast({
         title: "Update Failed",
-        description: "Please try closing and reopening the app manually.",
+        description: "Please refresh the page or reopen the app to update.",
         variant: "destructive",
       });
       setIsUpdating(false);
     }
   };
 
-  const handleRefresh = () => {
-    window.location.reload();
-  };
-
   const handleDismiss = () => {
+    if (latestBuildId) {
+      setDismissedBuild(latestBuildId);
+    }
     setShowNotification(false);
   };
 
@@ -90,71 +139,61 @@ export function UpdateNotification() {
   const iosMode = isIOSPWA();
 
   return (
-    <Alert className="fixed left-4 right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:left-auto md:bottom-4 md:right-4 md:w-auto max-w-md z-50 bg-primary text-primary-foreground border-primary shadow-2xl">
+    <Alert
+      role="status"
+      className="fixed left-4 right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:left-auto md:bottom-4 md:right-4 md:w-[390px] z-[60] bg-primary text-primary-foreground border border-primary-foreground/20 shadow-2xl rounded-xl p-4"
+    >
       <div className="flex items-start gap-3">
-        {iosMode ? <Smartphone className="h-5 w-5 mt-0.5" /> : <RefreshCw className="h-5 w-5 mt-0.5" />}
-        <div className="flex-1">
-          <AlertTitle className="mb-1 font-semibold">
-            {iosMode ? "iOS App Update Available" : "New Version Available"}
-          </AlertTitle>
-          <AlertDescription className="text-primary-foreground/90 mb-3 text-sm">
-            {iosMode ? (
-              <>
-                <p className="font-medium mb-2">Version {newVersion} is ready!</p>
-                <p className="text-xs leading-relaxed">To update your iOS app:</p>
-                <ol className="text-xs leading-relaxed mt-1 ml-4 list-decimal space-y-1">
-                  <li>Tap "Force Update" below</li>
-                  <li>Close this app completely</li>
-                  <li>Reopen from home screen</li>
-                </ol>
-              </>
-            ) : (
-              <>Version {newVersion} is ready. Refresh to update with the latest features and improvements.</>
+        {iosMode ? (
+          <Smartphone className="h-5 w-5 mt-0.5 shrink-0" />
+        ) : (
+          <RefreshCw className="h-5 w-5 mt-0.5 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <AlertTitle className="m-0 font-semibold text-sm flex items-center gap-2">
+              <span>New Version Available</span>
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-mono px-1.5 py-0 h-5"
+              >
+                v{newVersion}
+              </Badge>
+            </AlertTitle>
+          </div>
+          <AlertDescription className="text-primary-foreground/95 mb-3 text-xs leading-relaxed space-y-1.5">
+            <p>
+              New features &amp; fixes are ready. Tap <strong>Update Now</strong> to load the latest version.
+            </p>
+            <p className="flex items-center gap-1.5 text-[11px] text-primary-foreground/85">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+              <span>Your saved data and login stay 100% safe.</span>
+            </p>
+            {iosMode && (
+              <p className="text-[11px] text-primary-foreground/85">
+                Tip: If changes don&apos;t appear on iPhone, close and reopen the app once after updating.
+              </p>
             )}
           </AlertDescription>
-          <div className="flex gap-2 flex-wrap">
-            {iosMode ? (
-              <Button 
-                size="sm" 
-                variant="secondary"
-                onClick={handleForceUpdate}
-                disabled={isUpdating}
-                className="gap-2"
-              >
-                <RefreshCw className={`h-3 w-3 ${isUpdating ? 'animate-spin' : ''}`} />
-                {isUpdating ? 'Updating...' : 'Force Update'}
-              </Button>
-            ) : (
-              <>
-                <Button 
-                  size="sm" 
-                  variant="secondary"
-                  onClick={handleRefresh}
-                  className="gap-2"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Refresh Now
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="secondary"
-                  onClick={handleForceUpdate}
-                  disabled={isUpdating}
-                  className="gap-2"
-                >
-                  <RefreshCw className={`h-3 w-3 ${isUpdating ? 'animate-spin' : ''}`} />
-                  Force Update
-                </Button>
-              </>
-            )}
-            <Button 
-              size="sm" 
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleForceUpdate}
+              disabled={isUpdating}
+              className="gap-2 min-h-[44px] md:min-h-[36px] flex-1 font-semibold rounded-lg"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isUpdating ? "animate-spin" : ""}`} />
+              {isUpdating ? "Updating..." : "Update Now"}
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               onClick={handleDismiss}
               disabled={isUpdating}
-              className="gap-2"
+              className="gap-1.5 min-h-[44px] md:min-h-[36px] text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground rounded-lg"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
               Later
             </Button>
           </div>

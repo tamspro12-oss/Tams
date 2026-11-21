@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Plane, Menu, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MARKETING_NAVIGATION } from "@/config/marketingContent";
+import { MobileInstallButton } from "@/components/MobileInstallButton";
 import "./public-landing.css";
 
 interface PublicHeaderProps {
@@ -100,12 +101,14 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
           </Link>
         </div>
 
-        {/* Mobile: Hamburger toggle */}
-        <div className="flex md:hidden items-center gap-2">
+        {/* Mobile: Install + Login + Hamburger toggle */}
+        <div className="flex md:hidden items-center gap-1.5 min-[375px]:gap-2">
+          <MobileInstallButton variant="public-header" />
+
           <Link to="/login" className="sm:hidden">
             <Button
               size="sm"
-              className="tams-btn-primary h-11 md:h-8 px-4 rounded-xl text-xs font-semibold bg-[#0F5E63] text-white hover:bg-[#0B4A4E]"
+              className="tams-btn-primary h-11 md:h-8 px-3 min-[375px]:px-4 rounded-xl text-xs font-semibold bg-[#0F5E63] text-white hover:bg-[#0B4A4E]"
             >
               Login
             </Button>
@@ -161,6 +164,11 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({ currentPath }) => {
           </div>
 
           <div className="pt-6 border-t border-slate-200/80 space-y-3 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
+            <MobileInstallButton
+              variant="drawer-card"
+              onActionStart={() => setMobileMenuOpen(false)}
+            />
+
             <Link
               to="/login"
               onClick={() => setMobileMenuOpen(false)}

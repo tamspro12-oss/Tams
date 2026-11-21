@@ -18,6 +18,7 @@ import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalSearchBar } from "@/components/GlobalSearchBar";
+import { MobileInstallButton } from "@/components/MobileInstallButton";
 import { PaymentVoucherHost } from "@/components/vouchers/PaymentVoucherHost";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -244,6 +245,11 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Mobile-only Install App Card in Drawer */}
+        <div className="md:hidden px-3 pb-1">
+          <MobileInstallButton variant="drawer-card" onActionStart={handleNavClick} />
+        </div>
+
         {/* Logout Button */}
         <div className="px-3 pt-1">
           <button
@@ -347,6 +353,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* === MOBILE RIGHT CONTROLS === */}
             <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
               <OfflineIndicator />
+              <MobileInstallButton variant="app-header" />
               <NotificationBell />
               <ThemeToggle />
             </div>

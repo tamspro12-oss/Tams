@@ -17,9 +17,13 @@ import {
   BookOpen,
   Shield,
   X,
+  RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { MobileInstallButton } from "@/components/MobileInstallButton";
+import { versionManager } from "@/lib/versionManager";
 import { useReminders } from "@/hooks/useReminders";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
@@ -219,6 +223,12 @@ export function MobileBottomNav() {
             </SheetTitle>
           </SheetHeader>
 
+          <MobileInstallButton
+            variant="drawer-card"
+            className="pt-3"
+            onActionStart={() => setSheetOpen(false)}
+          />
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-3">
             {moreItems.map((item) => (
               <button
@@ -243,6 +253,35 @@ export function MobileBottomNav() {
                 )}
               </button>
             ))}
+          </div>
+
+          <div className="mt-3 pt-3 border-t flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground">
+                App Version <span className="font-mono">v{versionManager.getCurrentVersion()}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Safe updates preserve all saved data
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await versionManager.checkVersionAPI();
+                if (res.hasUpdate) {
+                  setSheetOpen(false);
+                  window.dispatchEvent(
+                    new CustomEvent("tams:update-available", { detail: res })
+                  );
+                } else {
+                  toast.success(`You're on the latest version (v${res.currentVersion})`);
+                }
+              }}
+              className="min-h-[44px] px-3 rounded-xl border bg-muted/40 hover:bg-muted/70 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Check Update</span>
+            </button>
           </div>
         </SheetContent>
       </Sheet>

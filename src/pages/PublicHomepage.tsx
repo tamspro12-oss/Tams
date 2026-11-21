@@ -18,6 +18,7 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { Tile } from "@/components/public/Tile";
+import { MobileInstallButton } from "@/components/MobileInstallButton";
 
 interface StripItem {
   id: string;
@@ -81,6 +82,10 @@ function HomepageContent() {
                 Sign Up Free
               </Button>
             </Link>
+          </div>
+
+          <div className="md:hidden mt-3 w-full">
+            <MobileInstallButton variant="hero-cta" />
           </div>
         </section>
 

@@ -1,5 +1,5 @@
 // src/lib/pwaInstall.ts
-// Handles beforeinstallprompt, appinstalled, display-mode detection, layout control
+// Handles beforeinstallprompt, appinstalled, display-mode detection, native Capacitor/PWA detection, layout control
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 const INSTALL_KEY = 'tams_pwa_installed_v1';
@@ -16,14 +16,39 @@ interface PwaInstallOptions {
 }
 
 export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true
   );
 }
 
+export function isCapacitorNative(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as any).Capacitor;
+  if (!cap) return false;
+  return typeof cap.isNativePlatform === 'function'
+    ? Boolean(cap.isNativePlatform())
+    : Boolean(cap.isNative);
+}
+
+export function isAppInstalled(): boolean {
+  return isStandalone() || isCapacitorNative();
+}
+
 export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
   return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
 }
 
 export function shouldForceDesktopLayout(): boolean {
@@ -32,10 +57,12 @@ export function shouldForceDesktopLayout(): boolean {
 }
 
 export function isDesktopBrowser(): boolean {
+  if (typeof window === 'undefined') return true;
   return window.innerWidth >= 900 && !/Mobi|Android/i.test(navigator.userAgent);
 }
 
 export function isSafariBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
   return /Safari/.test(ua) && !/Chrome/.test(ua) && !/CriOS/.test(ua);
 }
@@ -63,7 +90,9 @@ export function hasShownOnboarding(): boolean {
 export function setOnboardingShown(): void {
   try {
     localStorage.setItem(ONBOARD_KEY, 'true');
-  } catch {}
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 export function initPwaInstall(options: PwaInstallOptions = {}) {
@@ -82,10 +111,15 @@ export function initPwaInstall(options: PwaInstallOptions = {}) {
     }
   }
 
-  // Listen for beforeinstallprompt event
+  // Listen for beforeinstallprompt event (means browser allows fresh installation)
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e as BeforeInstallPromptEvent;
+    try {
+      localStorage.removeItem(INSTALL_KEY);
+    } catch {
+      // Ignore storage errors
+    }
     window.dispatchEvent(new CustomEvent('tams:beforeinstallprompt'));
   });
 
@@ -93,7 +127,9 @@ export function initPwaInstall(options: PwaInstallOptions = {}) {
   window.addEventListener('appinstalled', () => {
     try {
       localStorage.setItem(INSTALL_KEY, 'true');
-    } catch {}
+    } catch {
+      // Ignore storage errors
+    }
     deferredPrompt = null;
     onInstall();
     applyLayout();
@@ -119,7 +155,9 @@ export async function promptInstall(): Promise<{ outcome: string; error?: Error 
   try {
     await deferredPrompt.prompt();
     const choice = await deferredPrompt.userChoice;
-    deferredPrompt = null;
+    if (choice.outcome === 'accepted') {
+      deferredPrompt = null;
+    }
     window.dispatchEvent(new CustomEvent('tams:afterinstallprompt', { detail: choice }));
     return choice;
   } catch (err) {

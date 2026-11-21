@@ -1,48 +1,53 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
+/**
+ * Watches Service Worker lifecycle updates without forcefully reloading the page.
+ * Emits a safe event so UpdateNotification lets the user choose when to apply the update,
+ * ensuring active forms or unsaved entries are never interrupted.
+ */
 export function useAutoUpdate() {
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
       return;
     }
 
-    // Listen for service worker update messages
+    const notifyUpdateCheck = () => {
+      window.dispatchEvent(new CustomEvent("tams:check-update"));
+    };
+
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'SW_UPDATED') {
-        console.log('🚀 Auto-updating app to:', event.data.version);
-        window.location.reload();
+      if (event.data?.type === "SW_UPDATED") {
+        notifyUpdateCheck();
       }
     };
 
-    navigator.serviceWorker.addEventListener('message', handleMessage);
+    navigator.serviceWorker.addEventListener("message", handleMessage);
 
-    // Check for updates and activate waiting service worker
-    navigator.serviceWorker.ready.then((registration) => {
-      // Trigger update check
-      registration.update().catch(console.error);
+    navigator.serviceWorker.ready
+      .then((registration) => {
+        registration.update().catch(() => {});
 
-      // If there's a waiting service worker, activate it
-      if (registration.waiting) {
-        console.log('[AutoUpdate] Activating waiting service worker');
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: "SKIP_WAITING" });
+          notifyUpdateCheck();
+        }
 
-      // Watch for new service workers
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (!newWorker) return;
+        registration.addEventListener("updatefound", () => {
+          const newWorker = registration.installing;
+          if (!newWorker) return;
 
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[AutoUpdate] New version ready, activating...');
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
-          }
+          newWorker.addEventListener("statechange", () => {
+            if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: "SKIP_WAITING" });
+              notifyUpdateCheck();
+            }
+          });
         });
-      });
-    }).catch(console.error);
+      })
+      .catch(() => {});
 
     return () => {
-      navigator.serviceWorker.removeEventListener('message', handleMessage);
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
     };
   }, []);
 }
