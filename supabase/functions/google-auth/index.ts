@@ -145,6 +145,7 @@ serve(async (req) => {
 
       // Build allowlist of trusted origins to protect against open-redirect
       // via the state.return_to parameter. We accept:
+      //   - the production app origin (https://tamspro.online and www)
       //   - the Supabase project's own origin
       //   - any origin listed in the OAUTH_REDIRECT_ORIGINS secret (comma-sep)
       //   - *.lovable.app / *.lovable.dev (preview + published hosts)
@@ -153,7 +154,12 @@ serve(async (req) => {
       })();
       const extraOrigins = (Deno.env.get('OAUTH_REDIRECT_ORIGINS') ?? '')
         .split(',').map(s => s.trim()).filter(Boolean);
-      const allowlist = new Set<string>([supabaseOrigin, ...extraOrigins].filter(Boolean));
+      const allowlist = new Set<string>([
+        'https://tamspro.online',
+        'https://www.tamspro.online',
+        supabaseOrigin,
+        ...extraOrigins,
+      ].filter(Boolean));
 
       const isAllowedOrigin = (raw: string): { ok: boolean; origin: string } => {
         try {

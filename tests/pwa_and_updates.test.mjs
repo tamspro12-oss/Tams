@@ -70,18 +70,18 @@ test("compareUpdateManifest detects any newly deployed buildId or newer semver s
 
 test("buildSafeRefreshUrl preserves existing query parameters and hashes", () => {
   const out = buildSafeRefreshUrl(
-    "https://tamspro.vercel.app/app/clients-vendors?tab=parties&type=vendor#top",
+    "https://tamspro.online/app/clients-vendors?tab=parties&type=vendor#top",
     123456
   );
   assert.equal(
     out,
-    "https://tamspro.vercel.app/app/clients-vendors?tab=parties&type=vendor&_tams_v=123456#top"
+    "https://tamspro.online/app/clients-vendors?tab=parties&type=vendor&_tams_v=123456#top"
   );
 
   const out2 = buildSafeRefreshUrl(out, 999999);
   assert.equal(
     out2,
-    "https://tamspro.vercel.app/app/clients-vendors?tab=parties&type=vendor&_tams_v=999999#top"
+    "https://tamspro.online/app/clients-vendors?tab=parties&type=vendor&_tams_v=999999#top"
   );
 });
 

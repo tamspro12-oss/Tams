@@ -1,12 +1,12 @@
 /**
  * Canonical Supabase Auth redirect helpers.
  * Only uses the configured Supabase Redirect URLs:
- *   - https://tamspro.vercel.app/auth/callback
+ *   - https://tamspro.online/auth/callback
  *   - http://localhost:5173/auth/callback
  * plus /reset-password on the matching origin.
  */
 
-export const PRODUCTION_APP_ORIGIN = "https://tamspro.vercel.app";
+export const PRODUCTION_APP_ORIGIN = "https://tamspro.online";
 export const LOCAL_DEV_ORIGIN = "http://localhost:5173";
 
 /**

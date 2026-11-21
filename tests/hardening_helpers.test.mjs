@@ -245,13 +245,14 @@ test("agencyTemplatesCore prefers DB, migrates localStorage once, and survives m
 });
 
 test("authRedirect & authFlowState enforce allowlisted origins, cross-device PKCE message, and 60s cooldown", () => {
-  assert.equal(resolveAuthOrigin("https://tamspro.vercel.app"), "https://tamspro.vercel.app");
+  assert.equal(resolveAuthOrigin("https://tamspro.online"), "https://tamspro.online");
   assert.equal(resolveAuthOrigin("http://localhost:5173"), "http://localhost:5173");
-  assert.equal(resolveAuthOrigin("https://old-retired.example"), "https://tamspro.vercel.app");
+  assert.equal(resolveAuthOrigin("https://old-vercel.example"), "https://tamspro.online");
+  assert.equal(resolveAuthOrigin("https://old-retired.example"), "https://tamspro.online");
 
   assert.equal(
-    getAuthCallbackUrl(undefined, "https://tamspro.vercel.app"),
-    "https://tamspro.vercel.app/auth/callback"
+    getAuthCallbackUrl(undefined, "https://tamspro.online"),
+    "https://tamspro.online/auth/callback"
   );
   assert.equal(
     getAuthCallbackUrl(undefined, "http://localhost:5173"),
