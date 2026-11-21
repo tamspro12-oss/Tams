@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
-const CURRENT_VERSION = '3.7.0'; // Update this with each deployment
+const CURRENT_VERSION = '3.8.0'; // Update this with each deployment
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,6 +15,10 @@ Deno.serve(async (req) => {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString(),
       changelog: {
+        '3.8.0': [
+          'Removed B2B Agents section, routes, and navigation entries',
+          'Faster authentication, persistent layout navigation, and unified query caching',
+        ],
         '3.7.0': [
           'Unified shared navigation config across desktop sidebar, mobile bottom bar, and mobile More menu',
           'Updated mobile More menu routes: Vendors & Airlines opens Parties (Vendors), Financial Reports opens Reports, and Sales & Expenses exposes Invoice, Voucher, Refund, and Expense sub-sections',

@@ -9,7 +9,7 @@ export interface AgencyNotification {
   agency_id: string;
   title: string;
   message: string;
-  type: "all" | "travel" | "accounts" | "reminders" | "system" | "b2b";
+  type: "all" | "travel" | "accounts" | "reminders" | "system";
   category: string;
   link: string | null;
   metadata: Record<string, any>;

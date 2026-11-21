@@ -123,7 +123,7 @@ export const SERVICE_TYPE_LABELS: Record<string, string> = {
   Other: "Other Services",
   // Legacy quotation service_type keys preserved for previously saved records
   client_booking: "Client Booking",
-  b2b: "B2B Service",
+  b2b: "Other Services",
   umrah: "Umrah Package",
   custom: "Custom",
 };

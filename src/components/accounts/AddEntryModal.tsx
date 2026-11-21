@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowDownLeft, ArrowUpRight, Receipt, ArrowRightLeft, User, Building2, Store, Calendar, CreditCard, FileText } from "lucide-react";
 import { useAccounts, useTransactionMutations } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { LockedDateField, getTodayDateString } from "@/components/ui/LockedDateField";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { format } from "date-fns";
@@ -23,7 +22,7 @@ interface AddEntryModalProps {
   onOpenChange: (open: boolean) => void;
   defaultMode?: "received" | "paid" | "expense" | "transfer";
   defaultPartyId?: string;
-  defaultPartyType?: "client" | "agent" | "vendor";
+  defaultPartyType?: "client" | "vendor";
 }
 
 const COMMON_EXPENSE_CATEGORIES = [
@@ -54,7 +53,7 @@ export function AddEntryModal({
   const [date, setDate] = useState<string>(getTodayDateString());
   const [accountId, setAccountId] = useState<string>("");
   const [toAccountId, setToAccountId] = useState<string>("");
-  const [partyType, setPartyType] = useState<"client" | "agent" | "vendor">(defaultPartyType || "client");
+  const [partyType, setPartyType] = useState<"client" | "vendor">(defaultPartyType || "client");
   const [selectedPartyId, setSelectedPartyId] = useState<string>(defaultPartyId || "");
   const [category, setCategory] = useState<string>("Office Supplies & Tea");
   const [customCategory, setCustomCategory] = useState<string>("");
@@ -67,7 +66,6 @@ export function AddEntryModal({
 
   const { accounts, cashAccount, bankAccounts } = useAccounts();
   const { clients } = useClients();
-  const { agents } = useB2BAgents();
   const { vendors } = useVendors();
   const { recordPayment, recordExpense, recordTransfer } = useTransactionMutations();
 
@@ -97,16 +95,6 @@ export function AddEntryModal({
         name: `${c.name} ${c.pnr ? `(${c.pnr})` : ""}`,
         type: "client" as const,
       }));
-    } else if (partyType === "agent") {
-      return (agents || []).map((a) => {
-        const agentName = a.agent_name || (a as any).name || "Agent";
-        const businessName = a.business_name || (a as any).company_name;
-        return {
-          id: a.id,
-          name: `${agentName} ${businessName ? `(${businessName})` : ""}`.trim(),
-          type: "agent" as const,
-        };
-      });
     } else {
       return (vendors || []).map((v) => ({
         id: v.id,
@@ -114,7 +102,7 @@ export function AddEntryModal({
         type: "vendor" as const,
       }));
     }
-  }, [partyType, clients, agents, vendors]);
+  }, [partyType, clients, vendors]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -398,16 +386,6 @@ export function AddEntryModal({
                           )}
                         >
                           Client
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setPartyType("agent"); setSelectedPartyId(""); }}
-                          className={cn(
-                            "text-[10px] px-2 py-0.5 rounded border transition-colors",
-                            partyType === "agent" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
-                          )}
-                        >
-                          Agent
                         </button>
                         <button
                           type="button"

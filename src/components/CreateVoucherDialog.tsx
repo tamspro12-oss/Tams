@@ -11,7 +11,6 @@ import { Plus, Trash2, Calendar, FileText, User, Plane, Building2, Sparkles, Max
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useClients } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import type { Voucher, VoucherType, VoucherStatus, VoucherPassenger } from "@/types/voucher";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,7 +34,6 @@ export function CreateVoucherDialog({
   onSave,
 }: CreateVoucherDialogProps) {
   const { clients = [] } = useClients();
-  const { agents = [] } = useB2BAgents();
   const formRef = useRef<HTMLFormElement>(null);
   const paxNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -44,7 +42,6 @@ export function CreateVoucherDialog({
   const [passengerName, setPassengerName] = useState("");
   const [passengerPassport, setPassengerPassport] = useState("");
   const [contactNumber, setContactNumber] = useState("");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("none");
   const [bookingId, setBookingId] = useState<string>("");
 
   // Additional passengers
@@ -123,7 +120,6 @@ export function CreateVoucherDialog({
       setPassengerName(voucherToEdit.passenger_name || "");
       setPassengerPassport(voucherToEdit.passenger_passport || "");
       setContactNumber(voucherToEdit.contact_number || "");
-      setSelectedAgentId(voucherToEdit.agent_id || "none");
       setBookingId(voucherToEdit.booking_id || "");
       setPassengers(voucherToEdit.passengers || []);
 
@@ -176,7 +172,6 @@ export function CreateVoucherDialog({
     setPassengerName("");
     setPassengerPassport("");
     setContactNumber("");
-    setSelectedAgentId("none");
     setBookingId("");
     setPassengers([]);
 
@@ -235,10 +230,6 @@ export function CreateVoucherDialog({
     setPnr(pPnr);
     setAirline(pAirline);
     setBookingId(booking.id || "");
-
-    if (booking.agent_id) {
-      setSelectedAgentId(booking.agent_id);
-    }
 
     // Determine type from booking
     const travelType = (booking.travel_type || booking.service_type || "").toLowerCase();
@@ -364,7 +355,7 @@ export function CreateVoucherDialog({
       passenger_name: passengerName.trim(),
       passenger_passport: passengerPassport.trim() || null,
       contact_number: contactNumber.trim() || null,
-      agent_id: selectedAgentId !== "none" ? selectedAgentId : null,
+      agent_id: null,
       booking_id: bookingId || null,
       passengers: passengers.filter((p) => p.name.trim().length > 0),
 
@@ -552,8 +543,8 @@ export function CreateVoucherDialog({
             </div>
           )}
 
-          {/* Status & Agent Selection */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Status Selection */}
+          <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Voucher Status</Label>
               <Select value={status} onValueChange={(val) => setStatus(val as VoucherStatus)}>
@@ -564,23 +555,6 @@ export function CreateVoucherDialog({
                   <SelectItem value="Issued">Issued (Active)</SelectItem>
                   <SelectItem value="Draft">Draft</SelectItem>
                   <SelectItem value="Cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">B2B Agent (Optional)</Label>
-              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Direct Client (No Agent)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Direct Client (No Agent)</SelectItem>
-                  {agents.map((ag: any) => (
-                    <SelectItem key={ag.id} value={ag.id} className="text-xs">
-                      {ag.agency_name} ({ag.contact_person})
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>

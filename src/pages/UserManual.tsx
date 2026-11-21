@@ -297,7 +297,7 @@ const sections: Section[] = [
     icon: Users,
     content: (
       <div className="space-y-4">
-        <Intro>All clients, B2B agents and vendors are called parties. They live in one list. Your bank accounts are here too.</Intro>
+        <Intro>All clients and vendors are called parties. They live in one list. Your bank accounts are here too.</Intro>
         <div className="space-y-2">
           <SubHeading>A. Parties Tab</SubHeading>
           <Intro>Columns: Party Code, Name, Type, Current Balance, Actions.</Intro>

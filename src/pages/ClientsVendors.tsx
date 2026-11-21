@@ -196,7 +196,7 @@ export default function ClientsVendors() {
       const agencyId = bankToDelete.agency_id;
 
       // Check transactions across tables
-      const [invoicesRes, expensesRes, b2bRes, clientPmtRes, vendorPmtRes, refundsRes] = await Promise.all([
+      const [invoicesRes, expensesRes, clientPmtRes, vendorPmtRes, refundsRes] = await Promise.all([
         (supabase as any)
           .from("booking_invoices")
           .select("id")
@@ -205,12 +205,6 @@ export default function ClientsVendors() {
           .limit(1),
         (supabase as any)
           .from("expenses")
-          .select("id")
-          .eq("agency_id", agencyId)
-          .eq("bank_name", bankName)
-          .limit(1),
-        (supabase as any)
-          .from("b2b_ledger")
           .select("id")
           .eq("agency_id", agencyId)
           .eq("bank_name", bankName)
@@ -238,7 +232,6 @@ export default function ClientsVendors() {
       const hasTransactions =
         Boolean(invoicesRes.data && invoicesRes.data.length > 0) ||
         Boolean(expensesRes.data && expensesRes.data.length > 0) ||
-        Boolean(b2bRes.data && b2bRes.data.length > 0) ||
         Boolean(clientPmtRes.data && clientPmtRes.data.length > 0) ||
         Boolean(vendorPmtRes.data && vendorPmtRes.data.length > 0) ||
         Boolean(refundsRes.data && refundsRes.data.length > 0);

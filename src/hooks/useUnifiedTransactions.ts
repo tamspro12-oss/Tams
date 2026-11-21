@@ -377,9 +377,6 @@ export function useTransactionMutations() {
 
   const invalidateAllFinance = (scope: FinancialRefreshScope = "all") => {
     refreshAffectedFinancialQueries(queryClient, scope, agencyId);
-    queryClient.invalidateQueries({ queryKey: ["b2b_agents"] });
-    queryClient.invalidateQueries({ queryKey: ["b2b_bookings"] });
-    queryClient.invalidateQueries({ queryKey: ["b2b_ledger"] });
     queryClient.invalidateQueries({ queryKey: ["client_payment_history"] });
     queryClient.invalidateQueries({ queryKey: ["vendor_payment_history"] });
   };

@@ -33,7 +33,7 @@ const FEATURES_DATA: FeatureDef[] = [
   { id: "2", title: "Bookings", caption: "Tickets, Umrah and more", icon: CalendarCheck },
   { id: "3", title: "Visas", caption: "Visa applications and tracking", icon: Stamp },
   { id: "4", title: "Vouchers", caption: "Umrah, hotel, ticket", icon: Ticket },
-  { id: "5", title: "Parties", caption: "Clients, agents and vendors", icon: Users },
+  { id: "5", title: "Parties", caption: "Clients and vendors", icon: Users },
   { id: "6", title: "Expenses", caption: "Linked to accounts", icon: Wallet },
   { id: "7", title: "Queries & Quotes", caption: "Convert to booking", icon: FileText },
   { id: "8", title: "Umrah Calculator", caption: "SAR to PKR costing", icon: Calculator },

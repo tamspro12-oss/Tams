@@ -99,8 +99,6 @@ const QuotationFormPage = lazyWithRetry(() => import("./pages/QuotationFormPage"
 const NotificationsHub = lazyWithRetry(() => import("./pages/NotificationsHub"));
 const SettingsHub = lazyWithRetry(() => import("./pages/SettingsHub"));
 const UmrahCalculator = lazyWithRetry(() => import("./pages/UmrahCalculator"));
-const ClientBookings = lazyWithRetry(() => import("./pages/ClientBookings"));
-const B2BAgentDashboard = lazyWithRetry(() => import("./pages/B2BAgentDashboard"));
 
 // Lazy non-critical overlays (kept out of the initial bundle)
 const UpdateNotification = lazyWithRetry(() =>
@@ -232,8 +230,6 @@ const App = () => {
                       <Route path="leads-quotes/queries/:id/edit" element={<RouteErrorBoundary routeName="Edit Query"><QueryFormPage /></RouteErrorBoundary>} />
                       <Route path="leads-quotes/quotations/new" element={<RouteErrorBoundary routeName="New Quotation"><QuotationFormPage /></RouteErrorBoundary>} />
                       <Route path="leads-quotes/quotations/:id/edit" element={<RouteErrorBoundary routeName="Edit Quotation"><QuotationFormPage /></RouteErrorBoundary>} />
-                      <Route path="b2b-agents" element={<RouteErrorBoundary routeName="B2B Agents"><ClientBookings initialFilter="b2b" /></RouteErrorBoundary>} />
-                      <Route path="b2b-agents/:agentId" element={<RouteErrorBoundary routeName="B2B Agent Dashboard"><B2BAgentDashboard /></RouteErrorBoundary>} />
                       <Route path="umrah-calculator" element={<RouteErrorBoundary routeName="Umrah Calculator"><UmrahCalculator /></RouteErrorBoundary>} />
                       <Route path="notifications" element={<RouteErrorBoundary routeName="Notifications"><NotificationsHub /></RouteErrorBoundary>} />
                       <Route path="settings" element={<RouteErrorBoundary routeName="Settings"><SettingsHub /></RouteErrorBoundary>} />

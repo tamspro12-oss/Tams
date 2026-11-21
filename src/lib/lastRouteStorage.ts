@@ -2,7 +2,12 @@ export const DEFAULT_APP_ROUTE = "/app/dashboard";
 const LAST_ROUTE_PREFIX = "tams_last_route:";
 
 export function isValidAppRoute(path: string | null | undefined): path is string {
-  return typeof path === "string" && path.startsWith("/app/") && !path.startsWith("//");
+  return (
+    typeof path === "string" &&
+    path.startsWith("/app/") &&
+    !path.startsWith("//") &&
+    !path.startsWith("/app/b2b-agents")
+  );
 }
 
 export function saveLastAppRoute(

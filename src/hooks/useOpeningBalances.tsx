@@ -7,7 +7,7 @@ import { isMissingFunctionError } from "@/lib/friendlyError";
 import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 import { isMissingRpcOrParamError } from "@/lib/atomicSave";
 
-export type PartyType = "client" | "vendor" | "b2b_agent";
+export type PartyType = "client" | "vendor";
 export type BalanceType = "receivable" | "payable";
 
 export interface OpeningBalance {
@@ -39,7 +39,7 @@ async function syncOpeningTransactionLegacy(
     notes: string | null;
   }
 ) {
-  const pType = ob.party_type === "b2b_agent" ? "agent" : ob.party_type;
+  const pType = ob.party_type;
   const debit = ob.balance_type === "receivable" ? ob.amount : 0;
   const credit = ob.balance_type === "payable" ? ob.amount : 0;
 

@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import { useClients, useQueries } from "@/hooks/useStorage";
-import { useB2BBookings } from "@/hooks/useB2BBookings";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { format, startOfDay, addDays, subDays } from "date-fns";
 
 export interface ActionableFlightAlert {
@@ -15,8 +13,7 @@ export interface ActionableFlightAlert {
   serviceType: string;
   passport?: string | null;
   contactNumber?: string | null;
-  source: 'b2c' | 'b2b';
-  agentName?: string;
+  source: 'b2c';
   isToday: boolean;
   isTomorrow: boolean;
 }
@@ -46,8 +43,6 @@ export interface ActionableQueryAlert {
 export function useActionableAlerts() {
   const { clients = [], isLoading: loadingClients } = useClients();
   const { queries = [], isLoading: loadingQueries } = useQueries();
-  const { bookings: b2bBookings = [], isLoading: loadingB2BBookings } = useB2BBookings();
-  const { agents: b2bAgents = [], isLoading: loadingB2BAgents } = useB2BAgents();
 
   // 1. Upcoming Flights within 48h (today + tomorrow, including Monday if Saturday)
   const upcomingFlights = useMemo<ActionableFlightAlert[]>(() => {
@@ -56,7 +51,6 @@ export function useActionableAlerts() {
     const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
     const lastDay = dayOfWeek === 6 ? addDays(today, 2) : tomorrow;
 
-    // B2C upcoming flights
     const b2cList: ActionableFlightAlert[] = clients
       .filter((c: any) => {
         if (!c.flight_date) return false;
@@ -90,57 +84,8 @@ export function useActionableAlerts() {
         };
       });
 
-    // B2B upcoming flights
-    const b2bList: ActionableFlightAlert[] = b2bBookings
-      .filter((b: any) => {
-        if (!b.flight_date) return false;
-        const flightDate = startOfDay(new Date(b.flight_date));
-        const flightTime = flightDate.getTime();
-        return flightTime >= today.getTime() && flightTime <= lastDay.getTime();
-      })
-      .map((booking: any) => {
-        const flightDate = startOfDay(new Date(booking.flight_date!));
-        const isToday = flightDate.getTime() === today.getTime();
-        const isTomorrow = flightDate.getTime() === tomorrow.getTime();
-
-        let dateLabel = format(flightDate, 'MMM d');
-        if (isToday) dateLabel = 'Today';
-        else if (isTomorrow) dateLabel = 'Tomorrow';
-
-        let serviceType = 'Ticket';
-        try {
-          if (booking.notes && booking.notes.startsWith('{')) {
-            const parsed = JSON.parse(booking.notes.split('\n')[0]);
-            if (parsed.type === 'umrah_package') {
-              serviceType = 'Umrah';
-            }
-          }
-        } catch {
-          // ignore parsing error
-        }
-
-        const agent = b2bAgents.find((a: any) => a.id === booking.agent_id);
-
-        return {
-          id: booking.id,
-          name: `${booking.passenger_name} (B2B)`,
-          agentName: agent?.agent_name || 'B2B Partner',
-          destination: booking.destination || 'N/A',
-          date: dateLabel,
-          fullDate: flightDate,
-          flightDateFormatted: format(flightDate, 'MMM d, yyyy'),
-          pnr: booking.pnr || 'N/A',
-          serviceType,
-          passport: booking.passenger_passport,
-          contactNumber: booking.passenger_contact,
-          source: 'b2b' as const,
-          isToday,
-          isTomorrow,
-        };
-      });
-
-    return [...b2cList, ...b2bList].sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
-  }, [clients, b2bBookings, b2bAgents]);
+    return b2cList.sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
+  }, [clients]);
 
   // 2. Name Update Reminders
   const nameUpdateReminders = useMemo<ActionableNameUpdate[]>(() => {
@@ -216,6 +161,6 @@ export function useActionableAlerts() {
     activeQueries,
     urgentCount,
     summaryText,
-    isLoading: loadingClients || loadingQueries || loadingB2BBookings || loadingB2BAgents,
+    isLoading: loadingClients || loadingQueries,
   };
 }

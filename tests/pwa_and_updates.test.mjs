@@ -86,7 +86,7 @@ test("buildSafeRefreshUrl preserves existing query parameters and hashes", () =>
 });
 
 test("shared navigation config matches canonical routes and removes legacy modules", () => {
-  const forbiddenPrefixes = ["/app/bookings", "/app/accounts", "/app/vouchers", "/app/vendors"];
+  const forbiddenPrefixes = ["/app/bookings", "/app/accounts", "/app/vouchers", "/app/vendors", "/app/b2b-agents"];
   for (const item of APP_NAVIGATION_CORE) {
     assert.notEqual(item.label, "Vouchers Hub");
     for (const prefix of forbiddenPrefixes) {
@@ -119,7 +119,7 @@ test("shared navigation config matches canonical routes and removes legacy modul
 
   assert.equal(moreById["vendors-airlines"]?.href, "/app/clients-vendors?tab=parties&type=vendor");
   assert.equal(moreById["financial-reports"]?.href, "/app/reports?tab=financial-reports");
-  assert.equal(moreById["b2b-agents"]?.href, "/app/b2b-agents");
+  assert.equal(moreById["b2b-agents"], undefined);
   assert.equal(moreById["settings"]?.href, "/app/settings");
   assert.equal(moreById["email-integration"]?.href, "/app/settings?tab=email-integration");
   assert.equal(moreById["notifications"]?.href, "/app/notifications");
@@ -131,7 +131,7 @@ test("shared navigation config matches canonical routes and removes legacy modul
   assert.equal(adminMore.some((i) => i.id === "admin"), true);
 
   const desktopNonAdmin = getDesktopSidebarItemsCore({ isAdmin: false });
-  assert.equal(desktopNonAdmin.some((i) => i.id === "b2b-agents"), true);
+  assert.equal(desktopNonAdmin.some((i) => i.id === "b2b-agents"), false);
   assert.equal(desktopNonAdmin.some((i) => i.id === "admin"), false);
 
   const bottomItems = getMobileBottomBarItemsCore();
@@ -149,6 +149,7 @@ test("shared navigation config matches canonical routes and removes legacy modul
     isNavItemActive(moreById["vendors-airlines"], "/app/clients-vendors", ""),
     false
   );
-  assert.equal(isMoreMenuRouteActive("/app/b2b-agents", "", false), true);
+  assert.equal(isMoreMenuRouteActive("/app/umrah-calculator", "", false), true);
+  assert.equal(isMoreMenuRouteActive("/app/b2b-agents", "", false), false);
   assert.equal(isMoreMenuRouteActive("/app/clients-vendors", "?tab=parties&type=vendor", false), false);
 });

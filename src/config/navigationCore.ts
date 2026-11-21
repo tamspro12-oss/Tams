@@ -11,7 +11,6 @@ export type NavIconKey =
   | "users"
   | "bar-chart-3"
   | "message-square"
-  | "building-2"
   | "calculator"
   | "bell"
   | "plane"
@@ -172,16 +171,6 @@ export const APP_NAVIGATION_CORE: readonly AppNavItemCore[] = [
     colorClass: "text-sky-500 bg-sky-50 dark:bg-sky-950/40",
     placements: { desktopSidebar: true, mobileBottomBar: false, mobileMore: true },
     matchPrefixes: ["/app/leads-quotes"],
-  },
-  {
-    id: "b2b-agents",
-    label: "B2B Agents",
-    description: "Agent network, bookings & ledgers",
-    href: "/app/b2b-agents",
-    iconKey: "building-2",
-    colorClass: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40",
-    placements: { desktopSidebar: true, mobileBottomBar: false, mobileMore: true },
-    matchPrefixes: ["/app/b2b-agents"],
   },
   {
     id: "umrah-calculator",

@@ -509,7 +509,7 @@ export default function Dashboard() {
                 Add Quotation
               </span>
               <span className="text-xs text-muted-foreground font-normal truncate block mt-0.5">
-                Client & B2B price proposals
+                Client price proposals
               </span>
             </div>
           </button>

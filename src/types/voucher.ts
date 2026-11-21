@@ -60,11 +60,5 @@ export interface Voucher {
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
-
-  // Joined fields
-  b2b_agents?: {
-    agency_name: string;
-    contact_person: string;
-  } | null;
 }
 

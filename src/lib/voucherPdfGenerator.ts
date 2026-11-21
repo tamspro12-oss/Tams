@@ -72,9 +72,7 @@ export function generateVoucherPdf(v: Voucher, opts: VoucherPdfOptions = {}) {
 
   const col2X = 110;
   doc.text(`Contact: ${v.contact_number || "N/A"}`, col2X, y + 13);
-  if (v.b2b_agents?.agency_name) {
-    doc.text(`Booking Agent: ${v.b2b_agents.agency_name}`, col2X, y + 20);
-  } else if (v.pnr) {
+  if (v.pnr) {
     doc.text(`PNR / Booking Ref: ${v.pnr}`, col2X, y + 20);
   } else {
     doc.text(`Booking Status: Confirmed & Issued`, col2X, y + 20);

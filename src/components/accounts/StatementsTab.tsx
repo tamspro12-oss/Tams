@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download } from "lucide-react";
 import { useAccounts, useAgencyLedger, usePartyStatement } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
@@ -23,7 +22,7 @@ interface StatementsTabProps {
 export function StatementsTab({ initialScope = "all", initialPartyId }: StatementsTabProps) {
   const [scopeType, setScopeType] = useState<"all" | "cash" | "bank" | "party">(initialScope);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [partyType, setPartyType] = useState<"client" | "agent" | "vendor">("client");
+  const [partyType, setPartyType] = useState<"client" | "vendor">("client");
   const [selectedPartyId, setSelectedPartyId] = useState<string>(initialPartyId || "");
   const [datePreset, setDatePreset] = useState<"this_month" | "last_month" | "this_year" | "custom">("this_month");
   const [customStart, setCustomStart] = useState<string>(format(startOfMonth(new Date()), "yyyy-MM-dd"));
@@ -31,7 +30,6 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
 
   const { accounts, cashAccount, bankAccounts } = useAccounts();
   const { clients } = useClients();
-  const { agents } = useB2BAgents();
   const { vendors } = useVendors();
   const { data: agency } = useAgency();
 
@@ -111,7 +109,6 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
     if (scopeType === "party") {
       let pName = "Party";
       if (partyType === "client") pName = clients.find((c) => c.id === selectedPartyId)?.name || "Client";
-      if (partyType === "agent") pName = agents.find((a) => a.id === selectedPartyId)?.agent_name || (agents.find((a) => a.id === selectedPartyId) as any)?.name || "Agent";
       if (partyType === "vendor") pName = vendors.find((v) => v.id === selectedPartyId)?.name || "Vendor";
       return {
         title: `${partyType.toUpperCase()} Statement — ${pName}`,
@@ -119,7 +116,7 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
       };
     }
     return { title: "Financial Statement", subtitle: "" };
-  }, [scopeType, cashAccount, bankAccounts, selectedAccountId, selectedPartyId, partyType, clients, agents, vendors, agency]);
+  }, [scopeType, cashAccount, bankAccounts, selectedAccountId, selectedPartyId, partyType, clients, vendors, agency]);
 
   // Unified Rows for the statement
   const statementRows = useMemo(() => {
@@ -264,7 +261,6 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="client">Client</SelectItem>
-                      <SelectItem value="agent">B2B Agent</SelectItem>
                       <SelectItem value="vendor">Vendor</SelectItem>
                     </SelectContent>
                   </Select>
@@ -277,12 +273,6 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
                         clients.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name} {c.pnr ? `(${c.pnr})` : ""}
-                          </SelectItem>
-                        ))}
-                      {partyType === "agent" &&
-                        agents.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.agent_name || (a as any).name || a.business_name || "Agent"}
                           </SelectItem>
                         ))}
                       {partyType === "vendor" &&

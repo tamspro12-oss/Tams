@@ -18,13 +18,7 @@ export function useVouchers() {
       if (!agencyId) return [];
       const { data, error: queryError } = await supabase
         .from("vouchers" as any)
-        .select(`
-          *,
-          b2b_agents (
-            agency_name,
-            contact_person
-          )
-        `)
+        .select("*")
         .eq("agency_id", agencyId)
         .order("created_at", { ascending: false });
 
@@ -159,7 +153,7 @@ export function useVouchers() {
       if (!agencyId) throw new Error("No active agency found");
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { id, created_at, updated_at, b2b_agents, voucher_number, ...rest } = source;
+      const { id, created_at, updated_at, voucher_number, ...rest } = source;
 
       return await withDuplicateRetry(
         async () => {

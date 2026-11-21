@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { useAgencyLedger, useAccounts, useTransactionMutations, TransactionItem } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
-import { useB2BAgents } from "@/hooks/useB2BAgents";
 import { useAgency } from "@/hooks/useAgency";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { getKarachiTodayNoon, getKarachiYmd } from "@/lib/karachiTime";
@@ -52,7 +51,7 @@ import {
 
 interface AgencyLedgerTabProps {
   onOpenAddEntry?: () => void;
-  onOpenPartyCard?: (partyId: string, partyType: "client" | "agent" | "vendor") => void;
+  onOpenPartyCard?: (partyId: string, partyType: "client" | "vendor") => void;
 }
 
 export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedgerTabProps) {
@@ -67,7 +66,6 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
 
   const { accounts } = useAccounts();
   const { clients } = useClients();
-  const { agents } = useB2BAgents();
   const { vendors } = useVendors();
   const { data: agency } = useAgency();
   const { reverseTransaction } = useTransactionMutations();
@@ -379,7 +377,6 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                   <SelectContent>
                     <SelectItem value="all">All Parties</SelectItem>
                     <SelectItem value="client">Direct Clients</SelectItem>
-                    <SelectItem value="agent">B2B Agents</SelectItem>
                     <SelectItem value="vendor">Vendors</SelectItem>
                   </SelectContent>
                 </Select>
@@ -507,11 +504,14 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
                       {getTypeBadge(tx.type, tx.is_reversed || false)}
                     </td>
                     <td className="py-2 px-2.5 font-semibold text-foreground">
-                      {tx.party_id && tx.party_type ? (
+                      {tx.party_id && (tx.party_type === "client" || tx.party_type === "vendor") ? (
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => onOpenPartyCard && onOpenPartyCard(tx.party_id!, tx.party_type!)}
+                            onClick={() =>
+                              onOpenPartyCard &&
+                              onOpenPartyCard(tx.party_id!, tx.party_type as "client" | "vendor")
+                            }
                             className="text-left font-bold hover:underline hover:text-primary transition-colors cursor-pointer"
                             title="Click to open this party's booking card"
                           >

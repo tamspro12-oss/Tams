@@ -68,7 +68,7 @@ export function AuthLayout({
               Run your travel agency from one place
             </h2>
             <p className="text-xs xl:text-sm text-blue-100/75 leading-relaxed">
-              Automate passenger bookings, B2B partner ledgers, and fast client quotations in one unified workspace.
+              Automate passenger bookings, client & vendor ledgers, and fast quotations in one unified workspace.
             </p>
           </div>
 
