@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Plane,
   ArrowRight,
@@ -10,6 +11,9 @@ import {
   FileText,
   Calculator,
   BarChart3,
+  BookOpen,
+  Calendar,
+  Clock,
   LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +24,14 @@ import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { Tile } from "@/components/public/Tile";
 import { MobileInstallButton } from "@/components/MobileInstallButton";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
+import {
+  BLOG_QUERY_KEYS,
+  fetchPublishedBlogs,
+  formatBlogDate,
+  getPostReadMinutes,
+} from "@/lib/blogs";
+import { isSafeUrl } from "@/lib/blogSanitizer";
 
 interface StripItem {
   id: string;
@@ -40,12 +52,68 @@ const STRIP_ITEMS: StripItem[] = [
 function HomepageContent() {
   const { hero } = useSiteSettings();
 
+  const { data: blogsData } = useQuery({
+    queryKey: BLOG_QUERY_KEYS.publicList,
+    queryFn: fetchPublishedBlogs,
+    staleTime: 60 * 1000,
+  });
+
+  const latestPosts = useMemo(() => (blogsData?.posts ?? []).slice(0, 3), [blogsData?.posts]);
+
+  const homepageJsonLd = useMemo(
+    () => [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "TAMS Pro",
+        url: PRODUCTION_APP_ORIGIN,
+        logo: `${PRODUCTION_APP_ORIGIN}/icons/tams-icon-512.png`,
+        email: "tamspro12@gmail.com",
+        telephone: "+92-319-0846768",
+        areaServed: "PK",
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: "TAMS Pro — Travel Agency Management System",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web, Desktop PWA, Android, iOS",
+        url: PRODUCTION_APP_ORIGIN,
+        description: hero.subtitle,
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Monthly Plan",
+            price: "999",
+            priceCurrency: "PKR",
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+          {
+            "@type": "Offer",
+            name: "Yearly Plan",
+            price: "9999",
+            priceCurrency: "PKR",
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+        ],
+      },
+    ],
+    [hero.subtitle]
+  );
+
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="TAMS Pro — Travel Agency Management System"
         description={hero.subtitle}
         path="/"
+        keywords={[
+          "travel agency management system Pakistan",
+          "travel agency software Pakistan",
+          "umrah package software",
+          "travel agent accounting software",
+        ]}
+        jsonLd={homepageJsonLd}
       />
 
       <PublicHeader currentPath="/" />
@@ -119,7 +187,108 @@ function HomepageContent() {
           </div>
         </section>
 
-        {/* Section C: Final CTA Clean Rounded-2xl Banner */}
+        {/* Section C: Latest Blog Guides Preview */}
+        {latestPosts.length > 0 && (
+          <section className="w-full" aria-labelledby="home-blog-preview-heading">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-5">
+              <div>
+                <span className="text-xs font-semibold tracking-widest uppercase text-[#0F5E63] block mb-1">
+                  RESOURCES FOR TRAVEL AGENTS
+                </span>
+                <h2
+                  id="home-blog-preview-heading"
+                  className="text-xl sm:text-2xl font-bold text-[#0F172A] tracking-tight"
+                >
+                  Latest from the TAMS Pro Blog
+                </h2>
+              </div>
+              <Link
+                to="/blogs"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5E63] hover:text-[#0B4A4E] transition-colors group"
+              >
+                <span>View all articles</span>
+                <ArrowRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
+              </Link>
+            </div>
+
+            <div className="tams-blogs-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {latestPosts.map((post) => {
+                const safeCover =
+                  post.cover_image_url && isSafeUrl(post.cover_image_url, { allowMailto: false })
+                    ? post.cover_image_url
+                    : null;
+                const displayDate = formatBlogDate(post.published_at || post.created_at);
+                const readMin = getPostReadMinutes(post);
+
+                return (
+                  <Link
+                    key={post.id}
+                    to={`/blogs/${post.slug}`}
+                    className="block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                  >
+                    <article className="tams-card tams-card-interactive group h-full rounded-2xl overflow-hidden bg-white flex flex-col justify-between">
+                      <div>
+                        <div className="aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-[#0F5E63]/10 to-teal-500/10 border-b border-slate-200/70">
+                          {safeCover ? (
+                            <img
+                              src={safeCover}
+                              alt={post.cover_image_alt || post.title}
+                              loading="lazy"
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <BookOpen className="w-5 h-5 text-[#0F5E63]" strokeWidth={1.75} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                            <span className="bg-teal-50 text-teal-800 border border-teal-200/60 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+                              {post.category || "Guide"}
+                            </span>
+                            <div className="flex items-center gap-2 text-[11px] text-[#64748B]">
+                              {displayDate && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" strokeWidth={1.75} />
+                                  <span>{displayDate}</span>
+                                </span>
+                              )}
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3" strokeWidth={1.75} />
+                                <span>{readMin}m</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <h3 className="text-base font-bold text-[#0F172A] group-hover:text-[#0F5E63] transition-colors line-clamp-2 leading-snug">
+                            {post.title}
+                          </h3>
+
+                          {post.excerpt && (
+                            <p className="mt-2 text-xs sm:text-sm text-[#475569] line-clamp-2 leading-relaxed">
+                              {post.excerpt}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="px-5 pb-4 pt-1">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5E63]">
+                          <span>Read guide</span>
+                          <ArrowRight className="w-3.5 h-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+                        </span>
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Section D: Final CTA Clean Rounded-2xl Banner */}
         <section className="w-full">
           <div className="tams-banner-card rounded-2xl bg-white border border-slate-200/80 shadow-sm px-6 py-6 sm:px-8 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
             <h2 className="text-lg sm:text-xl font-semibold text-[#0F172A] tracking-tight">

@@ -11,14 +11,26 @@ interface SeoHeadProps {
   modifiedTime?: string | null;
   author?: string | null;
   tags?: string[];
+  keywords?: string[];
   jsonLd?: object | object[];
 }
 
 const DEFAULT_OG_IMAGE = `${PRODUCTION_APP_ORIGIN}/icons/tams-icon-512.png`;
 
+function resolveSocialImageUrl(rawImage: string): string {
+  const trimmed = rawImage.trim();
+  if (!trimmed || /\.svg(?:[?#].*)?$/i.test(trimmed)) {
+    return DEFAULT_OG_IMAGE;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `${PRODUCTION_APP_ORIGIN}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
+}
+
 /**
- * Per-route SEO head. Sets unique title/description/canonical and Open Graph / Twitter tags.
- * Resolves relative paths against PRODUCTION_APP_ORIGIN for canonical, og:url, and og:image.
+ * Per-route SEO head. Sets unique title/description/canonical, Open Graph / Twitter tags,
+ * keywords, and JSON-LD structured data.
  */
 export function SeoHead({
   title,
@@ -30,6 +42,7 @@ export function SeoHead({
   modifiedTime,
   author,
   tags,
+  keywords,
   jsonLd,
 }: SeoHeadProps) {
   const ldArray = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
@@ -38,21 +51,29 @@ export function SeoHead({
     ? path
     : `${PRODUCTION_APP_ORIGIN}${normalizedPath}`;
 
-  const rawImage = (image || "").trim();
-  const resolvedImage = !rawImage
-    ? DEFAULT_OG_IMAGE
-    : /^https?:\/\//i.test(rawImage)
-      ? rawImage
-      : `${PRODUCTION_APP_ORIGIN}${rawImage.startsWith("/") ? rawImage : `/${rawImage}`}`;
+  const resolvedImage = resolveSocialImageUrl(image || "");
 
   const cleanTags = Array.isArray(tags)
     ? tags.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    : [];
+
+  const cleanKeywords = Array.isArray(keywords)
+    ? Array.from(
+        new Set(
+          keywords
+            .filter((k): k is string => typeof k === "string" && k.trim().length > 0)
+            .map((k) => k.trim())
+        )
+      )
     : [];
 
   return (
     <Helmet>
       <title>{title}</title>
       <meta name="description" content={description} />
+      {cleanKeywords.length > 0 ? (
+        <meta name="keywords" content={cleanKeywords.join(", ")} />
+      ) : null}
       <link rel="canonical" href={absoluteUrl} />
 
       <meta property="og:site_name" content="TAMS Pro" />

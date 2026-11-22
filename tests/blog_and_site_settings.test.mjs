@@ -8,6 +8,7 @@ const {
   generateBlogSlug,
   formatBlogDate,
   estimateReadMinutes,
+  getPostReadMinutes,
   normalizeTags,
   parseTagsInput,
 } = await import("../src/lib/blogs.ts");
@@ -27,6 +28,9 @@ const {
 
 const { MARKETING_NAVIGATION } = await import("../src/config/marketingContent.ts");
 const { buildSitemapXml } = await import("../api/sitemap.js");
+const { ALL_SEO_BLOG_POSTS, validateSeoPosts } = await import(
+  "../scripts/generate-blog-assets.mjs"
+);
 
 test("generateBlogSlug, normalizeTags, parseTagsInput, formatBlogDate, estimateReadMinutes work accurately", () => {
   assert.equal(
@@ -53,6 +57,10 @@ test("generateBlogSlug, normalizeTags, parseTagsInput, formatBlogDate, estimateR
 
   assert.equal(estimateReadMinutes(""), 1);
   assert.equal(estimateReadMinutes(`<p>${"word ".repeat(450)}</p>`), 3);
+  assert.equal(
+    getPostReadMinutes({ read_time_minutes: 7, content: "<p>short</p>" }),
+    7
+  );
   assert.equal(stripHtmlToText("<h2>Hello</h2><p>World &amp; Agency</p>"), "Hello World & Agency");
 });
 
@@ -158,6 +166,36 @@ test("buildSitemapXml includes /blogs and published post slugs", () => {
   );
 });
 
+test("All 10 SEO blog posts, cover SVGs, migration SQL, and marketing docs pass strict quality rules", () => {
+  const errors = validateSeoPosts(ALL_SEO_BLOG_POSTS);
+  assert.deepEqual(errors, [], `SEO blog validation errors:\n${errors.join("\n")}`);
+
+  for (const post of ALL_SEO_BLOG_POSTS) {
+    const coverPath = path.resolve("public/blog-covers", `${post.slug}.svg`);
+    assert.equal(fs.existsSync(coverPath), true, `Missing SVG cover for ${post.slug}`);
+  }
+
+  const seoMigration = fs.readFileSync(
+    path.resolve("supabase/migrations/20261122150000_blog_seo_fields_and_10_posts.sql"),
+    "utf8"
+  );
+  assert.match(seoMigration, /public\.blog_leads/);
+  assert.match(seoMigration, /faq_items/);
+  for (const post of ALL_SEO_BLOG_POSTS) {
+    assert.match(seoMigration, new RegExp(post.slug));
+  }
+
+  const captionsDoc = fs.readFileSync(path.resolve("docs/social-captions.md"), "utf8");
+  assert.match(captionsDoc, /#TravelAgencyPakistan/);
+  assert.match(captionsDoc, /#UmrahPackages/);
+  assert.match(captionsDoc, /#TAMSPro/);
+
+  const seoPlanDoc = fs.readFileSync(path.resolve("docs/seo-plan.md"), "utf8");
+  assert.match(seoPlanDoc, /Google Search Console/);
+  assert.match(seoPlanDoc, /Google Business Profile/);
+  assert.match(seoPlanDoc, /sitemap\.xml/);
+});
+
 test("Navigation, routing, and Supabase migration guardrails stay intact", () => {
   assert.deepEqual(
     MARKETING_NAVIGATION.mainNav.map((item) => item.label),
@@ -181,4 +219,3 @@ test("Navigation, routing, and Supabase migration guardrails stay intact", () =>
   assert.match(migrationSql, /public\.site_settings/);
   assert.match(migrationSql, /super_admin/);
 });
-

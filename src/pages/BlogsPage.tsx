@@ -19,12 +19,13 @@ import { SeoHead } from "@/components/SeoHead";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 import {
   BLOG_QUERY_KEYS,
   BlogPost,
-  estimateReadMinutes,
   fetchPublishedBlogs,
   formatBlogDate,
+  getPostReadMinutes,
 } from "@/lib/blogs";
 import { isSafeUrl } from "@/lib/blogSanitizer";
 
@@ -53,7 +54,7 @@ function BlogCardSkeleton() {
 
 function BlogPostCard({ post }: { post: BlogPost }) {
   const displayDate = formatBlogDate(post.published_at || post.created_at);
-  const readMinutes = estimateReadMinutes(post.content);
+  const readMinutes = getPostReadMinutes(post);
   const safeCover =
     post.cover_image_url && isSafeUrl(post.cover_image_url, { allowMailto: false })
       ? post.cover_image_url
@@ -70,7 +71,7 @@ function BlogPostCard({ post }: { post: BlogPost }) {
             {safeCover ? (
               <img
                 src={safeCover}
-                alt={post.title}
+                alt={post.cover_image_alt || post.title}
                 loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
@@ -181,6 +182,7 @@ function BlogsPageContent() {
         post.excerpt,
         post.category,
         post.author,
+        post.focus_keyword || "",
         ...(Array.isArray(post.tags) ? post.tags : []),
       ]
         .join(" ")
@@ -192,12 +194,66 @@ function BlogsPageContent() {
 
   const hasFilters = Boolean(searchQuery.trim()) || selectedCategory !== "All";
 
+  const blogsJsonLd = useMemo(
+    () => [
+      {
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        name: "TAMS Pro Travel Agency Insights",
+        description:
+          "Guides, Umrah costing formulas, PKR accounting tips, and growth workflows for travel agencies in Pakistan.",
+        url: `${PRODUCTION_APP_ORIGIN}/blogs`,
+        publisher: {
+          "@type": "Organization",
+          name: "TAMS Pro",
+          url: PRODUCTION_APP_ORIGIN,
+        },
+        blogPost: posts.slice(0, 10).map((post) => ({
+          "@type": "BlogPosting",
+          headline: post.title,
+          url: `${PRODUCTION_APP_ORIGIN}/blogs/${post.slug}`,
+          datePublished: post.published_at || post.created_at,
+          author: {
+            "@type": "Organization",
+            name: post.author || "TAMS Pro Team",
+          },
+        })),
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${PRODUCTION_APP_ORIGIN}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Blogs",
+            item: `${PRODUCTION_APP_ORIGIN}/blogs`,
+          },
+        ],
+      },
+    ],
+    [posts]
+  );
+
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Blogs — TAMS Pro Travel Agency Management System"
-        description="Guides, industry insights, and operational best practices for modern travel and Umrah agencies."
+        description="Guides, Umrah package strategies, PKR accounting tips, and operational playbooks for Pakistani travel and Umrah agencies."
         path="/blogs"
+        keywords={[
+          "travel agency software Pakistan",
+          "umrah package software",
+          "travel agency accounting Pakistan",
+          "travel agency blog",
+        ]}
+        jsonLd={blogsJsonLd}
       />
 
       <PublicHeader currentPath="/blogs" />
@@ -212,7 +268,7 @@ function BlogsPageContent() {
             Travel Agency Insights
           </h1>
           <p className="mt-3 text-sm sm:text-base text-[#475569] leading-relaxed">
-            Practical guides on travel agency operations, Umrah accounting, invoicing, and growth.
+            Practical guides on travel agency operations, Umrah accounting, invoicing, and growth in Pakistan.
           </p>
         </div>
 
@@ -363,4 +419,3 @@ export default function BlogsPage() {
     </PublicErrorBoundary>
   );
 }
-

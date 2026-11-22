@@ -80,6 +80,8 @@ interface EditorFormState {
   published_at: string;
   seo_title: string;
   seo_description: string;
+  focus_keyword: string;
+  cover_image_alt: string;
 }
 
 function toDatetimeLocalValue(iso?: string | null): string {
@@ -112,6 +114,8 @@ const EMPTY_FORM: EditorFormState = {
   published_at: "",
   seo_title: "",
   seo_description: "",
+  focus_keyword: "",
+  cover_image_alt: "",
 };
 
 export const AdminBlogManager: React.FC = () => {
@@ -204,6 +208,8 @@ export const AdminBlogManager: React.FC = () => {
       published_at: toDatetimeLocalValue(post.published_at),
       seo_title: post.seo_title || "",
       seo_description: post.seo_description || "",
+      focus_keyword: post.focus_keyword || "",
+      cover_image_alt: post.cover_image_alt || "",
     });
     setTagDraft("");
     setSlugManuallyEdited(true);
@@ -308,6 +314,8 @@ export const AdminBlogManager: React.FC = () => {
           : null),
       seo_title: formState.seo_title.trim() || null,
       seo_description: formState.seo_description.trim() || null,
+      focus_keyword: formState.focus_keyword.trim() || null,
+      cover_image_alt: formState.cover_image_alt.trim() || null,
     };
 
     isSubmittingRef.current = true;
@@ -353,6 +361,8 @@ export const AdminBlogManager: React.FC = () => {
         published_at: toDatetimeLocalValue(result.post.published_at),
         seo_title: result.post.seo_title || "",
         seo_description: result.post.seo_description || "",
+        focus_keyword: result.post.focus_keyword || "",
+        cover_image_alt: result.post.cover_image_alt || "",
       });
       setTagDraft("");
       setMode("list");
@@ -839,6 +849,32 @@ export const AdminBlogManager: React.FC = () => {
                           setFormState((prev) => ({ ...prev, seo_description: e.target.value }))
                         }
                         placeholder="Defaults to excerpt"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="blog-focus-keyword" className="text-xs">
+                        Focus Keyword
+                      </Label>
+                      <Input
+                        id="blog-focus-keyword"
+                        value={formState.focus_keyword}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, focus_keyword: e.target.value }))
+                        }
+                        placeholder="e.g. travel agency software Pakistan"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="blog-cover-alt" className="text-xs">
+                        Cover Image Alt Text
+                      </Label>
+                      <Input
+                        id="blog-cover-alt"
+                        value={formState.cover_image_alt}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, cover_image_alt: e.target.value }))
+                        }
+                        placeholder="Descriptive alt text for SEO"
                       />
                     </div>
                   </CardContent>

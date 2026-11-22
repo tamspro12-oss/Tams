@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="Fast travel quotation builder creating branded PDF quotes for Pakistani travel agencies">
+  <defs>
+    <linearGradient id="bg-3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#134E4A" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <radialGradient id="glow-3" cx="85%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg-3)" />
+  <rect width="1200" height="675" fill="url(#glow-3)" />
+  <g opacity="0.12" stroke="#FFFFFF" stroke-width="1">
+    <line x1="80" y1="140" x2="1120" y2="140" />
+    <line x1="80" y1="540" x2="1120" y2="540" />
+    <circle cx="1020" cy="210" r="140" fill="none" />
+    <circle cx="1020" cy="210" r="210" fill="none" />
+  </g>
+  <rect x="80" y="72" width="190" height="44" rx="22" fill="#FEF3C7" />
+  <text x="175" y="100" text-anchor="middle" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#92400E">TICKETING</text>
+  <text x="80" y="250" font-family="Plus Jakarta Sans, Inter, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF" letter-spacing="-0.02em"><tspan x="80" dy="0">Create Professional Travel</tspan><tspan x="80" dy="58">Quotations in 2 Minutes</tspan></text>
+  <text x="80" y="485" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="500" fill="#CBD5E1">travel quotation software Pakistan • Pakistan Travel Agency Guide</text>
+  <text x="80" y="595" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">TAMS PRO</text>
+  <text x="230" y="595" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#99F6E4">tamspro.online • PKR 999/mo</text>
+</svg>

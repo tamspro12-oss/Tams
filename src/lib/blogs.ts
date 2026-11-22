@@ -4,6 +4,11 @@ import { stripHtmlToText } from "@/lib/blogSanitizer";
 
 export type BlogStatus = "draft" | "published";
 
+export interface BlogFaqItem {
+  question: string;
+  answer: string;
+}
+
 export interface BlogPost {
   id: string;
   title: string;
@@ -18,6 +23,12 @@ export interface BlogPost {
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  focus_keyword: string | null;
+  secondary_keywords: string[];
+  cover_image_alt: string | null;
+  cover_image_description: string | null;
+  read_time_minutes: number | null;
+  faq_items: BlogFaqItem[];
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -36,6 +47,12 @@ export interface BlogPostInput {
   is_featured: boolean;
   seo_title?: string | null;
   seo_description?: string | null;
+  focus_keyword?: string | null;
+  secondary_keywords?: string[];
+  cover_image_alt?: string | null;
+  cover_image_description?: string | null;
+  read_time_minutes?: number | null;
+  faq_items?: BlogFaqItem[];
   published_at?: string | null;
 }
 
@@ -45,6 +62,7 @@ export const BLOG_QUERY_KEYS = {
   publicList: ["public-blogs"] as const,
   publicDetail: (slug: string) => ["public-blog", slug] as const,
   related: (slug: string) => ["public-blog-related", slug] as const,
+  popular: (excludeKey: string) => ["public-blog-popular", excludeKey] as const,
   adminList: ["admin-blogs"] as const,
 };
 
@@ -55,9 +73,6 @@ export const BLOG_COVER_ALLOWED_MIME = new Set([
   "image/webp",
   "image/gif",
 ]);
-
-const BLOG_SELECT_COLUMNS =
-  "id, title, slug, excerpt, content, cover_image_url, category, tags, author, status, is_featured, seo_title, seo_description, published_at, created_at, updated_at";
 
 export function generateBlogSlug(title: string): string {
   return (title || "")
@@ -86,6 +101,16 @@ export function estimateReadMinutes(content: string): number {
   return Math.max(1, Math.ceil(words / 200));
 }
 
+export function getPostReadMinutes(
+  post?: Pick<BlogPost, "read_time_minutes" | "content"> | null
+): number {
+  if (!post) return 1;
+  if (typeof post.read_time_minutes === "number" && post.read_time_minutes > 0) {
+    return post.read_time_minutes;
+  }
+  return estimateReadMinutes(post.content);
+}
+
 export function normalizeTags(tags?: string[] | null): string[] {
   if (!Array.isArray(tags)) return [];
   const seen = new Set<string>();
@@ -106,6 +131,17 @@ export function parseTagsInput(raw: string): string[] {
   return normalizeTags((raw || "").split(","));
 }
 
+function normalizeFaqItems(raw: unknown): BlogFaqItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => ({
+      question: typeof item.question === "string" ? item.question.trim() : "",
+      answer: typeof item.answer === "string" ? item.answer.trim() : "",
+    }))
+    .filter((item) => item.question.length > 0 && item.answer.length > 0);
+}
+
 function normalizeBlogRow(row: Record<string, unknown>): BlogPost {
   const rawAuthor =
     typeof row.author === "string" && row.author.trim()
@@ -113,6 +149,11 @@ function normalizeBlogRow(row: Record<string, unknown>): BlogPost {
       : typeof row.author_name === "string" && row.author_name.trim()
         ? row.author_name.trim()
         : "TAMS Pro Team";
+
+  const rawReadMinutes =
+    typeof row.read_time_minutes === "number" && row.read_time_minutes > 0
+      ? row.read_time_minutes
+      : null;
 
   return {
     id: String(row.id || ""),
@@ -129,6 +170,15 @@ function normalizeBlogRow(row: Record<string, unknown>): BlogPost {
     is_featured: Boolean(row.is_featured),
     seo_title: typeof row.seo_title === "string" ? row.seo_title : null,
     seo_description: typeof row.seo_description === "string" ? row.seo_description : null,
+    focus_keyword: typeof row.focus_keyword === "string" ? row.focus_keyword : null,
+    secondary_keywords: normalizeTags(
+      Array.isArray(row.secondary_keywords) ? (row.secondary_keywords as string[]) : []
+    ),
+    cover_image_alt: typeof row.cover_image_alt === "string" ? row.cover_image_alt : null,
+    cover_image_description:
+      typeof row.cover_image_description === "string" ? row.cover_image_description : null,
+    read_time_minutes: rawReadMinutes,
+    faq_items: normalizeFaqItems(row.faq_items),
     published_at: typeof row.published_at === "string" ? row.published_at : null,
     created_at: String(row.created_at || ""),
     updated_at: String(row.updated_at || ""),
@@ -144,6 +194,19 @@ function getFriendlyBlogError(error: unknown, fallback: string): string {
   return toFriendlyMessage(error, fallback);
 }
 
+function isMissingExtendedColumnError(error: unknown): boolean {
+  const errObj = error as { code?: string; message?: string } | null;
+  const msg = (errObj?.message || "").toLowerCase();
+  return (
+    errObj?.code === "42703" ||
+    errObj?.code === "PGRST204" ||
+    msg.includes("focus_keyword") ||
+    msg.includes("cover_image_alt") ||
+    msg.includes("read_time_minutes") ||
+    msg.includes("faq_items")
+  );
+}
+
 export async function fetchPublishedBlogs(): Promise<{
   posts: BlogPost[];
   error: string | null;
@@ -151,7 +214,7 @@ export async function fetchPublishedBlogs(): Promise<{
   try {
     const { data, error } = await (supabase as any)
       .from("blog_posts")
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .eq("status", "published")
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
@@ -191,7 +254,7 @@ export async function fetchPublishedBlogBySlug(slug: string): Promise<{
 
     const { data, error } = await (supabase as any)
       .from("blog_posts")
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .eq("slug", cleanSlug)
       .eq("status", "published")
       .maybeSingle();
@@ -231,7 +294,7 @@ export async function fetchRelatedPublishedBlogs(
   try {
     const { data, error } = await (supabase as any)
       .from("blog_posts")
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .eq("status", "published")
       .neq("id", currentPost.id)
       .order("published_at", { ascending: false, nullsFirst: false })
@@ -262,6 +325,38 @@ export async function fetchRelatedPublishedBlogs(
   }
 }
 
+export async function fetchPopularPublishedBlogs(
+  excludeIds: string[] = [],
+  limit = 4
+): Promise<BlogPost[]> {
+  try {
+    const { data, error } = await (supabase as any)
+      .from("blog_posts")
+      .select("*")
+      .eq("status", "published")
+      .order("is_featured", { ascending: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(16);
+
+    if (error || !Array.isArray(data)) {
+      if (error) {
+        console.error("[TAMS Blogs] fetchPopularPublishedBlogs error:", error);
+      }
+      return [];
+    }
+
+    const excludeSet = new Set(excludeIds.filter(Boolean));
+    return data
+      .map((row: Record<string, unknown>) => normalizeBlogRow(row))
+      .filter((p) => !excludeSet.has(p.id))
+      .slice(0, limit);
+  } catch (err) {
+    console.error("[TAMS Blogs] fetchPopularPublishedBlogs exception:", err);
+    return [];
+  }
+}
+
 export async function fetchAllBlogsAdmin(): Promise<{
   posts: BlogPost[];
   error: string | null;
@@ -269,7 +364,7 @@ export async function fetchAllBlogsAdmin(): Promise<{
   try {
     const { data, error } = await (supabase as any)
       .from("blog_posts")
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -297,7 +392,10 @@ export async function fetchAllBlogsAdmin(): Promise<{
   }
 }
 
-function buildBlogPayload(input: BlogPostInput): Record<string, unknown> {
+function buildBlogPayload(
+  input: BlogPostInput,
+  includeExtendedSeo = true
+): Record<string, unknown> {
   const cleanTags = normalizeTags(input.tags);
   const cleanAuthor = input.author.trim() || "TAMS Pro Team";
   const publishedAt =
@@ -305,7 +403,7 @@ function buildBlogPayload(input: BlogPostInput): Record<string, unknown> {
       ? input.published_at || new Date().toISOString()
       : input.published_at ?? null;
 
-  return {
+  const base: Record<string, unknown> = {
     title: input.title.trim(),
     slug: generateBlogSlug(input.slug || input.title),
     excerpt: input.excerpt.trim(),
@@ -320,6 +418,26 @@ function buildBlogPayload(input: BlogPostInput): Record<string, unknown> {
     seo_description: input.seo_description?.trim() || null,
     published_at: publishedAt,
   };
+
+  if (includeExtendedSeo) {
+    base.focus_keyword = input.focus_keyword?.trim() || null;
+    base.cover_image_alt = input.cover_image_alt?.trim() || null;
+    base.read_time_minutes =
+      typeof input.read_time_minutes === "number" && input.read_time_minutes > 0
+        ? input.read_time_minutes
+        : estimateReadMinutes(input.content);
+    if (Array.isArray(input.secondary_keywords)) {
+      base.secondary_keywords = normalizeTags(input.secondary_keywords);
+    }
+    if (typeof input.cover_image_description === "string") {
+      base.cover_image_description = input.cover_image_description.trim() || null;
+    }
+    if (Array.isArray(input.faq_items)) {
+      base.faq_items = normalizeFaqItems(input.faq_items);
+    }
+  }
+
+  return base;
 }
 
 export async function createBlogAdmin(input: BlogPostInput): Promise<{
@@ -327,12 +445,23 @@ export async function createBlogAdmin(input: BlogPostInput): Promise<{
   error: string | null;
 }> {
   try {
-    const payload = buildBlogPayload(input);
-    const { data, error } = await (supabase as any)
+    const payload = buildBlogPayload(input, true);
+    let { data, error } = await (supabase as any)
       .from("blog_posts")
       .insert(payload)
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .single();
+
+    if (error && isMissingExtendedColumnError(error)) {
+      const basePayload = buildBlogPayload(input, false);
+      const retry = await (supabase as any)
+        .from("blog_posts")
+        .insert(basePayload)
+        .select("*")
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("[TAMS Blogs Admin] createBlogAdmin error:", error);
@@ -360,13 +489,25 @@ export async function updateBlogAdmin(
   error: string | null;
 }> {
   try {
-    const payload = buildBlogPayload(input);
-    const { data, error } = await (supabase as any)
+    const payload = buildBlogPayload(input, true);
+    let { data, error } = await (supabase as any)
       .from("blog_posts")
       .update(payload)
       .eq("id", id)
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .single();
+
+    if (error && isMissingExtendedColumnError(error)) {
+      const basePayload = buildBlogPayload(input, false);
+      const retry = await (supabase as any)
+        .from("blog_posts")
+        .update(basePayload)
+        .eq("id", id)
+        .select("*")
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("[TAMS Blogs Admin] updateBlogAdmin error:", error);
@@ -404,7 +545,7 @@ export async function toggleBlogStatusAdmin(
       .from("blog_posts")
       .update(updates)
       .eq("id", id)
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .single();
 
     if (error) {
@@ -437,7 +578,7 @@ export async function toggleBlogFeaturedAdmin(
       .from("blog_posts")
       .update({ is_featured: isFeatured })
       .eq("id", id)
-      .select(BLOG_SELECT_COLUMNS)
+      .select("*")
       .single();
 
     if (error) {
@@ -544,3 +685,45 @@ export async function uploadBlogImageAdmin(file: File): Promise<{
   }
 }
 
+export async function submitBlogLead(input: {
+  agencyName: string;
+  whatsapp: string;
+  email?: string;
+  sourceSlug?: string;
+}): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const agencyName = (input.agencyName || "").trim();
+    const whatsapp = (input.whatsapp || "").trim();
+    const email = (input.email || "").trim();
+
+    if (agencyName.length < 2) {
+      return { success: false, error: "Please enter your agency or contact name." };
+    }
+    if (whatsapp.replace(/\D/g, "").length < 7) {
+      return { success: false, error: "Please enter a valid WhatsApp or phone number." };
+    }
+
+    const { error } = await (supabase as any).from("blog_leads").insert({
+      agency_name: agencyName,
+      whatsapp,
+      email: email || null,
+      source_slug: input.sourceSlug || null,
+    });
+
+    if (error) {
+      console.error("[TAMS Blogs] submitBlogLead error:", error);
+      return {
+        success: false,
+        error: toFriendlyMessage(error, "Could not submit your request right now."),
+      };
+    }
+
+    return { success: true, error: null };
+  } catch (err) {
+    console.error("[TAMS Blogs] submitBlogLead exception:", err);
+    return {
+      success: false,
+      error: toFriendlyMessage(err, "Could not submit your request right now."),
+    };
+  }
+}
