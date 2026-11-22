@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import fs from "fs";
+import { buildSitemapXml, fetchPublishedPostsForSitemap } from "./api/sitemap.js";
 
 function readPackageVersion(): string {
   try {
@@ -31,6 +32,19 @@ function tamsVersionManifestPlugin(appVersion: string, buildId: string): Plugin 
         res.setHeader("Content-Type", "application/json; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.end(payload);
+      });
+      server.middlewares.use("/sitemap.xml", async (_req, res) => {
+        try {
+          const posts = await fetchPublishedPostsForSitemap();
+          const xml = buildSitemapXml(posts);
+          res.setHeader("Content-Type", "application/xml; charset=utf-8");
+          res.setHeader("Cache-Control", "no-cache");
+          res.end(xml);
+        } catch (err) {
+          console.error("[TAMS Vite] /sitemap.xml middleware error:", err);
+          res.setHeader("Content-Type", "application/xml; charset=utf-8");
+          res.end(buildSitemapXml([]));
+        }
       });
     },
     closeBundle() {

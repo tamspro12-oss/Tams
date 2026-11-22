@@ -19,6 +19,7 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { Tile } from "@/components/public/Tile";
 import { MobileInstallButton } from "@/components/MobileInstallButton";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 interface StripItem {
   id: string;
@@ -37,11 +38,13 @@ const STRIP_ITEMS: StripItem[] = [
 ];
 
 function HomepageContent() {
+  const { hero } = useSiteSettings();
+
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="TAMS Pro — Travel Agency Management System"
-        description="Bookings, visas, accounts and vouchers, everything in one place."
+        description={hero.subtitle}
         path="/"
       />
 
@@ -55,11 +58,11 @@ function HomepageContent() {
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-bold text-[#0F172A] tracking-tight leading-[1.12] max-w-4xl mx-auto">
-            Travel Agency Management System
+            {hero.heading}
           </h1>
 
           <p className="mt-4 sm:mt-5 text-base sm:text-lg lg:text-xl text-[#475569] max-w-2xl mx-auto leading-relaxed font-normal">
-            Bookings, visas, accounts and vouchers, everything in one place.
+            {hero.subtitle}
           </p>
 
           <div className="mt-7 sm:mt-8 flex flex-wrap items-center justify-center gap-3.5 w-full sm:w-auto">
