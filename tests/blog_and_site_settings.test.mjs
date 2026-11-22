@@ -175,6 +175,10 @@ test("index.html and blog SSR SEO injector preserve Google verification and emit
   const indexHtml = fs.readFileSync(path.resolve("index.html"), "utf8");
   assert.match(
     indexHtml,
+    /<meta name="google-site-verification" content="8-kWgmM6MkjojqsReBo0VOb3KbVz7dSJAl_GB788rVY" \/>/
+  );
+  assert.match(
+    indexHtml,
     /<meta name="google-site-verification" content="nASTYQhi5TfLw81mBKhge8XKryjIcvWSrrZGymUL0Uo" \/>/
   );
   assert.match(indexHtml, /<link rel="canonical" href="https:\/\/tamspro\.online\/" \/>/);
@@ -205,6 +209,10 @@ test("index.html and blog SSR SEO injector preserve Google verification and emit
   assert.doesNotMatch(injected, /"@type":"SoftwareApplication"/);
   assert.match(injected, /<noscript><main><article><h1>/);
   assert.doesNotMatch(injected, /<script>alert\(1\)<\/script>/);
+  assert.match(
+    injected,
+    /<meta name="google-site-verification" content="8-kWgmM6MkjojqsReBo0VOb3KbVz7dSJAl_GB788rVY" \/>/
+  );
   assert.match(
     injected,
     /<meta name="google-site-verification" content="nASTYQhi5TfLw81mBKhge8XKryjIcvWSrrZGymUL0Uo" \/>/
