@@ -7,17 +7,12 @@ const STATIC_SITEMAP_ENTRIES = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/features", changefreq: "monthly", priority: "0.8" },
   { path: "/pricing", changefreq: "monthly", priority: "0.8" },
-  { path: "/blogs", changefreq: "daily", priority: "0.8" },
+  { path: "/blogs", changefreq: "daily", priority: "0.9" },
   { path: "/contact", changefreq: "monthly", priority: "0.6" },
-  { path: "/login", changefreq: "yearly", priority: "0.4" },
   { path: "/signup", changefreq: "yearly", priority: "0.5" },
+  { path: "/install", changefreq: "monthly", priority: "0.5" },
   { path: "/privacy", changefreq: "yearly", priority: "0.3" },
   { path: "/terms", changefreq: "yearly", priority: "0.3" },
-  { path: "/install", changefreq: "monthly", priority: "0.5" },
-  { path: "/auth", changefreq: "yearly", priority: "0.3" },
-  { path: "/reset-password", changefreq: "yearly", priority: "0.2" },
-  { path: "/subscription-expired", changefreq: "yearly", priority: "0.2" },
-  { path: "/public", changefreq: "monthly", priority: "0.4" },
 ];
 
 function escapeXml(value) {
@@ -57,7 +52,7 @@ export function buildSitemapXml(publishedPosts = [], origin = PRODUCTION_ORIGIN)
       const lastmod = toIsoDate(post.updated_at || post.published_at);
       const lastmodTag = lastmod ? `<lastmod>${escapeXml(lastmod)}</lastmod>` : "";
       blogXml.push(
-        `  <url><loc>${escapeXml(`${cleanOrigin}/blogs/${encodeURIComponent(slug)}`)}</loc>${lastmodTag}<changefreq>weekly</changefreq><priority>0.7</priority></url>`
+        `  <url><loc>${escapeXml(`${cleanOrigin}/blogs/${encodeURIComponent(slug)}`)}</loc>${lastmodTag}<changefreq>weekly</changefreq><priority>0.8</priority></url>`
       );
     }
   }

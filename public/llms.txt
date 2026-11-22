@@ -1,17 +1,32 @@
 # TAMS Pro
 
-> TAMS Pro is a travel agency management system for bookings, vendors, invoices, expenses and financial reports. Web app with offline support and cloud sync.
+> TAMS Pro (`https://tamspro.online`) is a cloud travel agency management system built for Pakistani travel, Umrah, visa, and airline ticketing agencies. Plans are PKR 999/month and PKR 9,999/year (50% off). It manages bookings, branded quotations, PDF invoices and vouchers, automated PKR client/sub-agent/vendor ledgers, visa deadlines, Umrah package costing, and financial reports.
 
 ## Pages
 
-- [Home](/): Overview of TAMS Pro and core capabilities.
-- [Features](/features): Bookings, vendors, invoices, expenses and reporting features.
-- [Pricing](/pricing): Plans and pricing for travel agencies.
-- [Contact](/contact): Support and sales contact information.
-- [Sign Up](/signup): Create a free TAMS Pro account.
-- [Login](/login): Sign in to your TAMS Pro workspace.
+- [Home](https://tamspro.online/): Overview of TAMS Pro for Pakistani travel and Umrah agencies.
+- [Features](https://tamspro.online/features): Bookings, PKR ledgers, quotations, invoices, vouchers, visa tracking, Umrah calculator, and reports.
+- [Pricing](https://tamspro.online/pricing): PKR 999/month and PKR 9,999/year plans for Pakistani travel agencies.
+- [Blogs](https://tamspro.online/blogs): Guides on travel agency software, Umrah management, PKR ledgers, quotations, vouchers, and visa tracking in Pakistan.
+- [Contact](https://tamspro.online/contact): Sales and WhatsApp support (`+92 319 0846768`).
+- [Sign Up](https://tamspro.online/signup): Create a TAMS Pro agency workspace.
+- [Install](https://tamspro.online/install): Desktop and mobile PWA install instructions.
 
-## Optional
+## Published Guides
 
-- [Privacy Policy](/privacy): How TAMS Pro handles user data.
-- [Terms of Service](/terms): Terms governing use of TAMS Pro.
+- [Best Travel Agency Software in Pakistan (2026 Guide)](https://tamspro.online/blogs/best-travel-agency-software-pakistan-2026)
+- [How to Manage Umrah Packages Digitally in Pakistan](https://tamspro.online/blogs/manage-umrah-packages-digitally-pakistan)
+- [Travel Agency Accounting & Ledger Software in Pakistan](https://tamspro.online/blogs/travel-agency-accounting-ledger-pakistan)
+- [How to Create Professional Travel Quotations in 2 Minutes](https://tamspro.online/blogs/create-travel-quotations-in-2-minutes)
+- [Invoice and Voucher Software for Travel Agents](https://tamspro.online/blogs/invoice-voucher-software-travel-agents)
+- [How to Track Visa Applications Without Missing Deadlines](https://tamspro.online/blogs/track-visa-applications-without-missing-deadlines)
+- [Umrah Cost Calculator: Price Packages Profitably](https://tamspro.online/blogs/umrah-cost-calculator-price-packages-profitably)
+- [7 Mistakes Pakistani Travel Agencies Make in Bookings](https://tamspro.online/blogs/7-mistakes-pakistani-travel-agencies-bookings)
+- [Excel vs Travel Agency Software in Pakistan](https://tamspro.online/blogs/excel-vs-travel-agency-software-pakistan)
+- [Grow Your Travel Agency in Pakistan with Digital Tools](https://tamspro.online/blogs/grow-travel-agency-pakistan-digital-tools)
+
+## Discovery & Legal
+
+- [Sitemap](https://tamspro.online/sitemap.xml): Dynamic XML sitemap including all published blog posts.
+- [Privacy Policy](https://tamspro.online/privacy): How TAMS Pro handles agency and user data.
+- [Terms of Service](https://tamspro.online/terms): Terms governing use of TAMS Pro.

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
@@ -66,6 +67,40 @@ export function SeoHead({
         )
       )
     : [];
+
+  const hasJsonLd = ldArray.length > 0;
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.head) return;
+
+    if (hasJsonLd) {
+      document.head
+        .querySelectorAll('script[data-tams-ssr-jsonld="true"]')
+        .forEach((node) => node.remove());
+    }
+
+    const dedupeSelectors = [
+      'link[rel="canonical"]',
+      'meta[name="description"]',
+      'meta[name="keywords"]',
+      'meta[property="og:title"]',
+      'meta[property="og:description"]',
+      'meta[property="og:url"]',
+      'meta[property="og:type"]',
+      'meta[property="og:image"]',
+      'meta[name="twitter:title"]',
+      'meta[name="twitter:description"]',
+      'meta[name="twitter:image"]',
+    ];
+
+    for (const selector of dedupeSelectors) {
+      if (document.head.querySelector(`${selector}[data-rh="true"]`)) {
+        document.head
+          .querySelectorAll(`${selector}:not([data-rh])`)
+          .forEach((node) => node.remove());
+      }
+    }
+  }, [title, description, absoluteUrl, hasJsonLd]);
 
   return (
     <Helmet>

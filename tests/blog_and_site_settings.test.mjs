@@ -28,6 +28,7 @@ const {
 
 const { MARKETING_NAVIGATION } = await import("../src/config/marketingContent.ts");
 const { buildSitemapXml } = await import("../api/sitemap.js");
+const { injectBlogSeoIntoHtml } = await import("../api/blog-seo.js");
 const { ALL_SEO_BLOG_POSTS, validateSeoPosts } = await import(
   "../scripts/generate-blog-assets.mjs"
 );
@@ -159,10 +160,54 @@ test("buildSitemapXml includes /blogs and published post slugs", () => {
   assert.match(xml, /<loc>https:\/\/tamspro\.online\/blogs<\/loc>/);
   assert.match(xml, /<loc>https:\/\/tamspro\.online\/blogs\/umrah-guide-2026<\/loc>/);
   assert.match(xml, /<loc>https:\/\/tamspro\.online\/blogs\/agency-accounting-tips<\/loc>/);
+  assert.doesNotMatch(xml, /\/auth<\/loc>/);
+  assert.doesNotMatch(xml, /\/reset-password<\/loc>/);
+  assert.doesNotMatch(xml, /\/subscription-expired<\/loc>/);
+  assert.doesNotMatch(xml, /\/login<\/loc>/);
   assert.equal(
     (xml.match(/umrah-guide-2026/g) || []).length,
     1,
     "Duplicate slugs should be deduplicated in sitemap"
+  );
+});
+
+test("index.html and blog SSR SEO injector preserve Google verification and emit full article metadata", () => {
+  const indexHtml = fs.readFileSync(path.resolve("index.html"), "utf8");
+  assert.match(
+    indexHtml,
+    /<meta name="google-site-verification" content="nASTYQhi5TfLw81mBKhge8XKryjIcvWSrrZGymUL0Uo" \/>/
+  );
+  assert.match(indexHtml, /<link rel="canonical" href="https:\/\/tamspro\.online\/" \/>/);
+  assert.match(indexHtml, /SoftwareApplication/);
+
+  const post = ALL_SEO_BLOG_POSTS[0];
+  const injected = injectBlogSeoIntoHtml(indexHtml, {
+    ...post,
+    seo_title: post.title,
+    seo_description: post.excerpt,
+    content: `${post.content}<script>alert(1)</script>`,
+    cover_image_url: `/blog-covers/${post.slug}.svg`,
+  });
+
+  assert.match(
+    injected,
+    new RegExp(`<title>${post.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\| TAMS Pro Blog</title>`)
+  );
+  assert.match(
+    injected,
+    new RegExp(`<link rel="canonical" href="https://tamspro\\.online/blogs/${post.slug}" />`)
+  );
+  assert.match(injected, /<meta property="og:type" content="article" \/>/);
+  assert.match(injected, /https:\/\/tamspro\.online\/icons\/tams-icon-512\.png/);
+  assert.match(injected, /"@type":"Article"/);
+  assert.match(injected, /"@type":"BreadcrumbList"/);
+  assert.match(injected, /"@type":"FAQPage"/);
+  assert.doesNotMatch(injected, /"@type":"SoftwareApplication"/);
+  assert.match(injected, /<noscript><main><article><h1>/);
+  assert.doesNotMatch(injected, /<script>alert\(1\)<\/script>/);
+  assert.match(
+    injected,
+    /<meta name="google-site-verification" content="nASTYQhi5TfLw81mBKhge8XKryjIcvWSrrZGymUL0Uo" \/>/
   );
 });
 

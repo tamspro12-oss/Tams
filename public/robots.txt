@@ -14,5 +14,8 @@ User-agent: *
 Allow: /
 Disallow: /app/
 Disallow: /admin/
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /subscription-expired
 
 Sitemap: https://tamspro.online/sitemap.xml

@@ -5,6 +5,10 @@
       "destination": "/api/sitemap"
     },
     {
+      "source": "/blogs/:slug",
+      "destination": "/api/blog-seo?slug=:slug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
