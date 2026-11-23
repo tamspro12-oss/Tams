@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,11 +15,16 @@ import {
 import {
   ArrowLeft,
   ArrowRightCircle,
+  ChevronDown,
+  ChevronUp,
   Download,
   FileText,
+  Package,
+  Pencil,
   Plus,
   Save,
-  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
@@ -31,16 +37,12 @@ import {
 } from "@/hooks/useQuotations";
 import { useParties, type Party } from "@/hooks/useParties";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
-import { cn } from "@/lib/utils";
 import {
   LockedDateField,
   getTodayDateString,
 } from "@/components/ui/LockedDateField";
-import {
-  DocumentNumberControl,
-} from "@/components/ui/DocumentNumberControl";
+import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
 import { createRequestId, runBackgroundTask } from "@/lib/atomicSave";
 import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { useQueryClient } from "@tanstack/react-query";
@@ -52,22 +54,26 @@ import {
 } from "@/components/ui/SearchableSelect";
 import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
+import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import {
   type ServiceType,
+  type TripType,
   type Passenger,
   type ServiceDetailsState,
+  PASSENGER_TYPE_OPTIONS,
+  GENDER_OPTIONS,
   createDefaultServiceDetails,
   createDefaultPassenger,
   normalizeServiceType,
   getServiceDisplayLabel,
   buildServiceTitle,
   buildServiceSummaryLines,
+  buildCompactServiceKeyDetail,
   validateServiceAndPassengers,
 } from "@/lib/serviceDefinitions";
 import {
   ServiceTypeSelect,
-  ServiceSpecificFields,
-  PassengersSection,
+  TripTypeSelect,
 } from "@/components/bookings/ServiceSpecificFields";
 
 type Status = "draft" | "sent" | "accepted" | "rejected";
@@ -86,9 +92,253 @@ const DEFAULT_NOTES =
 
 const CUSTOM_RECIPIENT_ID = "__custom_recipient__";
 
+interface UmrahHotelPresetEntry {
+  name: string;
+  sharingType: "Quint" | "Quad" | "Triple" | "Double" | "Sharing";
+  rateMode: "sharing" | "room";
+  rate: string;
+  nights: string;
+}
+
+interface UmrahPresetPackage {
+  id: string;
+  name: string;
+  makkahHotels: UmrahHotelPresetEntry[];
+  madinahHotels: UmrahHotelPresetEntry[];
+  visaFee?: string;
+  transport?: string;
+  ziyarat?: string;
+  food?: string;
+  fixedPricePkr?: number;
+  customSummary?: string;
+}
+
+const OCCUPANCY_DIVISORS: Record<string, number> = {
+  Quint: 5,
+  Quad: 4,
+  Triple: 3,
+  Double: 2,
+  Sharing: 1,
+};
+
+const DEFAULT_UMRAH_PRESETS: UmrahPresetPackage[] = [
+  {
+    id: "package1",
+    name: "Package 1 (Standard)",
+    makkahHotels: [
+      {
+        name: "Standard Hotel Makkah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "150",
+        nights: "12",
+      },
+    ],
+    madinahHotels: [
+      {
+        name: "Standard Hotel Madinah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "120",
+        nights: "8",
+      },
+    ],
+    visaFee: "0",
+    transport: "0",
+    ziyarat: "0",
+    food: "0",
+  },
+  {
+    id: "package2",
+    name: "Package 2 (3-Star)",
+    makkahHotels: [
+      {
+        name: "3-Star Hotel Makkah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "250",
+        nights: "12",
+      },
+    ],
+    madinahHotels: [
+      {
+        name: "3-Star Hotel Madinah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "200",
+        nights: "8",
+      },
+    ],
+    visaFee: "0",
+    transport: "0",
+    ziyarat: "0",
+    food: "0",
+  },
+  {
+    id: "package3",
+    name: "Package 3 (4-Star)",
+    makkahHotels: [
+      {
+        name: "4-Star Hotel Makkah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "450",
+        nights: "12",
+      },
+    ],
+    madinahHotels: [
+      {
+        name: "4-Star Hotel Madinah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "380",
+        nights: "8",
+      },
+    ],
+    visaFee: "0",
+    transport: "0",
+    ziyarat: "0",
+    food: "0",
+  },
+  {
+    id: "package4",
+    name: "Package 4 (5-Star)",
+    makkahHotels: [
+      {
+        name: "5-Star Hotel Makkah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "800",
+        nights: "12",
+      },
+    ],
+    madinahHotels: [
+      {
+        name: "5-Star Hotel Madinah",
+        sharingType: "Sharing",
+        rateMode: "sharing",
+        rate: "650",
+        nights: "8",
+      },
+    ],
+    visaFee: "0",
+    transport: "0",
+    ziyarat: "0",
+    food: "0",
+  },
+];
+
+function computeUmrahPresetSummaryAndPrice(
+  preset: UmrahPresetPackage,
+  currency: string,
+  sarToPkrRate = 77.5
+): {
+  price: number;
+  summary: string;
+  makkahHotel: string;
+  makkahNights: string;
+  madinahHotel: string;
+  madinahNights: string;
+} {
+  const makkahFirst = preset.makkahHotels?.[0];
+  const madinahFirst = preset.madinahHotels?.[0];
+
+  const makkahNightsNum = (preset.makkahHotels || []).reduce(
+    (acc, h) => acc + (parseFloat(h.nights) || 0),
+    0
+  );
+  const madinahNightsNum = (preset.madinahHotels || []).reduce(
+    (acc, h) => acc + (parseFloat(h.nights) || 0),
+    0
+  );
+  const totalNights = makkahNightsNum + madinahNightsNum;
+
+  const calcHotelSar = (list: UmrahHotelPresetEntry[] = []) =>
+    list.reduce((sum, h) => {
+      const rate = parseFloat(h.rate) || 0;
+      const nights = parseFloat(h.nights) || 0;
+      const div = h.rateMode === "room" ? OCCUPANCY_DIVISORS[h.sharingType] || 1 : 1;
+      return sum + (rate / div) * nights;
+    }, 0);
+
+  const totalSar =
+    calcHotelSar(preset.makkahHotels) +
+    calcHotelSar(preset.madinahHotels) +
+    (parseFloat(preset.visaFee || "0") || 0) +
+    (parseFloat(preset.transport || "0") || 0) +
+    (parseFloat(preset.ziyarat || "0") || 0) +
+    (parseFloat(preset.food || "0") || 0);
+
+  const computedPrice =
+    typeof preset.fixedPricePkr === "number" && preset.fixedPricePkr > 0
+      ? currency === "SAR"
+        ? Math.round(preset.fixedPricePkr / (sarToPkrRate || 77.5))
+        : Math.round(preset.fixedPricePkr)
+      : currency === "SAR"
+        ? Math.round(totalSar)
+        : Math.round(totalSar * (sarToPkrRate || 77.5));
+
+  const makkahHotelName = makkahFirst?.name || "Standard Hotel Makkah";
+  const madinahHotelName = madinahFirst?.name || "Standard Hotel Madinah";
+  const sharingLabel = makkahFirst?.sharingType || "Sharing";
+
+  const summary =
+    preset.customSummary ||
+    `${totalNights} Nights · Makkah: ${makkahHotelName} (${makkahNightsNum}N, ${sharingLabel}) · Madinah: ${madinahHotelName} (${madinahNightsNum}N, ${
+      madinahFirst?.sharingType || sharingLabel
+    }) · Route: Karachi → Jeddah · Shared Bus · Ziyarat Included`;
+
+  return {
+    price: computedPrice,
+    summary,
+    makkahHotel: makkahHotelName,
+    makkahNights: String(makkahNightsNum || 12),
+    madinahHotel: madinahHotelName,
+    madinahNights: String(madinahNightsNum || 8),
+  };
+}
+
+export interface QuotationServiceLine {
+  id: string;
+  serviceType: ServiceType;
+  details: ServiceDetailsState;
+  amount: string;
+}
+
+function makeServiceId(): string {
+  return `srv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function createServiceLine(
+  serviceType: ServiceType = "Ticket",
+  overrides?: Partial<QuotationServiceLine>
+): QuotationServiceLine {
+  const defaultDetails = createDefaultServiceDetails();
+  let defaultAmount = "";
+  if (serviceType === "Umrah") {
+    const info = computeUmrahPresetSummaryAndPrice(DEFAULT_UMRAH_PRESETS[0], "PKR");
+    defaultDetails.umrahPackageId = DEFAULT_UMRAH_PRESETS[0].id;
+    defaultDetails.umrahPackageName = DEFAULT_UMRAH_PRESETS[0].name;
+    defaultDetails.umrahPackageSummary = info.summary;
+    defaultDetails.umrahPackagePrice = info.price;
+    defaultDetails.makkahHotel = info.makkahHotel;
+    defaultDetails.makkahNights = info.makkahNights;
+    defaultDetails.madinahHotel = info.madinahHotel;
+    defaultDetails.madinahNights = info.madinahNights;
+    defaultAmount = String(info.price);
+  }
+  return {
+    id: makeServiceId(),
+    serviceType,
+    details: overrides?.details
+      ? { ...defaultDetails, ...overrides.details }
+      : defaultDetails,
+    amount: overrides?.amount !== undefined ? overrides.amount : defaultAmount,
+  };
+}
+
 export default function QuotationFormPage() {
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const { id } = useParams<{ id?: string }>();
   const isEdit = Boolean(id);
   const location = useLocation();
@@ -98,11 +348,12 @@ export default function QuotationFormPage() {
   const { getBrandingAsync } = useAgencyBranding();
 
   const formContainerRef = useRef<HTMLFormElement>(null);
-  const itemsSectionRef = useRef<HTMLDivElement>(null);
+  const servicesListRef = useRef<HTMLDivElement>(null);
+  const paxListRef = useRef<HTMLDivElement>(null);
   const loadedRecordIdRef = useRef<string | null>(null);
   const prefillAppliedRef = useRef(false);
 
-  // Header fields
+  // Header & Row 1 / Row 2 fields
   const [quotationNumber, setQuotationNumber] = useState("Auto-assigned");
   const [isManualQuotationNo, setIsManualQuotationNo] = useState(false);
   const [manualQuotationNo, setManualQuotationNo] = useState("");
@@ -115,9 +366,8 @@ export default function QuotationFormPage() {
     format(addDays(new Date(), 14), "yyyy-MM-dd")
   );
   const [status, setStatus] = useState<Status>("draft");
-  const [serviceType, setServiceType] = useState<ServiceType>("Ticket");
 
-  // Client / Recipient fields (same searchable client integration as Booking Invoice)
+  // Client / Recipient fields
   const [partyId, setPartyId] = useState<string>("");
   const [clientName, setClientName] = useState<string>("");
   const [clientPhone, setClientPhone] = useState<string>("");
@@ -125,23 +375,110 @@ export default function QuotationFormPage() {
   const [legacyAgentId, setLegacyAgentId] = useState<string | null>(null);
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
 
-  // Shared Service-Specific fields + Passengers (Air Ticket)
-  const [serviceDetails, setServiceDetails] = useState<ServiceDetailsState>(() =>
-    createDefaultServiceDetails()
-  );
+  // Multi-Service lines + active expanded service ID
+  const [services, setServices] = useState<QuotationServiceLine[]>(() => {
+    const initial = createServiceLine("Ticket");
+    return [initial];
+  });
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(() => null);
+
+  // Ensure expandedServiceId points to the first service initially
+  useEffect(() => {
+    if (expandedServiceId === null && services.length === 1) {
+      setExpandedServiceId(services[0].id);
+    }
+  }, [expandedServiceId, services]);
+
+  // Custom Umrah presets from agency templates + session draft
+  const [customUmrahPresets, setCustomUmrahPresets] = useState<UmrahPresetPackage[]>([]);
+  const [sarToPkrRate, setSarToPkrRate] = useState<number>(77.5);
+  const [draftUmrahPreset, setDraftUmrahPreset] = useState<UmrahPresetPackage | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadAgencyTemplate<UmrahPresetPackage[]>("umrah_custom_presets", userAgencyId).then(
+      (res) => {
+        if (!active) return;
+        if (Array.isArray(res.data)) {
+          setCustomUmrahPresets(res.data);
+        }
+      }
+    );
+    try {
+      const rawDraft = sessionStorage.getItem("umrah_calculator_draft");
+      if (rawDraft) {
+        const parsed = JSON.parse(rawDraft);
+        const rate = parseFloat(parsed?.sarToPkrRate);
+        if (Number.isFinite(rate) && rate > 0) {
+          setSarToPkrRate(rate);
+        }
+        if (parsed?.result?.finalTotal > 0) {
+          const mHotels = Array.isArray(parsed.hotels)
+            ? parsed.hotels.filter((h: any) => h.city === "makkah")
+            : [];
+          const mdHotels = Array.isArray(parsed.hotels)
+            ? parsed.hotels.filter((h: any) => h.city === "madinah")
+            : [];
+          const nights = parsed.result.nights || 14;
+          const paxCount = parsed.result.totalPassengers || 1;
+          const perPerson = Math.round(parsed.result.perPerson || parsed.result.finalTotal);
+          setDraftUmrahPreset({
+            id: "calculator_latest",
+            name: `Calculator Package (${nights}N · ${paxCount} Pax)`,
+            makkahHotels: mHotels.length
+              ? mHotels
+              : [
+                  {
+                    name: "Makkah Hotel",
+                    sharingType: "Sharing",
+                    rateMode: "sharing",
+                    rate: "0",
+                    nights: String(Math.round(nights / 2)),
+                  },
+                ],
+            madinahHotels: mdHotels.length
+              ? mdHotels
+              : [
+                  {
+                    name: "Madinah Hotel",
+                    sharingType: "Sharing",
+                    rateMode: "sharing",
+                    rate: "0",
+                    nights: String(nights - Math.round(nights / 2)),
+                  },
+                ],
+            fixedPricePkr: Math.round(parsed.result.finalTotal),
+            customSummary: `${nights} Nights · ${paxCount} Pax (Per Person: PKR ${perPerson.toLocaleString()}) · Makkah: ${
+              mHotels[0]?.name || "Makkah Hotel"
+            } (${mHotels[0]?.nights || 0}N) · Madinah: ${
+              mdHotels[0]?.name || "Madinah Hotel"
+            } (${mdHotels[0]?.nights || 0}N)`,
+          });
+        }
+      }
+    } catch {
+      // Ignore draft parse errors
+    }
+    return () => {
+      active = false;
+    };
+  }, [userAgencyId]);
+
+  const allUmrahPackages = useMemo(() => {
+    const list: UmrahPresetPackage[] = [...DEFAULT_UMRAH_PRESETS, ...customUmrahPresets];
+    if (draftUmrahPreset) {
+      list.unshift(draftUmrahPreset);
+    }
+    return list;
+  }, [customUmrahPresets, draftUmrahPreset]);
+
+  // Shared Passengers across the whole quotation
   const [passengers, setPassengers] = useState<Passenger[]>(() => [
     createDefaultPassenger(),
   ]);
 
-  // Line items
-  const [items, setItems] = useState<QuotationItem[]>([
-    { description: "", qty: 1, unit_price: 0, amount: 0 },
-  ]);
-
-  // Totals & Notes (two columns)
+  // Bottom Row: Notes/Terms + Currency + Grand Total
   const [currency, setCurrency] = useState("PKR");
-  const [discount, setDiscount] = useState<number>(0);
-  const [tax, setTax] = useState<number>(0);
   const [notes, setNotes] = useState(DEFAULT_NOTES);
 
   const [convertedBookingId, setConvertedBookingId] = useState<string | null>(null);
@@ -216,10 +553,9 @@ export default function QuotationFormPage() {
       loadedRecordIdRef.current = id || null;
 
       setQuotationNumber(q.quotation_number || "");
-      setQuotationDate(getTodayDateString());
+      setQuotationDate(q.quotation_date || getTodayDateString());
       setValidUntil(q.valid_until || "");
       setStatus((q.status as Status) || "draft");
-      setServiceType(normalizeServiceType(q.service_type));
 
       const matchedClient =
         parties.find((p) => p.id === q.client_id) ||
@@ -235,24 +571,77 @@ export default function QuotationFormPage() {
       setLegacyAgentId(q.agent_id || null);
 
       const savedRef = q.source_ref && typeof q.source_ref === "object" ? q.source_ref : null;
-      if (savedRef?.serviceDetails) {
-        setServiceDetails({
+
+      // Hydrate multi-service array OR backward-compatible single service
+      if (Array.isArray(savedRef?.services) && savedRef.services.length > 0) {
+        const hydratedServices: QuotationServiceLine[] = savedRef.services.map(
+          (srv: any) => {
+            const sType = normalizeServiceType(srv.service_type || srv.serviceType || q.service_type);
+            const mergedDetails: ServiceDetailsState = {
+              ...createDefaultServiceDetails(),
+              ...(srv.serviceDetails || srv.details || {}),
+            };
+            return {
+              id: srv.id || makeServiceId(),
+              serviceType: sType,
+              details: mergedDetails,
+              amount: String(Number(srv.amount ?? 0)),
+            };
+          }
+        );
+        setServices(hydratedServices);
+        // If only 1 service, keep it expanded; if multiple, collapse previous and expand last or keep collapsed summary
+        setExpandedServiceId(hydratedServices[0]?.id || null);
+      } else {
+        // Legacy single-service quotation
+        const legacyType = normalizeServiceType(q.service_type);
+        const baseDetails: ServiceDetailsState = {
           ...createDefaultServiceDetails(),
-          ...savedRef.serviceDetails,
-        });
+          ...(savedRef?.serviceDetails || {}),
+        };
+        if (!savedRef?.serviceDetails) {
+          const fallbackDesc =
+            q.description ||
+            q.items?.map((i) => i.description).filter(Boolean).join("; ") ||
+            q.title ||
+            "";
+          if (legacyType === "Other") {
+            baseDetails.otherServiceName = q.title || "Custom Service";
+            baseDetails.generalDescription = fallbackDesc;
+          } else if (legacyType === "Umrah") {
+            baseDetails.umrahPackageName = q.title || "Umrah Package";
+            baseDetails.umrahPackageSummary =
+              fallbackDesc || baseDetails.umrahPackageSummary;
+          }
+        }
+        const legacyTotal =
+          Number(q.total) ||
+          (Array.isArray(q.items)
+            ? q.items.reduce(
+                (acc, it) =>
+                  acc +
+                  (Number(it.amount) ||
+                    (Number(it.qty) || 1) * (Number(it.unit_price) || 0)),
+                0
+              )
+            : 0);
+        const singleLine: QuotationServiceLine = {
+          id: makeServiceId(),
+          serviceType: legacyType,
+          details: baseDetails,
+          amount: String(legacyTotal),
+        };
+        setServices([singleLine]);
+        setExpandedServiceId(singleLine.id);
       }
+
       if (Array.isArray(savedRef?.passengers) && savedRef.passengers.length > 0) {
         setPassengers(savedRef.passengers);
+      } else {
+        setPassengers([createDefaultPassenger()]);
       }
 
       setCurrency(q.currency || "PKR");
-      setItems(
-        q.items && q.items.length > 0
-          ? q.items
-          : [{ description: q.title || "", qty: 1, unit_price: Number(q.total) || 0, amount: Number(q.total) || 0 }]
-      );
-      setDiscount(Number(q.discount) || 0);
-      setTax(Number(q.tax) || 0);
       const combinedNotes = [q.notes, q.terms].filter(Boolean).join("\n\n");
       setNotes(combinedNotes);
       setConvertedBookingId(q.booking_id || q.converted_booking_id || null);
@@ -261,20 +650,46 @@ export default function QuotationFormPage() {
       prefillAppliedRef.current = true;
       const prefill = (location.state as { prefill?: Partial<QuotationInput> })?.prefill;
       if (prefill) {
-        if (prefill.service_type) {
-          setServiceType(normalizeServiceType(prefill.service_type));
-        }
-        if (prefill.client_name) {
-          setClientName(prefill.client_name);
-        }
-        if (prefill.client_phone) {
-          setClientPhone(prefill.client_phone);
-        }
+        if (prefill.client_name) setClientName(prefill.client_name);
+        if (prefill.client_phone) setClientPhone(prefill.client_phone);
         if (prefill.currency) setCurrency(prefill.currency);
         if (prefill.notes) setNotes(prefill.notes);
-        if (prefill.items && Array.isArray(prefill.items) && prefill.items.length > 0) {
-          setItems(prefill.items);
+
+        const prefillType = prefill.service_type
+          ? normalizeServiceType(prefill.service_type)
+          : "Ticket";
+        const prefillAmount =
+          Array.isArray(prefill.items) && prefill.items.length > 0
+            ? prefill.items.reduce(
+                (sum, it) =>
+                  sum +
+                  (Number(it.amount) ||
+                    (Number(it.qty) || 1) * (Number(it.unit_price) || 0)),
+                0
+              )
+            : Number(prefill.total) || 0;
+
+        const nextLine = createServiceLine(prefillType);
+        if (prefillType === "Umrah") {
+          if (prefill.title) {
+            nextLine.details.umrahPackageId = "calculator_latest";
+            nextLine.details.umrahPackageName = prefill.title;
+          }
+          if (prefill.description) {
+            nextLine.details.umrahPackageSummary = prefill.description;
+          }
+        } else if (prefillType === "Other") {
+          nextLine.details.otherServiceName = prefill.title || "";
+          nextLine.details.generalDescription =
+            prefill.description ||
+            prefill.items?.[0]?.description ||
+            "";
         }
+        if (prefillAmount > 0) {
+          nextLine.amount = String(prefillAmount);
+        }
+        setServices([nextLine]);
+        setExpandedServiceId(nextLine.id);
         setIsDirty(true);
       }
     }
@@ -295,19 +710,6 @@ export default function QuotationFormPage() {
   }, [isEdit, partyId, clientName, clientPhone, clientsList]);
 
   const markDirty = useCallback(() => setIsDirty(true), []);
-
-  const handleServiceDetailChange = useCallback(
-    <K extends keyof ServiceDetailsState>(field: K, value: ServiceDetailsState[K]) => {
-      setServiceDetails((prev) => ({ ...prev, [field]: value }));
-      setIsDirty(true);
-    },
-    []
-  );
-
-  const handleServiceTypeChange = useCallback((nextService: ServiceType) => {
-    setServiceType(nextService);
-    setIsDirty(true);
-  }, []);
 
   const handleClientSelect = useCallback(
     (selectedId: string) => {
@@ -330,61 +732,194 @@ export default function QuotationFormPage() {
     setIsDirty(true);
   }, []);
 
-  // Financial Calculations (preserved identically)
-  const subtotal = useMemo(() => {
-    return items.reduce(
-      (acc, it) => acc + (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
-      0
-    );
-  }, [items]);
+  // Service Line Handlers
+  const handleServiceTypeChange = useCallback(
+    (serviceId: string, nextType: ServiceType) => {
+      setServices((prev) =>
+        prev.map((srv) => {
+          if (srv.id !== serviceId) return srv;
+          const updatedDetails = { ...srv.details };
+          let nextAmount = srv.amount;
+          if (nextType === "Umrah") {
+            const pkg =
+              allUmrahPackages.find((p) => p.id === updatedDetails.umrahPackageId) ||
+              allUmrahPackages[0] ||
+              DEFAULT_UMRAH_PRESETS[0];
+            if (pkg) {
+              const info = computeUmrahPresetSummaryAndPrice(pkg, currency, sarToPkrRate);
+              updatedDetails.umrahPackageId = pkg.id;
+              updatedDetails.umrahPackageName = pkg.name;
+              updatedDetails.umrahPackageSummary = info.summary;
+              updatedDetails.umrahPackagePrice = info.price;
+              updatedDetails.makkahHotel = info.makkahHotel;
+              updatedDetails.makkahNights = info.makkahNights;
+              updatedDetails.madinahHotel = info.madinahHotel;
+              updatedDetails.madinahNights = info.madinahNights;
+              if (!nextAmount || Number(nextAmount) === 0) {
+                nextAmount = String(info.price);
+              }
+            }
+          }
+          return {
+            ...srv,
+            serviceType: nextType,
+            details: updatedDetails,
+            amount: nextAmount,
+          };
+        })
+      );
+      setIsDirty(true);
+    },
+    [allUmrahPackages, currency, sarToPkrRate]
+  );
 
-  const total = useMemo(() => {
-    return Math.max(0, subtotal - (Number(discount) || 0) + (Number(tax) || 0));
-  }, [subtotal, discount, tax]);
+  const handleServiceDetailChange = useCallback(
+    <K extends keyof ServiceDetailsState>(
+      serviceId: string,
+      field: K,
+      value: ServiceDetailsState[K]
+    ) => {
+      setServices((prev) =>
+        prev.map((srv) =>
+          srv.id === serviceId
+            ? { ...srv, details: { ...srv.details, [field]: value } }
+            : srv
+        )
+      );
+      setIsDirty(true);
+    },
+    []
+  );
 
-  // Line Item handlers
-  const handleItemChange = (
-    idx: number,
-    field: keyof QuotationItem,
-    val: string | number
-  ) => {
-    setItems((prev) =>
-      prev.map((it, i) => {
-        if (i !== idx) return it;
-        const updated = { ...it, [field]: val };
-        updated.amount = (Number(updated.qty) || 0) * (Number(updated.unit_price) || 0);
-        return updated;
-      })
+  const handleUmrahPackageChange = useCallback(
+    (serviceId: string, packageId: string) => {
+      const pkg = allUmrahPackages.find((p) => p.id === packageId);
+      if (!pkg) return;
+      const info = computeUmrahPresetSummaryAndPrice(pkg, currency, sarToPkrRate);
+      setServices((prev) =>
+        prev.map((srv) => {
+          if (srv.id !== serviceId) return srv;
+          return {
+            ...srv,
+            details: {
+              ...srv.details,
+              umrahPackageId: pkg.id,
+              umrahPackageName: pkg.name,
+              umrahPackageSummary: info.summary,
+              umrahPackagePrice: info.price,
+              makkahHotel: info.makkahHotel,
+              makkahNights: info.makkahNights,
+              madinahHotel: info.madinahHotel,
+              madinahNights: info.madinahNights,
+            },
+            amount: String(info.price),
+          };
+        })
+      );
+      setIsDirty(true);
+    },
+    [allUmrahPackages, currency, sarToPkrRate]
+  );
+
+  const handleServiceAmountChange = useCallback((serviceId: string, rawAmount: string) => {
+    setServices((prev) =>
+      prev.map((srv) => (srv.id === serviceId ? { ...srv, amount: rawAmount } : srv))
     );
     setIsDirty(true);
-  };
+  }, []);
 
-  const focusNewItemRef = useRef(false);
+  const focusNewServiceRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!focusNewItemRef.current) return;
-    focusNewItemRef.current = false;
-    const targetIdx = items.length - 1;
-    const descInput = itemsSectionRef.current?.querySelector<HTMLInputElement>(
-      `[data-repeatable-row="${targetIdx}"] input[data-line-field="description"]`
+    if (!focusNewServiceRef.current) return;
+    const targetId = focusNewServiceRef.current;
+    focusNewServiceRef.current = null;
+    const rowEl = servicesListRef.current?.querySelector<HTMLElement>(
+      `[data-service-id="${targetId}"]`
     );
-    descInput?.focus();
-  }, [items.length]);
+    if (rowEl) {
+      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const firstFocusable = rowEl.querySelector<HTMLElement>(
+        'button[role="combobox"], input'
+      );
+      firstFocusable?.focus();
+    }
+  }, [services.length]);
 
-  const handleAddItem = () => {
-    focusNewItemRef.current = true;
-    setItems((prev) => [
-      ...prev,
-      { description: "", qty: 1, unit_price: 0, amount: 0 },
-    ]);
+  const handleAddService = useCallback(() => {
+    const newLine = createServiceLine("Ticket");
+    focusNewServiceRef.current = newLine.id;
+    setServices((prev) => [...prev, newLine]);
+    // Collapse all previous services and expand the newly added service
+    setExpandedServiceId(newLine.id);
     setIsDirty(true);
-  };
+  }, []);
 
-  const handleRemoveItem = (idx: number) => {
-    if (items.length === 1) return;
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+  const handleRemoveService = useCallback(
+    (serviceId: string, index: number) => {
+      if (index === 0 || services.length <= 1) return;
+      setServices((prev) => {
+        const next = prev.filter((s) => s.id !== serviceId);
+        if (expandedServiceId === serviceId) {
+          setExpandedServiceId(next[next.length - 1]?.id || null);
+        }
+        return next;
+      });
+      setIsDirty(true);
+    },
+    [expandedServiceId, services.length]
+  );
+
+  // Passenger Handlers
+  const focusNewPaxRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusNewPaxRef.current) return;
+    focusNewPaxRef.current = false;
+    const targetIdx = passengers.length - 1;
+    const nameInput = paxListRef.current?.querySelector<HTMLInputElement>(
+      `[data-pax-row="${targetIdx}"] input[data-pax-field="name"]`
+    );
+    if (nameInput) {
+      nameInput.scrollIntoView({ block: "nearest" });
+      nameInput.focus();
+    }
+  }, [passengers.length]);
+
+  const handlePassengerChange = useCallback(
+    (index: number, field: keyof Passenger, value: string) => {
+      setPassengers((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], [field]: value };
+        return next;
+      });
+      setIsDirty(true);
+    },
+    []
+  );
+
+  const handleAddPassenger = useCallback(() => {
+    focusNewPaxRef.current = true;
+    setPassengers((prev) => [...prev, createDefaultPassenger()]);
     setIsDirty(true);
-  };
+  }, []);
+
+  const handleRemovePassenger = useCallback(
+    (index: number) => {
+      if (passengers.length <= 1) return;
+      setPassengers((prev) => prev.filter((_, i) => i !== index));
+      setIsDirty(true);
+    },
+    [passengers.length]
+  );
+
+  // Grand Total = automatic sum of all service Amounts (read-only, updates live)
+  const grandTotal = useMemo(() => {
+    return services.reduce((sum, srv) => {
+      const val = Number(srv.amount);
+      return sum + (Number.isFinite(val) && val > 0 ? val : 0);
+    }, 0);
+  }, [services]);
 
   const validate = (): boolean => {
     if (!clientName.trim()) {
@@ -401,60 +936,73 @@ export default function QuotationFormPage() {
       return false;
     }
 
-    const nonEmptyItems = items.filter((i) => i.description.trim());
-    if (nonEmptyItems.length === 0) {
-      toast.error("Please add at least one line item description");
-      const firstDesc = itemsSectionRef.current?.querySelector<HTMLInputElement>(
-        '[data-repeatable-row="0"] input[data-line-field="description"]'
+    for (let i = 0; i < services.length; i += 1) {
+      const srv = services[i];
+      const rawAmt = String(srv.amount ?? "").trim();
+      const numAmt = Number(rawAmt);
+      if (!rawAmt || !Number.isFinite(numAmt) || numAmt < 0) {
+        toast.error(
+          `Service #${i + 1} (${getServiceDisplayLabel(srv.serviceType)}): Please enter a valid Amount`
+        );
+        setExpandedServiceId(srv.id);
+        setTimeout(() => {
+          const amtInput = servicesListRef.current?.querySelector<HTMLInputElement>(
+            `[data-service-id="${srv.id}"] input[data-service-amount="true"]`
+          );
+          amtInput?.focus();
+        }, 20);
+        return false;
+      }
+
+      const srvErr = validateServiceAndPassengers(
+        srv.serviceType,
+        srv.details,
+        i === 0 ? passengers : []
       );
-      firstDesc?.focus();
-      return false;
-    }
-
-    if (nonEmptyItems.some((i) => !Number.isFinite(Number(i.qty)) || Number(i.qty) <= 0 || !Number.isFinite(Number(i.unit_price)) || Number(i.unit_price) < 0)) {
-      toast.error("Line item quantities must be positive and prices cannot be negative");
-      return false;
-    }
-
-    const safeDiscount = Number(discount) || 0;
-    const safeTax = Number(tax) || 0;
-    if (safeDiscount < 0 || safeTax < 0) {
-      toast.error("Discount and tax cannot be negative");
-      return false;
-    }
-
-    const serviceError = validateServiceAndPassengers(
-      serviceType,
-      serviceDetails,
-      serviceType === "Ticket" ? passengers : []
-    );
-    if (serviceError) {
-      toast.error(serviceError);
-      return false;
+      if (srvErr) {
+        toast.error(
+          services.length > 1 ? `Service #${i + 1}: ${srvErr}` : srvErr
+        );
+        setExpandedServiceId(srv.id);
+        return false;
+      }
     }
 
     return true;
   };
 
   const buildPayload = (): QuotationInput => {
-    const normalizedItems = items
-      .filter((i) => i.description.trim())
-      .map((i) => ({
-        description: i.description.trim(),
-        qty: Math.max(1, Number(i.qty) || 1),
-        unit_price: Math.max(0, Number(i.unit_price) || 0),
-        amount: Math.max(1, Number(i.qty) || 1) * Math.max(0, Number(i.unit_price) || 0),
-      }));
+    const primaryService = services[0];
+    const normalizedItems: QuotationItem[] = services.map((srv) => {
+      const amt = Math.max(0, Number(srv.amount) || 0);
+      const typeLabel = getServiceDisplayLabel(srv.serviceType);
+      const keyDetail = buildCompactServiceKeyDetail(srv.serviceType, srv.details);
+      return {
+        description: keyDetail ? `${typeLabel} — ${keyDetail}` : typeLabel,
+        qty: 1,
+        unit_price: amt,
+        amount: amt,
+        service_type: srv.serviceType,
+        type_label: typeLabel,
+        details_summary: keyDetail,
+      } as QuotationItem;
+    });
 
-    const derivedTitle = buildServiceTitle(serviceType, serviceDetails);
-    const derivedSummary = buildServiceSummaryLines(
-      serviceType,
-      serviceDetails,
-      serviceType === "Ticket" ? passengers : undefined
-    ).join(" · ");
+    const serviceTitles = services.map((srv) =>
+      buildServiceTitle(srv.serviceType, srv.details)
+    );
+    const derivedTitle = serviceTitles.join(" + ");
+
+    const serviceSummaries = services.map((srv, idx) => {
+      const label = getServiceDisplayLabel(srv.serviceType);
+      const detail = buildCompactServiceKeyDetail(srv.serviceType, srv.details);
+      return services.length > 1
+        ? `${idx + 1}. ${label}${detail ? `: ${detail}` : ""}`
+        : detail || buildServiceSummaryLines(srv.serviceType, srv.details).join(" · ");
+    });
+    const derivedSummary = serviceSummaries.filter(Boolean).join(" | ");
 
     return {
-      // Leave quotation_number blank on Auto create so DB assigns atomic formatted number
       quotation_number: isEdit
         ? quotationNumber.trim()
         : isManualQuotationNo
@@ -462,7 +1010,7 @@ export default function QuotationFormPage() {
           : "",
       quotation_date: quotationDate,
       valid_until: validUntil || null,
-      service_type: serviceType,
+      service_type: primaryService?.serviceType || "Ticket",
       client_name: clientName.trim(),
       client_email: isEdit ? legacyClientEmail : null,
       client_phone: clientPhone.trim() || null,
@@ -471,19 +1019,27 @@ export default function QuotationFormPage() {
       title: derivedTitle,
       description: derivedSummary || null,
       items: normalizedItems,
-      subtotal,
-      discount: Math.max(0, Number(discount) || 0),
-      tax: Math.max(0, Number(tax) || 0),
-      total,
+      subtotal: grandTotal,
+      discount: 0,
+      tax: 0,
+      total: grandTotal,
       currency,
       status,
       notes: notes.trim() || null,
       terms: null,
       source: "web-app",
       source_ref: {
-        version: 2,
-        serviceDetails,
-        passengers: serviceType === "Ticket" ? passengers : [],
+        version: 3,
+        services: services.map((srv) => ({
+          id: srv.id,
+          service_type: srv.serviceType,
+          serviceDetails: srv.details,
+          amount: Math.max(0, Number(srv.amount) || 0),
+          title: buildServiceTitle(srv.serviceType, srv.details),
+          summary: buildCompactServiceKeyDetail(srv.serviceType, srv.details),
+        })),
+        serviceDetails: primaryService?.details || createDefaultServiceDetails(),
+        passengers,
       },
     };
   };
@@ -564,18 +1120,20 @@ export default function QuotationFormPage() {
   }, [isDirty, navigate]);
 
   const handleConvertToBooking = () => {
+    const primary = services[0];
+    const pType = primary?.serviceType || "Ticket";
+    const summaryTitles = services
+      .map((s) => buildServiceTitle(s.serviceType, s.details))
+      .join(" + ");
     navigate("/app/sales-expenses?tab=booking-invoice&new=1", {
       state: {
         openAddClient: true,
         prefill: {
           name: clientName,
           contact_number: clientPhone,
-          travel_type: serviceType === "Umrah" ? "Umrah" : serviceType,
-          selling_price: total,
-          notes: `Converted from Quotation #${quotationNumber} — ${buildServiceTitle(
-            serviceType,
-            serviceDetails
-          )}\nQuotation Total: ${currency} ${total.toLocaleString()}`,
+          travel_type: pType === "Umrah" ? "Umrah" : pType,
+          selling_price: grandTotal,
+          notes: `Converted from Quotation #${quotationNumber} — ${summaryTitles}\nQuotation Total: ${currency} ${grandTotal.toLocaleString()}`,
           converted_from_quote_id: id,
         },
       },
@@ -590,41 +1148,53 @@ export default function QuotationFormPage() {
     onCancel: handleCancel,
   });
 
-  const derivedHeading = useMemo(
-    () => buildServiceTitle(serviceType, serviceDetails),
-    [serviceType, serviceDetails]
-  );
+  const derivedHeading = useMemo(() => {
+    if (services.length === 1) {
+      return buildServiceTitle(services[0].serviceType, services[0].details);
+    }
+    return `${services.length} Services (${services
+      .map((s) => getServiceDisplayLabel(s.serviceType))
+      .join(" + ")})`;
+  }, [services]);
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-5 py-4 space-y-4">
-      {/* Compact Top Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <form
+      ref={formContainerRef}
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSave(false);
+      }}
+      className="max-w-7xl mx-auto -my-2 lg:-my-3 px-1 sm:px-2 py-1.5 flex flex-col gap-2 lg:max-h-[calc(100dvh-5.25rem)] lg:overflow-hidden"
+    >
+      {/* HEADER ROW: Back arrow + title "New Quotation" + subtitle on left | [Cancel] [Save & PDF] [Save Quotation] on right */}
+      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             tabIndex={-1}
             onClick={handleCancel}
-            className="h-8 w-8 p-0 shrink-0"
+            className="h-7 w-7 p-0 shrink-0"
             title="Back (Esc)"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
           </Button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <FileText className="w-4 h-4 text-teal-600 shrink-0" />
-              <h1 className="text-lg font-bold tracking-tight truncate">
-                {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
-              </h1>
-              <span className="text-xs font-medium text-muted-foreground truncate">
-                · {derivedHeading}
-              </span>
-            </div>
+          <div className="min-w-0 flex items-baseline gap-1.5 flex-wrap">
+            <FileText className="w-3.5 h-3.5 text-teal-600 shrink-0 self-center" />
+            <h1 className="text-sm sm:text-base font-bold tracking-tight truncate">
+              {isEdit ? `Edit Quotation #${quotationNumber}` : "New Quotation"}
+            </h1>
+            <span className="text-[11px] font-medium text-muted-foreground truncate max-w-[340px]">
+              · {derivedHeading}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div
+          data-nav-order="99"
+          className="flex items-center gap-1.5 shrink-0"
+        >
           {isEdit && !convertedBookingId && (
             <Button
               type="button"
@@ -632,429 +1202,972 @@ export default function QuotationFormPage() {
               size="sm"
               tabIndex={-1}
               onClick={handleConvertToBooking}
-              className="h-8 text-xs gap-1.5"
+              className="h-7 px-2.5 text-xs gap-1"
             >
               <ArrowRightCircle className="w-3.5 h-3.5 text-emerald-600" />
-              Convert to Booking
+              <span className="hidden sm:inline">Convert to Booking</span>
             </Button>
           )}
-          <span className="text-[11px] text-muted-foreground hidden sm:inline">
-            Enter = next · Ctrl+S = save · Esc = back
-          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            tabIndex={-1}
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="h-7 px-2.5 text-xs cursor-pointer"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-nav-skip="true"
+            onClick={() => handleSave(true)}
+            disabled={isSubmitting}
+            className="h-7 px-2.5 text-xs font-semibold gap-1 cursor-pointer"
+          >
+            <Download className="w-3 h-3" />
+            Save & PDF
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            data-save-button="true"
+            disabled={isSubmitting}
+            className="h-7 px-3 text-xs font-semibold bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            <Save className="w-3 h-3" />
+            {isSubmitting ? "Saving..." : "Save Quotation"}
+          </Button>
         </div>
       </div>
 
-      {/* Single Clean Form Surface */}
-      <form
-        ref={formContainerRef}
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSave(false);
-        }}
-        className="bg-card border rounded-xl p-4 sm:p-5 shadow-xs space-y-5"
-      >
-        {/* 1. HEADER FIELDS */}
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
-            {/* Quotation # (Auto with optional Manual Override on create) */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Quotation #
-              </Label>
-              <DocumentNumberControl
-                label=""
-                docType="quotation"
-                previewNumber={quotationNumber}
-                isManual={isManualQuotationNo}
-                manualValue={manualQuotationNo}
-                onManualModeChange={setIsManualQuotationNo}
-                onManualValueChange={setManualQuotationNo}
-                allowManualOverride={!isEdit}
-                readOnly={isEdit}
-                accentClassName="text-blue-600 dark:text-blue-400"
-                className="h-8 justify-between bg-muted/60"
-              />
-            </div>
-
-            {/* Date (Shared Locked Date component, skipped) */}
-            <div>
-              <LockedDateField
-                label="Date"
-                value={quotationDate}
-              />
-            </div>
-
-            {/* Service Type (Same shared component & list as Booking Invoice) */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Service Type <span className="text-red-500">*</span>
-              </Label>
-              <ServiceTypeSelect
-                value={serviceType}
-                onChange={handleServiceTypeChange}
-                className="h-8 text-xs font-medium bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-              />
-            </div>
-
-            {/* Client / Recipient Name (Same shared SearchableSelect + Quick Add as Booking Invoice) */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Client / Recipient Name <span className="text-red-500">*</span>
-                </Label>
-                <button
-                  type="button"
-                  data-quick-add-btn="true"
-                  onClick={() => setIsAddClientOpen(true)}
-                  className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-                >
-                  <Plus className="w-2.5 h-2.5" /> Quick Add
-                </button>
-              </div>
-              <SearchableSelect
-                value={partyId || (clientName.trim() ? CUSTOM_RECIPIENT_ID : "")}
-                onChange={handleClientSelect}
-                items={clientSelectItems}
-                placeholder="Select Client"
-                searchPlaceholder="Search clients by name, code, phone..."
-                emptyText="No clients found"
-                allowClear={false}
-                required={!clientName.trim()}
-                requiredMessage="Please select a Client or Recipient"
-                onQuickAdd={() => setIsAddClientOpen(true)}
-                quickAddLabel="Add New Client"
-                triggerProps={{ "data-client-select": "true" }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
-            {/* Phone Number (Auto-filled on client select, remains editable) */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Phone Number
-              </Label>
-              <Input
-                type="tel"
-                value={clientPhone}
-                onChange={(e) => {
-                  setClientPhone(e.target.value);
-                  markDirty();
-                }}
-                placeholder="e.g. +92 300 1234567"
-                className="h-11 md:h-8 text-base md:text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-              />
-            </div>
-
-            {/* Valid Until (+7 / +15 / +30 quick chips) */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Valid Until
-                </Label>
-                <div className="flex items-center gap-1">
-                  {[7, 15, 30].map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => {
-                        setValidUntil(format(addDays(new Date(), days), "yyyy-MM-dd"));
-                        markDirty();
-                      }}
-                      className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
-                    >
-                      +{days}d
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Input
-                type="date"
-                value={validUntil}
-                onChange={(e) => {
-                  setValidUntil(e.target.value);
-                  markDirty();
-                }}
-                className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-              />
-            </div>
-
-            {/* Status */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Status
-              </Label>
-              <Select
-                value={status}
-                onValueChange={(val) => {
-                  setStatus(val as Status);
-                  markDirty();
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. SERVICE-SPECIFIC FIELDS (Shared with Booking Invoice) */}
-        <div className="pt-3 border-t space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {getServiceDisplayLabel(serviceType)} Details
-            </h2>
-          </div>
-
-          <ServiceSpecificFields
-            service={serviceType}
-            details={serviceDetails}
-            onDetailChange={handleServiceDetailChange}
-            showInlineTripType={true}
-            showInlineZiyarat={true}
-            showIssuanceFields={false}
-            containerClassName="space-y-3"
-          />
-
-          {serviceType === "Ticket" && (
-            <PassengersSection
-              passengers={passengers}
-              onChangePassengers={(updater) => {
-                setPassengers(updater);
-                setIsDirty(true);
-              }}
-              requireFirstPassenger={false}
+      {/* MAIN FORM CARD: Fits on one laptop screen (1366x768+) with no page scroll */}
+      <div className="bg-card border rounded-xl p-2.5 sm:p-3 shadow-2xs flex flex-col gap-2 min-h-0">
+        {/* ROW 1: Quotation # | Date (locked) | Client (with Quick Add) | Phone Number */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end shrink-0">
+          {/* Quotation # */}
+          <div className="lg:col-span-2 space-y-0.5">
+            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+              Quotation #
+            </Label>
+            <DocumentNumberControl
+              label=""
+              docType="quotation"
+              previewNumber={quotationNumber}
+              isManual={isManualQuotationNo}
+              manualValue={manualQuotationNo}
+              onManualModeChange={setIsManualQuotationNo}
+              onManualValueChange={setManualQuotationNo}
+              allowManualOverride={!isEdit}
+              readOnly={isEdit}
+              accentClassName="text-blue-600 dark:text-blue-400"
+              className="h-7 justify-between bg-muted/60 text-xs"
             />
-          )}
-        </div>
-
-        {/* 3. LINE ITEMS */}
-        <div
-          ref={itemsSectionRef}
-          className="pt-3 border-t space-y-2.5"
-          data-repeatable-group="line-items"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Line Items
-            </h2>
-            <span className="text-[11px] text-muted-foreground">
-              Enter = next field · Ctrl+Enter = add line
-            </span>
           </div>
 
-          {isMobile ? (
-            <div className="space-y-3">
-              {items.map((item, idx) => (
-                <div
-                  key={idx}
-                  data-repeatable-row={idx}
-                  className="rounded-xl border bg-muted/20 p-3 space-y-2.5 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] font-bold text-muted-foreground">
-                      Item #{idx + 1}
-                    </span>
-                    {items.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        tabIndex={-1}
-                        onClick={() => handleRemoveItem(idx)}
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 gap-1"
-                        aria-label={`Remove line ${idx + 1}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remove</span>
-                      </Button>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">Description</Label>
-                    <Input
-                      data-line-field="description"
-                      value={item.description}
-                      onChange={(e) =>
-                        handleItemChange(idx, "description", e.target.value)
-                      }
-                      placeholder="Service item description..."
-                      data-required={
-                        idx === 0 && items.every((i) => !i.description.trim())
-                          ? "true"
-                          : undefined
-                      }
-                      data-required-message="Please enter at least one line item description"
-                      className="h-11 text-base bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Qty</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        step="1"
-                        value={item.qty}
-                        onChange={(e) =>
-                          handleItemChange(idx, "qty", Number(e.target.value) || 0)
-                        }
-                        className="h-11 text-base font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Unit Price</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={item.unit_price || ""}
-                        onChange={(e) =>
-                          handleItemChange(
-                            idx,
-                            "unit_price",
-                            Number(e.target.value) || 0
-                          )
-                        }
-                        placeholder="0"
-                        className="h-11 text-base font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-1.5 border-t border-border/50">
-                    <span className="text-[11px] font-medium text-muted-foreground">Line Amount</span>
-                    <span className="font-mono font-bold text-sm text-foreground">
-                      {currency}{" "}
-                      {((Number(item.qty) || 0) * (Number(item.unit_price) || 0)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
+          {/* Date (locked) */}
+          <div className="lg:col-span-2">
+            <LockedDateField
+              label="Date"
+              value={quotationDate}
+              className="space-y-0.5 [&_label]:text-[10px] [&_input]:h-7"
+            />
+          </div>
+
+          {/* Client (with Quick Add) */}
+          <div className="lg:col-span-5 space-y-0.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                Client <span className="text-red-500">*</span>
+              </Label>
+              <button
+                type="button"
+                data-quick-add-btn="true"
+                onClick={() => setIsAddClientOpen(true)}
+                className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-0.5 cursor-pointer rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              >
+                <Plus className="w-2.5 h-2.5" /> Quick Add
+              </button>
             </div>
-          ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b text-[11px] font-semibold text-muted-foreground">
-                  <th className="py-1.5 px-1.5 text-center w-8">#</th>
-                  <th className="py-1.5 px-1.5 text-left min-w-[220px]">Description</th>
-                  <th className="py-1.5 px-1.5 text-right w-20">Qty</th>
-                  <th className="py-1.5 px-1.5 text-right w-32">Unit Price</th>
-                  <th className="py-1.5 px-1.5 text-right w-32">Amount</th>
-                  <th className="py-1.5 px-1 w-8"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {items.map((item, idx) => (
-                  <tr key={idx} data-repeatable-row={idx}>
-                    <td className="py-1.5 px-1.5 text-center font-mono text-[11px] text-muted-foreground">
-                      {idx + 1}
-                    </td>
-                    <td className="py-1.5 px-1.5">
-                      <Input
-                        data-line-field="description"
-                        value={item.description}
-                        onChange={(e) =>
-                          handleItemChange(idx, "description", e.target.value)
-                        }
-                        placeholder="Service item description..."
-                        data-required={
-                          idx === 0 && items.every((i) => !i.description.trim())
-                            ? "true"
-                            : undefined
-                        }
-                        data-required-message="Please enter at least one line item description"
-                        className="h-8 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1.5">
-                      <Input
-                        type="number"
-                        min={1}
-                        step="1"
-                        value={item.qty}
-                        onChange={(e) =>
-                          handleItemChange(idx, "qty", Number(e.target.value) || 0)
-                        }
-                        className="h-8 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1.5">
-                      <Input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={item.unit_price || ""}
-                        onChange={(e) =>
-                          handleItemChange(
-                            idx,
-                            "unit_price",
-                            Number(e.target.value) || 0
-                          )
-                        }
-                        placeholder="0"
-                        className="h-8 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1.5">
-                      <Input
-                        value={((Number(item.qty) || 0) * (Number(item.unit_price) || 0)).toLocaleString()}
-                        readOnly
+            <SearchableSelect
+              value={partyId || (clientName.trim() ? CUSTOM_RECIPIENT_ID : "")}
+              onChange={handleClientSelect}
+              items={clientSelectItems}
+              placeholder="Select Client"
+              searchPlaceholder="Search clients by name, code, phone..."
+              emptyText="No clients found"
+              allowClear={false}
+              required={!clientName.trim()}
+              requiredMessage="Please select a Client"
+              onQuickAdd={() => setIsAddClientOpen(true)}
+              quickAddLabel="Add New Client"
+              className="h-7 text-xs"
+              triggerProps={{ "data-client-select": "true" }}
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div className="lg:col-span-3 space-y-0.5">
+            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+              Phone Number
+            </Label>
+            <Input
+              type="tel"
+              value={clientPhone}
+              onChange={(e) => {
+                setClientPhone(e.target.value);
+                markDirty();
+              }}
+              placeholder="e.g. +92 300 1234567"
+              className="h-7 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+            />
+          </div>
+        </div>
+
+        {/* ROW 2: Valid Until (+7d +15d +30d) | Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end shrink-0">
+          {/* Valid Until */}
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                Valid Until
+              </Label>
+              <div className="flex items-center gap-1">
+                {[7, 15, 30].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => {
+                      setValidUntil(format(addDays(new Date(), days), "yyyy-MM-dd"));
+                      markDirty();
+                    }}
+                    className="text-[10px] font-medium px-1.5 py-0 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                  >
+                    +{days}d
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Input
+              type="date"
+              value={validUntil}
+              onChange={(e) => {
+                setValidUntil(e.target.value);
+                markDirty();
+              }}
+              className="h-7 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-0.5">
+            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+              Status
+            </Label>
+            <Select
+              value={status}
+              onValueChange={(val) => {
+                setStatus(val as Status);
+                markDirty();
+              }}
+            >
+              <SelectTrigger className="h-7 text-xs bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* SERVICES SECTION (the main part) */}
+        <div className="pt-1.5 border-t flex flex-col gap-1.5 min-h-0">
+          <div className="flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Services ({services.length})
+              </h2>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                · Click any collapsed service to expand & edit
+              </span>
+            </div>
+          </div>
+
+          {/* Fixed max-height scrollable services list */}
+          <div
+            ref={servicesListRef}
+            className="max-h-[168px] overflow-y-auto space-y-1.5 pr-0.5"
+          >
+            {services.map((srv, idx) => {
+              const isExpanded =
+                services.length === 1 || expandedServiceId === srv.id;
+              const keyDetail = buildCompactServiceKeyDetail(
+                srv.serviceType,
+                srv.details
+              );
+              const amtNum = Number(srv.amount) || 0;
+
+              if (!isExpanded) {
+                return (
+                  <div
+                    key={srv.id}
+                    data-service-id={srv.id}
+                    onClick={() => setExpandedServiceId(srv.id)}
+                    className="h-8 px-2.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors flex items-center justify-between gap-2 text-xs cursor-pointer group"
+                    title="Click to expand and edit service"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-semibold h-5 px-1.5 shrink-0 bg-background"
+                      >
+                        {getServiceDisplayLabel(srv.serviceType)}
+                      </Badge>
+                      <span className="text-xs text-foreground truncate">
+                        {keyDetail || "No details entered"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono font-bold text-xs text-teal-700 dark:text-teal-400">
+                        {currency} {amtNum.toLocaleString()}
+                      </span>
+                      <button
+                        type="button"
                         tabIndex={-1}
-                        aria-readonly="true"
-                        className="h-8 text-xs font-mono text-right bg-muted/50 text-foreground cursor-default"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1 text-center">
-                      {items.length > 1 && (
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedServiceId(srv.id);
+                        }}
+                        className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-[10px]"
+                        title="Expand / Edit service"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      {idx > 0 && (
                         <button
                           type="button"
                           tabIndex={-1}
-                          onClick={() => handleRemoveItem(idx)}
-                          className="p-1 text-muted-foreground hover:text-red-500 cursor-pointer rounded"
-                          aria-label={`Remove line ${idx + 1}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveService(srv.id, idx);
+                          }}
+                          className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground hover:text-red-500 cursor-pointer"
+                          aria-label={`Remove service ${idx + 1}`}
+                          title="Remove service"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          )}
+                    </div>
+                  </div>
+                );
+              }
 
-          <div>
+              return (
+                <div
+                  key={srv.id}
+                  data-service-id={srv.id}
+                  className="rounded-lg border border-teal-500/30 bg-slate-50/70 dark:bg-slate-900/40 p-2 space-y-1.5"
+                >
+                  {/* ONE COMPACT LINE: Service Type dropdown | detail fields | Amount | remove (x) */}
+                  <div className="flex flex-wrap lg:flex-nowrap items-end gap-1.5">
+                    {/* Service Type Dropdown */}
+                    <div className="w-36 shrink-0 space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                          #{idx + 1} Service Type
+                        </Label>
+                        {services.length > 1 && (
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => setExpandedServiceId(null)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center"
+                            title="Collapse service row"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                      <ServiceTypeSelect
+                        value={srv.serviceType}
+                        onChange={(val) => handleServiceTypeChange(srv.id, val)}
+                        className="h-7 text-xs font-medium bg-background"
+                      />
+                    </div>
+
+                    {/* DETAIL FIELDS BY SERVICE TYPE (1-Line Compact) */}
+                    <div className="flex-1 min-w-0">
+                      {/* 1. Air Ticket: Trip Type | Flight Date | Flight Time | Sector (KHI to DXB) | Airline */}
+                      {srv.serviceType === "Ticket" && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 items-end">
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Trip Type
+                            </Label>
+                            <TripTypeSelect
+                              value={srv.details.tripType}
+                              onChange={(val: TripType) =>
+                                handleServiceDetailChange(srv.id, "tripType", val)
+                              }
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Flight Date
+                            </Label>
+                            <Input
+                              type="date"
+                              value={srv.details.flightDate}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "flightDate",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Flight Time
+                            </Label>
+                            <Input
+                              type="time"
+                              value={srv.details.flightTime}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "flightTime",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Sector (KHI to DXB)
+                            </Label>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={srv.details.origin}
+                                onChange={(e) =>
+                                  handleServiceDetailChange(
+                                    srv.id,
+                                    "origin",
+                                    e.target.value.toUpperCase()
+                                  )
+                                }
+                                placeholder="KHI"
+                                className="h-7 text-xs uppercase px-1 text-center font-mono bg-background"
+                              />
+                              <span className="text-[10px] text-muted-foreground shrink-0">
+                                to
+                              </span>
+                              <Input
+                                value={srv.details.destination}
+                                onChange={(e) =>
+                                  handleServiceDetailChange(
+                                    srv.id,
+                                    "destination",
+                                    e.target.value.toUpperCase()
+                                  )
+                                }
+                                placeholder="DXB"
+                                className="h-7 text-xs uppercase px-1 text-center font-mono bg-background"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Airline
+                            </Label>
+                            <Input
+                              value={srv.details.airline}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "airline",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="PIA / Emirates"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. Visa: Country | Visa Type | Duration | Processing time */}
+                      {srv.serviceType === "Visa" && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 items-end">
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Country
+                            </Label>
+                            <Input
+                              value={srv.details.visaCountry}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "visaCountry",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Saudi Arabia / UAE"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Visa Type
+                            </Label>
+                            <Input
+                              value={srv.details.visaType}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "visaType",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Tourist / E-Visa"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Duration
+                            </Label>
+                            <Input
+                              value={srv.details.visaValidity}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "visaValidity",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="30 Days"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Processing time
+                            </Label>
+                            <Input
+                              value={srv.details.visaProcessingTime || ""}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "visaProcessingTime",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="3-5 Days"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3. Hotel Booking: City | Hotel | Check-in | Check-out | Rooms */}
+                      {srv.serviceType === "Hotel" && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 items-end">
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              City
+                            </Label>
+                            <Input
+                              value={srv.details.hotelCity}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "hotelCity",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="City"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Hotel
+                            </Label>
+                            <Input
+                              value={srv.details.hotelName}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "hotelName",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Hotel Name"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Check-in
+                            </Label>
+                            <Input
+                              type="date"
+                              value={srv.details.hotelCheckIn}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "hotelCheckIn",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Check-out
+                            </Label>
+                            <Input
+                              type="date"
+                              value={srv.details.hotelCheckOut}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "hotelCheckOut",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Rooms
+                            </Label>
+                            <Input
+                              value={srv.details.hotelRoomType}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "hotelRoomType",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="1 Room / Double"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 4. Travel Insurance: Destination | Plan | Start date | End date */}
+                      {srv.serviceType === "Insurance" && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 items-end">
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Destination
+                            </Label>
+                            <Input
+                              value={srv.details.insuranceDestination || ""}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "insuranceDestination",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Schengen / Worldwide"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Plan
+                            </Label>
+                            <Input
+                              value={srv.details.insurancePlan}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "insurancePlan",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Standard Travel Care"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Start date
+                            </Label>
+                            <Input
+                              type="date"
+                              value={srv.details.insuranceStartDate || ""}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "insuranceStartDate",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              End date
+                            </Label>
+                            <Input
+                              type="date"
+                              value={srv.details.insuranceEndDate || ""}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "insuranceEndDate",
+                                  e.target.value
+                                )
+                              }
+                              className="h-7 text-xs px-1.5 bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 5. Other Services: Service name | Details */}
+                      {srv.serviceType === "Other" && (
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 items-end">
+                          <div className="sm:col-span-4 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Service name
+                            </Label>
+                            <Input
+                              value={srv.details.otherServiceName || ""}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "otherServiceName",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="e.g. Transport / Ziyarat"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-8 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Details
+                            </Label>
+                            <Input
+                              value={srv.details.generalDescription}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "generalDescription",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Service particulars & details..."
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 6. Umrah: Package Selector + Quotation/Package Summary */}
+                      {srv.serviceType === "Umrah" && (
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 items-end">
+                          <div className="sm:col-span-4 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <Package className="w-3 h-3 text-teal-600" />
+                              Umrah Package
+                            </Label>
+                            <Select
+                              value={
+                                srv.details.umrahPackageId ||
+                                allUmrahPackages[0]?.id ||
+                                "package1"
+                              }
+                              onValueChange={(pkgId) =>
+                                handleUmrahPackageChange(srv.id, pkgId)
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs bg-background font-medium">
+                                <SelectValue placeholder="Select Umrah Package" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allUmrahPackages.map((pkg) => {
+                                  const info = computeUmrahPresetSummaryAndPrice(
+                                    pkg,
+                                    currency,
+                                    sarToPkrRate
+                                  );
+                                  return (
+                                    <SelectItem key={pkg.id} value={pkg.id}>
+                                      {pkg.name} ({currency}{" "}
+                                      {info.price.toLocaleString()})
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="sm:col-span-8 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Package / Quotation Summary
+                            </Label>
+                            <div
+                              className="h-7 px-2 rounded-md border bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200/70 dark:border-emerald-900/50 flex items-center text-[11px] text-emerald-950 dark:text-emerald-200 truncate"
+                              title={
+                                srv.details.umrahPackageSummary ||
+                                buildServiceSummaryLines("Umrah", srv.details).join(
+                                  " · "
+                                )
+                              }
+                            >
+                              <span className="truncate font-medium">
+                                {srv.details.umrahPackageSummary ||
+                                  buildServiceSummaryLines("Umrah", srv.details).join(
+                                    " · "
+                                  )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Amount (Required Number) + Remove (x) */}
+                    <div className="w-32 shrink-0 space-y-0.5">
+                      <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                        Amount ({currency}) <span className="text-red-500">*</span>
+                      </Label>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          step="any"
+                          required
+                          data-service-amount="true"
+                          data-required="true"
+                          data-required-message="Please enter a service Amount"
+                          value={srv.amount}
+                          onChange={(e) =>
+                            handleServiceAmountChange(srv.id, e.target.value)
+                          }
+                          placeholder="0"
+                          className="h-7 text-xs font-mono font-semibold text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
+                        />
+                        {idx > 0 && (
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => handleRemoveService(srv.id, idx)}
+                            className="h-7 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0 cursor-pointer"
+                            aria-label={`Remove service ${idx + 1}`}
+                            title="Remove service"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* "+ Add Service" button below the list */}
+          <div className="shrink-0">
             <button
               type="button"
               data-add-row-btn="true"
-              onClick={handleAddItem}
-              className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+              onClick={handleAddService}
+              className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-teal-50 dark:hover:bg-teal-950/30 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" /> Add line
+              <Plus className="w-3.5 h-3.5" /> Add Service
             </button>
           </div>
         </div>
 
-        {/* 4. TOTALS & NOTES (TWO COLUMNS) */}
-        <div className="pt-3 border-t grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
-          {/* Right Column visually on desktop, ordered before Notes in keyboard flow */}
-          <div
-            data-nav-order="1"
-            className="md:col-span-5 md:order-2 bg-muted/30 rounded-lg border p-3.5 space-y-2.5"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+        {/* PASSENGERS SECTION: Shared by the whole quotation, 1 compact line + small scrollable area */}
+        <div
+          ref={paxListRef}
+          className="pt-1.5 border-t flex flex-col gap-1 shrink-0"
+          data-repeatable-group="passengers"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Passengers ({passengers.length})
+              </span>
+            </div>
+            <button
+              type="button"
+              data-add-passenger-btn="true"
+              onClick={handleAddPassenger}
+              className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-teal-50 dark:hover:bg-teal-950/30 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Passenger
+            </button>
+          </div>
+
+          {/* Small scrollable passenger area */}
+          <div className="max-h-[72px] overflow-y-auto space-y-1 pr-0.5">
+            {passengers.map((pax, idx) => (
+              <div
+                key={idx}
+                data-pax-row={idx}
+                className="flex flex-wrap sm:flex-nowrap items-center gap-1.5"
+              >
+                <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-center shrink-0">
+                  #{idx + 1}
+                </span>
+                <Input
+                  data-pax-field="name"
+                  value={pax.name}
+                  onChange={(e) =>
+                    handlePassengerChange(idx, "name", e.target.value)
+                  }
+                  placeholder="Name"
+                  className="h-7 text-xs flex-1 min-w-[140px] bg-background"
+                />
+                <Input
+                  data-pax-field="passport"
+                  maxLength={20}
+                  value={pax.passport || ""}
+                  onChange={(e) =>
+                    handlePassengerChange(
+                      idx,
+                      "passport",
+                      e.target.value.toUpperCase()
+                    )
+                  }
+                  placeholder="Passport #"
+                  className="h-7 text-xs w-28 uppercase font-mono bg-background"
+                />
+                <Select
+                  value={pax.type || "Adult"}
+                  onValueChange={(val) => handlePassengerChange(idx, "type", val)}
+                >
+                  <SelectTrigger className="h-7 text-[11px] w-20 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PASSENGER_TYPE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={pax.gender || "Male"}
+                  onValueChange={(val) =>
+                    handlePassengerChange(idx, "gender", val)
+                  }
+                >
+                  <SelectTrigger className="h-7 text-[11px] w-16 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GENDER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  min="1900-01-01"
+                  max={getTodayDateString()}
+                  title="Date of Birth"
+                  value={pax.dob || ""}
+                  onChange={(e) =>
+                    handlePassengerChange(idx, "dob", e.target.value)
+                  }
+                  data-pax-last-field="true"
+                  className="h-7 text-xs w-32 bg-background px-1.5"
+                />
+                {passengers.length > 1 && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => handleRemovePassenger(idx)}
+                    className="p-1 text-slate-400 hover:text-red-500 cursor-pointer shrink-0"
+                    aria-label={`Remove Passenger ${idx + 1}`}
+                    title="Remove passenger"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* BOTTOM ROW (ONE line): Notes/Terms (single-line textarea, expandable) on left | Currency + Grand Total on right */}
+        <div className="pt-1.5 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+          {/* Left: Notes/Terms (single-line textarea, expandable) */}
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 shrink-0">
+              Notes / Terms
+            </Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                markDirty();
+              }}
+              rows={1}
+              placeholder="Terms, inclusions, validity remarks, cancellation rules..."
+              className="h-8 min-h-[32px] max-h-20 py-1.5 px-2.5 text-xs resize-y bg-background focus-visible:ring-2 focus-visible:ring-teal-500 flex-1"
+            />
+          </div>
+
+          {/* Right: Currency + Grand Total */}
+          <div className="flex items-center justify-end gap-2.5 shrink-0 bg-muted/40 border rounded-lg px-2.5 py-1">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 Currency
               </Label>
               <Select
@@ -1064,7 +2177,7 @@ export default function QuotationFormPage() {
                   markDirty();
                 }}
               >
-                <SelectTrigger className="h-8 w-28 text-xs font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
+                <SelectTrigger className="h-7 w-20 text-xs font-mono bg-background focus-visible:ring-2 focus-visible:ring-teal-500">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1077,127 +2190,24 @@ export default function QuotationFormPage() {
               </Select>
             </div>
 
-            <div className="flex items-center justify-between gap-3 text-xs pt-1 border-t">
-              <span className="text-muted-foreground font-medium">Subtotal</span>
-              <span className="font-mono font-semibold text-foreground">
-                {currency} {subtotal.toLocaleString()}
+            <div className="h-4 w-px bg-border" />
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Grand Total
               </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Discount (−)
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                step="any"
-                value={discount || ""}
-                onChange={(e) => {
-                  setDiscount(Math.max(0, Number(e.target.value) || 0));
-                  markDirty();
-                }}
-                placeholder="0"
-                className="h-8 w-36 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Tax / Fee (+)
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                step="any"
-                value={tax || ""}
-                onChange={(e) => {
-                  setTax(Math.max(0, Number(e.target.value) || 0));
-                  markDirty();
-                }}
-                placeholder="0"
-                className="h-8 w-36 text-xs font-mono text-right bg-background focus-visible:ring-2 focus-visible:ring-teal-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-2 border-t">
-              <span className="text-sm font-bold text-foreground">Total</span>
-              <span className="text-base font-extrabold font-mono text-teal-700 dark:text-teal-400">
-                {currency} {total.toLocaleString()}
+              <span
+                data-grand-total="true"
+                className="text-sm sm:text-base font-extrabold font-mono text-teal-700 dark:text-teal-400"
+              >
+                {currency} {grandTotal.toLocaleString()}
               </span>
             </div>
           </div>
-
-          {/* Left Column: Notes / Terms */}
-          <div
-            data-nav-order="2"
-            className="md:col-span-7 md:order-1 space-y-1.5"
-          >
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Notes / Terms
-              </Label>
-              <span className="text-[11px] text-muted-foreground">
-                Enter = new line · Ctrl+Enter = Save
-              </span>
-            </div>
-            <Textarea
-              value={notes}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                markDirty();
-              }}
-              rows={6}
-              placeholder="Terms, inclusions, validity remarks, cancellation rules..."
-              className={cn(
-                "text-xs resize-y bg-background focus-visible:ring-2 focus-visible:ring-teal-500",
-                "min-h-[146px]"
-              )}
-            />
-          </div>
         </div>
+      </div>
 
-        {/* 5. ACTION BUTTONS */}
-        <div
-          data-nav-order="3"
-          className="pt-3 border-t flex flex-col-reverse md:flex-row flex-wrap md:items-center md:justify-end gap-2.5"
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-            className="w-full md:w-auto h-11 md:h-9 px-4 text-xs cursor-pointer"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-nav-skip="true"
-            onClick={() => handleSave(true)}
-            disabled={isSubmitting}
-            className="w-full md:w-auto h-11 md:h-9 px-4 text-xs font-semibold gap-1.5 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Save & PDF
-          </Button>
-          <Button
-            type="submit"
-            size="sm"
-            data-save-button="true"
-            disabled={isSubmitting}
-            className="w-full md:w-auto h-11 md:h-9 px-5 text-xs font-semibold bg-[#0B192C] hover:bg-[#1E3E62] text-white gap-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500"
-          >
-            <Save className="w-3.5 h-3.5" />
-            {isSubmitting ? "Saving..." : "Save Quotation"}
-          </Button>
-        </div>
-      </form>
-
-      {/* Quick Add Client Dialog (same shared modal as Booking Invoice) */}
+      {/* Quick Add Client Dialog */}
       <AddPartyDialog
         open={isAddClientOpen}
         onOpenChange={setIsAddClientOpen}
@@ -1205,6 +2215,6 @@ export default function QuotationFormPage() {
         lockType={true}
         onSaved={handleQuickClientSaved}
       />
-    </div>
+    </form>
   );
 }

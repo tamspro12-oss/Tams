@@ -44,6 +44,10 @@ export interface ServiceDetailsState {
   multicityLegs: FlightLeg[];
 
   // Umrah Package
+  umrahPackageId?: string;
+  umrahPackageName?: string;
+  umrahPackageSummary?: string;
+  umrahPackagePrice?: number;
   ziyaratIncluded: boolean;
   umrahDepartureCity: string;
   umrahArrivalCity: string;
@@ -62,9 +66,13 @@ export interface ServiceDetailsState {
   visaCountry: string;
   visaType: string;
   visaValidity: string;
+  visaProcessingTime?: string;
 
   // Insurance
+  insuranceDestination?: string;
   insurancePlan: string;
+  insuranceStartDate?: string;
+  insuranceEndDate?: string;
   insuranceDuration: string;
 
   // Hotel
@@ -75,6 +83,7 @@ export interface ServiceDetailsState {
   hotelRoomType: string;
 
   // Other
+  otherServiceName?: string;
   generalDescription: string;
 }
 
@@ -158,6 +167,10 @@ export function createDefaultServiceDetails(defaultDate?: string): ServiceDetail
     returnTime: "",
     multicityLegs: [createDefaultFlightLeg()],
 
+    umrahPackageId: "package1",
+    umrahPackageName: "Package 1 (Standard)",
+    umrahPackageSummary: "20 Nights · Standard Hotel Makkah (12N, Sharing) · Standard Hotel Madinah (8N, Sharing) · Route: Karachi → Jeddah · Shared Bus · Ziyarat Included",
+    umrahPackagePrice: 213900,
     ziyaratIncluded: true,
     umrahDepartureCity: "Karachi",
     umrahArrivalCity: "Jeddah",
@@ -167,24 +180,29 @@ export function createDefaultServiceDetails(defaultDate?: string): ServiceDetail
     umrahReturnDate: "",
     umrahReturnTime: "",
     umrahTransport: "Shared Bus",
-    makkahHotel: "",
-    makkahNights: "7",
-    madinahHotel: "",
-    madinahNights: "7",
+    makkahHotel: "Standard Hotel Makkah",
+    makkahNights: "12",
+    madinahHotel: "Standard Hotel Madinah",
+    madinahNights: "8",
 
     visaCountry: "Saudi Arabia",
     visaType: "Tourist / E-Visa",
     visaValidity: "30 Days",
+    visaProcessingTime: "3-5 Days",
 
+    insuranceDestination: "Worldwide",
     insurancePlan: "Standard Travel Care",
+    insuranceStartDate: today,
+    insuranceEndDate: "",
     insuranceDuration: "30",
 
     hotelName: "",
     hotelCity: "",
     hotelCheckIn: today,
     hotelCheckOut: "",
-    hotelRoomType: "Standard Double",
+    hotelRoomType: "1 Room / Double",
 
+    otherServiceName: "",
     generalDescription: "",
   };
 }
@@ -241,6 +259,7 @@ export function buildServiceTitle(
       return parts.length > 0 ? `${baseLabel} — ${parts.join(" · ")}` : baseLabel;
     }
     case "Umrah": {
+      const pkg = details.umrahPackageName?.trim() || "";
       const route =
         details.umrahDepartureCity && details.umrahArrivalCity
           ? `${details.umrahDepartureCity} → ${details.umrahArrivalCity}`
@@ -252,32 +271,133 @@ export function buildServiceTitle(
       if (details.madinahHotel || details.madinahNights) {
         nightsParts.push(`Madinah ${details.madinahNights || 0}N`);
       }
-      const extra = [route, nightsParts.join(" / ")].filter(Boolean).join(" · ");
+      const extra = [pkg, route, nightsParts.join(" / ")].filter(Boolean).join(" · ");
       return extra ? `${baseLabel} — ${extra}` : baseLabel;
     }
     case "Visa": {
-      const extra = [details.visaCountry, details.visaType].filter(Boolean).join(" · ");
-      return extra ? `${baseLabel} — ${extra}` : baseLabel;
-    }
-    case "Hotel": {
-      const extra = [details.hotelName, details.hotelCity].filter(Boolean).join(", ");
-      return extra ? `${baseLabel} — ${extra}` : baseLabel;
-    }
-    case "Insurance": {
       const extra = [
-        details.insurancePlan,
-        details.insuranceDuration ? `${details.insuranceDuration} Days` : "",
+        details.visaCountry,
+        details.visaType,
+        details.visaValidity,
+        details.visaProcessingTime,
       ]
         .filter(Boolean)
         .join(" · ");
       return extra ? `${baseLabel} — ${extra}` : baseLabel;
     }
+    case "Hotel": {
+      const extra = [details.hotelName, details.hotelCity, details.hotelRoomType]
+        .filter(Boolean)
+        .join(", ");
+      return extra ? `${baseLabel} — ${extra}` : baseLabel;
+    }
+    case "Insurance": {
+      const dateSpan =
+        details.insuranceStartDate && details.insuranceEndDate
+          ? `${details.insuranceStartDate} to ${details.insuranceEndDate}`
+          : details.insuranceDuration
+            ? `${details.insuranceDuration} Days`
+            : "";
+      const extra = [details.insuranceDestination, details.insurancePlan, dateSpan]
+        .filter(Boolean)
+        .join(" · ");
+      return extra ? `${baseLabel} — ${extra}` : baseLabel;
+    }
     case "Other": {
-      const trimmed = details.generalDescription.trim();
-      return trimmed ? `${baseLabel} — ${trimmed.slice(0, 60)}` : baseLabel;
+      const namePart = details.otherServiceName?.trim() || "";
+      const descPart = details.generalDescription.trim();
+      const combined = [namePart, descPart].filter(Boolean).join(" — ");
+      return combined ? `${baseLabel} — ${combined.slice(0, 70)}` : baseLabel;
     }
     default:
       return baseLabel;
+  }
+}
+
+/**
+ * Concise 1-line summary of key details for a single service row (used in collapsed service cards & PDF table).
+ */
+export function buildCompactServiceKeyDetail(
+  serviceType: ServiceType,
+  details: ServiceDetailsState
+): string {
+  switch (serviceType) {
+    case "Ticket": {
+      const sector =
+        details.origin || details.destination
+          ? `${details.origin || "—"} to ${details.destination || "—"}`
+          : "";
+      const dateTime = [details.flightDate, details.flightTime].filter(Boolean).join(" ");
+      return [details.tripType, dateTime, sector, details.airline]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    case "Visa": {
+      return [
+        details.visaCountry,
+        details.visaType,
+        details.visaValidity ? `Duration: ${details.visaValidity}` : "",
+        details.visaProcessingTime ? `Processing: ${details.visaProcessingTime}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    case "Hotel": {
+      const dates =
+        details.hotelCheckIn && details.hotelCheckOut
+          ? `${details.hotelCheckIn} → ${details.hotelCheckOut}`
+          : details.hotelCheckIn || details.hotelCheckOut || "";
+      return [
+        details.hotelCity,
+        details.hotelName,
+        dates,
+        details.hotelRoomType ? `Rooms: ${details.hotelRoomType}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    case "Insurance": {
+      const dates =
+        details.insuranceStartDate && details.insuranceEndDate
+          ? `${details.insuranceStartDate} → ${details.insuranceEndDate}`
+          : details.insuranceStartDate ||
+            details.insuranceEndDate ||
+            (details.insuranceDuration ? `${details.insuranceDuration} Days` : "");
+      return [details.insuranceDestination, details.insurancePlan, dates]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    case "Other": {
+      return [details.otherServiceName?.trim(), details.generalDescription?.trim()]
+        .filter(Boolean)
+        .join(" — ");
+    }
+    case "Umrah": {
+      if (details.umrahPackageSummary?.trim()) {
+        return [details.umrahPackageName?.trim(), details.umrahPackageSummary.trim()]
+          .filter(Boolean)
+          .join(" — ");
+      }
+      const route =
+        details.umrahDepartureCity || details.umrahArrivalCity
+          ? `${details.umrahDepartureCity || "—"} → ${details.umrahArrivalCity || "—"}`
+          : "";
+      const hotels = [
+        details.makkahHotel || details.makkahNights
+          ? `Makkah: ${details.makkahHotel || "Hotel"} (${details.makkahNights || 0}N)`
+          : "",
+        details.madinahHotel || details.madinahNights
+          ? `Madinah: ${details.madinahHotel || "Hotel"} (${details.madinahNights || 0}N)`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return [details.umrahPackageName?.trim(), hotels, route, details.umrahTransport]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    default:
+      return "";
   }
 }
 
@@ -320,34 +440,41 @@ export function buildServiceSummaryLines(
       });
     }
   } else if (serviceType === "Umrah") {
-    lines.push(
-      `Route: ${details.umrahDepartureCity || "—"} → ${details.umrahArrivalCity || "—"}${
-        details.umrahAirline ? ` | Airline: ${details.umrahAirline}` : ""
-      } | Transport: ${details.umrahTransport} | Ziyarat: ${details.ziyaratIncluded ? "Included" : "Excluded"}`
-    );
-    if (details.umrahFlightDate || details.umrahReturnDate) {
+    if (details.umrahPackageName?.trim()) {
+      lines.push(`Package: ${details.umrahPackageName.trim()}`);
+    }
+    if (details.umrahPackageSummary?.trim()) {
+      lines.push(details.umrahPackageSummary.trim());
+    } else {
       lines.push(
-        `Departure: ${details.umrahFlightDate || "—"}${details.umrahFlightTime ? ` ${details.umrahFlightTime}` : ""}${
-          details.umrahReturnDate
-            ? ` | Return: ${details.umrahReturnDate}${details.umrahReturnTime ? ` ${details.umrahReturnTime}` : ""}`
-            : ""
-        }`
+        `Route: ${details.umrahDepartureCity || "—"} → ${details.umrahArrivalCity || "—"}${
+          details.umrahAirline ? ` | Airline: ${details.umrahAirline}` : ""
+        } | Transport: ${details.umrahTransport} | Ziyarat: ${details.ziyaratIncluded ? "Included" : "Excluded"}`
+      );
+      if (details.umrahFlightDate || details.umrahReturnDate) {
+        lines.push(
+          `Departure: ${details.umrahFlightDate || "—"}${details.umrahFlightTime ? ` ${details.umrahFlightTime}` : ""}${
+            details.umrahReturnDate
+              ? ` | Return: ${details.umrahReturnDate}${details.umrahReturnTime ? ` ${details.umrahReturnTime}` : ""}`
+              : ""
+          }`
+        );
+      }
+      lines.push(
+        `Makkah: ${details.makkahHotel || "—"} (${details.makkahNights || "0"} Nights) | Madinah: ${
+          details.madinahHotel || "—"
+        } (${details.madinahNights || "0"} Nights)`
       );
     }
-    lines.push(
-      `Makkah: ${details.makkahHotel || "—"} (${details.makkahNights || "0"} Nights) | Madinah: ${
-        details.madinahHotel || "—"
-      } (${details.madinahNights || "0"} Nights)`
-    );
   } else if (serviceType === "Visa") {
     lines.push(
-      `Country: ${details.visaCountry || "—"} | Type: ${details.visaType || "—"} | Validity: ${
+      `Country: ${details.visaCountry || "—"} | Type: ${details.visaType || "—"} | Duration: ${
         details.visaValidity || "—"
-      }`
+      }${details.visaProcessingTime ? ` | Processing: ${details.visaProcessingTime}` : ""}`
     );
   } else if (serviceType === "Hotel") {
     lines.push(
-      `Hotel: ${details.hotelName || "—"}${details.hotelCity ? `, ${details.hotelCity}` : ""} | Room: ${
+      `City: ${details.hotelCity || "—"} | Hotel: ${details.hotelName || "—"} | Rooms: ${
         details.hotelRoomType || "—"
       }`
     );
@@ -357,11 +484,19 @@ export function buildServiceSummaryLines(
       );
     }
   } else if (serviceType === "Insurance") {
-    lines.push(
-      `Plan: ${details.insurancePlan || "—"} | Duration: ${details.insuranceDuration || "0"} Days`
-    );
-  } else if (serviceType === "Other" && details.generalDescription.trim()) {
-    lines.push(details.generalDescription.trim());
+    const destPart = details.insuranceDestination ? `Destination: ${details.insuranceDestination} | ` : "";
+    const datesPart =
+      details.insuranceStartDate || details.insuranceEndDate
+        ? ` | Start: ${details.insuranceStartDate || "—"} | End: ${details.insuranceEndDate || "—"}`
+        : details.insuranceDuration
+          ? ` | Duration: ${details.insuranceDuration} Days`
+          : "";
+    lines.push(`${destPart}Plan: ${details.insurancePlan || "—"}${datesPart}`);
+  } else if (serviceType === "Other") {
+    const parts = [details.otherServiceName?.trim(), details.generalDescription.trim()].filter(Boolean);
+    if (parts.length > 0) {
+      lines.push(parts.join(" — "));
+    }
   }
 
   const namedPassengers = (passengers || []).filter((p) => p.name.trim());
@@ -438,6 +573,13 @@ export function validateServiceAndPassengers(
       return "Hotel check-out date cannot be earlier than check-in date.";
     }
   } else if (serviceType === "Insurance") {
+    if (
+      details.insuranceEndDate &&
+      details.insuranceStartDate &&
+      details.insuranceEndDate < details.insuranceStartDate
+    ) {
+      return "Insurance end date cannot be earlier than start date.";
+    }
     const dur = details.insuranceDuration ? Number(details.insuranceDuration) : 0;
     if (Number.isNaN(dur) || dur < 0) {
       return "Insurance duration cannot be negative.";

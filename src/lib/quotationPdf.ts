@@ -2,7 +2,11 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import type { Quotation } from "@/hooks/useQuotations";
-import { getServiceDisplayLabel } from "@/lib/serviceDefinitions";
+import {
+  buildCompactServiceKeyDetail,
+  getServiceDisplayLabel,
+  normalizeServiceType,
+} from "@/lib/serviceDefinitions";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
@@ -139,9 +143,82 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
 
   let y = Math.max(31, leftBottomY + 4);
 
+  // Extract Service Rows (supports multi-service v3 source_ref.services and legacy single-service quotations)
+  const curr = q.currency || "PKR";
+  const effectiveTotal = Number(q.total ?? (q as any).total_amount ?? 0);
+  const defaultServiceLabel = getServiceDisplayLabel(q.service_type);
+  const serviceTitle = q.title?.trim() || defaultServiceLabel;
+
+  interface PdfServiceRow {
+    typeLabel: string;
+    details: string;
+    amount: number;
+  }
+
+  const savedRef = q.source_ref && typeof q.source_ref === "object" ? q.source_ref : null;
+  let serviceRows: PdfServiceRow[] = [];
+
+  if (Array.isArray(savedRef?.services) && savedRef.services.length > 0) {
+    serviceRows = savedRef.services.map((srv: any) => {
+      const sType = normalizeServiceType(srv.service_type || srv.serviceType || q.service_type);
+      const typeLabel = getServiceDisplayLabel(sType);
+      const details =
+        (typeof srv.summary === "string" && srv.summary.trim()) ||
+        (srv.serviceDetails
+          ? buildCompactServiceKeyDetail(sType, srv.serviceDetails)
+          : "") ||
+        (typeof srv.title === "string" && srv.title.trim()) ||
+        typeLabel;
+      return {
+        typeLabel,
+        details,
+        amount: Number(srv.amount ?? 0),
+      };
+    });
+  } else if (Array.isArray(q.items) && q.items.length > 0) {
+    serviceRows = q.items.map((it: any) => {
+      const rowType = it.service_type ? normalizeServiceType(it.service_type) : q.service_type;
+      const typeLabel = it.type_label || getServiceDisplayLabel(rowType);
+      const qtyVal = Number(it.qty ?? it.quantity ?? 1);
+      const unitVal = Number(it.unit_price ?? it.unitPrice ?? 0);
+      const amountVal = Number(it.amount ?? it.total ?? qtyVal * unitVal);
+      const fallbackDetail =
+        savedRef?.serviceDetails
+          ? buildCompactServiceKeyDetail(normalizeServiceType(rowType), savedRef.serviceDetails)
+          : "";
+      const rawDesc =
+        (typeof it.details_summary === "string" && it.details_summary.trim()) ||
+        (typeof it.description === "string" && it.description.trim()) ||
+        fallbackDetail ||
+        q.description?.trim() ||
+        serviceTitle;
+      const qtySuffix = qtyVal > 1 ? ` (Qty: ${qtyVal} × ${curr} ${unitVal.toLocaleString()})` : "";
+      return {
+        typeLabel,
+        details: `${rawDesc}${qtySuffix}`,
+        amount: amountVal,
+      };
+    });
+  } else {
+    const fallbackDetail = savedRef?.serviceDetails
+      ? buildCompactServiceKeyDetail(normalizeServiceType(q.service_type), savedRef.serviceDetails)
+      : "";
+    serviceRows = [
+      {
+        typeLabel: defaultServiceLabel,
+        details: fallbackDetail || q.description?.trim() || serviceTitle,
+        amount: effectiveTotal,
+      },
+    ];
+  }
+
+  const distinctServiceLabels = Array.from(new Set(serviceRows.map((r) => r.typeLabel)));
+  const infoBoxServiceLabel =
+    distinctServiceLabels.length > 1
+      ? `${serviceRows.length} Services (${distinctServiceLabels.join(", ")})`
+      : distinctServiceLabels[0] || defaultServiceLabel;
+
   // Colored Rounded Info Box (consistent with Booking Confirmation)
-  const serviceLabel = getServiceDisplayLabel(q.service_type);
-  const serviceTitle = q.title?.trim() || serviceLabel;
   const quoteDateStr = formatQuoteDate(q.quotation_date) || format(new Date(), "dd MMM yyyy");
   const validUntilStr = formatQuoteDate(q.valid_until);
 
@@ -156,8 +233,8 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
       ? [{ label: "VALID UNTIL", value: validUntilStr, width: 36 }]
       : []),
     {
-      label: "SERVICE TYPE",
-      value: serviceLabel,
+      label: "SERVICES",
+      value: infoBoxServiceLabel,
       width: contentW - (validUntilStr ? 136 : 124),
     },
   ];
@@ -185,49 +262,42 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
     colX += col.width;
   });
 
-  y += infoBoxH + 8;
+  y += infoBoxH + 7;
 
-  // Service Summary Card (Title & Description if present)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.setTextColor(...TEXT_DARK);
-  const titleLines = doc.splitTextToSize(serviceTitle, contentW);
-  doc.text(titleLines, marginX, y);
-  y += titleLines.length * 4.8 + 1;
-
-  if (q.description?.trim()) {
+  // Optional Passengers Strip (if shared passengers are present on the quotation)
+  const namedPassengers = Array.isArray(savedRef?.passengers)
+    ? savedRef.passengers.filter((p: any) => p?.name && String(p.name).trim())
+    : [];
+  if (namedPassengers.length > 0) {
+    const paxLine = namedPassengers
+      .map(
+        (p: any) =>
+          `${String(p.name).trim()}${p.passport ? ` (${p.passport})` : ""}${
+            p.type ? ` [${p.type}]` : ""
+          }`
+      )
+      .join(", ");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text(`Passengers (${namedPassengers.length}):`, marginX, y);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.8);
     doc.setTextColor(...TEXT_BODY);
-    const descLines = doc.splitTextToSize(q.description.trim(), contentW);
-    doc.text(descLines, marginX, y);
-    y += descLines.length * 4.4 + 3;
-  } else {
-    y += 2;
+    const paxLines = doc.splitTextToSize(paxLine, contentW - 30);
+    doc.text(paxLines, marginX + 28, y);
+    y += paxLines.length * 4.2 + 3;
   }
 
-  // Items Table
-  const curr = q.currency || "PKR";
-  const effectiveTotal = Number(q.total ?? (q as any).total_amount ?? 0);
-  const items = q.items?.length
-    ? q.items
-    : [{ description: serviceTitle, qty: 1, unit_price: effectiveTotal, amount: effectiveTotal }];
-
+  // Services Table: each service as its own row (Service Type, Details, Amount)
   autoTable(doc, {
     startY: y,
-    head: [["#", "Description", "Qty", `Unit (${curr})`, `Amount (${curr})`]],
-    body: items.map((it, i) => {
-      const qtyVal = Number(it.qty ?? (it as any).quantity ?? 1);
-      const unitVal = Number(it.unit_price ?? (it as any).unitPrice ?? 0);
-      const amountVal = Number(it.amount ?? (it as any).total ?? qtyVal * unitVal);
-      return [
-        String(i + 1),
-        it.description || serviceTitle,
-        String(qtyVal),
-        unitVal.toLocaleString(),
-        amountVal.toLocaleString(),
-      ];
-    }),
+    head: [["#", "Service Type", "Details", `Amount (${curr})`]],
+    body: serviceRows.map((row, i) => [
+      String(i + 1),
+      row.typeLabel,
+      row.details,
+      row.amount.toLocaleString(),
+    ]),
     showHead: "everyPage",
     theme: "grid",
     styles: {
@@ -245,9 +315,9 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
     alternateRowStyles: { fillColor: ROW_ALT },
     columnStyles: {
       0: { halign: "center", cellWidth: 11 },
-      2: { halign: "center", cellWidth: 18 },
-      3: { halign: "right", cellWidth: 34 },
-      4: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      1: { cellWidth: 36, fontStyle: "bold" },
+      2: { cellWidth: contentW - 11 - 36 - 38 },
+      3: { halign: "right", cellWidth: 38, fontStyle: "bold" },
     },
     margin: { left: marginX, right: marginX, top: 14, bottom: 26 },
     didDrawPage: (hookData) => {
@@ -257,17 +327,20 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
     },
   });
 
-  let endY = (doc as any).lastAutoTable.finalY + 8;
+  let endY = (doc as any).lastAutoTable.finalY + 6;
 
-  // Totals Card (Right aligned)
-  const totalsCardW = 76;
+  // Grand Total Card (Right aligned; includes legacy discount/tax only if present on old quotations)
+  const totalsCardW = 82;
   const totalsX = pageWidth - marginX - totalsCardW;
   const valueX = pageWidth - marginX - 4;
   const labelX = totalsX + 4;
   const hasDiscount = Number(q.discount) > 0;
   const hasTax = Number(q.tax) > 0;
-  const totalsRowsCount = 1 + (hasDiscount ? 1 : 0) + (hasTax ? 1 : 0);
-  const totalsBoxH = totalsRowsCount * 6.5 + 15;
+  const hasLegacyAdjustments = hasDiscount || hasTax;
+  const totalsRowsCount = hasLegacyAdjustments
+    ? 1 + (hasDiscount ? 1 : 0) + (hasTax ? 1 : 0)
+    : 0;
+  const totalsBoxH = hasLegacyAdjustments ? totalsRowsCount * 6.5 + 15 : 12;
 
   if (endY + totalsBoxH > pageHeight - 26) {
     doc.addPage();
@@ -275,42 +348,52 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
     endY = 16;
   }
 
-  doc.setFillColor(...ROW_ALT);
-  doc.setDrawColor(...BORDER_LIGHT);
-  doc.setLineWidth(0.35);
-  doc.roundedRect(totalsX, endY, totalsCardW, totalsBoxH, 2, 2, "FD");
+  if (hasLegacyAdjustments) {
+    doc.setFillColor(...ROW_ALT);
+    doc.setDrawColor(...BORDER_LIGHT);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(totalsX, endY, totalsCardW, totalsBoxH, 2, 2, "FD");
 
-  let rowY = endY + 6.5;
-  const drawTotalRow = (label: string, value: string) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...TEXT_BODY);
-    doc.text(label, labelX, rowY);
-    doc.setFont("helvetica", "bold");
-    doc.text(value, valueX, rowY, { align: "right" });
-    rowY += 6.5;
-  };
+    let rowY = endY + 6.5;
+    const drawTotalRow = (label: string, value: string) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...TEXT_BODY);
+      doc.text(label, labelX, rowY);
+      doc.setFont("helvetica", "bold");
+      doc.text(value, valueX, rowY, { align: "right" });
+      rowY += 6.5;
+    };
 
-  drawTotalRow("Subtotal", `${curr} ${Number(q.subtotal || 0).toLocaleString()}`);
-  if (hasDiscount) {
-    drawTotalRow("Discount", `- ${curr} ${Number(q.discount).toLocaleString()}`);
+    drawTotalRow("Subtotal", `${curr} ${Number(q.subtotal || 0).toLocaleString()}`);
+    if (hasDiscount) {
+      drawTotalRow("Discount", `- ${curr} ${Number(q.discount).toLocaleString()}`);
+    }
+    if (hasTax) {
+      drawTotalRow("Tax", `${curr} ${Number(q.tax).toLocaleString()}`);
+    }
   }
-  if (hasTax) {
-    drawTotalRow("Tax", `${curr} ${Number(q.tax).toLocaleString()}`);
-  }
 
-  // Highlighted Grand Total bar inside Totals Card
-  const totalBarY = endY + totalsBoxH - 11;
+  // Highlighted Grand Total bar
+  const totalBarY = hasLegacyAdjustments ? endY + totalsBoxH - 11 : endY;
+  const totalBarH = hasLegacyAdjustments ? 11 : 12;
   doc.setFillColor(...primaryRgb);
-  doc.roundedRect(totalsX, totalBarY, totalsCardW, 11, 2, 2, "F");
-  doc.rect(totalsX, totalBarY, totalsCardW, 3, "F");
+  doc.roundedRect(totalsX, totalBarY, totalsCardW, totalBarH, 2, 2, "F");
+  if (hasLegacyAdjustments) {
+    doc.rect(totalsX, totalBarY, totalsCardW, 3, "F");
+  }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
+  doc.setFontSize(10.2);
   doc.setTextColor(...contrastOnPrimary);
-  doc.text("TOTAL", labelX, totalBarY + 7.4);
-  doc.text(`${curr} ${effectiveTotal.toLocaleString()}`, valueX, totalBarY + 7.4, {
-    align: "right",
-  });
+  doc.text("GRAND TOTAL", labelX, totalBarY + (hasLegacyAdjustments ? 7.4 : 7.8));
+  doc.text(
+    `${curr} ${effectiveTotal.toLocaleString()}`,
+    valueX,
+    totalBarY + (hasLegacyAdjustments ? 7.4 : 7.8),
+    {
+      align: "right",
+    }
+  );
 
   endY += totalsBoxH + 8;
 

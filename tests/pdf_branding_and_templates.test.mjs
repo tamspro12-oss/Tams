@@ -758,6 +758,50 @@ test("Quotation PDF applies agency branding and hides Terms & Conditions unless 
   assert.match(textWithTerms, /Skyline Wings/);
   assert.match(textWithTerms, /TERMS & CONDITIONS/);
   assert.match(textWithTerms, /50% non-refundable advance upon booking\./);
+
+  // Multi-service quotation (Umrah Package + Air Ticket + Visa Services)
+  const multiServiceQuote = {
+    ...baseQuotation,
+    quotation_number: "QT-2026-010",
+    total: 525000,
+    subtotal: 525000,
+    source_ref: {
+      version: 3,
+      services: [
+        {
+          id: "s1",
+          service_type: "Umrah",
+          summary: "Package 1 (Standard) — 20 Nights · Makkah 12N · Madinah 8N",
+          amount: 350000,
+        },
+        {
+          id: "s2",
+          service_type: "Ticket",
+          summary: "One Way · 2026-12-01 · KHI to DXB · Emirates",
+          amount: 120000,
+        },
+        {
+          id: "s3",
+          service_type: "Visa",
+          summary: "UAE · Tourist · Duration: 30 Days · Processing: 3 Days",
+          amount: 55000,
+        },
+      ],
+      passengers: [
+        { name: "Imran Malik", passport: "PK998877", type: "Adult", gender: "Male", dob: "1988-05-12" },
+      ],
+    },
+  };
+  const docMulti = buildQuotationPdf(multiServiceQuote, { branding: AGENCY_A_BRANDING });
+  const textMulti = extractPdfText(docMulti);
+  assert.match(textMulti, /Service Type/);
+  assert.match(textMulti, /Details/);
+  assert.match(textMulti, /Umrah Package/);
+  assert.match(textMulti, /Air Ticket/);
+  assert.match(textMulti, /Visa Services/);
+  assert.match(textMulti, /KHI to DXB/);
+  assert.match(textMulti, /GRAND TOTAL/);
+  assert.match(textMulti, /525,000/);
 });
 
 test("Voucher and Financial Report PDFs use agency branding with zero TAMS Pro leaks", async () => {
