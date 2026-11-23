@@ -1,5 +1,5 @@
 import type { jsPDF } from "jspdf";
-import { getContrastTextRgb, tintRgb, type RgbTuple } from "@/lib/pdf/agencyBrandingCore";
+import type { RgbTuple } from "@/lib/pdf/agencyBrandingCore";
 
 export interface AirlineBrand {
   code: string;
@@ -326,9 +326,23 @@ export function resolveAirlineBrand(
 }
 
 /**
- * Draws the right-side airline emblem on Air Ticket headers.
- * Uses AIRLINE_LOGO_MAP for crisp vector branding, falls back to clean airline
- * name text when unknown, and safely renders nothing if missing.
+ * Returns ONLY the airline name text for headers — never draws an airline logo box or badge.
+ */
+export function resolveAirlineDisplayName(
+  airlineName?: string | null,
+  flightNo?: string | null
+): string {
+  const trimmedName = (airlineName || "").trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+  const byFlight = resolveAirlineBrand(null, flightNo);
+  return byFlight ? byFlight.displayName : "";
+}
+
+/**
+ * Draws ONLY clean right-aligned bold airline name text on Air Ticket headers.
+ * Never draws any airline logo card, badge, or emblem. Safely renders nothing if missing.
  */
 export function drawAirlineHeaderLogo(
   doc: jsPDF,
@@ -337,67 +351,17 @@ export function drawAirlineHeaderLogo(
   rightX = 196,
   topY = 6,
   maxW = 48,
-  maxH = 17
+  _maxH = 17
 ): void {
-  const trimmedName = (airlineName || "").trim();
-  const brand = resolveAirlineBrand(trimmedName, flightNo);
-
-  if (!brand && !trimmedName) {
+  const displayName = resolveAirlineDisplayName(airlineName, flightNo);
+  if (!displayName) {
     return;
   }
 
-  if (!brand) {
-    // Unknown airline fallback: clean right-aligned text block (never breaks)
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    const lines = doc.splitTextToSize(trimmedName.toUpperCase(), maxW).slice(0, 2);
-    const startY = topY + (lines.length > 1 ? 6 : 9);
-    doc.text(lines, rightX, startY, { align: "right" });
-    return;
-  }
-
-  const boxX = rightX - maxW;
-  const softBg = tintRgb(brand.primaryRgb, 0.92);
-  const badgeW = 13;
-  const badgeH = 11;
-  const badgeX = rightX - badgeW;
-  const badgeY = topY + (maxH - badgeH) / 2;
-
-  // Subtle card frame
-  doc.setFillColor(softBg[0], softBg[1], softBg[2]);
-  doc.setDrawColor(brand.primaryRgb[0], brand.primaryRgb[1], brand.primaryRgb[2]);
-  doc.setLineWidth(0.35);
-  doc.roundedRect(boxX, topY, maxW, maxH, 2, 2, "FD");
-
-  // Tail-fin accent stripe along top-left
-  doc.setFillColor(brand.accentRgb[0], brand.accentRgb[1], brand.accentRgb[2]);
-  doc.roundedRect(boxX, topY, 2.2, maxH, 1, 1, "F");
-
-  // IATA code badge pill on the right edge
-  doc.setFillColor(brand.primaryRgb[0], brand.primaryRgb[1], brand.primaryRgb[2]);
-  doc.roundedRect(badgeX - 2, badgeY, badgeW, badgeH, 1.8, 1.8, "F");
-
-  const badgeTextRgb = getContrastTextRgb(brand.primaryRgb);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(badgeTextRgb[0], badgeTextRgb[1], badgeTextRgb[2]);
-  doc.text(brand.code, badgeX - 2 + badgeW / 2, badgeY + 7.2, { align: "center" });
-
-  // Airline short mark + optional subtitle inside remaining space
-  const textRightX = badgeX - 4;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(brand.shortMark.length > 8 ? 8.5 : 10.5);
-  doc.setTextColor(brand.primaryRgb[0], brand.primaryRgb[1], brand.primaryRgb[2]);
-
-  if (brand.subtitle) {
-    doc.text(brand.shortMark, textRightX, topY + 7.6, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.4);
-    doc.setTextColor(71, 85, 105);
-    const subLines = doc.splitTextToSize(brand.subtitle, maxW - badgeW - 8).slice(0, 1);
-    doc.text(subLines, textRightX, topY + 12.6, { align: "right" });
-  } else {
-    doc.text(brand.shortMark, textRightX, topY + 10.2, { align: "right" });
-  }
+  doc.setFontSize(10.5);
+  doc.setTextColor(30, 41, 59);
+  const lines = doc.splitTextToSize(displayName.toUpperCase(), maxW).slice(0, 2);
+  const startY = topY + (lines.length > 1 ? 5.5 : 8.5);
+  doc.text(lines, rightX, startY, { align: "right" });
 }

@@ -38,7 +38,9 @@ function drawExportHeader(
 
   let leftX = 14;
   if (branding.logo) {
-    const res = drawBrandLogo(doc, branding.logo, 14, 4, 16, 16, "left");
+    const res = drawBrandLogo(doc, branding.logo, 14, 4, 16, 16, "left", {
+      backing: "white-pill",
+    });
     if (res.rendered) leftX = 14 + res.width + 3;
   }
 

@@ -806,22 +806,23 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
     doc.text(`PNR: ${effectivePnr.toUpperCase()}`, marginX, titleLines.length > 1 ? 21 : 17.5);
   }
 
-  // Center Top: Logo (if uploaded) + Bold Agency Name
+  // Center Top: Bold Agency Name FIRST, with Uploaded Agency Logo JUST BELOW IT
   const centerX = pageWidth / 2;
-  let agencyNameY = 14;
-  if (branding.logo) {
-    const logoResult = drawBrandLogo(doc, branding.logo, centerX - 16, 4.5, 32, 11, "center");
-    if (logoResult.rendered) {
-      agencyNameY = 20.5;
-    }
-  }
+  const agencyNameY = 10.5;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.5);
+  doc.setFontSize(12);
   doc.setTextColor(...TEXT_DARK);
-  const agencyLines = doc.splitTextToSize(branding.agencyName.toUpperCase(), 68).slice(0, 2);
+  const agencyLines = doc
+    .splitTextToSize(branding.agencyName.toUpperCase(), 68)
+    .slice(0, 2);
   doc.text(agencyLines, centerX, agencyNameY, { align: "center" });
 
-  // Right Top: Airline Logo (Tickets only)
+  const logoTopY = agencyNameY + (agencyLines.length - 1) * 4.6 + 2.2;
+  const logoResult = branding.logo
+    ? drawBrandLogo(doc, branding.logo, centerX - 22, logoTopY, 44, 15, "center")
+    : { rendered: false, width: 0, height: 0 };
+
+  // Right Top: Airline Name text only (Tickets only — no airline logo box)
   if (normService === "Ticket") {
     const primaryAirline = cleanStr(
       legs[0]?.airline || data.moreDetails?.airline
@@ -835,7 +836,10 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
   // -------------------------------------------------------------------------
   // INFO BOX (Colored Rounded Bar — ONLY 4 allowed fields)
   // -------------------------------------------------------------------------
-  let y = Math.max(29, agencyNameY + agencyLines.length * 4.5 + 3);
+  const headerBottomY = logoResult.rendered
+    ? logoTopY + logoResult.height + 3.5
+    : agencyNameY + (agencyLines.length - 1) * 4.6 + 5;
+  let y = Math.max(29, headerBottomY);
   const boxH = 16.5;
 
   doc.setFillColor(...primaryRgb);
@@ -1186,7 +1190,9 @@ export function buildBookingInvoicePdfDoc(data: BookingPdfData): jsPDF {
 
   let leftTextX = 14;
   if (branding.logo) {
-    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left");
+    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left", {
+      backing: "white-pill",
+    });
     if (logoRes.rendered) {
       leftTextX = 14 + logoRes.width + 4;
     }

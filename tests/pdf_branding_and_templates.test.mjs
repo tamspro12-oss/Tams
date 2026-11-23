@@ -1,12 +1,14 @@
 import "./ts-alias-register.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
+import zlib from "node:zlib";
 
 const {
   loadAgencyBrandingCore,
   resolveAgencyBrandingFromRecords,
+  scopedTemplateFallbackKey,
 } = await import("../src/lib/pdf/agencyBrandingCore.ts");
-const { resolveAirlineBrand, AIRLINE_LOGO_MAP } = await import(
+const { resolveAirlineBrand, resolveAirlineDisplayName, AIRLINE_LOGO_MAP } = await import(
   "../src/lib/pdf/airlineLogos.ts"
 );
 const {
@@ -71,10 +73,63 @@ function assertNoTamsProBranding(pdfText, label) {
   );
 }
 
+function makeTestLogoPng(w = 32, h = 12) {
+  const crcTable = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = (buf) => {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i += 1) {
+      c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const typeBuf = Buffer.from(type, "ascii");
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32BE(data.length, 0);
+    const crcBuf = Buffer.alloc(4);
+    crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+    return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const rowSize = 1 + w * 3;
+  const raw = Buffer.alloc(rowSize * h);
+  for (let y = 0; y < h; y += 1) {
+    const rowOff = y * rowSize;
+    raw[rowOff] = 0;
+    for (let x = 0; x < w; x += 1) {
+      const px = rowOff + 1 + x * 3;
+      raw[px] = 15;
+      raw[px + 1] = 118;
+      raw[px + 2] = 110;
+    }
+  }
+  const idat = zlib.deflateSync(raw);
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", idat),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
+
+const TEST_LOGO_PNG = makeTestLogoPng();
+
 const AGENCY_A_BRANDING = {
   agencyId: "11111111-1111-1111-1111-111111111111",
   agencyName: "Al-Noor Travels",
-  logo: null,
+  logo: TEST_LOGO_PNG,
   email: "sales@alnoor.pk",
   phone: "+92 300 1112233",
   address: "Suite 4, Blue Area, Islamabad",
@@ -214,9 +269,55 @@ test("Agency branding resolves strictly per agency_id and never leaks or falls b
   const empty = resolveAgencyBrandingFromRecords({});
   assert.equal(empty.agencyName, "Travel Agency");
   assert.equal(/tams\s*pro/i.test(empty.agencyName), false);
+
+  // Scoped fallback storage resolves strictly by agencyId (never leaks between agencies)
+  const scopedStore = new Map([
+    [
+      scopedTemplateFallbackKey("agency-z", "invoice_template"),
+      JSON.stringify({
+        agencyName: "Offline Synced Agency Z",
+        logo: TEST_LOGO_PNG,
+        email: "z@agency.pk",
+        themeColor: "#0f766e",
+      }),
+    ],
+    [
+      "invoice_template",
+      JSON.stringify({
+        agencyName: "Unscoped Polluted Agency",
+        email: "leak@bad.example",
+      }),
+    ],
+  ]);
+  const emptyDbClient = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return this; },
+        in() { return Promise.resolve({ data: [], error: null }); },
+        maybeSingle() { return Promise.resolve({ data: null, error: null }); },
+      };
+    },
+  };
+  const scopedLoaded = await loadAgencyBrandingCore({
+    client: emptyDbClient,
+    agencyId: "agency-z",
+    localFallbackStorage: { getItem: (k) => scopedStore.get(k) ?? null },
+  });
+  assert.equal(scopedLoaded.agencyName, "Offline Synced Agency Z");
+  assert.equal(scopedLoaded.logo, TEST_LOGO_PNG);
+  const isolatedOther = await loadAgencyBrandingCore({
+    client: emptyDbClient,
+    agencyId: "agency-y",
+    signupAgencyName: "Agency Y Signup",
+    localFallbackStorage: { getItem: (k) => scopedStore.get(k) ?? null },
+  });
+  assert.equal(isolatedOther.agencyName, "Agency Y Signup");
+  assert.equal(isolatedOther.logo, null);
+  assert.equal(isolatedOther.email, "");
 });
 
-test("Airline logo map resolves Pakistani, Gulf, and international carriers safely", () => {
+test("Airline logo map and display-name helper resolve Pakistani, Gulf, and international carriers safely", () => {
   assert.ok(AIRLINE_LOGO_MAP.length >= 25);
   assert.equal(resolveAirlineBrand("PIA")?.code, "PK");
   assert.equal(resolveAirlineBrand(null, "PK-304")?.code, "PK");
@@ -226,6 +327,11 @@ test("Airline logo map resolves Pakistani, Gulf, and international carriers safe
   assert.equal(resolveAirlineBrand("Fly Jinnah")?.code, "9P");
   assert.equal(resolveAirlineBrand("Pegasus Airlines"), null);
   assert.equal(resolveAirlineBrand(""), null);
+
+  assert.equal(resolveAirlineDisplayName("PIA", "PK-304"), "PIA");
+  assert.equal(resolveAirlineDisplayName("", "PK-304"), "PIA");
+  assert.equal(resolveAirlineDisplayName("Caspian Regional Air", "CR-101"), "Caspian Regional Air");
+  assert.equal(resolveAirlineDisplayName("", ""), "");
 });
 
 test("Invoice PDF removes Payment Terms & Conditions completely and uses agency branding", async () => {
@@ -250,6 +356,7 @@ test("Invoice PDF removes Payment Terms & Conditions completely and uses agency 
   assert.match(textA, /Suite 4, Blue Area, Islamabad/);
   assert.match(textA, /INV-2026-0042/);
   assert.match(textA, /Balance Due:/);
+  assert.match(docA.output(), /\/Subtype \/Image/);
   assert.equal(/Payment Terms/i.test(textA), false);
   assert.equal(/Terms\s*&\s*Conditions/i.test(textA), false);
   assert.equal(/airline\/supplier cancellation/i.test(textA), false);
@@ -338,6 +445,11 @@ test("Booking Confirmation PDF (Return, Group 6 pax & Group 25 pax) matches PIA 
   assert.match(textA, /Thank you for choosing Al-Noor Travels\. Have a safe journey!/);
   assert.match(textA, /sales@alnoor\.pk/);
   assert.equal(/Skyline Wings/i.test(textA), false);
+  // Airline name text ONLY on header — no airline logo badge subtitle ("Pakistan International")
+  assert.match(textA, /\nPIA\n/);
+  assert.equal(/Pakistan International/i.test(textA), false);
+  // Uploaded agency logo PNG is embedded inside the PDF binary
+  assert.match(docA.output(), /\/Subtype \/Image/);
 
   // 25 passengers -> auto page-break with repeated header
   const pax25 = Array.from({ length: 25 }, (_, i) => ({
@@ -368,6 +480,8 @@ test("Booking Confirmation PDF (Return, Group 6 pax & Group 25 pax) matches PIA 
   const groupText = extractPdfText(docGroup25);
   assertNoTamsProBranding(groupText, "Group 25 Booking Confirmation");
   assert.match(groupText, /SKYLINE WINGS/);
+  assert.match(groupText, /\nSAUDIA\n/);
+  assert.equal(/Saudi Arabian Airlines/i.test(groupText), false);
   assert.match(groupText, /Thank you for choosing Skyline Wings\. Have a safe journey!/);
   assert.equal(/Al-Noor Travels/i.test(groupText), false);
   // Empty columns Meal & Baggage hidden when no passenger has them
@@ -602,6 +716,7 @@ test("Quotation PDF applies agency branding and hides Terms & Conditions unless 
   assertNoTamsProBranding(textNoTerms, "Quotation without terms");
   assert.match(textNoTerms, /Al-Noor Travels/);
   assert.match(textNoTerms, /sales@alnoor\.pk/);
+  assert.match(docNoTerms.output(), /\/Subtype \/Image/);
   assert.equal(/Terms\s*&\s*Conditions/i.test(textNoTerms), false);
 
   const docWithTerms = buildQuotationPdf(
@@ -629,6 +744,7 @@ test("Voucher and Financial Report PDFs use agency branding with zero TAMS Pro l
   const crvText = extractPdfText(crvDoc);
   assertNoTamsProBranding(crvText, "Payment Voucher PDF");
   assert.match(crvText, /Al-Noor Travels/);
+  assert.match(crvDoc.output(), /\/Subtype \/Image/);
 
   const stmtDoc = generateAccountStatementPdf({
     agency: brandingToReportAgencyInfo(AGENCY_B_BRANDING),
@@ -721,6 +837,7 @@ test("Voucher and Financial Report PDFs use agency branding with zero TAMS Pro l
   assertNoTamsProBranding(umrahVoucherText, "Umrah Service Voucher PDF");
   assert.match(umrahVoucherText, /Al-Noor Travels/);
   assert.match(umrahVoucherText, /Swissotel Makkah/);
+  assert.match(umrahVoucherDoc.output(), /\/Subtype \/Image/);
   assert.equal(/TERMS\s*&\s*CONDITIONS/i.test(umrahVoucherText), false);
 
   // Legacy bookingPdfGenerator path delegates cleanly to PIA-style booking PDF
@@ -748,5 +865,7 @@ test("Voucher and Financial Report PDFs use agency branding with zero TAMS Pro l
   assert.match(legacyText, /SKYLINE WINGS/);
   assert.match(legacyText, /ELECTRONIC TICKET/);
   assert.match(legacyText, /LEG778/);
+  assert.match(legacyText, /\nPIA\n/);
+  assert.equal(/Pakistan International/i.test(legacyText), false);
   assert.equal(/Terms\s*&\s*Conditions/i.test(legacyText), false);
 });

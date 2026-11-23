@@ -12,6 +12,7 @@ import {
   saveAgencyTemplateCore,
 } from "@/lib/agencyTemplatesCore";
 import { invalidateAgencyBrandingCache } from "@/lib/pdf/agencyBranding";
+import { scopedTemplateFallbackKey } from "@/lib/pdf/agencyBrandingCore";
 
 export type { AgencyTemplateKey, LoadTemplateResult, SaveTemplateResult };
 
@@ -46,10 +47,22 @@ export async function saveAgencyTemplate<T = unknown>(
 ): Promise<SaveTemplateResult> {
   const agencyId =
     explicitAgencyId !== undefined ? explicitAgencyId : await getAuthenticatedAgencyId();
+  const storage = getBrowserStorage();
+  if (
+    storage &&
+    agencyId &&
+    (key === "invoice_template" || key === "booking_template")
+  ) {
+    try {
+      storage.setItem(scopedTemplateFallbackKey(agencyId, key), JSON.stringify(value));
+    } catch (err) {
+      console.warn("[AgencyTemplates] Failed to store scoped template backup:", err);
+    }
+  }
   const result = await saveAgencyTemplateCore<T>(key, value, {
     client: supabase as any,
     agencyId,
-    storage: getBrowserStorage(),
+    storage,
   });
   if (result.ok && (key === "invoice_template" || key === "booking_template")) {
     invalidateAgencyBrandingCache();

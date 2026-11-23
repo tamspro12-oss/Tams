@@ -95,7 +95,7 @@ export default function QuotationFormPage() {
 
   const { quotations = [], addQuotation, updateQuotation } = useQuotations();
   const { parties = [] } = useParties();
-  const { branding } = useAgencyBranding();
+  const { getBrandingAsync } = useAgencyBranding();
 
   const formContainerRef = useRef<HTMLFormElement>(null);
   const itemsSectionRef = useRef<HTMLDivElement>(null);
@@ -523,9 +523,10 @@ export default function QuotationFormPage() {
         setIsDirty(false);
         navigate("/app/leads-quotes?tab=quotations");
 
-        runBackgroundTask("QuotationFormPage.pdfAndRefresh", () => {
+        runBackgroundTask("QuotationFormPage.pdfAndRefresh", async () => {
           if (andDownloadPdf) {
             try {
+              const latestBranding = await getBrandingAsync();
               const quoteForPdf: Quotation = {
                 id: savedQuote?.id || id || "temp",
                 agency_id: savedQuote?.agency_id || "",
@@ -535,7 +536,7 @@ export default function QuotationFormPage() {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               };
-              downloadQuotationPdf(quoteForPdf, { branding });
+              downloadQuotationPdf(quoteForPdf, { branding: latestBranding });
               toast.success("PDF generated & downloaded");
             } catch (pdfErr) {
               console.warn("Quotation PDF error:", pdfErr);

@@ -10,6 +10,7 @@ export function registerGlobalQueryClient(client: QueryClient) {
 export function invalidateQueriesByPrefix(prefix: string) {
   if (!globalQueryClient) return;
   try {
+    globalQueryClient.removeQueries({ queryKey: [prefix] });
     void globalQueryClient.invalidateQueries({ queryKey: [prefix] });
   } catch (e) {
     console.warn("[CacheManager] Error invalidating query cache:", prefix, e);

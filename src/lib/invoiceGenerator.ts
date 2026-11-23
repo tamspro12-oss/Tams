@@ -47,7 +47,9 @@ export async function generateInvoicePDF(
 
   let leftTextX = 14;
   if (branding.logo) {
-    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left");
+    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left", {
+      backing: "white-pill",
+    });
     if (logoRes.rendered) {
       leftTextX = 14 + logoRes.width + 4;
     }

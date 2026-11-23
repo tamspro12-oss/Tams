@@ -23,8 +23,39 @@ function cleanStr(val: unknown): string {
 function cleanLogo(val: unknown): string | null {
   if (typeof val !== "string") return null;
   const trimmed = val.trim();
-  if (!trimmed.startsWith("data:image/")) return null;
-  return trimmed;
+  if (
+    trimmed.startsWith("data:image/") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://")
+  ) {
+    return trimmed;
+  }
+  return null;
+}
+
+export function scopedTemplateFallbackKey(
+  agencyId: string,
+  key: "invoice_template" | "booking_template"
+): string {
+  return `tams_agency_template:${agencyId}:${key}`;
+}
+
+function parseScopedTemplateFallback(
+  storage: { getItem(key: string): string | null } | null | undefined,
+  agencyId: string,
+  key: "invoice_template" | "booking_template"
+): Record<string, any> | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(scopedTemplateFallbackKey(agencyId, key));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, any>)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeHexColor(
@@ -157,8 +188,9 @@ export async function loadAgencyBrandingCore(opts: {
   client: BrandingDbClient;
   agencyId: string | null | undefined;
   signupAgencyName?: string | null;
+  localFallbackStorage?: { getItem(key: string): string | null } | null;
 }): Promise<AgencyBranding> {
-  const { client, agencyId } = opts;
+  const { client, agencyId, localFallbackStorage } = opts;
   let signupName = cleanStr(opts.signupAgencyName);
 
   if (!agencyId) {
@@ -195,6 +227,21 @@ export async function loadAgencyBrandingCore(opts: {
     }
   } catch (err) {
     console.warn("[AgencyBranding] Failed to load agency_templates:", err);
+  }
+
+  if (!invoiceTemplate) {
+    invoiceTemplate = parseScopedTemplateFallback(
+      localFallbackStorage,
+      agencyId,
+      "invoice_template"
+    );
+  }
+  if (!bookingTemplate) {
+    bookingTemplate = parseScopedTemplateFallback(
+      localFallbackStorage,
+      agencyId,
+      "booking_template"
+    );
   }
 
   if (!signupName) {

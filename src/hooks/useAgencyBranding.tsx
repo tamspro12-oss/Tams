@@ -20,8 +20,9 @@ export function useAgencyBranding() {
     queryKey: ["agency-branding", user?.id ?? "anonymous", agencyId ?? null],
     queryFn: () => fetchAgencyBranding(agencyId, agency?.name),
     enabled: !!user?.id && !!agencyId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     gcTime: 15 * 60 * 1000,
+    refetchOnMount: "always",
   });
 
   const branding = useMemo<AgencyBranding>(
@@ -35,7 +36,6 @@ export function useAgencyBranding() {
   );
 
   const getBrandingAsync = useCallback(async (): Promise<AgencyBranding> => {
-    if (query.data) return query.data;
     const resolvedAgencyId = agencyId ?? (await getAuthenticatedAgencyId(user?.id));
     if (!resolvedAgencyId) {
       return resolveAgencyBrandingFromRecords({
@@ -47,13 +47,16 @@ export function useAgencyBranding() {
       return await queryClient.fetchQuery({
         queryKey: ["agency-branding", user?.id ?? "anonymous", resolvedAgencyId],
         queryFn: () => fetchAgencyBranding(resolvedAgencyId, agency?.name),
-        staleTime: 5 * 60 * 1000,
+        staleTime: 0,
       });
     } catch {
-      return resolveAgencyBrandingFromRecords({
-        agencyId: resolvedAgencyId,
-        signupAgencyName: agency?.name,
-      });
+      return (
+        query.data ??
+        resolveAgencyBrandingFromRecords({
+          agencyId: resolvedAgencyId,
+          signupAgencyName: agency?.name,
+        })
+      );
     }
   }, [query.data, agencyId, user?.id, agency?.name, queryClient]);
 

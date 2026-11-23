@@ -51,7 +51,9 @@ export function exportRowsToPDF(
 
   let leftX = 14;
   if (branding.logo) {
-    const logoRes = drawBrandLogo(doc, branding.logo, 14, 4, 16, 16, "left");
+    const logoRes = drawBrandLogo(doc, branding.logo, 14, 4, 16, 16, "left", {
+      backing: "white-pill",
+    });
     if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
   }
 

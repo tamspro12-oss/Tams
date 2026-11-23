@@ -81,7 +81,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 }) => {
   const { parties } = useParties();
   const { data: agency } = useAgency();
-  const { branding } = useAgencyBranding();
+  const { branding, getBrandingAsync } = useAgencyBranding();
   const { data: currentAgencyId } = useCurrentAgencyId();
   const { accounts = [] } = useAccounts();
   const queryClient = useQueryClient();
@@ -647,13 +647,22 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         );
 
         // Refresh only affected queries and generate optional PDFs in background
-        runBackgroundTask("booking-invoice-post-save", () => {
+        runBackgroundTask("booking-invoice-post-save", async () => {
           refreshAffectedFinancialQueries(queryClient, "invoice", agencyIdForRefresh);
-          if (confirmationSnapshot) {
-            generateBookingConfirmationPdf(confirmationSnapshot);
-          }
-          if (invoiceSnapshot) {
-            generateBookingInvoicePdf(invoiceSnapshot);
+          if (confirmationSnapshot || invoiceSnapshot) {
+            const latestBranding = await getBrandingAsync().catch(() => branding);
+            if (confirmationSnapshot) {
+              generateBookingConfirmationPdf({
+                ...confirmationSnapshot,
+                branding: latestBranding,
+              });
+            }
+            if (invoiceSnapshot) {
+              generateBookingInvoicePdf({
+                ...invoiceSnapshot,
+                branding: latestBranding,
+              });
+            }
           }
           if (onSuccess) onSuccess();
         });

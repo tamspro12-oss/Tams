@@ -10,6 +10,7 @@ import {
   loadAgencyBrandingCore,
   normalizeHexColor,
   resolveAgencyBrandingFromRecords,
+  scopedTemplateFallbackKey,
   tintRgb,
   type AgencyBranding,
   type RgbTuple,
@@ -22,10 +23,80 @@ export {
   hexToRgb,
   normalizeHexColor,
   resolveAgencyBrandingFromRecords,
+  scopedTemplateFallbackKey,
   tintRgb,
   type AgencyBranding,
   type RgbTuple,
 };
+
+function getBrowserLocalFallbackStorage(): { getItem(key: string): string | null } | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage;
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return null;
+}
+
+/**
+ * Normalizes any uploaded image (PNG, JPEG, WEBP, SVG, GIF, AVIF, BMP, or URL)
+ * to a compressed canvas PNG data URI in the browser so jsPDF always renders it.
+ */
+export async function normalizeLogoForPdf(
+  logo: string | null | undefined
+): Promise<string | null> {
+  if (!logo || typeof logo !== "string") return null;
+  const trimmed = logo.trim();
+  if (!trimmed) return null;
+  if (typeof document === "undefined" || typeof Image === "undefined") {
+    return trimmed;
+  }
+
+  return await new Promise<string | null>((resolve) => {
+    let settled = false;
+    const done = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => done(trimmed), 3500);
+    const img = new Image();
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onload = () => {
+      clearTimeout(timer);
+      try {
+        const srcW = img.naturalWidth || img.width || 200;
+        const srcH = img.naturalHeight || img.height || 80;
+        const maxDim = 600;
+        const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
+        const targetW = Math.max(1, Math.round(srcW * scale));
+        const targetH = Math.max(1, Math.round(srcH * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          done(trimmed);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        done(canvas.toDataURL("image/png"));
+      } catch {
+        done(trimmed);
+      }
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      done(trimmed);
+    };
+    img.src = trimmed;
+  });
+}
 
 export async function fetchAgencyBranding(
   explicitAgencyId?: string | null,
@@ -33,11 +104,17 @@ export async function fetchAgencyBranding(
 ): Promise<AgencyBranding> {
   const agencyId =
     explicitAgencyId !== undefined ? explicitAgencyId : await getAuthenticatedAgencyId();
-  return loadAgencyBrandingCore({
+  const branding = await loadAgencyBrandingCore({
     client: supabase as any,
     agencyId,
     signupAgencyName,
+    localFallbackStorage: getBrowserLocalFallbackStorage(),
   });
+  const normalizedLogo = await normalizeLogoForPdf(branding.logo);
+  return {
+    ...branding,
+    logo: normalizedLogo,
+  };
 }
 
 export function invalidateAgencyBrandingCache(): void {
@@ -78,7 +155,8 @@ export function drawBrandLogo(
   boxY: number,
   maxW: number,
   maxH: number,
-  align: "left" | "center" | "right" = "left"
+  align: "left" | "center" | "right" = "left",
+  options?: { backing?: "none" | "white-pill" }
 ): { rendered: boolean; width: number; height: number } {
   if (!logo || typeof logo !== "string") {
     return { rendered: false, width: 0, height: 0 };
@@ -89,30 +167,43 @@ export function drawBrandLogo(
   }
 
   try {
-    let drawW = maxW;
-    let drawH = maxH;
+    const useBacking = options?.backing === "white-pill";
+    const pad = useBacking ? 1.2 : 0;
+    const innerMaxW = Math.max(4, maxW - pad * 2);
+    const innerMaxH = Math.max(4, maxH - pad * 2);
+
+    let drawW = innerMaxW;
+    let drawH = innerMaxH;
     try {
       const props = doc.getImageProperties(logo);
       if (props?.width && props?.height) {
-        const scale = Math.min(maxW / props.width, maxH / props.height);
+        const scale = Math.min(innerMaxW / props.width, innerMaxH / props.height);
         drawW = Math.max(1, props.width * scale);
         drawH = Math.max(1, props.height * scale);
       }
     } catch {
-      drawW = Math.min(maxW, maxH * 1.6);
-      drawH = maxH;
+      drawW = Math.min(innerMaxW, innerMaxH * 1.6);
+      drawH = innerMaxH;
     }
 
-    let x = boxX;
+    const totalW = drawW + pad * 2;
+    const totalH = drawH + pad * 2;
+
+    let outerX = boxX;
     if (align === "center") {
-      x = boxX + (maxW - drawW) / 2;
+      outerX = boxX + (maxW - totalW) / 2;
     } else if (align === "right") {
-      x = boxX + (maxW - drawW);
+      outerX = boxX + (maxW - totalW);
     }
-    const y = boxY + (maxH - drawH) / 2;
+    const outerY = boxY + (maxH - totalH) / 2;
 
-    doc.addImage(logo, format, x, y, drawW, drawH);
-    return { rendered: true, width: drawW, height: drawH };
+    if (useBacking) {
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(outerX, outerY, totalW, totalH, 1.8, 1.8, "F");
+    }
+
+    doc.addImage(logo, format, outerX + pad, outerY + pad, drawW, drawH);
+    return { rendered: true, width: totalW, height: totalH };
   } catch (err) {
     console.warn("[AgencyBranding] Could not render logo in PDF:", err);
     return { rendered: false, width: 0, height: 0 };
