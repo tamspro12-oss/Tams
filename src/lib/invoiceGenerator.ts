@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import {
   drawBrandLogo,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -26,12 +27,13 @@ export async function generateInvoicePDF(
   agency: any,
   brandingOverride?: AgencyBranding | null
 ) {
-  const branding: AgencyBranding =
+  const branding: AgencyBranding = enrichWithCachedBranding(
     brandingOverride ??
-    resolveAgencyBrandingFromRecords({
-      agencyId: agency?.id ?? null,
-      signupAgencyName: agency?.name || null,
-    });
+      resolveAgencyBrandingFromRecords({
+        agencyId: agency?.id ?? null,
+        signupAgencyName: agency?.name || null,
+      })
+  );
 
   const primaryRgb = hexToRgb(branding.brandColor);
   const readablePrimary = ensureReadableOnWhite(primaryRgb);

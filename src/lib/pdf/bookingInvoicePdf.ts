@@ -10,6 +10,7 @@ import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
   drawPlaneIcon,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -147,22 +148,24 @@ function computeNightDiff(checkIn?: string | null, checkOut?: string | null): nu
 
 function resolveEffectiveBranding(data: BookingPdfData): AgencyBranding {
   if (data.branding) {
-    return data.branding;
+    return enrichWithCachedBranding(data.branding);
   }
   if (data.agency) {
-    return resolveAgencyBrandingFromRecords({
-      signupAgencyName: data.agency.name || null,
-      invoiceTemplate: {
-        agencyName: data.agency.name,
-        phone: data.agency.phone,
-        email: data.agency.email,
-        address: data.agency.address,
-        logo: data.agency.logo,
-        themeColor: data.agency.brandColor || DEFAULT_BRAND_COLOR,
-      },
-    });
+    return enrichWithCachedBranding(
+      resolveAgencyBrandingFromRecords({
+        signupAgencyName: data.agency.name || null,
+        invoiceTemplate: {
+          agencyName: data.agency.name,
+          phone: data.agency.phone,
+          email: data.agency.email,
+          address: data.agency.address,
+          logo: data.agency.logo,
+          themeColor: data.agency.brandColor || DEFAULT_BRAND_COLOR,
+        },
+      })
+    );
   }
-  return resolveAgencyBrandingFromRecords({});
+  return enrichWithCachedBranding(resolveAgencyBrandingFromRecords({}));
 }
 
 export function buildBookingPdfDataFromInvoice(

@@ -4,6 +4,7 @@ import { format, startOfDay, endOfDay } from "date-fns";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   formatBrandingContactParts,
   getContrastTextRgb,
   hexToRgb,
@@ -15,12 +16,14 @@ function resolveExportBranding(
   brandingOrName?: AgencyBranding | string | null
 ): AgencyBranding {
   if (brandingOrName && typeof brandingOrName === "object") {
-    return brandingOrName;
+    return enrichWithCachedBranding(brandingOrName);
   }
-  return resolveAgencyBrandingFromRecords({
-    signupAgencyName: typeof brandingOrName === "string" ? brandingOrName : null,
-    invoiceTemplate: { themeColor: DEFAULT_BRAND_COLOR },
-  });
+  return enrichWithCachedBranding(
+    resolveAgencyBrandingFromRecords({
+      signupAgencyName: typeof brandingOrName === "string" ? brandingOrName : null,
+      invoiceTemplate: { themeColor: DEFAULT_BRAND_COLOR },
+    })
+  );
 }
 
 function drawExportHeader(

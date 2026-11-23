@@ -5,6 +5,7 @@ import type { Voucher } from "@/types/voucher";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -31,19 +32,21 @@ const BORDER_LIGHT: RgbTuple = [226, 232, 240];
 
 function resolveVoucherBranding(opts: VoucherPdfOptions): AgencyBranding {
   if (opts.branding) {
-    return opts.branding;
+    return enrichWithCachedBranding(opts.branding);
   }
-  return resolveAgencyBrandingFromRecords({
-    signupAgencyName: opts.agencyName || null,
-    invoiceTemplate: {
-      agencyName: opts.agencyName,
-      email: opts.agencyEmail,
-      phone: opts.agencyPhone,
-      address: opts.agencyAddress,
-      logo: opts.logo || undefined,
-      themeColor: opts.brandColor || DEFAULT_BRAND_COLOR,
-    },
-  });
+  return enrichWithCachedBranding(
+    resolveAgencyBrandingFromRecords({
+      signupAgencyName: opts.agencyName || null,
+      invoiceTemplate: {
+        agencyName: opts.agencyName,
+        email: opts.agencyEmail,
+        phone: opts.agencyPhone,
+        address: opts.agencyAddress,
+        logo: opts.logo || undefined,
+        themeColor: opts.brandColor || DEFAULT_BRAND_COLOR,
+      },
+    })
+  );
 }
 
 export function generateVoucherPdf(v: Voucher, opts: VoucherPdfOptions = {}) {

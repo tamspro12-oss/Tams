@@ -7,6 +7,7 @@ const {
   loadAgencyBrandingCore,
   resolveAgencyBrandingFromRecords,
   scopedTemplateFallbackKey,
+  syncSharedBrandingFields,
 } = await import("../src/lib/pdf/agencyBrandingCore.ts");
 const { resolveAirlineBrand, resolveAirlineDisplayName, AIRLINE_LOGO_MAP } = await import(
   "../src/lib/pdf/airlineLogos.ts"
@@ -315,6 +316,35 @@ test("Agency branding resolves strictly per agency_id and never leaks or falls b
   assert.equal(isolatedOther.agencyName, "Agency Y Signup");
   assert.equal(isolatedOther.logo, null);
   assert.equal(isolatedOther.email, "");
+
+  // Updating Invoice Template logo & address automatically syncs into Booking Template
+  const syncedBooking = syncSharedBrandingFields(
+    {
+      logo: TEST_LOGO_PNG,
+      agencyName: "Al-Noor Travels",
+      phone: "+92 300 1112233",
+      email: "sales@alnoor.pk",
+      address: "Updated Plaza 99, Blue Area, Islamabad",
+      prefix: "INV",
+      layout: "standard",
+      themeColor: "#0f766e",
+      updatedAt: "2026-11-23T18:45:00Z",
+    },
+    {
+      agencyName: "Old Name",
+      address: "Old Address",
+      prefix: "BKG",
+      headerText: "BOOKING CONFIRMATION",
+      footerText: "Have a safe trip!",
+      themeColor: "#1e40af",
+    },
+    "booking_template"
+  );
+  assert.equal(syncedBooking.logo, TEST_LOGO_PNG);
+  assert.equal(syncedBooking.address, "Updated Plaza 99, Blue Area, Islamabad");
+  assert.equal(syncedBooking.agencyName, "Al-Noor Travels");
+  assert.equal(syncedBooking.prefix, "BKG");
+  assert.equal(syncedBooking.headerText, "BOOKING CONFIRMATION");
 });
 
 test("Airline logo map and display-name helper resolve Pakistani, Gulf, and international carriers safely", () => {

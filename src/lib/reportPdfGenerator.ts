@@ -134,9 +134,9 @@ function drawHeader(
 
   let leftTextX = 14;
   if (agency?.logo) {
-    const logoRes = drawBrandLogo(doc, agency.logo, 14, 7.5, 14, 14, "left");
+    const logoRes = drawBrandLogo(doc, agency.logo, 14, 7, 22, 15, "left");
     if (logoRes.rendered) {
-      leftTextX = 14 + logoRes.width + 3.5;
+      leftTextX = 14 + logoRes.width + 4;
     }
   }
 

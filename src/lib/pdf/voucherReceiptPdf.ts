@@ -4,6 +4,7 @@ import { formatPdfEditedNote } from "@/lib/documentEditHelpers";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -45,21 +46,22 @@ const TEXT_MUTED: RgbTuple = [100, 116, 139];
 const BORDER_LIGHT: RgbTuple = [226, 232, 240];
 
 export function buildVoucherReceiptPdfDoc(data: VoucherPdfData): jsPDF {
-  const branding: AgencyBranding =
+  const branding: AgencyBranding = enrichWithCachedBranding(
     data.branding ??
-    resolveAgencyBrandingFromRecords({
-      signupAgencyName: data.agency?.name || null,
-      invoiceTemplate: data.agency
-        ? {
-            agencyName: data.agency.name,
-            phone: data.agency.phone,
-            email: data.agency.email,
-            address: data.agency.address,
-            logo: data.agency.logo,
-            themeColor: data.agency.brandColor || DEFAULT_BRAND_COLOR,
-          }
-        : null,
-    });
+      resolveAgencyBrandingFromRecords({
+        signupAgencyName: data.agency?.name || null,
+        invoiceTemplate: data.agency
+          ? {
+              agencyName: data.agency.name,
+              phone: data.agency.phone,
+              email: data.agency.email,
+              address: data.agency.address,
+              logo: data.agency.logo,
+              themeColor: data.agency.brandColor || DEFAULT_BRAND_COLOR,
+            }
+          : null,
+      })
+  );
 
   const primaryRgb = hexToRgb(branding.brandColor);
   const readablePrimary = ensureReadableOnWhite(primaryRgb);

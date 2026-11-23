@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
 import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
+import { normalizeLogoForPdf } from "@/lib/pdf/agencyBranding";
 
 export function InvoiceTemplateDesigner() {
   const { toast } = useToast();
@@ -43,24 +44,27 @@ export function InvoiceTemplateDesigner() {
 
   const loadInvoiceTemplate = async () => {
     try {
-      const result = await loadAgencyTemplate<Record<string, any>>(
-        "invoice_template",
-        agency?.id
-      );
-      if (result.data) {
-        const data = result.data;
-        setInvoiceLogo(data.logo || "");
-        setInvoiceAgencyName(data.agencyName || "");
-        setInvoicePhone(data.phone || "");
-        setInvoiceEmail(data.email || "");
-        setInvoiceAddress(data.address || "");
+      const [invResult, bkgResult] = await Promise.all([
+        loadAgencyTemplate<Record<string, any>>("invoice_template", agency?.id),
+        loadAgencyTemplate<Record<string, any>>("booking_template", agency?.id),
+      ]);
+      const invData = invResult.data;
+      const bkgData = bkgResult.data;
+      if (invData || bkgData) {
+        const data = invData || {};
+        const fallback = bkgData || {};
+        setInvoiceLogo(data.logo || fallback.logo || "");
+        setInvoiceAgencyName(data.agencyName || fallback.agencyName || "");
+        setInvoicePhone(data.phone || fallback.phone || "");
+        setInvoiceEmail(data.email || fallback.email || "");
+        setInvoiceAddress(data.address || fallback.address || "");
         setInvoicePrefix(data.prefix || "INV");
         setInvoiceLayout(data.layout || "standard");
-        setInvoiceThemeColor(data.themeColor || "#1e40af");
-      } else if (result.errorMessage) {
+        setInvoiceThemeColor(data.themeColor || fallback.themeColor || "#1e40af");
+      } else if (invResult.errorMessage) {
         toast({
           title: "Error",
-          description: result.errorMessage,
+          description: invResult.errorMessage,
           variant: "destructive",
         });
       }
@@ -83,8 +87,32 @@ export function InvoiceTemplateDesigner() {
     }
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setInvoiceLogo(reader.result as string);
+    reader.onloadend = async () => {
+      const rawDataUrl = reader.result as string;
+      const normalized = (await normalizeLogoForPdf(rawDataUrl)) || rawDataUrl;
+      setInvoiceLogo(normalized);
+
+      const effectiveAgencyName = (invoiceAgencyName || agency?.name || "").trim();
+      if (effectiveAgencyName) {
+        const template = {
+          logo: normalized,
+          agencyName: effectiveAgencyName,
+          phone: invoicePhone || agency?.phone_number || "",
+          email: invoiceEmail || agency?.email || user?.email || "",
+          address: invoiceAddress,
+          prefix: invoicePrefix,
+          layout: invoiceLayout,
+          themeColor: invoiceThemeColor,
+          updatedAt: new Date().toISOString(),
+        };
+        const res = await saveAgencyTemplate("invoice_template", template, agency?.id);
+        if (res.ok) {
+          toast({
+            title: "Logo updated",
+            description: "Agency logo synced to Invoice, Booking, Vouchers, Quotations & all PDFs.",
+          });
+        }
+      }
     };
     reader.readAsDataURL(file);
   };

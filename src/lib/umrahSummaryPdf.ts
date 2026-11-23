@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -63,18 +64,19 @@ const num = (v: string | number) => {
 };
 
 export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
-  const branding: AgencyBranding =
+  const branding: AgencyBranding = enrichWithCachedBranding(
     d.branding ??
-    resolveAgencyBrandingFromRecords({
-      signupAgencyName: d.agencyName || null,
-      invoiceTemplate: {
-        agencyName: d.agencyName,
-        phone: d.agencyPhone,
-        email: d.agencyEmail,
-        address: d.agencyAddress,
-        themeColor: DEFAULT_BRAND_COLOR,
-      },
-    });
+      resolveAgencyBrandingFromRecords({
+        signupAgencyName: d.agencyName || null,
+        invoiceTemplate: {
+          agencyName: d.agencyName,
+          phone: d.agencyPhone,
+          email: d.agencyEmail,
+          address: d.agencyAddress,
+          themeColor: DEFAULT_BRAND_COLOR,
+        },
+      })
+  );
 
   const primaryRgb = hexToRgb(branding.brandColor);
   const readablePrimary = ensureReadableOnWhite(primaryRgb);

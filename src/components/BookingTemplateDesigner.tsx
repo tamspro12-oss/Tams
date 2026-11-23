@@ -5,11 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { FileText, Save, Eye } from "lucide-react";
+import { FileText, Save, Eye, Upload, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAuth } from "@/hooks/useAuth";
 import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
+import { normalizeLogoForPdf } from "@/lib/pdf/agencyBranding";
 
 export function BookingTemplateDesigner() {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -17,6 +18,7 @@ export function BookingTemplateDesigner() {
   const { data: agency } = useAgency();
   const { user } = useAuth();
 
+  const [bookingLogo, setBookingLogo] = useState<string>("");
   const [agencyName, setAgencyName] = useState("");
   const [agencyPhone, setAgencyPhone] = useState("");
   const [agencyEmail, setAgencyEmail] = useState("");
@@ -43,30 +45,82 @@ export function BookingTemplateDesigner() {
 
   const loadBookingTemplate = async () => {
     try {
-      const result = await loadAgencyTemplate<Record<string, any>>(
-        "booking_template",
-        agency?.id
-      );
-      if (result.data) {
-        const data = result.data;
-        setAgencyName(data.agencyName || "");
-        setAgencyPhone(data.phone || "");
-        setAgencyEmail(data.email || "");
-        setAgencyAddress(data.address || "");
-        setBookingPrefix(data.prefix || "BKG");
-        setHeaderText(data.headerText || "BOOKING CONFIRMATION");
-        setFooterText(data.footerText || "Thank you for booking with us!");
-        setThemeColor(data.themeColor || "#1e40af");
-      } else if (result.errorMessage) {
+      const [bkgResult, invResult] = await Promise.all([
+        loadAgencyTemplate<Record<string, any>>("booking_template", agency?.id),
+        loadAgencyTemplate<Record<string, any>>("invoice_template", agency?.id),
+      ]);
+      const bkgData = bkgResult.data;
+      const invData = invResult.data;
+      if (bkgData || invData) {
+        const invTs = invData?.updatedAt ? Date.parse(invData.updatedAt) || 0 : 0;
+        const bkgTs = bkgData?.updatedAt ? Date.parse(bkgData.updatedAt) || 0 : 0;
+        const primary = invTs > bkgTs ? invData || {} : bkgData || {};
+        const secondary = invTs > bkgTs ? bkgData || {} : invData || {};
+
+        setBookingLogo(primary.logo || secondary.logo || "");
+        setAgencyName(primary.agencyName || secondary.agencyName || "");
+        setAgencyPhone(primary.phone || secondary.phone || "");
+        setAgencyEmail(primary.email || secondary.email || "");
+        setAgencyAddress(primary.address || secondary.address || "");
+        setBookingPrefix(bkgData?.prefix || "BKG");
+        setHeaderText(bkgData?.headerText || "BOOKING CONFIRMATION");
+        setFooterText(bkgData?.footerText || "Thank you for booking with us!");
+        setThemeColor(primary.themeColor || secondary.themeColor || "#1e40af");
+      } else if (bkgResult.errorMessage) {
         toast({
           title: "Error",
-          description: result.errorMessage,
+          description: bkgResult.errorMessage,
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error("Failed to load booking template:", error);
     }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Logo size must be less than 2MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const rawDataUrl = reader.result as string;
+      const normalized = (await normalizeLogoForPdf(rawDataUrl)) || rawDataUrl;
+      setBookingLogo(normalized);
+
+      const effectiveAgencyName = (agencyName || agency?.name || "").trim();
+      if (effectiveAgencyName) {
+        const template = {
+          logo: normalized,
+          agencyName: effectiveAgencyName,
+          phone: agencyPhone || agency?.phone_number || "",
+          email: agencyEmail || agency?.email || user?.email || "",
+          address: agencyAddress,
+          prefix: bookingPrefix,
+          headerText,
+          footerText,
+          themeColor,
+          updatedAt: new Date().toISOString(),
+        };
+        const res = await saveAgencyTemplate("booking_template", template, agency?.id);
+        if (res.ok) {
+          toast({
+            title: "Logo updated",
+            description: "Agency logo synced to Booking, Invoice, Vouchers, Quotations & all PDFs.",
+          });
+        }
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveTemplate = async () => {
@@ -82,6 +136,7 @@ export function BookingTemplateDesigner() {
     setIsSaving(true);
     try {
       const template = {
+        logo: bookingLogo,
         agencyName,
         phone: agencyPhone,
         email: agencyEmail,
@@ -287,6 +342,33 @@ export function BookingTemplateDesigner() {
           />
         </div>
 
+        {/* Row 3: Logo Upload Compact Bar (Synced with Invoice Template) */}
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/40 rounded-lg border">
+          <div className="flex-1 min-w-[200px]">
+            <Label htmlFor="booking-logo" className="text-xs font-semibold flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+              Agency Logo (Max 2MB, synced across Invoice & Booking)
+            </Label>
+            <Input
+              id="booking-logo"
+              type="file"
+              accept="image/*"
+              onChange={handleLogoUpload}
+              className="h-8.5 text-xs mt-1 cursor-pointer"
+            />
+          </div>
+
+          {bookingLogo ? (
+            <div className="w-16 h-12 border rounded-md p-1 bg-background flex items-center justify-center shrink-0">
+              <img src={bookingLogo} alt="Logo preview" className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-16 h-12 border border-dashed rounded-md flex items-center justify-center text-muted-foreground shrink-0 bg-background/50">
+              <ImageIcon className="w-5 h-5 opacity-40" />
+            </div>
+          )}
+        </div>
+
         {/* Preview Panel */}
         {showPreview && (
           <div className="p-4 border rounded-lg bg-card/60 backdrop-blur-xs space-y-3">
@@ -295,6 +377,11 @@ export function BookingTemplateDesigner() {
                 {headerText || "BOOKING CONFIRMATION"}
               </h3>
               <p className="text-sm font-semibold text-foreground">{agencyName || "Your Agency Name"}</p>
+              {bookingLogo && (
+                <div className="flex justify-center py-1">
+                  <img src={bookingLogo} alt="Agency Logo" className="h-10 object-contain" />
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
                 {agencyPhone && <span>Tel: {agencyPhone}</span>}
                 {agencyEmail && <span>Email: {agencyEmail}</span>}

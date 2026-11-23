@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import {
   DEFAULT_BRAND_COLOR,
+  enrichWithCachedBranding,
   resolveAgencyBrandingFromRecords,
   type AgencyBranding,
 } from "@/lib/pdf/agencyBranding";
@@ -76,24 +77,26 @@ export async function generateBookingConfirmationPDF(
   _vendor: any | null,
   templateOrBranding?: LegacyTemplateOrBranding | AgencyBranding | null
 ) {
-  const branding: AgencyBranding = isAgencyBranding(templateOrBranding)
-    ? templateOrBranding
-    : resolveAgencyBrandingFromRecords({
-        agencyId: templateOrBranding?.agencyId ?? null,
-        invoiceTemplate: templateOrBranding
-          ? {
-              logo: templateOrBranding.logo,
-              agencyName: templateOrBranding.agencyName,
-              phone: templateOrBranding.phone,
-              email: templateOrBranding.email,
-              address: templateOrBranding.address,
-              themeColor:
-                templateOrBranding.brandColor ||
-                templateOrBranding.themeColor ||
-                DEFAULT_BRAND_COLOR,
-            }
-          : null,
-      });
+  const branding: AgencyBranding = enrichWithCachedBranding(
+    isAgencyBranding(templateOrBranding)
+      ? templateOrBranding
+      : resolveAgencyBrandingFromRecords({
+          agencyId: templateOrBranding?.agencyId ?? null,
+          invoiceTemplate: templateOrBranding
+            ? {
+                logo: templateOrBranding.logo,
+                agencyName: templateOrBranding.agencyName,
+                phone: templateOrBranding.phone,
+                email: templateOrBranding.email,
+                address: templateOrBranding.address,
+                themeColor:
+                  templateOrBranding.brandColor ||
+                  templateOrBranding.themeColor ||
+                  DEFAULT_BRAND_COLOR,
+              }
+            : null,
+        })
+  );
 
   const parsedPassengers = parsePassengersList(client?.passengers_data);
   const customServiceData = parsedPassengers[0]?.custom_service;

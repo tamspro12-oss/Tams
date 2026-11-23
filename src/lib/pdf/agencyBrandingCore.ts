@@ -45,17 +45,112 @@ function parseScopedTemplateFallback(
   agencyId: string,
   key: "invoice_template" | "booking_template"
 ): Record<string, any> | null {
-  if (!storage) return null;
+  if (!storage || !agencyId) return null;
   try {
-    const raw = storage.getItem(scopedTemplateFallbackKey(agencyId, key));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, any>)
-      : null;
+    const scopedRaw = storage.getItem(scopedTemplateFallbackKey(agencyId, key));
+    if (scopedRaw) {
+      const parsed = JSON.parse(scopedRaw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>;
+      }
+    }
+
+    const isSyncedForAgency =
+      storage.getItem(`tams_template_synced:${agencyId}:${key}`) === "1";
+    const isPending = storage.getItem(`tams_template_pending:${key}`) === "1";
+    if (isSyncedForAgency || isPending) {
+      const raw = storage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const record = { ...(parsed as Record<string, any>) };
+          if (key === "invoice_template" && !cleanLogo(record.logo)) {
+            const legacyLogo = cleanLogo(storage.getItem("agency_logo"));
+            if (legacyLogo) {
+              record.logo = legacyLogo;
+            }
+          }
+          return record;
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+function mergeTemplateWithLocalFallback(
+  dbTemplate: Record<string, any> | null,
+  localTemplate: Record<string, any> | null
+): Record<string, any> | null {
+  if (!dbTemplate) return localTemplate;
+  if (!localTemplate) return dbTemplate;
+
+  const dbTs = parseTimestamp(dbTemplate);
+  const localTs = parseTimestamp(localTemplate);
+  const newer = localTs > dbTs ? localTemplate : dbTemplate;
+  const older = localTs > dbTs ? dbTemplate : localTemplate;
+
+  return {
+    ...older,
+    ...newer,
+    logo: cleanLogo(newer.logo) || cleanLogo(older.logo) || "",
+    address: cleanStr(newer.address) || cleanStr(older.address) || "",
+    agencyName: cleanStr(newer.agencyName) || cleanStr(older.agencyName) || "",
+    phone: cleanStr(newer.phone) || cleanStr(older.phone) || "",
+    email: cleanStr(newer.email) || cleanStr(older.email) || "",
+    themeColor: cleanStr(newer.themeColor) || cleanStr(older.themeColor) || DEFAULT_BRAND_COLOR,
+  };
+}
+
+/**
+ * Synchronizes shared branding fields (logo, address, agencyName, phone, email, themeColor)
+ * from a saved template (e.g. invoice_template) into its companion template (booking_template),
+ * while preserving template-specific fields (prefix, layout, headerText, footerText).
+ */
+export function syncSharedBrandingFields(
+  source: Record<string, any>,
+  existingCompanion?: Record<string, any> | null,
+  companionKey: "invoice_template" | "booking_template" = "booking_template"
+): Record<string, any> {
+  const base: Record<string, any> =
+    existingCompanion && typeof existingCompanion === "object" && !Array.isArray(existingCompanion)
+      ? { ...existingCompanion }
+      : companionKey === "booking_template"
+        ? {
+            prefix: "BKG",
+            headerText: "BOOKING CONFIRMATION",
+            footerText: "Thank you for booking with us!",
+          }
+        : {
+            prefix: "INV",
+            layout: "standard",
+          };
+
+  const nextLogo = cleanLogo(source.logo) ?? cleanLogo(base.logo) ?? "";
+  const nextAddress =
+    source.address !== undefined ? cleanStr(source.address) : cleanStr(base.address);
+  const nextAgencyName = cleanStr(source.agencyName) || cleanStr(base.agencyName);
+  const nextPhone =
+    source.phone !== undefined ? cleanStr(source.phone) : cleanStr(base.phone);
+  const nextEmail =
+    source.email !== undefined ? cleanStr(source.email) : cleanStr(base.email);
+  const nextThemeColor = normalizeHexColor(
+    cleanStr(source.themeColor) || cleanStr(base.themeColor) || DEFAULT_BRAND_COLOR
+  );
+  const nextUpdatedAt = cleanStr(source.updatedAt) || new Date().toISOString();
+
+  return {
+    ...base,
+    logo: nextLogo,
+    address: nextAddress,
+    agencyName: nextAgencyName,
+    phone: nextPhone,
+    email: nextEmail,
+    themeColor: nextThemeColor,
+    updatedAt: nextUpdatedAt,
+  };
 }
 
 export function normalizeHexColor(
@@ -229,20 +324,19 @@ export async function loadAgencyBrandingCore(opts: {
     console.warn("[AgencyBranding] Failed to load agency_templates:", err);
   }
 
-  if (!invoiceTemplate) {
-    invoiceTemplate = parseScopedTemplateFallback(
-      localFallbackStorage,
-      agencyId,
-      "invoice_template"
-    );
-  }
-  if (!bookingTemplate) {
-    bookingTemplate = parseScopedTemplateFallback(
-      localFallbackStorage,
-      agencyId,
-      "booking_template"
-    );
-  }
+  const localInvoiceFallback = parseScopedTemplateFallback(
+    localFallbackStorage,
+    agencyId,
+    "invoice_template"
+  );
+  const localBookingFallback = parseScopedTemplateFallback(
+    localFallbackStorage,
+    agencyId,
+    "booking_template"
+  );
+
+  invoiceTemplate = mergeTemplateWithLocalFallback(invoiceTemplate, localInvoiceFallback);
+  bookingTemplate = mergeTemplateWithLocalFallback(bookingTemplate, localBookingFallback);
 
   if (!signupName) {
     try {

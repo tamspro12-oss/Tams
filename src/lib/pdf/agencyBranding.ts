@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
+import { loadAgencyTemplateCore } from "@/lib/agencyTemplatesCore";
 import { invalidateQueriesByPrefix } from "@/lib/cacheManager";
 import {
   DEFAULT_BRAND_COLOR,
@@ -11,6 +12,7 @@ import {
   normalizeHexColor,
   resolveAgencyBrandingFromRecords,
   scopedTemplateFallbackKey,
+  syncSharedBrandingFields,
   tintRgb,
   type AgencyBranding,
   type RgbTuple,
@@ -24,12 +26,62 @@ export {
   normalizeHexColor,
   resolveAgencyBrandingFromRecords,
   scopedTemplateFallbackKey,
+  syncSharedBrandingFields,
   tintRgb,
   type AgencyBranding,
   type RgbTuple,
 };
 
-function getBrowserLocalFallbackStorage(): { getItem(key: string): string | null } | null {
+const memoryBrandingByAgency = new Map<string, AgencyBranding>();
+let latestActiveAgencyBranding: AgencyBranding | null = null;
+
+export function setCachedAgencyBranding(branding: AgencyBranding | null): void {
+  if (!branding) return;
+  if (branding.agencyId) {
+    memoryBrandingByAgency.set(branding.agencyId, branding);
+  }
+  latestActiveAgencyBranding = branding;
+}
+
+export function getCachedAgencyBranding(agencyId?: string | null): AgencyBranding | null {
+  if (agencyId && memoryBrandingByAgency.has(agencyId)) {
+    return memoryBrandingByAgency.get(agencyId) ?? null;
+  }
+  if (
+    latestActiveAgencyBranding &&
+    (!agencyId || !latestActiveAgencyBranding.agencyId || latestActiveAgencyBranding.agencyId === agencyId)
+  ) {
+    return latestActiveAgencyBranding;
+  }
+  return null;
+}
+
+/**
+ * Ensures any PDF generator call receives the agency's latest cached logo, address,
+ * phone, email, and brand color if the caller's branding snapshot was missing them.
+ */
+export function enrichWithCachedBranding(branding: AgencyBranding): AgencyBranding {
+  const cached = getCachedAgencyBranding(branding.agencyId);
+  if (!cached) return branding;
+  return {
+    ...branding,
+    agencyId: branding.agencyId ?? cached.agencyId,
+    agencyName:
+      branding.agencyName && branding.agencyName !== "Travel Agency"
+        ? branding.agencyName
+        : cached.agencyName || branding.agencyName,
+    logo: branding.logo || cached.logo || null,
+    email: branding.email || cached.email || "",
+    phone: branding.phone || cached.phone || "",
+    address: branding.address || cached.address || "",
+    brandColor:
+      branding.brandColor && branding.brandColor !== DEFAULT_BRAND_COLOR
+        ? branding.brandColor
+        : cached.brandColor || branding.brandColor,
+  };
+}
+
+function getBrowserLocalFallbackStorage(): Storage | null {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       return window.localStorage;
@@ -104,20 +156,72 @@ export async function fetchAgencyBranding(
 ): Promise<AgencyBranding> {
   const agencyId =
     explicitAgencyId !== undefined ? explicitAgencyId : await getAuthenticatedAgencyId();
+  const storage = getBrowserLocalFallbackStorage();
+
+  // Run loadAgencyTemplateCore so any pending local templates or legacy agency_logo
+  // are migrated and enriched identically to InvoiceTemplateDesigner / BookingTemplateDesigner.
+  let migratedInv: Record<string, any> | null = null;
+  let migratedBkg: Record<string, any> | null = null;
+  if (agencyId) {
+    try {
+      const [invRes, bkgRes] = await Promise.all([
+        loadAgencyTemplateCore<Record<string, any>>("invoice_template", {
+          client: supabase as any,
+          agencyId,
+          storage,
+        }),
+        loadAgencyTemplateCore<Record<string, any>>("booking_template", {
+          client: supabase as any,
+          agencyId,
+          storage,
+        }),
+      ]);
+      migratedInv = invRes.data ?? null;
+      migratedBkg = bkgRes.data ?? null;
+    } catch {
+      // Fallback handled by loadAgencyBrandingCore below
+    }
+  }
+
   const branding = await loadAgencyBrandingCore({
     client: supabase as any,
     agencyId,
     signupAgencyName,
-    localFallbackStorage: getBrowserLocalFallbackStorage(),
+    localFallbackStorage: storage,
   });
-  const normalizedLogo = await normalizeLogoForPdf(branding.logo);
-  return {
-    ...branding,
+
+  const fallbackMerged = resolveAgencyBrandingFromRecords({
+    agencyId,
+    invoiceTemplate: migratedInv,
+    bookingTemplate: migratedBkg,
+    signupAgencyName: branding.agencyName || signupAgencyName,
+  });
+
+  const rawLogo = branding.logo || fallbackMerged.logo || null;
+  const normalizedLogo = await normalizeLogoForPdf(rawLogo);
+  const resolved: AgencyBranding = {
+    agencyId: branding.agencyId ?? agencyId ?? null,
+    agencyName:
+      branding.agencyName && branding.agencyName !== "Travel Agency"
+        ? branding.agencyName
+        : fallbackMerged.agencyName || branding.agencyName,
     logo: normalizedLogo,
+    email: branding.email || fallbackMerged.email || "",
+    phone: branding.phone || fallbackMerged.phone || "",
+    address: branding.address || fallbackMerged.address || "",
+    brandColor:
+      branding.brandColor && branding.brandColor !== DEFAULT_BRAND_COLOR
+        ? branding.brandColor
+        : fallbackMerged.brandColor || branding.brandColor,
   };
+
+  setCachedAgencyBranding(resolved);
+  return resolved;
 }
 
 export function invalidateAgencyBrandingCache(): void {
+  memoryBrandingByAgency.clear();
+  latestActiveAgencyBranding = null;
   invalidateQueriesByPrefix("agency-branding");
 }
 
@@ -140,11 +244,13 @@ export function brandingToReportAgencyInfo(branding: AgencyBranding) {
   };
 }
 
-function getJsPdfImageFormat(dataUri: string): "PNG" | "JPEG" | "WEBP" | null {
-  const lower = dataUri.slice(0, 40).toLowerCase();
+function getJsPdfImageFormat(dataUri: string): "PNG" | "JPEG" | "WEBP" | "GIF" | "BMP" | null {
+  const lower = dataUri.slice(0, 48).toLowerCase();
   if (lower.startsWith("data:image/png")) return "PNG";
   if (lower.startsWith("data:image/jpeg") || lower.startsWith("data:image/jpg")) return "JPEG";
   if (lower.startsWith("data:image/webp")) return "WEBP";
+  if (lower.startsWith("data:image/gif")) return "GIF";
+  if (lower.startsWith("data:image/bmp")) return "BMP";
   return null;
 }
 

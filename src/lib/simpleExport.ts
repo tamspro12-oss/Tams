@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   formatBrandingContactParts,
   getContrastTextRgb,
   hexToRgb,
@@ -32,13 +33,14 @@ export function exportRowsToPDF(
   fileName: string,
   brandingOrName?: AgencyBranding | string
 ) {
-  const branding: AgencyBranding =
+  const branding: AgencyBranding = enrichWithCachedBranding(
     brandingOrName && typeof brandingOrName === "object"
       ? brandingOrName
       : resolveAgencyBrandingFromRecords({
           signupAgencyName: typeof brandingOrName === "string" ? brandingOrName : null,
           invoiceTemplate: { themeColor: DEFAULT_BRAND_COLOR },
-        });
+        })
+  );
 
   const primaryRgb = hexToRgb(branding.brandColor);
   const contrastRgb = getContrastTextRgb(primaryRgb);

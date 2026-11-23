@@ -6,6 +6,7 @@ import { getServiceDisplayLabel } from "@/lib/serviceDefinitions";
 import {
   DEFAULT_BRAND_COLOR,
   drawBrandLogo,
+  enrichWithCachedBranding,
   ensureReadableOnWhite,
   formatBrandingContactParts,
   getContrastTextRgb,
@@ -34,19 +35,21 @@ const ROW_ALT: RgbTuple = [248, 250, 252];
 
 function resolveQuotationBranding(opts: BuildOptions): AgencyBranding {
   if (opts.branding) {
-    return opts.branding;
+    return enrichWithCachedBranding(opts.branding);
   }
-  return resolveAgencyBrandingFromRecords({
-    signupAgencyName: opts.agencyName || null,
-    invoiceTemplate: {
-      agencyName: opts.agencyName,
-      email: opts.agencyEmail,
-      phone: opts.agencyPhone,
-      address: opts.agencyAddress,
-      themeColor: opts.brandColor || DEFAULT_BRAND_COLOR,
-      logo: opts.logo || undefined,
-    },
-  });
+  return enrichWithCachedBranding(
+    resolveAgencyBrandingFromRecords({
+      signupAgencyName: opts.agencyName || null,
+      invoiceTemplate: {
+        agencyName: opts.agencyName,
+        email: opts.agencyEmail,
+        phone: opts.agencyPhone,
+        address: opts.agencyAddress,
+        themeColor: opts.brandColor || DEFAULT_BRAND_COLOR,
+        logo: opts.logo || undefined,
+      },
+    })
+  );
 }
 
 function formatQuoteDate(raw?: string | null): string {
