@@ -373,15 +373,15 @@ export function BookingTemplateDesigner() {
         {showPreview && (
           <div className="p-4 border rounded-lg bg-card/60 backdrop-blur-xs space-y-3">
             <div className="text-center pb-3 space-y-1 border-b-2" style={{ borderColor: themeColor }}>
-              <h3 className="text-base font-bold tracking-wide" style={{ color: themeColor }}>
-                {headerText || "BOOKING CONFIRMATION"}
-              </h3>
-              <p className="text-sm font-semibold text-foreground">{agencyName || "Your Agency Name"}</p>
               {bookingLogo && (
                 <div className="flex justify-center py-1">
                   <img src={bookingLogo} alt="Agency Logo" className="h-10 object-contain" />
                 </div>
               )}
+              <p className="text-sm font-semibold text-foreground">{agencyName || "Your Agency Name"}</p>
+              <h3 className="text-base font-bold tracking-wide" style={{ color: themeColor }}>
+                {headerText || "BOOKING CONFIRMATION"}
+              </h3>
               <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
                 {agencyPhone && <span>Tel: {agencyPhone}</span>}
                 {agencyEmail && <span>Email: {agencyEmail}</span>}

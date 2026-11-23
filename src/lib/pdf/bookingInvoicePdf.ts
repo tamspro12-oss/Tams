@@ -809,9 +809,14 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
     doc.text(`PNR: ${effectivePnr.toUpperCase()}`, marginX, titleLines.length > 1 ? 21 : 17.5);
   }
 
-  // Center Top: Bold Agency Name FIRST, with Uploaded Agency Logo JUST BELOW IT
+  // Center Top: Uploaded Agency Logo UPPER, with Bold Agency Name BELOW THE LOGO
   const centerX = pageWidth / 2;
-  const agencyNameY = 10.5;
+  const logoTopY = 4.5;
+  const logoResult = branding.logo
+    ? drawBrandLogo(doc, branding.logo, centerX - 22, logoTopY, 44, 15, "center")
+    : { rendered: false, width: 0, height: 0 };
+
+  const agencyNameY = logoResult.rendered ? logoTopY + 15 + 3.8 : 13.5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...TEXT_DARK);
@@ -819,11 +824,6 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
     .splitTextToSize(branding.agencyName.toUpperCase(), 68)
     .slice(0, 2);
   doc.text(agencyLines, centerX, agencyNameY, { align: "center" });
-
-  const logoTopY = agencyNameY + (agencyLines.length - 1) * 4.6 + 2.2;
-  const logoResult = branding.logo
-    ? drawBrandLogo(doc, branding.logo, centerX - 22, logoTopY, 44, 15, "center")
-    : { rendered: false, width: 0, height: 0 };
 
   // Right Top: Airline Name text only (Tickets only — no airline logo box)
   if (normService === "Ticket") {
@@ -839,9 +839,7 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
   // -------------------------------------------------------------------------
   // INFO BOX (Colored Rounded Bar — ONLY 4 allowed fields)
   // -------------------------------------------------------------------------
-  const headerBottomY = logoResult.rendered
-    ? logoTopY + logoResult.height + 3.5
-    : agencyNameY + (agencyLines.length - 1) * 4.6 + 5;
+  const headerBottomY = agencyNameY + (agencyLines.length - 1) * 4.6 + 4.5;
   let y = Math.max(29, headerBottomY);
   const boxH = 16.5;
 
