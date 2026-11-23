@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/design-system";
 import { isInvoiceVoidedOrRefunded } from "@/lib/accountingEngine";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { FileCheck, Printer } from "lucide-react";
 
 interface InvoiceQuickViewDialogProps {
@@ -22,6 +23,7 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
   onClose,
   fallbackPartyName,
 }) => {
+  const { getBrandingAsync } = useAgencyBranding();
   const total = Number(invoice?.client_amount) || 0;
   const paid = Number(invoice?.paid_amount) || 0;
   const remaining = invoice
@@ -104,25 +106,24 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                   size="sm"
                   className="h-8 text-xs gap-1.5"
                   onClick={async () => {
-                    const { generateBookingConfirmationPdf } = await import(
-                      "@/lib/pdf/bookingInvoicePdf"
+                    const [{ buildBookingPdfDataFromInvoice, generateBookingConfirmationPdf }, branding] =
+                      await Promise.all([
+                        import("@/lib/pdf/bookingInvoicePdf"),
+                        getBrandingAsync(),
+                      ]);
+                    generateBookingConfirmationPdf(
+                      buildBookingPdfDataFromInvoice(
+                        {
+                          ...invoice,
+                          client_name: displayClientName,
+                          client_amount: total,
+                          paid_amount: paid,
+                          remaining_amount: remaining,
+                          service: invoice.service || "Ticket",
+                        },
+                        branding
+                      )
                     );
-                    generateBookingConfirmationPdf({
-                      invoiceNo: invoice.invoice_no,
-                      invoiceDate: invoice.invoice_date,
-                      clientName: displayClientName,
-                      service: invoice.service || "Ticket",
-                      pnr: invoice.pnr,
-                      ticketNo: invoice.ticket_no,
-                      passportNo: invoice.passport_no,
-                      clientAmount: total,
-                      paidAmount: paid,
-                      balanceDue: remaining,
-                      passengers: invoice.passengers || [],
-                      currency: invoice.currency,
-                      isEdited: invoice.is_edited,
-                      lastEditedAt: invoice.last_edited_at,
-                    });
                   }}
                 >
                   <FileCheck className="w-3.5 h-3.5" />
@@ -134,25 +135,24 @@ export const InvoiceQuickViewDialog: React.FC<InvoiceQuickViewDialogProps> = ({
                   size="sm"
                   className="h-8 text-xs gap-1.5"
                   onClick={async () => {
-                    const { generateBookingInvoicePdf } = await import(
-                      "@/lib/pdf/bookingInvoicePdf"
+                    const [{ buildBookingPdfDataFromInvoice, generateBookingInvoicePdf }, branding] =
+                      await Promise.all([
+                        import("@/lib/pdf/bookingInvoicePdf"),
+                        getBrandingAsync(),
+                      ]);
+                    generateBookingInvoicePdf(
+                      buildBookingPdfDataFromInvoice(
+                        {
+                          ...invoice,
+                          client_name: displayClientName,
+                          client_amount: total,
+                          paid_amount: paid,
+                          remaining_amount: remaining,
+                          service: invoice.service || "Ticket",
+                        },
+                        branding
+                      )
                     );
-                    generateBookingInvoicePdf({
-                      invoiceNo: invoice.invoice_no,
-                      invoiceDate: invoice.invoice_date,
-                      clientName: displayClientName,
-                      service: invoice.service || "Ticket",
-                      clientAmount: total,
-                      paidAmount: paid,
-                      balanceDue: remaining,
-                      pnr: invoice.pnr,
-                      ticketNo: invoice.ticket_no,
-                      passportNo: invoice.passport_no,
-                      passengers: invoice.passengers || [],
-                      currency: invoice.currency,
-                      isEdited: invoice.is_edited,
-                      lastEditedAt: invoice.last_edited_at,
-                    });
                   }}
                 >
                   <Printer className="w-3.5 h-3.5" />

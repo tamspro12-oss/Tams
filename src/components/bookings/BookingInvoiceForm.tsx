@@ -9,6 +9,7 @@ import { AddPartyDialog } from "@/components/parties/AddPartyDialog";
 import { useParties, Party } from "@/hooks/useParties";
 import { generateBookingConfirmationPdf, generateBookingInvoicePdf, BookingPdfData } from "@/lib/pdf/bookingInvoicePdf";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccounts } from "@/hooks/useUnifiedTransactions";
@@ -49,7 +50,6 @@ import {
 import {
   FileText,
   Plus,
-  TrendingUp,
   Lock,
   AlertTriangle,
 } from "lucide-react";
@@ -58,6 +58,11 @@ import {
   evaluateInvoiceEdit,
   type InvoiceEditSnapshot,
 } from "@/lib/documentEditHelpers";
+import {
+  parseVendorAmountPaid,
+  validateBookingVendorPayment,
+  shouldResolveBookingPaymentAccount,
+} from "@/lib/bookingVendorPaymentHelpers";
 
 export type { ServiceType, TripType };
 
@@ -76,6 +81,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 }) => {
   const { parties } = useParties();
   const { data: agency } = useAgency();
+  const { branding } = useAgencyBranding();
   const { data: currentAgencyId } = useCurrentAgencyId();
   const { accounts = [] } = useAccounts();
   const queryClient = useQueryClient();
@@ -162,6 +168,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const [vendorPayable, setVendorPayable] = useState<string>("0");
   const [totalAmount, setTotalAmount] = useState<string>("0");
   const [amountPaid, setAmountPaid] = useState<string>("0");
+  const [vendorAmountPaid, setVendorAmountPaid] = useState<string>("");
   const [remainingDueDate, setRemainingDueDate] = useState<string>(
     () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
@@ -211,6 +218,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       setVendorPayable(hydrated.vendorPayable);
       setTotalAmount(hydrated.totalAmount);
       setAmountPaid(String(Number(editingInvoice.paid_amount) || 0));
+      setVendorAmountPaid("");
       setRemainingDueDate(hydrated.dueDate);
       setPaymentMode("cash");
       setNotes(hydrated.notes);
@@ -233,6 +241,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     setVendorPayable("0");
     setTotalAmount("0");
     setAmountPaid("0");
+    setVendorAmountPaid("");
     setRemainingDueDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     setPaymentMode("cash");
     setNotes("");
@@ -289,8 +298,32 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
   const clientAmtNum = Number.isFinite(rawClientAmt) ? rawClientAmt : 0;
   const vendorPayNum = Number.isFinite(rawVendorPay) ? rawVendorPay : 0;
   const amountPaidNum = Number.isFinite(rawAmountPaid) ? rawAmountPaid : 0;
+  const vendorAmountPaidNum = parseVendorAmountPaid(vendorAmountPaid);
   const remainingAmountNum = Math.max(0, clientAmtNum - amountPaidNum);
-  const liveProfit = clientAmtNum - vendorPayNum;
+
+  const vendorPaymentInlineError = useMemo(() => {
+    if (isEditMode || vendorAmountPaidNum === 0) return null;
+    const validation = validateBookingVendorPayment({
+      vendorAmountPaid: vendorAmountPaidNum,
+      purchasingCost: vendorPayNum,
+      vendorId,
+      paymentMode,
+      selectedBank,
+      clientAmountPaid: amountPaidNum,
+    });
+    if (!validation.ok && validation.code !== "missing_bank") {
+      return validation.error;
+    }
+    return null;
+  }, [
+    isEditMode,
+    vendorAmountPaidNum,
+    vendorPayNum,
+    vendorId,
+    paymentMode,
+    selectedBank,
+    amountPaidNum,
+  ]);
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const existingPaidNum = Number(editingInvoice?.paid_amount) || 0;
@@ -365,6 +398,9 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     ticketNo: ticketNo || passengers[0]?.ticketNo || undefined,
     passportNo: passengers[0]?.passport || undefined,
     passengers: passengers.filter((p) => p.name.trim()),
+    moreDetails: buildNormalizedMoreDetails(),
+    paymentStatus: editingInvoice?.payment_status,
+    isVoid: editingInvoice?.is_void,
     clientAmount: clientAmtNum,
     paidAmount: isEditMode ? existingPaidNum : amountPaidNum,
     balanceDue: isEditMode ? effectiveRemainingNum : remainingAmountNum,
@@ -372,10 +408,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     notes: notes || undefined,
     isEdited: isEditMode ? true : undefined,
     lastEditedAt: isEditMode ? new Date().toISOString() : undefined,
-    agency: {
-      name: agency?.name,
-      phone: agency?.contact_info,
-    },
+    branding,
   });
 
   // Handle Save
@@ -516,8 +549,18 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       return;
     }
 
-    if (amountPaidNum > 0 && paymentMode === "bank" && !selectedBank) {
-      toast.error("Please select an agency bank account for bank payment");
+    const vendorPaymentValidation = validateBookingVendorPayment({
+      vendorAmountPaid: vendorAmountPaidNum,
+      purchasingCost: vendorPayNum,
+      vendorId,
+      paymentMode,
+      selectedBank,
+      clientAmountPaid: amountPaidNum,
+    });
+    if (!vendorPaymentValidation.ok) {
+      toast.error(
+        vendorPaymentValidation.error || "Please check the vendor payment amount."
+      );
       return;
     }
 
@@ -529,10 +572,12 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       }
     }
 
-    const resolvedAccountId =
-      amountPaidNum > 0
-        ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
-        : null;
+    const resolvedAccountId = shouldResolveBookingPaymentAccount(
+      amountPaidNum,
+      vendorAmountPaidNum
+    )
+      ? resolveAccountIdForPayment(accounts, paymentMode, selectedBank)
+      : null;
 
     const legacyParams = {
       p_invoice_no: isManualInvoiceNo ? manualInvoiceNo.trim() : null,
@@ -563,11 +608,24 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       contextLabel: "BookingInvoiceForm.handleSave",
       fallbackErrorMessage: "Failed to save booking invoice. Please try again.",
       execute: async (requestId) => {
-        const rpcData = await rpcWithPreSqlFallback(
+        const rpcData = await rpcWithPreSqlFallback<any>(
           supabase as any,
           "save_booking_invoice",
-          { ...legacyParams, p_request_id: requestId },
-          { legacyParams, isAutoMode: !isManualInvoiceNo }
+          {
+            ...legacyParams,
+            p_request_id: requestId,
+            p_vendor_amount_paid: vendorAmountPaidNum,
+          },
+          vendorAmountPaidNum > 0
+            ? {
+                isAutoMode: !isManualInvoiceNo,
+                legacyFallback: async () => {
+                  throw new Error(
+                    "Vendor payment at booking requires the latest database update. Nothing was saved."
+                  );
+                },
+              }
+            : { legacyParams, isAutoMode: !isManualInvoiceNo }
         );
         if (rpcData && rpcData.success === false) {
           throw new Error(rpcData.error || "Failed to save booking invoice");
@@ -582,7 +640,11 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
         // Close modal IMMEDIATELY after save confirmation
         onOpenChange(false);
-        toast.success(`Booking Invoice ${assignedInvoiceNo} saved`);
+        toast.success(
+          data?.vendor_voucher_no
+            ? `Booking Invoice ${assignedInvoiceNo} & Vendor Voucher ${data.vendor_voucher_no} saved`
+            : `Booking Invoice ${assignedInvoiceNo} saved`
+        );
 
         // Refresh only affected queries and generate optional PDFs in background
         runBackgroundTask("booking-invoice-post-save", () => {
@@ -626,6 +688,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
         clientAmtNum > 0 ||
         vendorPayNum > 0 ||
         amountPaidNum > 0 ||
+        vendorAmountPaidNum > 0 ||
         passengers.some((p) => p.name.trim() || (p.passport && p.passport.trim()))
     );
   }, [
@@ -644,6 +707,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
     clientAmtNum,
     vendorPayNum,
     amountPaidNum,
+    vendorAmountPaidNum,
     passengers,
   ]);
 
@@ -863,7 +927,7 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
             onChangePassengers={setPassengers}
             requireFirstPassenger={!partyId}
           />
-          {/* MONEY: One single row with Profit Preview badge */}
+          {/* MONEY: One single row */}
           <div className="pt-1 border-t space-y-1.5">
             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
               {/* Purchasing Cost */}
@@ -983,24 +1047,34 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
                 </div>
               )}
 
-              {/* Profit Preview Badge */}
-              <div className="flex flex-col justify-end">
-                <div className="h-8 px-2 flex items-center justify-between rounded bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-[11px]">
-                  <span className="text-[10px] text-teal-800 dark:text-teal-300 flex items-center gap-0.5 font-medium">
-                    <TrendingUp className="w-3 h-3" /> Profit:
-                  </span>
-                  <span
-                    className={`font-mono font-bold ${
-                      liveProfit >= 0
-                        ? "text-teal-700 dark:text-teal-300"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
+              {/* Amount Paid to Vendor (optional initial vendor CPV voucher on create) */}
+              {!isEditMode && (
+                <div>
+                  <Label
+                    htmlFor="booking-vendor-amount-paid"
+                    className="text-[11px] font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {liveProfit.toLocaleString()}
-                  </span>
+                    Amount Paid to Vendor
+                  </Label>
+                  <Input
+                    id="booking-vendor-amount-paid"
+                    type="number"
+                    min={0}
+                    value={vendorAmountPaid}
+                    onChange={(e) => setVendorAmountPaid(e.target.value)}
+                    placeholder="0"
+                    className="h-8 text-xs font-mono text-right mt-0.5"
+                  />
                 </div>
-              </div>
+              )}
             </div>
+
+            {!isEditMode && vendorPaymentInlineError && (
+              <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>{vendorPaymentInlineError}</span>
+              </div>
+            )}
 
             {invoiceUnderPaidError && (
               <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">

@@ -587,12 +587,12 @@ export function GlobalSearchBar() {
                             <span
                               className={cn(
                                 "text-[10px] font-bold px-1.5 py-0.2 rounded uppercase",
-                                v.direction === "out"
+                                v.direction === "out" || v.direction === "paid"
                                   ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
                                   : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
                               )}
                             >
-                              {v.direction === "out" ? "PAID" : "RCVD"}
+                              {v.direction === "out" || v.direction === "paid" ? "PAID" : "RCVD"}
                             </span>
                             <span className="font-bold">
                               PKR {(Number(v.amount) || 0).toLocaleString()}

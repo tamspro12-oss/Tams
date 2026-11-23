@@ -6,8 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { sendEmail, createBookingEmailBody } from "@/lib/emailService";
 import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
-import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import {
   Tooltip,
   TooltipContent,
@@ -24,6 +24,7 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const queryClient = useQueryClient();
 
   const handleEmailBooking = async () => {
@@ -72,15 +73,10 @@ export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) 
     setIsSending(true);
     console.log('[EmailBookingButton] Starting booking email process...');
     try {
-      // Load invoice template (DB first, localStorage fallback)
-      const templateResult = await loadAgencyTemplate<Record<string, any>>(
-        'invoice_template',
-        agency?.id
-      );
-      const parsedTemplate = templateResult.data || {};
-      
-      // Generate PDF and get blob (correct parameter order: client, vendor, template)
-      const pdfResult = await generateBookingConfirmationPDF(client, vendor, parsedTemplate);
+      const branding = await getBrandingAsync();
+
+      // Generate PDF and get blob
+      const pdfResult = await generateBookingConfirmationPDF(client, vendor, branding);
       const pdfBlob = pdfResult.doc.output('blob');
       
       // Convert blob to base64

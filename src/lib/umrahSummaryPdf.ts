@@ -1,6 +1,16 @@
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
+import {
+  DEFAULT_BRAND_COLOR,
+  drawBrandLogo,
+  ensureReadableOnWhite,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+  resolveAgencyBrandingFromRecords,
+  type AgencyBranding,
+} from "@/lib/pdf/agencyBranding";
 
 interface HotelLine {
   city: "Makkah" | "Madinah";
@@ -13,6 +23,7 @@ interface HotelLine {
 }
 
 export interface UmrahSummaryData {
+  branding?: AgencyBranding;
   agencyName?: string;
   agencyPhone?: string;
   agencyEmail?: string;
@@ -52,34 +63,62 @@ const num = (v: string | number) => {
 };
 
 export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
+  const branding: AgencyBranding =
+    d.branding ??
+    resolveAgencyBrandingFromRecords({
+      signupAgencyName: d.agencyName || null,
+      invoiceTemplate: {
+        agencyName: d.agencyName,
+        phone: d.agencyPhone,
+        email: d.agencyEmail,
+        address: d.agencyAddress,
+        themeColor: DEFAULT_BRAND_COLOR,
+      },
+    });
+
+  const primaryRgb = hexToRgb(branding.brandColor);
+  const readablePrimary = ensureReadableOnWhite(primaryRgb);
+  const contrastOnPrimary = getContrastTextRgb(primaryRgb);
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
 
   // Header
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text(d.agencyName || "Travel Agency", 14, 12);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  const contactLine = [d.agencyPhone, d.agencyEmail].filter(Boolean).join("  |  ");
-  if (contactLine) doc.text(contactLine, 14, 19);
-  if (d.agencyAddress) doc.text(d.agencyAddress, 14, 24);
+  doc.setFillColor(...primaryRgb);
+  doc.rect(0, 0, pageWidth, 30, "F");
 
-  doc.setTextColor(15, 23, 42);
+  let leftTextX = 14;
+  if (branding.logo) {
+    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left");
+    if (logoRes.rendered) {
+      leftTextX = 14 + logoRes.width + 4;
+    }
+  }
+
+  doc.setTextColor(...contrastOnPrimary);
+  doc.setFontSize(15.5);
+  doc.setFont("helvetica", "bold");
+  doc.text(branding.agencyName, leftTextX, 13);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  const contactParts = formatBrandingContactParts(branding);
+  if (contactParts.length > 0) {
+    const contactLines = doc.splitTextToSize(contactParts.join("  |  "), 155).slice(0, 2);
+    doc.text(contactLines, leftTextX, 19.5);
+  }
+
+  doc.setTextColor(...readablePrimary);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("Umrah Package Quotation", 14, 40);
+  doc.text("Umrah Package Quotation", 14, 41);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Generated: ${format(new Date(), "dd MMM yyyy, HH:mm")}`, 14, 46);
-  if (d.packageName) doc.text(`Package: ${d.packageName}`, pageWidth - 14, 46, { align: "right" });
+  doc.text(`Generated: ${format(new Date(), "dd MMM yyyy, HH:mm")}`, 14, 47);
+  if (d.packageName) doc.text(`Package: ${d.packageName}`, pageWidth - 14, 47, { align: "right" });
 
-  let y = 54;
+  let y = 55;
 
   // Trip info
   if (d.arrivalDate || d.departureDate || d.result.totalPassengers > 0) {
@@ -89,7 +128,7 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
     info.push(["Total Nights", String(d.result.nights)]);
     const pax = `${num(d.adultCount)} Adult, ${num(d.childCount)} Child, ${num(d.infantCount)} Infant`;
     info.push(["Passengers", pax]);
-    info.push(["SAR → PKR Rate", String(d.sarToPkrRate)]);
+    info.push(["SAR -> PKR Rate", String(d.sarToPkrRate)]);
 
     autoTable(doc, {
       startY: y,
@@ -120,7 +159,7 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
         String(h.nights),
       ]),
       styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold" },
+      headStyles: { fillColor: primaryRgb, textColor: contrastOnPrimary, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [248, 250, 252] },
     });
     y = (doc as any).lastAutoTable.finalY + 6;
@@ -148,7 +187,7 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
       head: [["Item", "Amount"]],
       body: charges,
       styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold" },
+      headStyles: { fillColor: primaryRgb, textColor: contrastOnPrimary, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [248, 250, 252] },
     });
     y = (doc as any).lastAutoTable.finalY + 6;
@@ -166,25 +205,25 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   let sy = y + 16;
-  doc.text(`Makkah Hotel Total:`, 20, sy);
+  doc.text("Makkah Hotel Total:", 20, sy);
   doc.text(fmt(d.result.makkahCost), pageWidth - 20, sy, { align: "right" });
   sy += 6;
-  doc.text(`Madinah Hotel Total:`, 20, sy);
+  doc.text("Madinah Hotel Total:", 20, sy);
   doc.text(fmt(d.result.madinahCost), pageWidth - 20, sy, { align: "right" });
   sy += 6;
-  doc.text(`Base Total:`, 20, sy);
+  doc.text("Base Total:", 20, sy);
   doc.text(fmt(d.result.baseTotal), pageWidth - 20, sy, { align: "right" });
   if (d.result.profitAmount > 0) {
     sy += 6;
-    doc.text(`Service / Markup:`, 20, sy);
+    doc.text("Service / Markup:", 20, sy);
     doc.text(fmt(d.result.profitAmount), pageWidth - 20, sy, { align: "right" });
   }
 
   y = y + 52;
   // Final total card
-  doc.setFillColor(15, 23, 42);
+  doc.setFillColor(...primaryRgb);
   doc.rect(14, y, pageWidth - 28, 22, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(...contrastOnPrimary);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text("Grand Total", 20, y + 9);
@@ -204,7 +243,7 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8);
   doc.text(
-    "Note: This is a draft quotation. Prices may vary based on availability and final confirmation.",
+    `Prepared by ${branding.agencyName}. Prices may vary based on availability and final confirmation.`,
     pageWidth / 2,
     pageHeight - 10,
     { align: "center" }

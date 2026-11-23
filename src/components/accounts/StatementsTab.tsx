@@ -7,6 +7,13 @@ import { Download } from "lucide-react";
 import { useAccounts, useAgencyLedger, usePartyStatement } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
@@ -32,6 +39,7 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
   const { clients } = useClients();
   const { vendors } = useVendors();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   // Set default bank or party if available
   React.useEffect(() => {
@@ -165,28 +173,54 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
   }, [statementRows]);
 
   // Export PDF with full official header preserved
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
+      const branding = await getBrandingAsync();
+      const primaryRgb = hexToRgb(branding.brandColor);
+      const contrastRgb = getContrastTextRgb(primaryRgb);
       const doc = new jsPDF("portrait", "mm", "a4");
-      doc.setFontSize(18);
-      doc.text(agency?.agency_name || "TAMS Pro Travel Agency", 14, 18);
-      doc.setFontSize(9);
-      const contactInfo = [
-        agency?.address || "Head Office, Travel Plaza",
-        agency?.phone ? `Phone: ${agency?.phone}` : "",
-      ].filter(Boolean).join(" • ");
-      doc.text(contactInfo, 14, 24);
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(...primaryRgb);
+      doc.rect(0, 0, pageWidth, 4, "F");
+
+      let leftX = 14;
+      if (branding.logo) {
+        const logoRes = drawBrandLogo(doc, branding.logo, 14, 7, 14, 14, "left");
+        if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(15, 23, 42);
+      doc.text(branding.agencyName, leftX, 15);
+
+      const contactParts = formatBrandingContactParts(branding);
+      let nextY = 21;
+      if (contactParts.length > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(doc.splitTextToSize(contactParts.join("  |  "), 170).slice(0, 1), leftX, nextY);
+        nextY += 6;
+      }
+
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text(scopeMetadata.title, 14, 30);
+      doc.setTextColor(30, 41, 59);
+      doc.text(scopeMetadata.title, 14, Math.max(nextY, 26));
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text(`Period: ${dateRange.start} to ${dateRange.end} | Generated: ${format(new Date(), "PPpp")}`, 14, 36);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Period: ${dateRange.start} to ${dateRange.end} | Generated: ${format(new Date(), "PPpp")}`, 14, Math.max(nextY + 5, 31));
 
       // Opening & Closing summary box
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
       doc.text(
         `Opening Balance: PKR ${totals.opening.toLocaleString()}  |  Total In: PKR ${totals.totDebit.toLocaleString()}  |  Total Out: PKR ${totals.totCredit.toLocaleString()}  |  Closing: PKR ${totals.closing.toLocaleString()}`,
         14,
-        42
+        Math.max(nextY + 11, 37)
       );
 
       const tableData = statementRows.map((r) => [
@@ -202,10 +236,20 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
       autoTable(doc, {
         head: [["Date", "Ref/PNR", "Description", "Method/Account", "Debit", "Credit", "Balance"]],
         body: tableData,
-        startY: 46,
+        startY: Math.max(nextY + 15, 41),
         styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+        headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
       });
+
+      const pageCount = doc.getNumberOfPages();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      for (let i = 1; i <= pageCount; i += 1) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`${branding.agencyName} • Financial Statement`, 14, pageHeight - 7);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
+      }
 
       doc.save(`Statement_${scopeType}_${format(new Date(), "yyyyMMdd")}.pdf`);
       toast.success("Statement PDF downloaded");

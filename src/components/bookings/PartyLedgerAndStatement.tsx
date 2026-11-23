@@ -22,7 +22,13 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { usePartyStatement, useAccounts, useTransactionMutations, PartyStatementRow } from "@/hooks/useUnifiedTransactions";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { getKarachiYmd, getKarachiTodayNoon } from "@/lib/karachiTime";
 import { toast } from "sonner";
@@ -79,7 +85,7 @@ export function PartyLedgerAndStatement({
   });
 
   const { accounts, cashAccount } = useAccounts();
-  const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const { recordPayment, reverseTransaction } = useTransactionMutations();
 
   // Initialize account
@@ -202,22 +208,54 @@ export function PartyLedgerAndStatement({
   };
 
   // Export PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
+      const branding = await getBrandingAsync();
+      const primaryRgb = hexToRgb(branding.brandColor);
+      const contrastRgb = getContrastTextRgb(primaryRgb);
       const doc = new jsPDF("portrait", "mm", "a4");
-      doc.setFontSize(16);
-      doc.text(agency?.agency_name || "TAMS Pro Travel Agency", 14, 16);
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(...primaryRgb);
+      doc.rect(0, 0, pageWidth, 4, "F");
+
+      let leftX = 14;
+      if (branding.logo) {
+        const logoRes = drawBrandLogo(doc, branding.logo, 14, 7, 14, 14, "left");
+        if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(15, 23, 42);
+      doc.text(branding.agencyName, leftX, 14);
+
+      const contactParts = formatBrandingContactParts(branding);
+      let nextY = 20;
+      if (contactParts.length > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(doc.splitTextToSize(contactParts.join("  |  "), 170).slice(0, 1), leftX, nextY);
+        nextY += 5;
+      }
+
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text(`Party Statement: ${partyName} (${partyType.toUpperCase()})`, 14, 23);
-      doc.setFontSize(9);
-      doc.text(`Generated: ${format(new Date(), "PPpp")}`, 14, 29);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Party Statement: ${partyName} (${partyType.toUpperCase()})`, 14, Math.max(nextY, 24));
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${format(new Date(), "PPpp")}`, 14, Math.max(nextY + 5, 29));
 
       // Summary block
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
       doc.text(
         `Total Charged: PKR ${summary.totDebit.toLocaleString()}  |  Total Paid: PKR ${summary.totCredit.toLocaleString()}  |  Balance Due: PKR ${summary.balance.toLocaleString()}`,
         14,
-        36
+        Math.max(nextY + 11, 35)
       );
 
       const tableData = rawRows.map((r) => [
@@ -233,10 +271,20 @@ export function PartyLedgerAndStatement({
       autoTable(doc, {
         head: [["Date", "Ref/PNR", "Particulars", "Account/Method", "Debit", "Credit", "Balance"]],
         body: tableData,
-        startY: 40,
+        startY: Math.max(nextY + 15, 39),
         styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
+        headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
       });
+
+      const pageCount = doc.getNumberOfPages();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      for (let i = 1; i <= pageCount; i += 1) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`${branding.agencyName} • Party Statement`, 14, pageHeight - 7);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
+      }
 
       doc.save(`${partyName.replace(/\s+/g, "_")}_Statement.pdf`);
       toast.success("Statement exported to PDF");

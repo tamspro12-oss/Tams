@@ -1,6 +1,18 @@
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatPdfEditedNote } from "@/lib/documentEditHelpers";
+import {
+  DEFAULT_BRAND_COLOR,
+  drawBrandLogo,
+  ensureReadableOnWhite,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+  resolveAgencyBrandingFromRecords,
+  tintRgb,
+  type AgencyBranding,
+  type RgbTuple,
+} from "@/lib/pdf/agencyBranding";
 
 export interface VoucherPdfData {
   voucherNo: string;
@@ -17,48 +29,86 @@ export interface VoucherPdfData {
   isEdited?: boolean;
   lastEditedAt?: string | null;
   allocations?: { invoiceNo: string; amount: number }[];
+  branding?: AgencyBranding;
   agency?: {
     name?: string;
     phone?: string;
+    email?: string;
     address?: string;
+    logo?: string | null;
+    brandColor?: string;
   };
 }
 
-const BRAND = {
-  navy: [11, 25, 44] as [number, number, number],
-  teal: [13, 148, 136] as [number, number, number],
-  text: [30, 41, 59] as [number, number, number],
-  muted: [100, 116, 139] as [number, number, number],
-};
+const TEXT_BODY: RgbTuple = [30, 41, 59];
+const TEXT_MUTED: RgbTuple = [100, 116, 139];
+const BORDER_LIGHT: RgbTuple = [226, 232, 240];
 
-export function generateVoucherPdf(data: VoucherPdfData) {
+export function buildVoucherReceiptPdfDoc(data: VoucherPdfData): jsPDF {
+  const branding: AgencyBranding =
+    data.branding ??
+    resolveAgencyBrandingFromRecords({
+      signupAgencyName: data.agency?.name || null,
+      invoiceTemplate: data.agency
+        ? {
+            agencyName: data.agency.name,
+            phone: data.agency.phone,
+            email: data.agency.email,
+            address: data.agency.address,
+            logo: data.agency.logo,
+            themeColor: data.agency.brandColor || DEFAULT_BRAND_COLOR,
+          }
+        : null,
+    });
+
+  const primaryRgb = hexToRgb(branding.brandColor);
+  const readablePrimary = ensureReadableOnWhite(primaryRgb);
+  const contrastOnPrimary = getContrastTextRgb(primaryRgb);
+  const softTint = tintRgb(primaryRgb, 0.93);
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Top Navy Bar
-  doc.setFillColor(...BRAND.navy);
-  doc.rect(0, 0, pageWidth, 28, "F");
+  // Top Header Bar
+  doc.setFillColor(...primaryRgb);
+  doc.rect(0, 0, pageWidth, 30, "F");
+
+  let leftTextX = 14;
+  if (branding.logo) {
+    const logoRes = drawBrandLogo(doc, branding.logo, 14, 5, 22, 18, "left");
+    if (logoRes.rendered) {
+      leftTextX = 14 + logoRes.width + 4;
+    }
+  }
 
   const title =
     data.direction === "received"
       ? "CASH / BANK RECEIPT VOUCHER (CRV)"
       : "PAYMENT VOUCHER (CPV)";
 
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(...contrastOnPrimary);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(data.agency?.name || "TAMS PRO TRAVEL AGENCY", 14, 13);
+  doc.text(branding.agencyName, leftTextX, 13);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(title, 14, 20);
+  doc.text(title, leftTextX, 20.5);
 
-  // Teal line
-  doc.setFillColor(...BRAND.teal);
-  doc.rect(0, 27, pageWidth, 2, "F");
+  const contactParts = formatBrandingContactParts(branding);
+  if (contactParts.length > 0) {
+    doc.setFontSize(7.5);
+    const hdrLine = doc.splitTextToSize(contactParts.join("  |  "), 78).slice(0, 2);
+    doc.text(hdrLine, pageWidth - 14, 13, { align: "right" });
+  }
 
-  let y = 38;
-  doc.setTextColor(...BRAND.text);
+  // Accent line
+  doc.setFillColor(...readablePrimary);
+  doc.rect(0, 29, pageWidth, 1.5, "F");
+
+  let y = 40;
+  doc.setTextColor(...TEXT_BODY);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.text(`VOUCHER NO: ${data.voucherNo}`, 14, y);
@@ -77,18 +127,18 @@ export function generateVoucherPdf(data: VoucherPdfData) {
   y += 28;
 
   // Amount in Numbers & Words Box
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(...softTint);
+  doc.setDrawColor(...BORDER_LIGHT);
   doc.roundedRect(14, y, pageWidth - 28, 24, 3, 3, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(...BRAND.navy);
-  doc.text(`AMOUNT: PKR ${data.amount.toLocaleString()}`, 20, y + 10);
+  doc.setTextColor(...readablePrimary);
+  doc.text(`AMOUNT: PKR ${Number(data.amount || 0).toLocaleString()}`, 20, y + 10);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(...BRAND.muted);
+  doc.setTextColor(...TEXT_MUTED);
   doc.text(`Payment allocated via ${data.paymentMode} account: ${data.accountName}`, 20, y + 18);
 
   y += 32;
@@ -105,7 +155,7 @@ export function generateVoucherPdf(data: VoucherPdfData) {
       startY: y,
       head: [["#", "Invoice Matched", "Allocated Amount"]],
       body: allocRows,
-      headStyles: { fillColor: BRAND.navy, textColor: [255, 255, 255], fontSize: 8.5 },
+      headStyles: { fillColor: primaryRgb, textColor: contrastOnPrimary, fontSize: 8.5 },
       bodyStyles: { fontSize: 8.5 },
       margin: { left: 14, right: 14 },
     });
@@ -116,32 +166,51 @@ export function generateVoucherPdf(data: VoucherPdfData) {
   if (data.notes) {
     doc.setFontSize(8.5);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...BRAND.text);
+    doc.setTextColor(...TEXT_BODY);
     doc.text("Description / Remarks:", 14, y);
     doc.setFont("helvetica", "normal");
-    doc.text(data.notes, 14, y + 5);
-    y += 18;
+    const noteLines = doc.splitTextToSize(data.notes, pageWidth - 28);
+    doc.text(noteLines, 14, y + 5);
+    y += noteLines.length * 4.5 + 12;
   }
 
   // Signatures
-  y = Math.max(y + 20, 240);
+  y = Math.max(y + 18, 236);
   doc.setDrawColor(200, 200, 200);
   doc.line(14, y, 64, y);
   doc.line(140, y, 190, y);
 
   doc.setFontSize(8);
-  doc.setTextColor(...BRAND.muted);
+  doc.setTextColor(...TEXT_MUTED);
   doc.text("Prepared By", 14, y + 5);
   doc.text("Received / Authorized By", 140, y + 5);
+
+  // Footer
+  doc.setDrawColor(...BORDER_LIGHT);
+  doc.setLineWidth(0.35);
+  doc.line(14, pageHeight - 16, pageWidth - 14, pageHeight - 16);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text(
+    contactParts.length > 0
+      ? `${branding.agencyName}  |  ${contactParts.join("  |  ")}`
+      : branding.agencyName,
+    14,
+    pageHeight - 10
+  );
 
   const editedNote = formatPdfEditedNote(data.isEdited, data.lastEditedAt);
   if (editedNote) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.5);
-    doc.text(editedNote, pageWidth - 14, 280, { align: "right" });
+    doc.text(editedNote, pageWidth - 14, pageHeight - 10, { align: "right" });
     doc.setFont("helvetica", "normal");
   }
 
-  doc.save(`Voucher_${data.voucherNo}.pdf`);
+  return doc;
 }
 
+export function generateVoucherPdf(data: VoucherPdfData) {
+  const doc = buildVoucherReceiptPdfDoc(data);
+  doc.save(`Voucher_${data.voucherNo}.pdf`);
+}

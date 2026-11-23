@@ -30,7 +30,7 @@ import {
   type QuotationItem,
 } from "@/hooks/useQuotations";
 import { useParties, type Party } from "@/hooks/useParties";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { cn } from "@/lib/utils";
@@ -95,7 +95,7 @@ export default function QuotationFormPage() {
 
   const { quotations = [], addQuotation, updateQuotation } = useQuotations();
   const { parties = [] } = useParties();
-  const { data: agency } = useAgency();
+  const { branding } = useAgencyBranding();
 
   const formContainerRef = useRef<HTMLFormElement>(null);
   const itemsSectionRef = useRef<HTMLDivElement>(null);
@@ -535,11 +535,7 @@ export default function QuotationFormPage() {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               };
-              downloadQuotationPdf(quoteForPdf, {
-                agencyName: agency?.name,
-                agencyEmail: agency?.contact_email || agency?.email,
-                agencyPhone: agency?.phone_number,
-              });
+              downloadQuotationPdf(quoteForPdf, { branding });
               toast.success("PDF generated & downloaded");
             } catch (pdfErr) {
               console.warn("Quotation PDF error:", pdfErr);

@@ -9,6 +9,7 @@ import { Download, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { InvoicePreviewDialog } from "./InvoicePreviewDialog";
 
 interface InvoiceDialogProps {
@@ -25,6 +26,7 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   const handleGenerateInvoice = async (client: any) => {
     if (!agency) {
@@ -37,7 +39,8 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
     }
 
     try {
-      const { blobUrl, filename, doc } = await generateInvoicePDF(client, agency);
+      const branding = await getBrandingAsync();
+      const { blobUrl, filename, doc } = await generateInvoicePDF(client, agency, branding);
       setPdfUrl(blobUrl);
       setPdfFilename(filename);
       setPdfDoc(doc);

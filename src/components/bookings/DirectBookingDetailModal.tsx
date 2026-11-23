@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { useVendors, useClients } from "@/hooks/useStorage";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { useVouchers } from "@/hooks/useVouchers";
 import { InlinePaymentHistory } from "@/components/InlinePaymentHistory";
 import { ClientPaymentDialog } from "@/components/ClientPaymentDialog";
@@ -77,7 +77,7 @@ export function DirectBookingDetailModal({
 
   const { deleteClient } = useClients();
   const { vendors } = useVendors();
-  const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const { vouchers, addVoucher } = useVouchers();
 
   if (!open || !client) return null;
@@ -104,15 +104,15 @@ export function DirectBookingDetailModal({
   const passengers = Array.isArray(client.passengers_data) && client.passengers_data.length > 0
     ? client.passengers_data
     : [
-        {
-          name: client.name,
-          passport_number: client.passport_number || "-",
-          cnic: client.cnic || "-",
-          date_of_birth: "-",
-          gender: "M",
-          nationality: "Pakistani",
-        },
-      ];
+      {
+        name: client.name,
+        passport_number: client.passport_number || "-",
+        cnic: client.cnic || "-",
+        date_of_birth: "-",
+        gender: "M",
+        nationality: "Pakistani",
+      },
+    ];
 
   const handleCopyPnr = () => {
     if (!client.pnr) return;
@@ -125,11 +125,14 @@ export function DirectBookingDetailModal({
   const handleDownloadConfirmationPdf = async () => {
     try {
       setIsGeneratingPdf(true);
-      await generateBookingConfirmationPDF(client, vendor, {
-        agencyName: agency?.name || "Travel Agency",
-        phone: agency?.phone_number || agency?.contact_info || "",
-        email: agency?.email || agency?.contact_email || "",
-      });
+      const branding = await getBrandingAsync();
+      const { doc, filename, blobUrl } = await generateBookingConfirmationPDF(
+        client,
+        vendor,
+        branding
+      );
+      doc.save(filename);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
       toast.success("Booking confirmation PDF downloaded!");
     } catch (err: any) {
       console.error(err);
@@ -186,8 +189,8 @@ export function DirectBookingDetailModal({
                   client.payment_status === "Paid" || client.payment_status === "paid"
                     ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                     : client.payment_status === "Partial" || client.payment_status === "partial"
-                    ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                    : "bg-red-500/10 text-red-600 border-red-500/20"
+                      ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                      : "bg-red-500/10 text-red-600 border-red-500/20"
                 )}
               >
                 ● {client.payment_status || "Pending"}
@@ -212,14 +215,10 @@ export function DirectBookingDetailModal({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  downloadVoucherPdf(linkedVouchers[0], {
-                    agencyName: agency?.name || "Travel Agency",
-                    agencyEmail: agency?.email || agency?.contact_email || "",
-                    agencyPhone: agency?.phone_number || agency?.contact_info || "",
-                    agencyAddress: "",
-                  })
-                }
+                onClick={async () => {
+                  const branding = await getBrandingAsync();
+                  downloadVoucherPdf(linkedVouchers[0], { branding });
+                }}
                 className="text-xs h-8 gap-1.5"
               >
                 <Ticket className="w-3.5 h-3.5 text-amber-600" />
@@ -373,298 +372,294 @@ export function DirectBookingDetailModal({
 
           {cardSubTab === "bookings" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Left 2 Cols: Travel & Passenger Details */}
-            <div className="lg:col-span-2 space-y-5">
-              {/* Flight & Travel Details Card */}
-              <Card>
-                <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Plane className="w-4 h-4 text-primary" />
-                    Travel & Booking Information
-                  </CardTitle>
-                  {client.pnr && (
-                    <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-0.5 rounded border">
-                      <span className="text-xs text-muted-foreground">PNR:</span>
-                      <span className="font-mono font-bold text-xs">{client.pnr}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleCopyPnr}
-                        className="h-5 w-5 ml-1"
-                      >
-                        {copiedPnr ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Service Type</span>
-                    <span className="font-semibold text-foreground text-sm">
-                      {client.travel_type || "Ticket"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Destination</span>
-                    <span className="font-semibold text-foreground text-sm uppercase">
-                      {client.destination || "Not specified"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Airline</span>
-                    <span className="font-semibold text-foreground text-sm">
-                      {client.airline || "Not specified"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Flight Date</span>
-                    <span className="font-semibold text-foreground text-sm flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                      {client.flight_date
-                        ? format(parseISO(client.flight_date), "dd MMM yyyy")
-                        : "Not set"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Name Update Date</span>
-                    <span className="font-semibold text-foreground text-sm flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                      {client.name_update_date || "Not set"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Passengers Count</span>
-                    <span className="font-semibold text-foreground text-sm">
-                      {passengers.length} Pax ({client.group_booking_type || "Individual"})
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Contact Phone</span>
-                    <span className="font-semibold text-foreground text-sm flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-muted-foreground" />
-                      {client.contact_number || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Contact Email</span>
-                    <span className="font-semibold text-foreground text-sm flex items-center gap-1">
-                      <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                      {client.email || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Booking Created</span>
-                    <span className="font-semibold text-foreground text-sm">
-                      {client.created_at
-                        ? format(parseISO(client.created_at), "dd MMM yyyy, hh:mm a")
-                        : "-"}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Passengers Manifest Card */}
-              <Card>
-                <CardHeader className="py-3 px-4 border-b">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Users className="w-4 h-4 text-indigo-500" />
-                    Passengers Manifest ({passengers.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50 border-b text-muted-foreground">
-                      <tr>
-                        <th className="p-2.5 text-center w-10">#</th>
-                        <th className="p-2.5 text-left">Passenger Name</th>
-                        <th className="p-2.5 text-left">Passport Number</th>
-                        <th className="p-2.5 text-left">CNIC</th>
-                        <th className="p-2.5 text-left">DOB</th>
-                        <th className="p-2.5 text-center">Gender</th>
-                        <th className="p-2.5 text-left">Nationality</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {passengers.map((pax: any, idx: number) => (
-                        <tr key={idx} className="hover:bg-muted/20">
-                          <td className="p-2.5 text-center font-bold text-muted-foreground">
-                            {idx + 1}
-                          </td>
-                          <td className="p-2.5 font-bold uppercase text-foreground">
-                            {pax.name || client.name}
-                          </td>
-                          <td className="p-2.5 font-mono uppercase">
-                            {pax.passport_number || client.passport_number || "-"}
-                          </td>
-                          <td className="p-2.5 font-mono">
-                            {pax.cnic || client.cnic || "-"}
-                          </td>
-                          <td className="p-2.5">{pax.date_of_birth || "-"}</td>
-                          <td className="p-2.5 text-center">{pax.gender || "M"}</td>
-                          <td className="p-2.5">{pax.nationality || "Pakistani"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
-
-              {/* Notes Card */}
-              {client.notes && (
+              {/* Left 2 Cols: Travel & Passenger Details */}
+              <div className="lg:col-span-2 space-y-5">
+                {/* Flight & Travel Details Card */}
                 <Card>
-                  <CardHeader className="py-2.5 px-4 border-b">
-                    <CardTitle className="text-xs font-semibold flex items-center gap-2">
-                      <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                      Notes & Special Instructions
+                  <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Plane className="w-4 h-4 text-primary" />
+                      Travel & Booking Information
                     </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3 text-xs text-muted-foreground whitespace-pre-wrap">
-                    {client.notes}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Right Col: Payments & Vendor Association */}
-            <div className="space-y-5">
-              {/* Vendor Association Card */}
-              <Card>
-                <CardHeader className="py-3 px-4 border-b">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Store className="w-4 h-4 text-emerald-500" />
-                    Supplier / Vendor Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 text-xs space-y-2">
-                  {vendor ? (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Vendor Name:</span>
-                        <span className="font-bold text-foreground text-sm">
-                          {vendor.name}
-                        </span>
-                      </div>
-                      {vendor.service_type && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Service:</span>
-                          <span className="font-medium text-foreground">
-                            {vendor.service_type}
-                          </span>
-                        </div>
-                      )}
-                      {vendor.contact_person && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Contact Person:</span>
-                          <span className="font-medium text-foreground">
-                            {vendor.contact_person}
-                          </span>
-                        </div>
-                      )}
-                      {vendor.contact_number && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Phone:</span>
-                          <span className="font-medium text-foreground">
-                            {vendor.contact_number}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between pt-2 border-t">
-                        <span className="text-muted-foreground">Payable for this booking:</span>
-                        <span className="font-bold text-foreground">
-                          PKR {purchasePrice.toLocaleString()}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground italic text-center py-2">
-                      No vendor associated with this booking
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Payment History Card */}
-              <Card>
-                <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <History className="w-4 h-4 text-blue-500" />
-                    Settlement & Payments
-                  </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPaymentDialog(true)}
-                    className="h-7 text-xs gap-1"
-                  >
-                    <DollarSign className="w-3 h-3 text-emerald-600" />
-                    + Payment
-                  </Button>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <InlinePaymentHistory entityId={client.id} entityType="client" />
-                </CardContent>
-              </Card>
-
-              {/* Linked Vouchers Card */}
-              <Card>
-                <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Ticket className="w-4 h-4 text-amber-500" />
-                    Vouchers ({linkedVouchers.length})
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowCreateVoucher(true)}
-                    className="h-7 text-xs text-amber-600 font-semibold"
-                  >
-                    + Create Voucher
-                  </Button>
-                </CardHeader>
-                <CardContent className="p-4 text-xs space-y-2">
-                  {linkedVouchers.length > 0 ? (
-                    linkedVouchers.map((v) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center justify-between p-2 rounded border bg-muted/30"
-                      >
-                        <div>
-                          <span className="font-bold">{v.voucher_number}</span>
-                          <span className="text-muted-foreground ml-2">
-                            ({v.voucher_type})
-                          </span>
-                        </div>
+                    {client.pnr && (
+                      <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-0.5 rounded border">
+                        <span className="text-xs text-muted-foreground">PNR:</span>
+                        <span className="font-mono font-bold text-xs">{client.pnr}</span>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            downloadVoucherPdf(v, {
-                              agencyName: agency?.name || "Travel Agency",
-                              agencyEmail: agency?.email || agency?.contact_email || "",
-                              agencyPhone: agency?.phone_number || agency?.contact_info || "",
-                              agencyAddress: "",
-                            })
-                          }
-                          className="h-6 text-[11px] gap-1"
+                          size="icon"
+                          onClick={handleCopyPnr}
+                          className="h-5 w-5 ml-1"
                         >
-                          <Download className="w-3 h-3" />
-                          PDF
+                          {copiedPnr ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
                         </Button>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-muted-foreground italic text-center py-1">
-                      No vouchers issued for this booking yet
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                    )}
+                  </CardHeader>
+                  <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Service Type</span>
+                      <span className="font-semibold text-foreground text-sm">
+                        {client.travel_type || "Ticket"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Destination</span>
+                      <span className="font-semibold text-foreground text-sm uppercase">
+                        {client.destination || "Not specified"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Airline</span>
+                      <span className="font-semibold text-foreground text-sm">
+                        {client.airline || "Not specified"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Flight Date</span>
+                      <span className="font-semibold text-foreground text-sm flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                        {client.flight_date
+                          ? format(parseISO(client.flight_date), "dd MMM yyyy")
+                          : "Not set"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Name Update Date</span>
+                      <span className="font-semibold text-foreground text-sm flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                        {client.name_update_date || "Not set"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Passengers Count</span>
+                      <span className="font-semibold text-foreground text-sm">
+                        {passengers.length} Pax ({client.group_booking_type || "Individual"})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Contact Phone</span>
+                      <span className="font-semibold text-foreground text-sm flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                        {client.contact_number || "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Contact Email</span>
+                      <span className="font-semibold text-foreground text-sm flex items-center gap-1">
+                        <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                        {client.email || "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5">Booking Created</span>
+                      <span className="font-semibold text-foreground text-sm">
+                        {client.created_at
+                          ? format(parseISO(client.created_at), "dd MMM yyyy, hh:mm a")
+                          : "-"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Passengers Manifest Card */}
+                <Card>
+                  <CardHeader className="py-3 px-4 border-b">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-500" />
+                      Passengers Manifest ({passengers.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50 border-b text-muted-foreground">
+                        <tr>
+                          <th className="p-2.5 text-center w-10">#</th>
+                          <th className="p-2.5 text-left">Passenger Name</th>
+                          <th className="p-2.5 text-left">Passport Number</th>
+                          <th className="p-2.5 text-left">CNIC</th>
+                          <th className="p-2.5 text-left">DOB</th>
+                          <th className="p-2.5 text-center">Gender</th>
+                          <th className="p-2.5 text-left">Nationality</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {passengers.map((pax: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-muted/20">
+                            <td className="p-2.5 text-center font-bold text-muted-foreground">
+                              {idx + 1}
+                            </td>
+                            <td className="p-2.5 font-bold uppercase text-foreground">
+                              {pax.name || client.name}
+                            </td>
+                            <td className="p-2.5 font-mono uppercase">
+                              {pax.passport_number || client.passport_number || "-"}
+                            </td>
+                            <td className="p-2.5 font-mono">
+                              {pax.cnic || client.cnic || "-"}
+                            </td>
+                            <td className="p-2.5">{pax.date_of_birth || "-"}</td>
+                            <td className="p-2.5 text-center">{pax.gender || "M"}</td>
+                            <td className="p-2.5">{pax.nationality || "Pakistani"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+
+                {/* Notes Card */}
+                {client.notes && (
+                  <Card>
+                    <CardHeader className="py-2.5 px-4 border-b">
+                      <CardTitle className="text-xs font-semibold flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                        Notes & Special Instructions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 text-xs text-muted-foreground whitespace-pre-wrap">
+                      {client.notes}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right Col: Payments & Vendor Association */}
+              <div className="space-y-5">
+                {/* Vendor Association Card */}
+                <Card>
+                  <CardHeader className="py-3 px-4 border-b">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Store className="w-4 h-4 text-emerald-500" />
+                      Supplier / Vendor Details
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 text-xs space-y-2">
+                    {vendor ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Vendor Name:</span>
+                          <span className="font-bold text-foreground text-sm">
+                            {vendor.name}
+                          </span>
+                        </div>
+                        {vendor.service_type && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Service:</span>
+                            <span className="font-medium text-foreground">
+                              {vendor.service_type}
+                            </span>
+                          </div>
+                        )}
+                        {vendor.contact_person && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Contact Person:</span>
+                            <span className="font-medium text-foreground">
+                              {vendor.contact_person}
+                            </span>
+                          </div>
+                        )}
+                        {vendor.contact_number && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Phone:</span>
+                            <span className="font-medium text-foreground">
+                              {vendor.contact_number}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <span className="text-muted-foreground">Payable for this booking:</span>
+                          <span className="font-bold text-foreground">
+                            PKR {purchasePrice.toLocaleString()}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground italic text-center py-2">
+                        No vendor associated with this booking
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Payment History Card */}
+                <Card>
+                  <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <History className="w-4 h-4 text-blue-500" />
+                      Settlement & Payments
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPaymentDialog(true)}
+                      className="h-7 text-xs gap-1"
+                    >
+                      <DollarSign className="w-3 h-3 text-emerald-600" />
+                      + Payment
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <InlinePaymentHistory entityId={client.id} entityType="client" />
+                  </CardContent>
+                </Card>
+
+                {/* Linked Vouchers Card */}
+                <Card>
+                  <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Ticket className="w-4 h-4 text-amber-500" />
+                      Vouchers ({linkedVouchers.length})
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowCreateVoucher(true)}
+                      className="h-7 text-xs text-amber-600 font-semibold"
+                    >
+                      + Create Voucher
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-4 text-xs space-y-2">
+                    {linkedVouchers.length > 0 ? (
+                      linkedVouchers.map((v) => (
+                        <div
+                          key={v.id}
+                          className="flex items-center justify-between p-2 rounded border bg-muted/30"
+                        >
+                          <div>
+                            <span className="font-bold">{v.voucher_number}</span>
+                            <span className="text-muted-foreground ml-2">
+                              ({v.voucher_type})
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              const branding = await getBrandingAsync();
+                              downloadVoucherPdf(v, { branding });
+                            }}
+                            className="h-6 text-[11px] gap-1"
+                          >
+                            <Download className="w-3 h-3" />
+                            PDF
+                          </Button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground italic text-center py-1">
+                        No vouchers issued for this booking yet
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
           )}
 
           {cardSubTab !== "bookings" && (

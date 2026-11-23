@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { useQuotations, type Quotation } from "@/hooks/useQuotations";
 import { useClients } from "@/hooks/useStorage";
 import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { downloadQuotationPdf, quotationPdfBase64 } from "@/lib/quotationPdf";
 import { sendEmail } from "@/lib/emailService";
 import {
@@ -79,6 +80,7 @@ export default function Quotations() {
   const { quotations = [], isLoading, updateQuotation, deleteQuotation } = useQuotations();
   const { clients = [] } = useClients();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const queryClient = useQueryClient();
 
   // Filters State
@@ -213,12 +215,9 @@ export default function Quotations() {
   }, [dateFilteredQuotations, filterService, filterStatus, search, isQuotationExpired]);
 
   // Action handlers
-  const handleDownload = (q: Quotation) => {
-    downloadQuotationPdf(q, {
-      agencyName: agency?.name,
-      agencyEmail: agency?.contact_email || agency?.email,
-      agencyPhone: agency?.phone_number,
-    });
+  const handleDownload = async (q: Quotation) => {
+    const branding = await getBrandingAsync();
+    downloadQuotationPdf(q, { branding });
     toast.success("PDF downloaded");
   };
 
@@ -244,11 +243,8 @@ export default function Quotations() {
 
     setSendingEmailId(q.id);
     try {
-      const base64 = quotationPdfBase64(q, {
-        agencyName: agency?.name,
-        agencyEmail: agency?.contact_email || agency?.email,
-        agencyPhone: agency?.phone_number,
-      });
+      const branding = await getBrandingAsync();
+      const base64 = quotationPdfBase64(q, { branding });
       const body = `
         <div style="font-family:Arial,sans-serif;color:#0a2540;">
           <h2>Quotation ${q.quotation_number}</h2>

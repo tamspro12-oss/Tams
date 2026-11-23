@@ -7,7 +7,13 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { useVendorPaymentHistoryLocal } from "@/hooks/useLocalPaymentHistory";
 import { useClients } from "@/hooks/useStorage";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 
 interface VendorQuickActionsProps {
   vendor: {
@@ -28,38 +34,65 @@ interface VendorQuickActionsProps {
 export function VendorQuickActions({ vendor, onViewLedger, onViewBookings }: VendorQuickActionsProps) {
   const { history } = useVendorPaymentHistoryLocal(vendor.id);
   const { clients } = useClients();
-  const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   // Download vendor statement as PDF (read-only export)
-  const handleDownloadStatement = () => {
+  const handleDownloadStatement = async () => {
+    const branding = await getBrandingAsync();
+    const primaryRgb = hexToRgb(branding.brandColor);
+    const contrastRgb = getContrastTextRgb(primaryRgb);
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
     const vendorClients = clients.filter(c => c.vendor_id === vendor.id);
 
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Vendor Statement", 14, 20);
+    doc.setFillColor(...primaryRgb);
+    doc.rect(0, 0, pageWidth, 4, "F");
 
-    doc.setFontSize(11);
+    let leftX = 14;
+    if (branding.logo) {
+      const logoRes = drawBrandLogo(doc, branding.logo, 14, 7, 14, 14, "left");
+      if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
+    }
+
+    // Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(15, 23, 42);
+    doc.text(branding.agencyName, leftX, 14);
+
+    const contactParts = formatBrandingContactParts(branding);
+    if (contactParts.length > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(contactParts.join("  |  "), leftX, 19);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Vendor Statement", pageWidth - 14, 14, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
     doc.setTextColor(100);
-    doc.text(`Vendor: ${vendor.name}`, 14, 30);
-    if (vendor.contact_person) doc.text(`Contact: ${vendor.contact_person}`, 14, 36);
-    if (agency?.name) doc.text(`Agency: ${agency.name}`, 14, vendor.contact_person ? 42 : 36);
-    doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, 14, vendor.contact_person ? 48 : 42);
+    doc.text(`Vendor: ${vendor.name}`, 14, 28);
+    if (vendor.contact_person) doc.text(`Contact: ${vendor.contact_person}`, 14, 34);
+    doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth - 14, 28, { align: "right" });
 
     // Summary Section
-    const summaryStartY = vendor.contact_person ? 58 : 52;
+    const summaryStartY = vendor.contact_person ? 42 : 36;
     autoTable(doc, {
       startY: summaryStartY,
       head: [["Summary", "Amount (PKR)"]],
       body: [
-        ["Total Payable", `₨ ${vendor.totalPayable.toLocaleString()}`],
-        ["Amount Paid", `₨ ${vendor.amountPaid.toLocaleString()}`],
-        ["Outstanding", `₨ ${vendor.amountPending.toLocaleString()}`],
+        ["Total Payable", `PKR ${vendor.totalPayable.toLocaleString()}`],
+        ["Amount Paid", `PKR ${vendor.amountPaid.toLocaleString()}`],
+        ["Outstanding", `PKR ${vendor.amountPending.toLocaleString()}`],
         ["Total Bookings", vendor.clientBookingsCount.toString()],
       ],
       styles: { fontSize: 10 },
-      headStyles: { fillColor: [15, 23, 42] },
+      headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
     });
 
     // Bookings Section
@@ -77,10 +110,10 @@ export function VendorQuickActions({ vendor, onViewLedger, onViewBookings }: Ven
           c.pnr || "-",
           c.destination || "-",
           c.flight_date ? format(new Date(c.flight_date), "dd MMM yyyy") : "-",
-          `₨ ${(Number(c.purchasing_price) || 0).toLocaleString()}`,
+          `PKR ${(Number(c.purchasing_price) || 0).toLocaleString()}`,
         ]),
         styles: { fontSize: 9 },
-        headStyles: { fillColor: [59, 130, 246] },
+        headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
       });
     }
 
@@ -96,7 +129,7 @@ export function VendorQuickActions({ vendor, onViewLedger, onViewBookings }: Ven
         head: [["Date", "Amount", "Type", "Notes"]],
         body: history.map(p => [
           format(new Date(p.payment_date), "dd MMM yyyy"),
-          `₨ ${Number(p.payment_amount).toLocaleString()}`,
+          `PKR ${Number(p.payment_amount).toLocaleString()}`,
           p.payment_type === "full" ? "Full" : "Partial",
           p.notes || "-",
         ]),
@@ -107,9 +140,9 @@ export function VendorQuickActions({ vendor, onViewLedger, onViewBookings }: Ven
 
     // Footer
     const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(9);
-    doc.setTextColor(150);
-    doc.text("This is a computer-generated statement.", 14, pageHeight - 10);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`${branding.agencyName} • Vendor Statement`, 14, pageHeight - 8);
 
     // Save
     doc.save(`${vendor.name.replace(/\s+/g, "_")}_Statement_${format(new Date(), "yyyyMMdd")}.pdf`);

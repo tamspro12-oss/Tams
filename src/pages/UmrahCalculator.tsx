@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { exportUmrahSummaryPdf } from "@/lib/umrahSummaryPdf";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { loadAgencyTemplate, saveAgencyTemplate } from "@/lib/agencyTemplates";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -174,6 +175,7 @@ const SHARING_TYPES = ["Sharing", "Quint", "Quad", "Triple", "Double"] as const;
 export default function UmrahCalculator() {
   const navigate = useNavigate();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   // Exchange Rate
   const [sarToPkrRate, setSarToPkrRate] = useState("77.50");
@@ -752,7 +754,7 @@ export default function UmrahCalculator() {
     });
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!result) {
       toast.error("Please calculate first");
       return;
@@ -768,11 +770,9 @@ export default function UmrahCalculator() {
     }));
     const presetName = allPresets.find(p => p.id === selectedPreset)?.name;
     try {
+      const branding = await getBrandingAsync();
       exportUmrahSummaryPdf({
-        agencyName: agency?.name,
-        agencyPhone: (agency as any)?.phone || (agency as any)?.contact_number || agency?.contact_info,
-        agencyEmail: agency?.email || agency?.contact_email,
-        agencyAddress: (agency as any)?.address,
+        branding,
         packageName: presetName,
         arrivalDate: arrivalDate || null,
         departureDate: departureDate || null,

@@ -334,3 +334,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   fs.writeFileSync(sqlPath, buildMigrationSql(ALL_SEO_BLOG_POSTS), "utf8");
   console.log(`\nWrote migration: ${sqlPath}`);
 }
+

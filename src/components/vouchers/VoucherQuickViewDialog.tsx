@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/design-system";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { Printer } from "lucide-react";
 
 interface VoucherQuickViewDialogProps {
@@ -21,6 +22,7 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
   onClose,
   fallbackPartyName,
 }) => {
+  const { getBrandingAsync } = useAgencyBranding();
   const displayPartyName = voucher?.party?.name || fallbackPartyName || "Customer";
   const isReceived = voucher?.direction === "received" || voucher?.direction === "in";
 
@@ -85,9 +87,10 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
                   size="sm"
                   className="h-8 text-xs gap-1.5"
                   onClick={async () => {
-                    const { generateVoucherPdf } = await import(
-                      "@/lib/pdf/voucherReceiptPdf"
-                    );
+                    const [{ generateVoucherPdf }, branding] = await Promise.all([
+                      import("@/lib/pdf/voucherReceiptPdf"),
+                      getBrandingAsync(),
+                    ]);
                     generateVoucherPdf({
                       voucherNo: voucher.voucher_no,
                       voucherDate: voucher.voucher_date,
@@ -101,6 +104,7 @@ export const VoucherQuickViewDialog: React.FC<VoucherQuickViewDialogProps> = ({
                       notes: voucher.notes,
                       isEdited: voucher.is_edited,
                       lastEditedAt: voucher.last_edited_at,
+                      branding,
                     });
                   }}
                 >

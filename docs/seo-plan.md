@@ -100,3 +100,4 @@ Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms
 | **Thursday** | WhatsApp Business Status | Share quick visual tip + "Reply DEMO for PKR 999/mo walkthrough" |
 | **Friday** | Travel Communities | Answer 3–5 agent questions in groups; share helpful calculator/guide links |
 | **Saturday** | Search Console Check | Review top queries, impressions, CTR, and incoming `blog_leads` |
+

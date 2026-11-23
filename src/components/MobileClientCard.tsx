@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  Pencil, DollarSign, Trash2, Mail, Download, 
+import {
+  Pencil, DollarSign, Trash2, Mail, Download,
   ChevronDown, ChevronUp, MapPin, Plane, Users,
   MoreHorizontal, CreditCard
 } from "lucide-react";
@@ -39,23 +39,23 @@ export function MobileClientCard({ client, vendorName, onEdit, onDelete, onPayme
   const pending = sellingPrice - amountPaid;
   const profit = sellingPrice - purchasePrice;
 
-  const statusColor = client.payment_status === "paid" 
+  const statusColor = client.payment_status === "paid"
     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
     : client.payment_status === "partial"
-    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800"
-    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800";
+      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800";
 
-  const isCustomService = client.travel_type && 
+  const isCustomService = client.travel_type &&
     !['Ticket', 'Ticket – One Way', 'Ticket – Return', 'Umrah'].includes(client.travel_type);
   const customServiceData = client.passengers_data?.[0]?.custom_service;
-  const locationDisplay = isCustomService 
+  const locationDisplay = isCustomService
     ? (customServiceData?.location || client.destination || "—")
     : (client.destination || "—");
 
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-shadow duration-200">
       {/* Main Card Content - Tappable */}
-      <button 
+      <button
         className="w-full text-left p-3.5 space-y-2.5 active:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
@@ -173,7 +173,7 @@ export function MobileClientCard({ client, vendorName, onEdit, onDelete, onPayme
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <PermissionGate module="clients" action="delete">
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="gap-2 text-destructive focus:text-destructive"
                 onClick={() => onDelete(client.id)}
               >
@@ -218,7 +218,7 @@ export function MobileClientCard({ client, vendorName, onEdit, onDelete, onPayme
               <div className="text-sm font-medium mt-0.5">{client.contact_number || "—"}</div>
             </div>
           </div>
-          
+
           <InlinePaymentHistory entityId={client.id} entityType="client" />
         </div>
       )}

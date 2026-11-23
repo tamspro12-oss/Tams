@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
-import { loadAgencyTemplate } from "@/lib/agencyTemplates";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import { brandingToReportAgencyInfo } from "@/lib/pdf/agencyBranding";
 import { sendEmail } from "@/lib/emailService";
 import { logAndFriendlyMessage, toFriendlyMessage } from "@/lib/friendlyError";
 import type { AgencyInfo, StatementRow } from "@/lib/reportPdfGenerator";
@@ -62,6 +63,7 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
   initialCustomTo,
 }) => {
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<StatementPeriodPreset>("this_month");
@@ -96,32 +98,8 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
   }, [party, ledger, preset, customFrom, customTo]);
 
   const buildPdfDoc = async () => {
-    let brandLogo: string | null = null;
-    let templateName: string | undefined;
-    let templatePhone: string | undefined;
-    let templateEmail: string | undefined;
-    let templateAddress: string | undefined;
-
-    try {
-      const tpl = await loadAgencyTemplate<Record<string, any>>("invoice_template", agency?.id);
-      if (tpl?.data) {
-        brandLogo = tpl.data.logo || null;
-        templateName = tpl.data.agencyName || undefined;
-        templatePhone = tpl.data.phone || undefined;
-        templateEmail = tpl.data.email || undefined;
-        templateAddress = tpl.data.address || undefined;
-      }
-    } catch {
-      // Fall back silently to agency profile details
-    }
-
-    const agencyInfo: AgencyInfo = {
-      name: templateName || agency?.name || "TAMS Pro Travel Agency",
-      phone_number: templatePhone || agency?.phone_number || agency?.contact_info || undefined,
-      contact_email: templateEmail || agency?.contact_email || agency?.email || undefined,
-      address: templateAddress || undefined,
-      logo: brandLogo,
-    };
+    const branding = await getBrandingAsync();
+    const agencyInfo: AgencyInfo = brandingToReportAgencyInfo(branding);
 
     const statementRows: StatementRow[] = statement.entries.map((entry) => ({
       date: entry.date,

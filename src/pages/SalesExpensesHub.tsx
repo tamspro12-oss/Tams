@@ -35,10 +35,12 @@ import {
 } from "@/lib/agencyQueries";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import {
+  buildBookingPdfDataFromInvoice,
   generateBookingConfirmationPdf,
   generateBookingInvoicePdf,
 } from "@/lib/pdf/bookingInvoicePdf";
 import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { toast } from "sonner";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -77,6 +79,7 @@ import {
 export default function SalesExpensesHub() {
   const queryClient = useQueryClient();
   const { data: userAgencyId } = useCurrentAgencyId();
+  const { getBrandingAsync } = useAgencyBranding();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab: SalesSubSectionId = normalizeSalesTab(searchParams.get("tab"));
 
@@ -719,20 +722,10 @@ export default function SalesExpensesHub() {
         <div className="flex items-center justify-center gap-1">
           <button
             type="button"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              generateBookingConfirmationPdf({
-                invoiceNo: inv.invoice_no,
-                invoiceDate: inv.invoice_date,
-                service: inv.service,
-                clientName: inv.party?.name || inv.client_name || "Client",
-                pnr: inv.pnr,
-                clientAmount: inv.client_amount || 0,
-                paidAmount: inv.paid_amount || 0,
-                balanceDue: inv.remaining_amount || 0,
-                isEdited: inv.is_edited,
-                lastEditedAt: inv.last_edited_at,
-              });
+              const branding = await getBrandingAsync();
+              generateBookingConfirmationPdf(buildBookingPdfDataFromInvoice(inv, branding));
             }}
             title="Download Confirmation"
             className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-teal-600 cursor-pointer"
@@ -741,20 +734,10 @@ export default function SalesExpensesHub() {
           </button>
           <button
             type="button"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              generateBookingInvoicePdf({
-                invoiceNo: inv.invoice_no,
-                invoiceDate: inv.invoice_date,
-                service: inv.service,
-                clientName: inv.party?.name || inv.client_name || "Client",
-                pnr: inv.pnr,
-                clientAmount: inv.client_amount || 0,
-                paidAmount: inv.paid_amount || 0,
-                balanceDue: inv.remaining_amount || 0,
-                isEdited: inv.is_edited,
-                lastEditedAt: inv.last_edited_at,
-              });
+              const branding = await getBrandingAsync();
+              generateBookingInvoicePdf(buildBookingPdfDataFromInvoice(inv, branding));
             }}
             title="Download Invoice"
             className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 cursor-pointer"
@@ -930,20 +913,10 @@ export default function SalesExpensesHub() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                generateBookingConfirmationPdf({
-                  invoiceNo: inv.invoice_no,
-                  invoiceDate: inv.invoice_date,
-                  service: inv.service,
-                  clientName: inv.party?.name || inv.client_name || "Client",
-                  pnr: inv.pnr,
-                  clientAmount: inv.client_amount || 0,
-                  paidAmount: inv.paid_amount || 0,
-                  balanceDue: inv.remaining_amount || 0,
-                  isEdited: inv.is_edited,
-                  lastEditedAt: inv.last_edited_at,
-                });
+                const branding = await getBrandingAsync();
+                generateBookingConfirmationPdf(buildBookingPdfDataFromInvoice(inv, branding));
               }}
               className="h-7 text-xs gap-1.5 text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 cursor-pointer"
             >
@@ -953,20 +926,10 @@ export default function SalesExpensesHub() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                generateBookingInvoicePdf({
-                  invoiceNo: inv.invoice_no,
-                  invoiceDate: inv.invoice_date,
-                  service: inv.service,
-                  clientName: inv.party?.name || inv.client_name || "Client",
-                  pnr: inv.pnr,
-                  clientAmount: inv.client_amount || 0,
-                  paidAmount: inv.paid_amount || 0,
-                  balanceDue: inv.remaining_amount || 0,
-                  isEdited: inv.is_edited,
-                  lastEditedAt: inv.last_edited_at,
-                });
+                const branding = await getBrandingAsync();
+                generateBookingInvoicePdf(buildBookingPdfDataFromInvoice(inv, branding));
               }}
               className="h-7 text-xs gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 hover:bg-slate-100 cursor-pointer"
             >
@@ -1114,8 +1077,9 @@ export default function SalesExpensesHub() {
       render: (v) => (
         <button
           type="button"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
+            const branding = await getBrandingAsync();
             const modeStr = String(v.payment_mode || "cash").toUpperCase();
             generateVoucherPdf({
               voucherNo: v.voucher_no,
@@ -1129,6 +1093,7 @@ export default function SalesExpensesHub() {
               notes: v.notes,
               isEdited: v.is_edited,
               lastEditedAt: v.last_edited_at,
+              branding,
             });
           }}
           className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"

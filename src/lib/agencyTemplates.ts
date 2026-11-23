@@ -11,6 +11,7 @@ import {
   migrateAllLocalTemplatesCore,
   saveAgencyTemplateCore,
 } from "@/lib/agencyTemplatesCore";
+import { invalidateAgencyBrandingCache } from "@/lib/pdf/agencyBranding";
 
 export type { AgencyTemplateKey, LoadTemplateResult, SaveTemplateResult };
 
@@ -45,11 +46,15 @@ export async function saveAgencyTemplate<T = unknown>(
 ): Promise<SaveTemplateResult> {
   const agencyId =
     explicitAgencyId !== undefined ? explicitAgencyId : await getAuthenticatedAgencyId();
-  return saveAgencyTemplateCore<T>(key, value, {
+  const result = await saveAgencyTemplateCore<T>(key, value, {
     client: supabase as any,
     agencyId,
     storage: getBrowserStorage(),
   });
+  if (result.ok && (key === "invoice_template" || key === "booking_template")) {
+    invalidateAgencyBrandingCache();
+  }
+  return result;
 }
 
 export async function migrateAllLocalTemplatesToDb(explicitAgencyId?: string | null): Promise<void> {

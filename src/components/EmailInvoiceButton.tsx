@@ -5,6 +5,7 @@ import { Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, createInvoiceEmailBody } from "@/lib/emailService";
 import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
@@ -22,6 +23,7 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const queryClient = useQueryClient();
 
   const handleEmailInvoice = async () => {
@@ -71,8 +73,9 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
     console.log('[EmailInvoiceButton] Starting invoice email process...');
     
     try {
+      const branding = await getBrandingAsync();
       // Generate PDF using the professional invoice generator
-      const { doc } = await generateInvoicePDF(client, agency);
+      const { doc } = await generateInvoicePDF(client, agency, branding);
       const pdfBlob = doc.output('blob');
       
       // Generate invoice number

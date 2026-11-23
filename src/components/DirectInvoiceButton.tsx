@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
@@ -20,6 +21,7 @@ export function DirectInvoiceButton({ client }: DirectInvoiceButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   const handleGenerateInvoice = async () => {
     if (isGenerating) return;
@@ -36,7 +38,8 @@ export function DirectInvoiceButton({ client }: DirectInvoiceButtonProps) {
     setIsGenerating(true);
     
     try {
-      const { blobUrl, filename, doc } = await generateInvoicePDF(client, agency);
+      const branding = await getBrandingAsync();
+      const { blobUrl, filename, doc } = await generateInvoicePDF(client, agency, branding);
       
       // Direct download
       doc.save(filename);

@@ -668,11 +668,10 @@ export const AdminBlogManager: React.FC = () => {
                             type="button"
                             data-compact-btn=""
                             onClick={() => setFormState((prev) => ({ ...prev, category: cat }))}
-                            className={`px-2 py-0.5 text-[11px] border transition-colors ${
-                              formState.category === cat
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-muted/50 text-foreground border-border hover:bg-muted"
-                            }`}
+                            className={`px-2 py-0.5 text-[11px] border transition-colors ${formState.category === cat
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted/50 text-foreground border-border hover:bg-muted"
+                              }`}
                           >
                             {cat}
                           </button>
@@ -749,7 +748,7 @@ export const AdminBlogManager: React.FC = () => {
                     />
 
                     {formState.cover_image_url &&
-                    isSafeUrl(formState.cover_image_url, { allowMailto: false }) ? (
+                      isSafeUrl(formState.cover_image_url, { allowMailto: false }) ? (
                       <div className="relative border overflow-hidden">
                         <img
                           src={formState.cover_image_url}

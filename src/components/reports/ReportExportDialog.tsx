@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import { brandingToReportAgencyInfo } from "@/lib/pdf/agencyBranding";
 import {
   format,
   startOfDay,
@@ -113,6 +115,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   initialOverdueBucket = "none",
   quotationSummary,
 }) => {
+  const { getBrandingAsync } = useAgencyBranding();
   const dialogContainerRef = useRef<HTMLDivElement>(null);
   // --------------------------------------------------------------------------
   // 1. DATE RANGE STATE (Synced to defaults on open)
@@ -416,7 +419,9 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
     setLastExportedParty(null);
 
     try {
-      const agencyName = agency?.name || "TAMS";
+      const resolvedBranding = await getBrandingAsync();
+      const reportAgency: AgencyInfo = brandingToReportAgencyInfo(resolvedBranding);
+      const agencyName = resolvedBranding.agencyName || "Agency";
       const periodText =
         datePreset === "all"
           ? "All Time"
@@ -468,7 +473,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
           selectedPartyObjs.length === 1 ? sanitizeFilename(selectedPartyObjs[0].name) : "All_Parties";
 
         const doc = generateAccountStatementPdf({
-          agency,
+          agency: reportAgency,
           periodText,
           fromIso: fromDate,
           toIso: toDate,
@@ -530,7 +535,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
             : "All";
 
         const doc = generateBookingReportPdf({
-          agency,
+          agency: reportAgency,
           periodText,
           rows: bookingRows,
           includeProfit: includeProfitColumns,
@@ -583,7 +588,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         if (dailyEntryType === "payments") receipts = [];
 
         const doc = generateDailyReportPdf({
-          agency,
+          agency: reportAgency,
           periodText,
           receipts,
           payments,
@@ -660,7 +665,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         ];
 
         const doc = generateFinancialReportsPdf({
-          agency,
+          agency: reportAgency,
           periodText,
           subReport: selectedFinSubReport as any,
           asOfDateText: toDate ? `As of ${format(parseISO(toDate), "dd MMM yyyy")}` : "As of Today",

@@ -699,11 +699,11 @@ export function AddClientDialog({ open, onOpenChange, editClient, prefillClient 
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-        "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
-        isFullScreen
-          ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
-          : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
-      )}>
+          "enterprise-dialog overflow-hidden flex flex-col transition-all duration-300",
+          isFullScreen
+            ? "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none w-screen h-[100dvh] !rounded-none border-0"
+            : "w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]"
+        )}>
         <DialogHeader className="pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

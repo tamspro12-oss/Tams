@@ -10,6 +10,13 @@ import {
 import { FileText, FileSpreadsheet, Download, ChevronDown } from "lucide-react";
 import { useVendors, useClients } from "@/hooks/useStorage";
 import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 import { format, differenceInDays, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -32,6 +39,7 @@ export function VendorAgingReport() {
   const { vendors } = useVendors();
   const { clients } = useClients();
   const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
 
   // Calculate aging data for all vendors (read-only from existing data)
   const agingData = useMemo((): AgingData[] => {
@@ -102,77 +110,105 @@ export function VendorAgingReport() {
     };
   }, [agingData]);
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const branding = await getBrandingAsync();
+    const primaryRgb = hexToRgb(branding.brandColor);
+    const contrastRgb = getContrastTextRgb(primaryRgb);
     const doc = new jsPDF("landscape");
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFillColor(...primaryRgb);
+    doc.rect(0, 0, pageWidth, 4, "F");
+
+    let leftX = 14;
+    if (branding.logo) {
+      const logoRes = drawBrandLogo(doc, branding.logo, 14, 7, 14, 14, "left");
+      if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
+    }
 
     // Header
-    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
     doc.setTextColor(15, 23, 42);
-    doc.text("Vendor Aging Report", 14, 20);
+    doc.text(branding.agencyName, leftX, 14);
 
-    doc.setFontSize(11);
+    const contactParts = formatBrandingContactParts(branding);
+    if (contactParts.length > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(contactParts.join("  |  "), leftX, 19);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Vendor Aging Report", pageWidth - 14, 14, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
     doc.setTextColor(100);
-    if (agency?.name) doc.text(`Agency: ${agency.name}`, 14, 28);
-    doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, 14, 35);
+    doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth - 14, 20, { align: "right" });
 
     // Summary Section
-    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text("Summary", 14, 48);
+    doc.text("Summary", 14, 30);
 
     autoTable(doc, {
-      startY: 52,
+      startY: 34,
       head: [["Metric", "Value"]],
       body: [
         ["Total Vendors with Outstanding", agingData.length.toString()],
-        ["Total Outstanding Amount", `₨ ${grandTotals.totalOutstanding.toLocaleString()}`],
-        ["0-7 Days", `₨ ${grandTotals.bucket0to7.toLocaleString()}`],
-        ["8-15 Days", `₨ ${grandTotals.bucket8to15.toLocaleString()}`],
-        ["16-30 Days", `₨ ${grandTotals.bucket16to30.toLocaleString()}`],
-        ["30+ Days (Overdue)", `₨ ${grandTotals.bucket30plus.toLocaleString()}`],
+        ["Total Outstanding Amount", `PKR ${grandTotals.totalOutstanding.toLocaleString()}`],
+        ["0-7 Days", `PKR ${grandTotals.bucket0to7.toLocaleString()}`],
+        ["8-15 Days", `PKR ${grandTotals.bucket8to15.toLocaleString()}`],
+        ["16-30 Days", `PKR ${grandTotals.bucket16to30.toLocaleString()}`],
+        ["30+ Days (Overdue)", `PKR ${grandTotals.bucket30plus.toLocaleString()}`],
       ],
       styles: { fontSize: 9 },
-      headStyles: { fillColor: [15, 23, 42] },
+      headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
       columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 50 } },
     });
 
     // Detail Table
-    const detailStartY = (doc as any).lastAutoTable.finalY + 15;
+    const detailStartY = (doc as any).lastAutoTable.finalY + 12;
     doc.text("Vendor Details", 14, detailStartY);
 
     autoTable(doc, {
-      startY: detailStartY + 5,
+      startY: detailStartY + 4,
       head: [["Vendor", "Service Type", "Bookings", "0-7 Days", "8-15 Days", "16-30 Days", "30+ Days", "Total Outstanding"]],
       body: agingData.map(v => [
         v.vendorName,
         v.serviceType,
         v.bookingsCount.toString(),
-        `₨ ${v.bucket0to7.toLocaleString()}`,
-        `₨ ${v.bucket8to15.toLocaleString()}`,
-        `₨ ${v.bucket16to30.toLocaleString()}`,
-        `₨ ${v.bucket30plus.toLocaleString()}`,
-        `₨ ${v.totalOutstanding.toLocaleString()}`,
+        `PKR ${v.bucket0to7.toLocaleString()}`,
+        `PKR ${v.bucket8to15.toLocaleString()}`,
+        `PKR ${v.bucket16to30.toLocaleString()}`,
+        `PKR ${v.bucket30plus.toLocaleString()}`,
+        `PKR ${v.totalOutstanding.toLocaleString()}`,
       ]),
       foot: [[
         "TOTAL",
         "",
         grandTotals.totalBookings.toString(),
-        `₨ ${grandTotals.bucket0to7.toLocaleString()}`,
-        `₨ ${grandTotals.bucket8to15.toLocaleString()}`,
-        `₨ ${grandTotals.bucket16to30.toLocaleString()}`,
-        `₨ ${grandTotals.bucket30plus.toLocaleString()}`,
-        `₨ ${grandTotals.totalOutstanding.toLocaleString()}`,
+        `PKR ${grandTotals.bucket0to7.toLocaleString()}`,
+        `PKR ${grandTotals.bucket8to15.toLocaleString()}`,
+        `PKR ${grandTotals.bucket16to30.toLocaleString()}`,
+        `PKR ${grandTotals.bucket30plus.toLocaleString()}`,
+        `PKR ${grandTotals.totalOutstanding.toLocaleString()}`,
       ]],
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
-      footStyles: { fillColor: [15, 23, 42], fontStyle: "bold" },
+      headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
+      footStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
     });
 
     // Footer
     const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(9);
-    doc.setTextColor(150);
-    doc.text("This is a computer-generated aging report for accounting purposes.", 14, pageHeight - 10);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`${branding.agencyName} • Vendor Aging Report`, 14, pageHeight - 8);
 
     doc.save(`Vendor_Aging_Report_${format(new Date(), "yyyyMMdd")}.pdf`);
     toast.success("Vendor Aging Report PDF downloaded");

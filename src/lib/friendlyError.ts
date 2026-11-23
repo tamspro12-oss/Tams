@@ -41,6 +41,19 @@ const KNOWN_FRIENDLY_RPC_PATTERNS: Array<{ test: RegExp; message: string }> = [
     message: "Amount paid cannot exceed the total amount.",
   },
   {
+    test: /amount paid to vendor cannot exceed purchasing cost/i,
+    message: "Amount paid to vendor cannot exceed the purchasing cost.",
+  },
+  {
+    test: /select a vendor when amount paid to vendor/i,
+    message: "Please select a vendor before entering an amount paid to vendor.",
+  },
+  {
+    test: /vendor payment at booking requires the latest database update/i,
+    message:
+      "Vendor payment at booking requires the latest database update. Nothing was saved — please apply the latest migration and try again.",
+  },
+  {
     test: /amounts? cannot be negative/i,
     message: "Amounts cannot be negative.",
   },

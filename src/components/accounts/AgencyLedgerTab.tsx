@@ -27,7 +27,13 @@ import {
 } from "lucide-react";
 import { useAgencyLedger, useAccounts, useTransactionMutations, TransactionItem } from "@/hooks/useUnifiedTransactions";
 import { useClients, useVendors } from "@/hooks/useStorage";
-import { useAgency } from "@/hooks/useAgency";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { getKarachiTodayNoon, getKarachiYmd } from "@/lib/karachiTime";
 import { toast } from "sonner";
@@ -67,7 +73,7 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   const { accounts } = useAccounts();
   const { clients } = useClients();
   const { vendors } = useVendors();
-  const { data: agency } = useAgency();
+  const { getBrandingAsync } = useAgencyBranding();
   const { reverseTransaction } = useTransactionMutations();
 
   // Date range calculation (Asia/Karachi timezone)
@@ -202,15 +208,44 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
   };
 
   // Export to PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
+      const branding = await getBrandingAsync();
+      const primaryRgb = hexToRgb(branding.brandColor);
+      const contrastRgb = getContrastTextRgb(primaryRgb);
       const doc = new jsPDF("landscape", "mm", "a4");
-      doc.setFontSize(16);
-      doc.text(agency?.agency_name || "TAMS Pro Agency", 14, 15);
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(...primaryRgb);
+      doc.rect(0, 0, pageWidth, 4, "F");
+
+      let leftX = 14;
+      if (branding.logo) {
+        const logoRes = drawBrandLogo(doc, branding.logo, 14, 7, 14, 14, "left");
+        if (logoRes.rendered) leftX = 14 + logoRes.width + 3;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(15, 23, 42);
+      doc.text(branding.agencyName, leftX, 14);
+
+      const contactParts = formatBrandingContactParts(branding);
+      if (contactParts.length > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(contactParts.join("  |  "), leftX, 19);
+      }
+
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text("Agency-Wide Financial Ledger", 14, 22);
-      doc.setFontSize(9);
-      doc.text(`Generated: ${format(new Date(), "PPpp")}`, 14, 28);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Agency-Wide Financial Ledger", pageWidth - 14, 14, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${format(new Date(), "PPpp")}`, pageWidth - 14, 19.5, { align: "right" });
 
       const tableData = filteredTransactions.map((tx) => [
         tx.date,
@@ -227,10 +262,20 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
       autoTable(doc, {
         head: [["Date", "Type", "Ref/PNR", "Party", "Account", "Debit (In)", "Credit (Out)", "Balance", "Notes"]],
         body: tableData,
-        startY: 32,
+        startY: 26,
         styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
+        headStyles: { fillColor: primaryRgb, textColor: contrastRgb },
       });
+
+      const pageCount = doc.getNumberOfPages();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      for (let i = 1; i <= pageCount; i += 1) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`${branding.agencyName} • Financial Ledger`, 14, pageHeight - 7);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
+      }
 
       doc.save(`Agency_Ledger_${format(new Date(), "yyyyMMdd")}.pdf`);
       toast.success("Ledger exported to PDF");

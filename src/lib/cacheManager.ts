@@ -7,6 +7,15 @@ export function registerGlobalQueryClient(client: QueryClient) {
   globalQueryClient = client;
 }
 
+export function invalidateQueriesByPrefix(prefix: string) {
+  if (!globalQueryClient) return;
+  try {
+    void globalQueryClient.invalidateQueries({ queryKey: [prefix] });
+  } catch (e) {
+    console.warn("[CacheManager] Error invalidating query cache:", prefix, e);
+  }
+}
+
 export function getCachedAgencyId(): string | null {
   if (!globalQueryClient) return null;
   try {

@@ -316,11 +316,10 @@ function BlogsPageContent() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setSelectedCategory(cat)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all border ${
-                      active
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all border ${active
                         ? "bg-[#0F5E63] text-white border-[#0F5E63] shadow-xs"
                         : "bg-white text-[#475569] border-slate-200/80 hover:border-teal-500/40 hover:text-[#0F172A]"
-                    }`}
+                      }`}
                   >
                     {cat}
                   </button>

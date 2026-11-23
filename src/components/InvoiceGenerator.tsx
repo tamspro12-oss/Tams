@@ -10,11 +10,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import { DocumentNumberControl } from "@/components/ui/DocumentNumberControl";
 import { withDuplicateRetry } from "@/lib/supabaseErrorHandler";
-import { loadAgencyTemplate } from "@/lib/agencyTemplates";
 import { createRequestId, rpcWithPreSqlFallback, runBackgroundTask } from "@/lib/atomicSave";
 import { runUiAtomicSave } from "@/lib/atomicSaveUi";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useCurrentAgencyId } from "@/hooks/useCurrentAgencyId";
+import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  drawBrandLogo,
+  formatBrandingContactParts,
+  getContrastTextRgb,
+  hexToRgb,
+} from "@/lib/pdf/agencyBranding";
 import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 import { useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
@@ -51,12 +57,12 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
   const isGeneratingRef = useRef(false);
   const requestIdRef = useRef<string>(createRequestId());
   const dialogFormRef = useRef<HTMLDivElement>(null);
-  const cachedTemplateRef = useRef<Record<string, any> | null>(null);
   const [invoicePreviewNo, setInvoicePreviewNo] = useState("Auto-assigned");
   const [isManualInvoiceNo, setIsManualInvoiceNo] = useState(false);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const { toast } = useToast();
   const { data: agencyIdHook } = useCurrentAgencyId();
+  const { getBrandingAsync } = useAgencyBranding();
   const queryClient = useQueryClient();
 
   useFormKeyboardNav({
@@ -67,7 +73,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
     onCancel: () => setOpen(false),
   });
 
-  // Load invoice history, template, and preview number when dialog opens
+  // Load invoice history and preview number when dialog opens
   useEffect(() => {
     if (open) {
       loadInvoiceHistory();
@@ -76,13 +82,6 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       supabase.rpc("preview_next_number", { p_counter_type: "invoice" }).then(({ data, error }) => {
         setInvoicePreviewNo(!error && data ? String(data) : "Auto-assigned");
       });
-      if (agencyIdHook) {
-        loadAgencyTemplate<Record<string, any>>("invoice_template", agencyIdHook)
-          .then((res) => {
-            if (res?.data) cachedTemplateRef.current = res.data;
-          })
-          .catch(() => {});
-      }
     }
   }, [open, agencyIdHook]);
 
@@ -121,33 +120,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
       return;
     }
 
-    let template = cachedTemplateRef.current;
-    if (!template) {
-      const agencyIdResolved = agencyIdHook || (await getAuthenticatedAgencyId());
-      if (!agencyIdResolved) {
-        toast({
-          title: "Error",
-          description: "Unable to identify agency account.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const templateResult = await loadAgencyTemplate<Record<string, any>>(
-        "invoice_template",
-        agencyIdResolved
-      );
-      if (!templateResult.data) {
-        toast({
-          title: "Error",
-          description: "Please set up your invoice template in Settings first",
-          variant: "destructive",
-        });
-        return;
-      }
-      template = templateResult.data;
-      cachedTemplateRef.current = template;
-    }
-
+    const branding = await getBrandingAsync();
     const amount = Math.max(0, Number(client.selling_price) || 0);
     const paid = Math.max(0, Number(client.amount_paid) || 0);
     const balance = Math.max(0, amount - paid);
@@ -229,46 +202,52 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
           try {
             const invoiceDate = new Date().toLocaleDateString();
             const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const primaryRgb = hexToRgb(branding.brandColor);
+            const contrastRgb = getContrastTextRgb(primaryRgb);
             let yPos = 20;
 
-            if (template!.logo) {
-              try {
-                doc.addImage(template!.logo, "PNG", 15, yPos, 40, 16);
-                yPos += 20;
-              } catch (error) {
-                console.log("Could not add logo", error);
+            if (branding.logo) {
+              const logoRes = drawBrandLogo(doc, branding.logo, 15, yPos - 6, 36, 16, "left");
+              if (logoRes.rendered) {
+                yPos += 16;
               }
             }
 
-            doc.setFontSize(20);
-            doc.setTextColor(template!.themeColor || "#1e40af");
-            doc.text(template!.agencyName || "Agency Name", 15, yPos);
-            yPos += 8;
+            doc.setFontSize(18);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...primaryRgb);
+            doc.text(branding.agencyName, 15, yPos);
+            yPos += 7;
 
-            doc.setFontSize(10);
+            doc.setFontSize(9.5);
+            doc.setFont("helvetica", "normal");
             doc.setTextColor(100, 100, 100);
-            if (template!.phone) {
-              doc.text(`Phone: ${template!.phone}`, 15, yPos);
+            if (branding.phone) {
+              doc.text(`Phone: ${branding.phone}`, 15, yPos);
               yPos += 5;
             }
-            if (template!.email) {
-              doc.text(`Email: ${template!.email}`, 15, yPos);
+            if (branding.email) {
+              doc.text(`Email: ${branding.email}`, 15, yPos);
               yPos += 5;
             }
-            if (template!.address) {
-              const addressLines = doc.splitTextToSize(template!.address, 80);
+            if (branding.address) {
+              const addressLines = doc.splitTextToSize(branding.address, 80);
               doc.text(addressLines, 15, yPos);
               yPos += addressLines.length * 5;
             }
 
-            doc.setFontSize(24);
-            doc.setTextColor(template!.themeColor || "#1e40af");
-            doc.text("INVOICE", 200, 25, { align: "right" });
+            doc.setFontSize(22);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...primaryRgb);
+            doc.text("INVOICE", 195, 25, { align: "right" });
 
             doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
             doc.setTextColor(100, 100, 100);
-            doc.text(`Invoice #: ${invoiceNumber}`, 200, 35, { align: "right" });
-            doc.text(`Date: ${invoiceDate}`, 200, 40, { align: "right" });
+            doc.text(`Invoice #: ${invoiceNumber}`, 195, 35, { align: "right" });
+            doc.text(`Date: ${invoiceDate}`, 195, 40, { align: "right" });
 
             yPos = Math.max(yPos, 50);
 
@@ -317,7 +296,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
             yPos += 5;
 
             const tableData = [
-              [itemDescription, `Rs ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`],
+              [itemDescription, `PKR ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`],
             ];
 
             autoTable(doc, {
@@ -326,8 +305,8 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
               body: tableData,
               theme: "striped",
               headStyles: {
-                fillColor: template!.themeColor || "#1e40af",
-                textColor: "#ffffff",
+                fillColor: primaryRgb,
+                textColor: contrastRgb,
                 fontSize: 11,
               },
               columnStyles: {
@@ -345,21 +324,21 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
             doc.setFontSize(10);
             doc.setTextColor(50, 50, 50);
             doc.text("Subtotal:", 125, yPos + 7);
-            doc.text(`Rs ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 7, { align: "right" });
+            doc.text(`PKR ${amount.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 7, { align: "right" });
 
             doc.text("Amount Paid:", 125, yPos + 14);
-            doc.text(`Rs ${paid.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 14, { align: "right" });
+            doc.text(`PKR ${paid.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 14, { align: "right" });
 
             doc.setFontSize(12);
-            doc.setFont(undefined as any, "bold");
-            doc.setTextColor(template!.themeColor || "#1e40af");
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...primaryRgb);
             doc.text("Balance Due:", 125, yPos + 24);
-            doc.text(`Rs ${balance.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 24, { align: "right" });
+            doc.text(`PKR ${balance.toLocaleString("en-PK", { minimumFractionDigits: 2 })}`, 190, yPos + 24, { align: "right" });
 
             yPos += 40;
 
             if (additionalNotes.trim()) {
-              doc.setFont(undefined as any, "normal");
+              doc.setFont("helvetica", "normal");
               doc.setFontSize(10);
               doc.setTextColor(100, 100, 100);
               doc.text("Notes:", 15, yPos);
@@ -369,14 +348,18 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
               yPos += notes.length * 5;
             }
 
-            yPos = 270;
             doc.setDrawColor(200, 200, 200);
-            doc.line(15, yPos, 195, yPos);
-            yPos += 7;
-
-            doc.setFontSize(9);
-            doc.setTextColor(150, 150, 150);
-            doc.text("Thank you for your business!", 105, yPos, { align: "center" });
+            doc.line(15, pageHeight - 18, pageWidth - 15, pageHeight - 18);
+            const footerContact = formatBrandingContactParts(branding).join("  |  ");
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.5);
+            doc.setTextColor(130, 130, 130);
+            doc.text(
+              footerContact ? `${branding.agencyName}  |  ${footerContact}` : branding.agencyName,
+              pageWidth / 2,
+              pageHeight - 11,
+              { align: "center" }
+            );
 
             const fileName = `Invoice-${invoiceNumber}-${client.name.replace(/\s+/g, "-")}.pdf`;
             doc.save(fileName);
