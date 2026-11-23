@@ -57,7 +57,7 @@ DECLARE
   v_summary JSONB;
   v_reconcile JSONB;
   v_search JSONB;
-  v_stmt_debit NUMERIC;
+  v_stmt_credit NUMERIC;
   v_cash_bal NUMERIC;
   v_bank_bal NUMERIC;
   v_vendor_bal NUMERIC;
@@ -167,7 +167,7 @@ BEGIN
   SELECT * INTO v_pv FROM public.payment_vouchers WHERE id = v_cpv_id;
   SELECT current_balance INTO v_cash_bal FROM public.account_balances(v_agency_a) WHERE account_id = v_cash_a;
   SELECT current_balance INTO v_vendor_bal FROM public.parties WHERE id = v_vendor_a;
-  SELECT COALESCE(SUM(debit), 0) INTO v_stmt_debit FROM public.get_party_statement(v_vendor_a) WHERE reference_no = 'AT-VENDOR-BOOKING-' || v_inv_no;
+  SELECT COALESCE(SUM(credit), 0) INTO v_stmt_credit FROM public.get_party_statement(v_vendor_a) WHERE reference_no = 'AT-VENDOR-BOOKING-' || v_inv_no AND type = 'payment_out';
   v_summary := public.get_agency_financial_summary(date_trunc('month', CURRENT_DATE)::date, CURRENT_DATE, v_agency_a);
   v_reconcile := public.reconcile_agency_balances(v_agency_a);
   v_search := public.global_search(v_cpv_no, 10, 0);
@@ -185,14 +185,14 @@ BEGIN
        AND v_pv.notes = 'Initial payment to vendor at booking for ' || v_inv_no
        AND v_cash_bal = 130000
        AND v_vendor_bal = -90000
-       AND v_stmt_debit = 30000
+       AND v_stmt_credit = 30000
        AND (v_summary->>'vendor_dues')::numeric = 90000
        AND (v_summary->>'client_dues')::numeric = 90000
        AND (v_summary->>'period_profit')::numeric = 30000
        AND (v_reconcile->>'reconciled')::boolean = true
        AND jsonb_array_length(v_search->'vouchers') >= 1
       THEN 'PASS' ELSE 'FAIL' END,
-    'detail', format('cpv=%s cash=%s vendor_bal=%s stmt=%s dues=%s', v_cpv_no, v_cash_bal, v_vendor_bal, v_stmt_debit, v_summary->>'vendor_dues')
+    'detail', format('cpv=%s cash=%s vendor_bal=%s stmt_credit=%s vendor_dues=%s client_dues=%s profit=%s reconciled=%s search_vouchers=%s', v_cpv_no, v_cash_bal, v_vendor_bal, v_stmt_credit, v_summary->>'vendor_dues', v_summary->>'client_dues', v_summary->>'period_profit', v_reconcile->>'reconciled', jsonb_array_length(v_search->'vouchers'))
   );
 
   -- --------------------------------------------------------------------------
