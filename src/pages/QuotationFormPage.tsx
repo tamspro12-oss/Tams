@@ -19,7 +19,6 @@ import {
   ChevronUp,
   Download,
   FileText,
-  Package,
   Pencil,
   Plus,
   Save,
@@ -314,26 +313,13 @@ function createServiceLine(
   overrides?: Partial<QuotationServiceLine>
 ): QuotationServiceLine {
   const defaultDetails = createDefaultServiceDetails();
-  let defaultAmount = "";
-  if (serviceType === "Umrah") {
-    const info = computeUmrahPresetSummaryAndPrice(DEFAULT_UMRAH_PRESETS[0], "PKR");
-    defaultDetails.umrahPackageId = DEFAULT_UMRAH_PRESETS[0].id;
-    defaultDetails.umrahPackageName = DEFAULT_UMRAH_PRESETS[0].name;
-    defaultDetails.umrahPackageSummary = info.summary;
-    defaultDetails.umrahPackagePrice = info.price;
-    defaultDetails.makkahHotel = info.makkahHotel;
-    defaultDetails.makkahNights = info.makkahNights;
-    defaultDetails.madinahHotel = info.madinahHotel;
-    defaultDetails.madinahNights = info.madinahNights;
-    defaultAmount = String(info.price);
-  }
   return {
     id: makeServiceId(),
     serviceType,
     details: overrides?.details
       ? { ...defaultDetails, ...overrides.details }
       : defaultDetails,
-    amount: overrides?.amount !== undefined ? overrides.amount : defaultAmount,
+    amount: overrides?.amount !== undefined ? overrides.amount : "",
   };
 }
 
@@ -736,41 +722,18 @@ export default function QuotationFormPage() {
   const handleServiceTypeChange = useCallback(
     (serviceId: string, nextType: ServiceType) => {
       setServices((prev) =>
-        prev.map((srv) => {
-          if (srv.id !== serviceId) return srv;
-          const updatedDetails = { ...srv.details };
-          let nextAmount = srv.amount;
-          if (nextType === "Umrah") {
-            const pkg =
-              allUmrahPackages.find((p) => p.id === updatedDetails.umrahPackageId) ||
-              allUmrahPackages[0] ||
-              DEFAULT_UMRAH_PRESETS[0];
-            if (pkg) {
-              const info = computeUmrahPresetSummaryAndPrice(pkg, currency, sarToPkrRate);
-              updatedDetails.umrahPackageId = pkg.id;
-              updatedDetails.umrahPackageName = pkg.name;
-              updatedDetails.umrahPackageSummary = info.summary;
-              updatedDetails.umrahPackagePrice = info.price;
-              updatedDetails.makkahHotel = info.makkahHotel;
-              updatedDetails.makkahNights = info.makkahNights;
-              updatedDetails.madinahHotel = info.madinahHotel;
-              updatedDetails.madinahNights = info.madinahNights;
-              if (!nextAmount || Number(nextAmount) === 0) {
-                nextAmount = String(info.price);
+        prev.map((srv) =>
+          srv.id === serviceId
+            ? {
+                ...srv,
+                serviceType: nextType,
               }
-            }
-          }
-          return {
-            ...srv,
-            serviceType: nextType,
-            details: updatedDetails,
-            amount: nextAmount,
-          };
-        })
+            : srv
+        )
       );
       setIsDirty(true);
     },
-    [allUmrahPackages, currency, sarToPkrRate]
+    []
   );
 
   const handleServiceDetailChange = useCallback(
@@ -1909,65 +1872,84 @@ export default function QuotationFormPage() {
                         </div>
                       )}
 
-                      {/* 6. Umrah: Package Selector + Quotation/Package Summary */}
+                      {/* 6. Umrah: Makkah Hotel | Madinah Hotel | Airline | Ziyarat box */}
                       {srv.serviceType === "Umrah" && (
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 items-end">
+                        <div className="grid grid-cols-2 sm:grid-cols-12 gap-1.5 items-end">
                           <div className="sm:col-span-4 space-y-0.5">
-                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                              <Package className="w-3 h-3 text-teal-600" />
-                              Umrah Package
-                            </Label>
-                            <Select
-                              value={
-                                srv.details.umrahPackageId ||
-                                allUmrahPackages[0]?.id ||
-                                "package1"
-                              }
-                              onValueChange={(pkgId) =>
-                                handleUmrahPackageChange(srv.id, pkgId)
-                              }
-                            >
-                              <SelectTrigger className="h-7 text-xs bg-background font-medium">
-                                <SelectValue placeholder="Select Umrah Package" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allUmrahPackages.map((pkg) => {
-                                  const info = computeUmrahPresetSummaryAndPrice(
-                                    pkg,
-                                    currency,
-                                    sarToPkrRate
-                                  );
-                                  return (
-                                    <SelectItem key={pkg.id} value={pkg.id}>
-                                      {pkg.name} ({currency}{" "}
-                                      {info.price.toLocaleString()})
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="sm:col-span-8 space-y-0.5">
                             <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
-                              Package / Quotation Summary
+                              Makkah Hotel
                             </Label>
-                            <div
-                              className="h-7 px-2 rounded-md border bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200/70 dark:border-emerald-900/50 flex items-center text-[11px] text-emerald-950 dark:text-emerald-200 truncate"
-                              title={
-                                srv.details.umrahPackageSummary ||
-                                buildServiceSummaryLines("Umrah", srv.details).join(
-                                  " · "
+                            <Input
+                              value={srv.details.makkahHotel}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "makkahHotel",
+                                  e.target.value
                                 )
                               }
-                            >
-                              <span className="truncate font-medium">
-                                {srv.details.umrahPackageSummary ||
-                                  buildServiceSummaryLines("Umrah", srv.details).join(
-                                    " · "
-                                  )}
+                              placeholder="e.g. Pullman Zamzam Makkah"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-4 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Madinah Hotel
+                            </Label>
+                            <Input
+                              value={srv.details.madinahHotel}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "madinahHotel",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="e.g. Anwar Al Madinah"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Airline
+                            </Label>
+                            <Input
+                              value={srv.details.umrahAirline}
+                              onChange={(e) =>
+                                handleServiceDetailChange(
+                                  srv.id,
+                                  "umrahAirline",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Saudia / PIA"
+                              className="h-7 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2 space-y-0.5">
+                            <Label className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                              Ziyarat
+                            </Label>
+                            <label className="h-7 px-2 rounded-md border bg-background flex items-center gap-1.5 cursor-pointer select-none hover:bg-muted/40 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(srv.details.ziyaratIncluded)}
+                                onChange={(e) =>
+                                  handleServiceDetailChange(
+                                    srv.id,
+                                    "ziyaratIncluded",
+                                    e.target.checked
+                                  )
+                                }
+                                className="h-3.5 w-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-teal-600"
+                              />
+                              <span className="text-[11px] font-medium text-foreground truncate">
+                                {srv.details.ziyaratIncluded ? "Included" : "No"}
                               </span>
-                            </div>
+                            </label>
                           </div>
                         </div>
                       )}

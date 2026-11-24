@@ -167,10 +167,10 @@ export function createDefaultServiceDetails(defaultDate?: string): ServiceDetail
     returnTime: "",
     multicityLegs: [createDefaultFlightLeg()],
 
-    umrahPackageId: "package1",
-    umrahPackageName: "Package 1 (Standard)",
-    umrahPackageSummary: "20 Nights · Standard Hotel Makkah (12N, Sharing) · Standard Hotel Madinah (8N, Sharing) · Route: Karachi → Jeddah · Shared Bus · Ziyarat Included",
-    umrahPackagePrice: 213900,
+    umrahPackageId: "",
+    umrahPackageName: "",
+    umrahPackageSummary: "",
+    umrahPackagePrice: 0,
     ziyaratIncluded: true,
     umrahDepartureCity: "Karachi",
     umrahArrivalCity: "Jeddah",
@@ -180,10 +180,10 @@ export function createDefaultServiceDetails(defaultDate?: string): ServiceDetail
     umrahReturnDate: "",
     umrahReturnTime: "",
     umrahTransport: "Shared Bus",
-    makkahHotel: "Standard Hotel Makkah",
-    makkahNights: "12",
-    madinahHotel: "Standard Hotel Madinah",
-    madinahNights: "8",
+    makkahHotel: "",
+    makkahNights: "7",
+    madinahHotel: "",
+    madinahNights: "7",
 
     visaCountry: "Saudi Arabia",
     visaType: "Tourist / E-Visa",
@@ -259,19 +259,20 @@ export function buildServiceTitle(
       return parts.length > 0 ? `${baseLabel} — ${parts.join(" · ")}` : baseLabel;
     }
     case "Umrah": {
-      const pkg = details.umrahPackageName?.trim() || "";
-      const route =
-        details.umrahDepartureCity && details.umrahArrivalCity
-          ? `${details.umrahDepartureCity} → ${details.umrahArrivalCity}`
-          : "";
-      const nightsParts: string[] = [];
-      if (details.makkahHotel || details.makkahNights) {
-        nightsParts.push(`Makkah ${details.makkahNights || 0}N`);
+      const hotelParts: string[] = [];
+      if (details.makkahHotel?.trim()) {
+        hotelParts.push(`Makkah: ${details.makkahHotel.trim()}`);
       }
-      if (details.madinahHotel || details.madinahNights) {
-        nightsParts.push(`Madinah ${details.madinahNights || 0}N`);
+      if (details.madinahHotel?.trim()) {
+        hotelParts.push(`Madinah: ${details.madinahHotel.trim()}`);
       }
-      const extra = [pkg, route, nightsParts.join(" / ")].filter(Boolean).join(" · ");
+      const extra = [
+        hotelParts.join(" / "),
+        details.umrahAirline?.trim(),
+        details.ziyaratIncluded ? "Ziyarat Included" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       return extra ? `${baseLabel} — ${extra}` : baseLabel;
     }
     case "Visa": {
@@ -373,26 +374,28 @@ export function buildCompactServiceKeyDetail(
         .join(" — ");
     }
     case "Umrah": {
-      if (details.umrahPackageSummary?.trim()) {
+      const hasDirectFields = Boolean(
+        details.makkahHotel?.trim() ||
+          details.madinahHotel?.trim() ||
+          details.umrahAirline?.trim()
+      );
+      if (!hasDirectFields && details.umrahPackageSummary?.trim()) {
         return [details.umrahPackageName?.trim(), details.umrahPackageSummary.trim()]
           .filter(Boolean)
           .join(" — ");
       }
-      const route =
-        details.umrahDepartureCity || details.umrahArrivalCity
-          ? `${details.umrahDepartureCity || "—"} → ${details.umrahArrivalCity || "—"}`
-          : "";
-      const hotels = [
-        details.makkahHotel || details.makkahNights
-          ? `Makkah: ${details.makkahHotel || "Hotel"} (${details.makkahNights || 0}N)`
+      return [
+        details.makkahHotel?.trim()
+          ? `Makkah Hotel: ${details.makkahHotel.trim()}`
           : "",
-        details.madinahHotel || details.madinahNights
-          ? `Madinah: ${details.madinahHotel || "Hotel"} (${details.madinahNights || 0}N)`
+        details.madinahHotel?.trim()
+          ? `Madinah Hotel: ${details.madinahHotel.trim()}`
           : "",
+        details.umrahAirline?.trim()
+          ? `Airline: ${details.umrahAirline.trim()}`
+          : "",
+        `Ziyarat: ${details.ziyaratIncluded ? "Included" : "Excluded"}`,
       ]
-        .filter(Boolean)
-        .join(" · ");
-      return [details.umrahPackageName?.trim(), hotels, route, details.umrahTransport]
         .filter(Boolean)
         .join(" · ");
     }
