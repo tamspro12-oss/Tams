@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -107,15 +107,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const applySession = (nextSession: Session | null) => {
       if (!isMounted) return;
-      setSession(nextSession);
+      setSession((prev) => {
+        if (
+          prev &&
+          nextSession &&
+          prev.access_token === nextSession.access_token &&
+          prev.refresh_token === nextSession.refresh_token &&
+          prev.user?.id === nextSession.user?.id
+        ) {
+          return prev;
+        }
+        return nextSession;
+      });
       const nextUser = nextSession?.user ?? null;
       setUser((prev) => {
         if (
           prev &&
           nextUser &&
           prev.id === nextUser.id &&
-          prev.email === nextUser.email &&
-          prev.updated_at === nextUser.updated_at
+          prev.email === nextUser.email
         ) {
           return prev;
         }
@@ -164,8 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (
             prev &&
             prev.id === verifiedUser.id &&
-            prev.email === verifiedUser.email &&
-            prev.updated_at === verifiedUser.updated_at
+            prev.email === verifiedUser.email
           ) {
             return prev;
           }
@@ -269,8 +278,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ user, session, loading }),
+    [user, session, loading]
+  );
+
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

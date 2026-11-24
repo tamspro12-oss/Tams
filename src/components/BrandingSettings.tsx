@@ -1,4 +1,5 @@
-import { useState, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Receipt, MessageSquare } from "lucide-react";
 import { SettingsTabSkeleton } from "@/components/SettingsSkeleton";
@@ -10,8 +11,21 @@ const ReminderMessageTemplates = lazy(() => import("@/components/ReminderMessage
 
 export type BrandingView = "invoice" | "booking" | "reminder";
 
+function normalizeBrandingView(val: string | null): BrandingView {
+  if (val === "booking" || val === "reminder") return val;
+  return "invoice";
+}
+
 export function BrandingSettings() {
-  const [activeTemplateView, setActiveTemplateView] = useState<BrandingView>("invoice");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTemplateView = normalizeBrandingView(searchParams.get("view"));
+
+  const handleViewChange = (val: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "branding");
+    next.set("view", normalizeBrandingView(val));
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="space-y-3">
@@ -19,7 +33,7 @@ export function BrandingSettings() {
       <div className="sticky top-[52px] z-20 bg-background/95 backdrop-blur-md pb-2 pt-1 border-b border-border/40">
         <Tabs
           value={activeTemplateView}
-          onValueChange={(val) => setActiveTemplateView(val as BrandingView)}
+          onValueChange={handleViewChange}
           className="w-full"
         >
           <TabsList className="h-9 p-1 bg-muted/60 border rounded-lg flex items-center justify-start gap-1 w-full sm:w-fit overflow-x-auto shadow-xs">

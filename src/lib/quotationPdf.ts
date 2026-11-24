@@ -20,6 +20,7 @@ import {
   type AgencyBranding,
   type RgbTuple,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 interface BuildOptions {
   branding?: AgencyBranding;
@@ -483,9 +484,13 @@ export function buildQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
   return doc;
 }
 
-export function downloadQuotationPdf(q: Quotation, opts: BuildOptions = {}) {
+export function downloadQuotationPdf(
+  q: Quotation,
+  opts: BuildOptions = {},
+  preOpenedTab?: Window | null
+) {
   const doc = buildQuotationPdf(q, opts);
-  doc.save(`Quotation-${q.quotation_number}.pdf`);
+  openPdfInNewTab(doc, `Quotation-${q.quotation_number}.pdf`, preOpenedTab);
 }
 
 export function quotationPdfBase64(q: Quotation, opts: BuildOptions = {}): string {

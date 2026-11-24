@@ -28,12 +28,12 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
 
   const handleEmailInvoice = async () => {
     if (isSending) return;
-    
-    console.log('[EmailInvoiceButton] Validating client email:', { 
-      clientId: client.id, 
+
+    console.log('[EmailInvoiceButton] Validating client email:', {
+      clientId: client.id,
       clientName: client.name,
       hasEmail: !!client.email,
-      email: client.email 
+      email: client.email
     });
 
     if (!client.email) {
@@ -48,10 +48,10 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
 
     const smtpConfigured = agency?.email
       ? await queryClient.fetchQuery({
-          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
-          queryFn: fetchAgencySmtpConfigured,
-          staleTime: 10 * 60 * 1000,
-        })
+        queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+        queryFn: fetchAgencySmtpConfigured,
+        staleTime: 10 * 60 * 1000,
+      })
       : false;
 
     console.log('[EmailInvoiceButton] Validating agency SMTP config:', {
@@ -68,19 +68,19 @@ export function EmailInvoiceButton({ client }: EmailInvoiceButtonProps) {
       });
       return;
     }
-    
+
     setIsSending(true);
     console.log('[EmailInvoiceButton] Starting invoice email process...');
-    
+
     try {
       const branding = await getBrandingAsync();
       // Generate PDF using the professional invoice generator
       const { doc } = await generateInvoicePDF(client, agency, branding);
       const pdfBlob = doc.output('blob');
-      
+
       // Generate invoice number
       const invoiceNumber = `INV-${client.id?.slice(0, 8).toUpperCase() || 'DRAFT'}`;
-      
+
       // Convert blob to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {

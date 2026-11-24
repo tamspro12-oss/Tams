@@ -37,6 +37,7 @@ import {
 import { useParties, type Party } from "@/hooks/useParties";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
+import { closePreOpenedPdfTab, preOpenPdfTab } from "@/lib/pdf/openPdfInNewTab";
 import {
   LockedDateField,
   getTodayDateString,
@@ -1021,6 +1022,7 @@ export default function QuotationFormPage() {
     }
 
     const payload = buildPayload();
+    const pdfTab = andDownloadPdf ? preOpenPdfTab("Preparing Quotation PDF...") : null;
 
     await runUiAtomicSave<any>({
       requestIdRef,
@@ -1055,9 +1057,10 @@ export default function QuotationFormPage() {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               };
-              downloadQuotationPdf(quoteForPdf, { branding: latestBranding });
-              toast.success("PDF generated & downloaded");
+              downloadQuotationPdf(quoteForPdf, { branding: latestBranding }, pdfTab);
+              toast.success("PDF opened in a new tab");
             } catch (pdfErr) {
+              closePreOpenedPdfTab(pdfTab);
               console.warn("Quotation PDF error:", pdfErr);
             }
           }
@@ -1065,6 +1068,7 @@ export default function QuotationFormPage() {
         });
       },
       onErrorToast: (friendlyMessage, { timedOut, offline }) => {
+        closePreOpenedPdfTab(pdfTab);
         if (timedOut || offline) {
           toast.error(friendlyMessage);
         }

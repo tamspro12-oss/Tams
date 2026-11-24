@@ -11,6 +11,7 @@ import {
   resolveAgencyBrandingFromRecords,
   type AgencyBranding,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 function resolveExportBranding(
   brandingOrName?: AgencyBranding | string | null
@@ -185,7 +186,7 @@ export async function exportClientsReport(
     );
   }
 
-  doc.save(`ClientBookings_${format(new Date(), "yyyyMMdd_HHmmss")}.pdf`);
+  openPdfInNewTab(doc, `ClientBookings_${format(new Date(), "yyyyMMdd_HHmmss")}.pdf`);
 }
 
 export async function exportExpensesReport(
@@ -235,7 +236,7 @@ export async function exportExpensesReport(
   doc.setFont("helvetica", "bold");
   doc.text(`Total Expenses: PKR ${totalExpenses.toLocaleString()}`, 14, yPos);
 
-  doc.save(`Expenses_${format(new Date(), "yyyy_MM_dd_HHmmss")}.pdf`);
+  openPdfInNewTab(doc, `Expenses_${format(new Date(), "yyyy_MM_dd_HHmmss")}.pdf`);
 }
 
 export async function exportMonthlyReport(
@@ -329,7 +330,7 @@ export async function exportMonthlyReport(
   doc.text(`Total Expenses: PKR ${totalExpenses.toLocaleString()}`, 14, yPos + 14);
 
   const safeAgencySlug = branding.agencyName.replace(/[^a-zA-Z0-9_-]/g, "_") || "Agency";
-  doc.save(`${safeAgencySlug}_Monthly_Report_${format(month, "yyyy_MM")}.pdf`);
+  openPdfInNewTab(doc, `${safeAgencySlug}_Monthly_Report_${format(month, "yyyy_MM")}.pdf`);
 }
 
 function contrastOn(rgb: [number, number, number]) {

@@ -6,6 +6,7 @@ import { useAgency } from "@/hooks/useAgency";
 import { getAuthenticatedAgencyId } from "@/lib/agencyContext";
 import {
   fetchAgencyBranding,
+  getCachedAgencyBranding,
   resolveAgencyBrandingFromRecords,
   type AgencyBranding,
 } from "@/lib/pdf/agencyBranding";
@@ -43,11 +44,15 @@ export function useAgencyBranding() {
         signupAgencyName: agency?.name,
       });
     }
+    const cached = getCachedAgencyBranding(resolvedAgencyId);
+    if (cached && cached.agencyId === resolvedAgencyId) {
+      return cached;
+    }
     try {
       return await queryClient.fetchQuery({
         queryKey: ["agency-branding", user?.id ?? "anonymous", resolvedAgencyId],
         queryFn: () => fetchAgencyBranding(resolvedAgencyId, agency?.name),
-        staleTime: 0,
+        staleTime: 5 * 60 * 1000,
       });
     } catch {
       return (

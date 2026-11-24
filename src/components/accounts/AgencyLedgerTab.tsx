@@ -34,6 +34,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { getKarachiTodayNoon, getKarachiYmd } from "@/lib/karachiTime";
 import { toast } from "sonner";
@@ -277,8 +278,8 @@ export function AgencyLedgerTab({ onOpenAddEntry, onOpenPartyCard }: AgencyLedge
         doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
       }
 
-      doc.save(`Agency_Ledger_${format(new Date(), "yyyyMMdd")}.pdf`);
-      toast.success("Ledger exported to PDF");
+      openPdfInNewTab(doc, `Agency_Ledger_${format(new Date(), "yyyyMMdd")}.pdf`);
+      toast.success("Ledger PDF opened in a new tab");
     } catch (err: unknown) {
       handleSupabaseError(err, "Export failed. Please try again.", "AgencyLedgerTab.export");
     }

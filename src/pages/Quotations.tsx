@@ -218,7 +218,7 @@ export default function Quotations() {
   const handleDownload = async (q: Quotation) => {
     const branding = await getBrandingAsync();
     downloadQuotationPdf(q, { branding });
-    toast.success("PDF downloaded");
+    toast.success("PDF opened in a new tab");
   };
 
   const handleEmail = async (q: Quotation) => {
@@ -923,9 +923,7 @@ export default function Quotations() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const q = previewQ;
-                    setPreviewQ(null);
-                    handleDownload(q);
+                    handleDownload(previewQ);
                   }}
                   className="gap-1.5"
                 >

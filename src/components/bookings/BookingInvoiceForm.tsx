@@ -181,8 +181,10 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
 
   const isEditMode = Boolean(editingInvoice?.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const wasOpenRef = useRef(false);
+  const hydratedEditIdRef = useRef<string | null>(null);
 
-  // Hydrate form in Edit mode OR initialize clean defaults in Create mode
+  // Hydrate form in Edit mode OR initialize clean defaults in Create mode only when opening or switching record
   useEffect(() => {
     async function fetchNextInvoiceNo() {
       try {
@@ -200,7 +202,18 @@ export const BookingInvoiceForm: React.FC<BookingInvoiceFormProps> = ({
       setAutoInvoiceNo("Auto-assigned");
     }
 
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      hydratedEditIdRef.current = null;
+      return;
+    }
+
+    const editId = editingInvoice?.id || null;
+    if (wasOpenRef.current && hydratedEditIdRef.current === editId) {
+      return;
+    }
+    wasOpenRef.current = true;
+    hydratedEditIdRef.current = editId;
 
     requestIdRef.current = createRequestId();
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { brandingToReportAgencyInfo } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { sendEmail } from "@/lib/emailService";
 import { logAndFriendlyMessage, toFriendlyMessage } from "@/lib/friendlyError";
 import type { AgencyInfo, StatementRow } from "@/lib/reportPdfGenerator";
@@ -73,10 +74,19 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
   const [recipientEmail, setRecipientEmail] = useState<string>(party.email || "");
   const [busyAction, setBusyAction] = useState<"pdf" | "whatsapp" | "email" | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const wasOpenRef = useRef(false);
+  const lastPartyIdRef = useRef<string | null>(null);
 
-  // Reset to default "This month" and prefill Custom From/To from ledger filter whenever opened
+  // Reset to default "This month" and prefill Custom From/To only when the dialog opens or party changes
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      wasOpenRef.current = false;
+      lastPartyIdRef.current = null;
+      return;
+    }
+    if (!wasOpenRef.current || lastPartyIdRef.current !== party.id) {
+      wasOpenRef.current = true;
+      lastPartyIdRef.current = party.id;
       setPreset("this_month");
       setCustomFrom(initialCustomFrom || "");
       setCustomTo(initialCustomTo || "");
@@ -167,8 +177,8 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
     setBusyAction("pdf");
     try {
       const { doc, filename } = await buildPdfDoc();
-      doc.save(filename);
-      toast.success("Statement PDF downloaded.");
+      openPdfInNewTab(doc, filename);
+      toast.success("Statement PDF opened in a new tab.");
     } catch (err) {
       const friendly = logAndFriendlyMessage(
         "SendStatement.DownloadPdf",
@@ -228,10 +238,10 @@ export const SendStatementDialog: React.FC<SendStatementDialogProps> = ({
 
     const smtpConfigured = agency?.email
       ? await queryClient.fetchQuery({
-          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
-          queryFn: fetchAgencySmtpConfigured,
-          staleTime: 10 * 60 * 1000,
-        })
+        queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
+        queryFn: fetchAgencySmtpConfigured,
+        staleTime: 10 * 60 * 1000,
+      })
       : false;
 
     if (!agency?.email || !smtpConfigured) {

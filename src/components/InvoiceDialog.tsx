@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Download, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { useAgency } from "@/hooks/useAgency";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { InvoicePreviewDialog } from "./InvoicePreviewDialog";
@@ -44,10 +45,13 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
       setPdfUrl(blobUrl);
       setPdfFilename(filename);
       setPdfDoc(doc);
-      setShowPreview(true);
+      openPdfInNewTab(blobUrl || doc, filename);
+      if (preSelectedClient) {
+        onOpenChange(false);
+      }
       toast({
         title: "Success",
-        description: "Invoice generated successfully",
+        description: "Invoice PDF opened in a new tab",
       });
     } catch (error) {
       console.error('Invoice generation error:', error);
@@ -61,10 +65,10 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
 
   const handleDownload = () => {
     if (pdfDoc && pdfFilename) {
-      pdfDoc.save(pdfFilename);
+      openPdfInNewTab(pdfUrl || pdfDoc, pdfFilename);
       toast({
-        title: "Downloaded",
-        description: "Invoice PDF has been downloaded",
+        title: "Opened PDF",
+        description: "Invoice PDF has been opened in a new tab",
       });
     }
   };
@@ -80,13 +84,13 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
     queryKey: ["invoice-clients", searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
-      
+
       const { data } = await supabase
         .from("clients")
         .select("*")
         .or(`name.ilike.%${searchQuery}%,passport_number.ilike.%${searchQuery}%`)
         .order("created_at", { ascending: false });
-      
+
       return data || [];
     },
     enabled: searchQuery.length > 0,
@@ -101,7 +105,7 @@ export function InvoiceDialog({ open, onOpenChange, preSelectedClient }: Invoice
             <DialogHeader>
               <DialogTitle>Generate Invoice</DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="search">Search by Name or Passport Number</Label>

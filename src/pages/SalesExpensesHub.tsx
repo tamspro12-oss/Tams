@@ -981,11 +981,10 @@ export default function SalesExpensesHub() {
       width: 95,
       render: (v) => (
         <span
-          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-            v.direction === "received"
+          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${v.direction === "received"
               ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
               : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300"
-          }`}
+            }`}
         >
           {v.direction === "received" ? "RECEIPT" : "PAYMENT"}
         </span>
@@ -1057,9 +1056,8 @@ export default function SalesExpensesHub() {
           isAmount={true}
           displayValue={
             <span
-              className={`font-mono font-bold ${
-                v.direction === "received" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-              }`}
+              className={`font-mono font-bold ${v.direction === "received" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                }`}
             >
               {(v.amount || 0).toLocaleString()}
             </span>
@@ -1587,9 +1585,9 @@ export default function SalesExpensesHub() {
                 onAction={
                   canRecordPayments
                     ? () => {
-                        setVoucherPrefill({});
-                        setIsVoucherOpen(true);
-                      }
+                      setVoucherPrefill({});
+                      setIsVoucherOpen(true);
+                    }
                     : undefined
                 }
               />

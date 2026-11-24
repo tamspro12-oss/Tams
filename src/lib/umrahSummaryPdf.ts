@@ -12,6 +12,7 @@ import {
   resolveAgencyBrandingFromRecords,
   type AgencyBranding,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 interface HotelLine {
   city: "Makkah" | "Madinah";
@@ -254,5 +255,5 @@ export function exportUmrahSummaryPdf(d: UmrahSummaryData) {
   );
 
   const filename = `Umrah_Quotation_${format(new Date(), "yyyyMMdd_HHmmss")}.pdf`;
-  doc.save(filename);
+  openPdfInNewTab(doc, filename);
 }

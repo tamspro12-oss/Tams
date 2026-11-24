@@ -63,6 +63,8 @@ export async function fetchAgencyClients(agencyId: string) {
 export function mapLegacyClientsToInvoices(clientsData: any[]): any[] {
   return (clientsData || []).map((c: any) => ({
     id: c.id,
+    party_id: c.party_id || c.id,
+    vendor_id: c.vendor_id || null,
     invoice_no: `INV-${c.id.slice(0, 4).toUpperCase()}`,
     invoice_date: c.flight_date || (c.created_at ? getKarachiYmd(c.created_at) : ""),
     created_at: c.created_at,

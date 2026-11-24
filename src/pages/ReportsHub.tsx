@@ -40,7 +40,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { getInvoiceOverdueInfo } from "@/lib/overdueUtils";
+import {
+  buildAccountStatementRows,
+  filterAccountStatementRows,
+  resolveStatementDateRange,
+  syncPartiesWithLedgerRows,
+} from "@/lib/accountStatementUtils";
 import {
   isInvoiceVoidedOrRefunded,
   computeFinancialMetrics,
@@ -601,202 +606,69 @@ export default function ReportsHub() {
     return { totalQuotes, acceptedQuotes, convertedQuotes, conversionRate };
   }, [quotations]);
 
-  // Helper to compute overdue days adhering to Remaining Due Date logic
-  const getOverdueDays = (inv: any): number | null => {
-    const { isOverdue, overdueDays } = getInvoiceOverdueInfo(inv);
-    return isOverdue ? overdueDays : null;
-  };
-
   // ==========================================
   // REPORT 1: ACCOUNT STATEMENT (Live Master Ledger)
   // ==========================================
-  const rawStatementData = useMemo(() => {
-    let entries: any[] = [];
+  const unfilteredStatementData = useMemo(
+    () =>
+      buildAccountStatementRows({
+        rawInvoices,
+        rawTransactions,
+        rawExpenses,
+        rawRefunds,
+        parties,
+        detailedView,
+      }),
+    [rawInvoices, rawTransactions, rawExpenses, rawRefunds, parties, detailedView]
+  );
 
-    // Filter invoices by date, party, status, search (exclude voided/refunded unless explicitly filtered)
-    const matchingInvoices = rawInvoices.filter((inv: any) => {
-      if (!isDateInRange(inv.invoice_date)) return false;
-      if (
-        statusFilter !== "void" &&
-        statusFilter !== "refunded" &&
-        isInvoiceVoidedOrRefunded(inv)
-      ) {
-        return false;
-      }
-      if (filters.partyId && filters.partyId !== "all" && inv.party_id !== filters.partyId) {
-        return false;
-      }
-      if (filters.status !== "all" && inv.payment_status !== filters.status) {
-        return false;
-      }
-      if (onlyUnpaid && (inv.payment_status === "paid" || (Number(inv.client_amount) || 0) - (Number(inv.paid_amount) || 0) <= 0)) {
-        return false;
-      }
-      if (filters.searchQuery.trim()) {
-        const q = filters.searchQuery.toLowerCase();
-        const mInv = inv.invoice_no?.toLowerCase().includes(q);
-        const mPnr = inv.pnr?.toLowerCase().includes(q);
-        const mTicket = inv.ticket_no?.toLowerCase().includes(q);
-        const mParty = (inv.party?.name || inv.client_name || "").toLowerCase().includes(q);
-        const mDesc = `${inv.service} Booking`.toLowerCase().includes(q);
-        if (!mInv && !mPnr && !mTicket && !mParty && !mDesc) return false;
-      }
-      return true;
-    });
+  const statementParties = useMemo(
+    () => syncPartiesWithLedgerRows(parties, unfilteredStatementData),
+    [parties, unfilteredStatementData]
+  );
 
-    if (!detailedView) {
-      entries = matchingInvoices.map((inv: any) => ({
-        id: inv.id,
-        date: inv.invoice_date,
-        voucher_no: inv.invoice_no,
-        description: `${inv.service || "Ticket"} Booking - ${inv.party?.name || inv.client_name || ""}`,
-        service: inv.service || "Ticket",
-        entry: "Sale",
-        debit: inv.client_amount || 0,
-        credit: inv.paid_amount || 0,
-        overdue_days: getOverdueDays(inv),
-      }));
-    } else {
-      // Invoices
-      const invEntries = matchingInvoices.map((inv: any) => ({
-        id: `inv_${inv.id}`,
-        date: inv.invoice_date,
-        voucher_no: inv.invoice_no,
-        description: `${inv.service || "Ticket"} Booking - ${inv.party?.name || inv.client_name || ""}`,
-        service: inv.service || "Ticket",
-        entry: "Sale",
-        debit: inv.client_amount || 0,
-        credit: 0,
-        overdue_days: getOverdueDays(inv),
-      }));
+  const statementDateRange = useMemo(
+    () =>
+      resolveStatementDateRange(
+        filters.dateRange,
+        filters.startDate,
+        filters.endDate
+      ),
+    [filters.dateRange, filters.startDate, filters.endDate]
+  );
 
-      // Transactions (Receipts & Payments)
-      const txEntries = (rawTransactions || [])
-        .filter((t: any) => {
-          if (t.is_void) return false;
-          if (!isDateInRange(t.date)) return false;
-          if (filters.partyId && filters.partyId !== "all" && t.party_id !== filters.partyId) {
-            return false;
-          }
-          if (filters.searchQuery.trim()) {
-            const q = filters.searchQuery.toLowerCase();
-            const mRef = t.reference_no?.toLowerCase().includes(q);
-            const mNotes = t.notes?.toLowerCase().includes(q);
-            const mCat = t.category?.toLowerCase().includes(q);
-            if (!mRef && !mNotes && !mCat) return false;
-          }
-          return true;
-        })
-        .map((t: any) => {
-          const isReceipt = t.type === "payment_in";
-          const isExp = t.type === "expense";
-          const isRef = t.type === "refund";
-
-          let entryType = "Payment";
-          if (isExp) entryType = "Expense";
-          else if (isRef) entryType = "Refund";
-          else if (t.type === "void") entryType = "Void";
-          else if (t.type === "transfer") entryType = "Transfer";
-
-          let debitVal = 0;
-          let creditVal = 0;
-          if (isReceipt) {
-            creditVal = Number(t.debit) || Number(t.amount) || 0;
-          } else {
-            debitVal = Number(t.credit) || Number(t.amount) || 0;
-          }
-
-          return {
-            id: `tx_${t.id}`,
-            date: t.date,
-            voucher_no: t.reference_no || `PV-${t.id.slice(0, 4).toUpperCase()}`,
-            description: t.notes || t.category || `${entryType} Voucher`,
-            service: "Other",
-            entry: entryType,
-            debit: debitVal,
-            credit: creditVal,
-            overdue_days: null,
-          };
-        });
-
-      // Operating Expenses
-      const expEntries = (rawExpenses || [])
-        .filter((e: any) => {
-          if (!isDateInRange(e.expense_date)) return false;
-          if (filters.searchQuery.trim()) {
-            const q = filters.searchQuery.toLowerCase();
-            const mRef = e.reference_number?.toLowerCase().includes(q);
-            const mType = e.expense_type?.toLowerCase().includes(q);
-            const mNotes = e.notes?.toLowerCase().includes(q);
-            if (!mRef && !mType && !mNotes) return false;
-          }
-          return true;
-        })
-        .map((e: any) => ({
-          id: `exp_${e.id}`,
-          date: e.expense_date,
-          voucher_no: e.reference_number || `EXP-${e.id.slice(0, 4).toUpperCase()}`,
-          description: `Expense: ${e.expense_type || e.notes || "Operating Expense"}`,
-          service: "Other",
-          entry: "Expense",
-          debit: Number(e.amount) || 0,
-          credit: 0,
-          overdue_days: null,
-        }));
-
-      // Customer Refunds
-      const refEntries = (rawRefunds || [])
-        .filter((r: any) => {
-          if (!isDateInRange(r.refund_date)) return false;
-          if (filters.searchQuery.trim()) {
-            const q = filters.searchQuery.toLowerCase();
-            const mRef = r.refund_no?.toLowerCase().includes(q);
-            const mReason = r.reason?.toLowerCase().includes(q);
-            if (!mRef && !mReason) return false;
-          }
-          return true;
-        })
-        .map((r: any) => ({
-          id: `ref_${r.id}`,
-          date: r.refund_date,
-          voucher_no: r.refund_no || `REF-${r.id.slice(0, 4).toUpperCase()}`,
-          description: `Refund: ${r.reason || "Ticket Refund"}`,
-          service: "Ticket",
-          entry: "Refund",
-          debit: 0,
-          credit: Number(r.client_refund_amount ?? r.refund_amount ?? r.amount) || 0,
-          overdue_days: null,
-        }));
-
-      entries = [...invEntries, ...txEntries, ...expEntries, ...refEntries];
-    }
-
-    // Apply Overdue filter
-    if (overdueBucket !== "none") {
-      entries = entries.filter((r) => {
-        if (!r.overdue_days) return false;
-        if (overdueBucket === "all") return r.overdue_days > 0;
-        if (overdueBucket === "0-30") return r.overdue_days <= 30;
-        if (overdueBucket === "31-60") return r.overdue_days > 30 && r.overdue_days <= 60;
-        if (overdueBucket === "61-90") return r.overdue_days > 60 && r.overdue_days <= 90;
-        if (overdueBucket === "90+") return r.overdue_days > 90;
-        return true;
-      });
-    }
-
-    // Sort by Date
-    entries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-
-    // Calculate live running balance
-    let running = 0;
-    return entries.map((r) => {
-      running = running + (r.debit || 0) - (r.credit || 0);
-      return {
-        ...r,
-        balance: running,
-      };
-    });
-  }, [rawInvoices, rawTransactions, rawExpenses, rawRefunds, filters, detailedView, onlyUnpaid, overdueBucket]);
+  const rawStatementData = useMemo(
+    () =>
+      filterAccountStatementRows(
+        unfilteredStatementData,
+        {
+          datePreset: filters.dateRange,
+          fromDate: statementDateRange.fromDate,
+          toDate: statementDateRange.toDate,
+          selectedPartyIds:
+            filters.partyId && filters.partyId !== "all" ? [filters.partyId] : [],
+          onlyUnpaid,
+          overdueBucket,
+          detailedView,
+          status: filters.status,
+          searchQuery: filters.searchQuery,
+        },
+        statementParties
+      ),
+    [
+      unfilteredStatementData,
+      filters.dateRange,
+      filters.partyId,
+      filters.status,
+      filters.searchQuery,
+      statementDateRange.fromDate,
+      statementDateRange.toDate,
+      onlyUnpaid,
+      overdueBucket,
+      detailedView,
+      statementParties,
+    ]
+  );
 
   // Live state for rows after header filters are applied in ExcelGrid
   const [activeStatementRows, setActiveStatementRows] = useState<any[]>(rawStatementData);
@@ -1289,7 +1161,7 @@ export default function ReportsHub() {
           <FilterBar
             filters={filters}
             onChange={setFilters}
-            parties={parties}
+            parties={statementParties}
             showPartyFilter={true}
             showStatusFilter={true}
             showEntryTypeFilter={false}
@@ -1327,7 +1199,12 @@ export default function ReportsHub() {
               {(["none", "all", "0-30", "31-60", "61-90", "90+"] as const).map((b) => (
                 <button
                   key={b}
-                  onClick={() => setOverdueBucket(b)}
+                  onClick={() => {
+                    setOverdueBucket(b);
+                    if (b === "none") {
+                      setOnlyUnpaid(false);
+                    }
+                  }}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
                     overdueBucket === b
                       ? "bg-[#0B192C] text-white shadow-xs"
@@ -2736,12 +2613,13 @@ export default function ReportsHub() {
         onOpenChange={setExportDialogOpen}
         reportTab={currentTab}
         agency={agency || undefined}
-        parties={parties}
+        parties={statementParties}
         accounts={accounts}
         rawInvoices={rawInvoices}
         rawExpenses={rawExpenses}
         rawTransactions={rawTransactions}
-        rawStatementData={rawStatementData}
+        rawRefunds={rawRefunds}
+        rawStatementData={unfilteredStatementData}
         financialSubReport={financialSubReport}
         initialDateRange={filters.dateRange}
         initialStartDate={filters.startDate}
@@ -2750,6 +2628,8 @@ export default function ReportsHub() {
         initialDetailedView={detailedView}
         initialOnlyUnpaid={onlyUnpaid}
         initialOverdueBucket={overdueBucket}
+        initialStatus={filters.status}
+        initialSearchQuery={filters.searchQuery}
         quotationSummary={quoteStats}
       />
 

@@ -32,6 +32,9 @@ const {
   generateFinancialReportsPdf,
 } = await import("../src/lib/reportPdfGenerator.ts");
 const { brandingToReportAgencyInfo } = await import("../src/lib/pdf/agencyBranding.ts");
+const { openPdfInNewTab, preOpenPdfTab, closePreOpenedPdfTab } = await import(
+  "../src/lib/pdf/openPdfInNewTab.ts"
+);
 
 function extractPdfText(doc) {
   const raw = doc.output();
@@ -942,4 +945,72 @@ test("Voucher and Financial Report PDFs use agency branding with zero TAMS Pro l
   assert.match(legacyText, /\nPIA\n/);
   assert.equal(/Pakistan International/i.test(legacyText), false);
   assert.equal(/Terms\s*&\s*Conditions/i.test(legacyText), false);
+});
+
+test("openPdfInNewTab opens every generated PDF in a new browser tab (_blank) without navigating the current app tab", () => {
+  const openedCalls = [];
+  const doc = buildBookingInvoicePdfDoc({
+    invoiceNo: "INV-2026-0099",
+    invoiceDate: "2026-11-24",
+    service: "Ticket",
+    clientName: "Usman Khan",
+    clientAmount: 145000,
+    paidAmount: 145000,
+    balanceDue: 0,
+    currency: "PKR",
+    branding: AGENCY_A_BRANDING,
+  });
+
+  const prevWindow = globalThis.window;
+  const prevDocument = globalThis.document;
+  try {
+    globalThis.window = {
+      open(url, target) {
+        openedCalls.push({ url, target });
+        return {
+          closed: false,
+          opener: {},
+          document: { title: "", body: { innerHTML: "" } },
+          location: {
+            href: url,
+            replace(nextUrl) {
+              this.href = nextUrl;
+            },
+          },
+          focus() {},
+          close() {
+            this.closed = true;
+          },
+        };
+      },
+    };
+    globalThis.document = {
+      body: {
+        appendChild() {},
+        removeChild() {},
+      },
+      createElement() {
+        return { style: {}, click() {} };
+      },
+    };
+
+    const blobUrl = openPdfInNewTab(doc, "Invoice_INV-2026-0099.pdf");
+    assert.equal(openedCalls.length, 1);
+    assert.equal(openedCalls[0].target, "_blank");
+    assert.equal(openedCalls[0].url, blobUrl);
+    assert.match(doc.output(), /\/Title \(Invoice_INV-2026-0099\.pdf\)/);
+
+    // Pre-opened tab flow (for async save + PDF actions)
+    const preTab = preOpenPdfTab("Preparing Quotation PDF...");
+    assert.ok(preTab);
+    assert.equal(openedCalls.length, 2);
+    assert.equal(openedCalls[1].target, "_blank");
+    const preUrl = openPdfInNewTab(doc, "Quotation-QT-101.pdf", preTab);
+    assert.equal(preTab.location.href, preUrl);
+    closePreOpenedPdfTab(preTab);
+    assert.equal(preTab.closed, true);
+  } finally {
+    globalThis.window = prevWindow;
+    globalThis.document = prevDocument;
+  }
 });

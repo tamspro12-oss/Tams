@@ -38,6 +38,7 @@ import { InlinePaymentHistory } from "@/components/InlinePaymentHistory";
 import { ClientPaymentDialog } from "@/components/ClientPaymentDialog";
 import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { downloadVoucherPdf, printVoucherPdf } from "@/lib/voucherPdfGenerator";
 import { PartyLedgerAndStatement } from "./PartyLedgerAndStatement";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -131,9 +132,8 @@ export function DirectBookingDetailModal({
         vendor,
         branding
       );
-      doc.save(filename);
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-      toast.success("Booking confirmation PDF downloaded!");
+      openPdfInNewTab(blobUrl || doc, filename);
+      toast.success("Booking confirmation PDF opened in a new tab!");
     } catch (err: any) {
       console.error(err);
       toast.error("Failed to generate booking confirmation PDF");

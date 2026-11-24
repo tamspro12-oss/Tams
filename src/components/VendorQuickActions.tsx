@@ -14,6 +14,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 interface VendorQuickActionsProps {
   vendor: {
@@ -144,9 +145,9 @@ export function VendorQuickActions({ vendor, onViewLedger, onViewBookings }: Ven
     doc.setTextColor(148, 163, 184);
     doc.text(`${branding.agencyName} • Vendor Statement`, 14, pageHeight - 8);
 
-    // Save
-    doc.save(`${vendor.name.replace(/\s+/g, "_")}_Statement_${format(new Date(), "yyyyMMdd")}.pdf`);
-    toast.success("Vendor statement downloaded");
+    // Open in new tab
+    openPdfInNewTab(doc, `${vendor.name.replace(/\s+/g, "_")}_Statement_${format(new Date(), "yyyyMMdd")}.pdf`);
+    toast.success("Vendor statement PDF opened in a new tab");
   };
 
   return (

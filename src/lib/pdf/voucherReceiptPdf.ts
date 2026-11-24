@@ -14,6 +14,7 @@ import {
   type AgencyBranding,
   type RgbTuple,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 export interface VoucherPdfData {
   voucherNo: string;
@@ -214,7 +215,10 @@ export function buildVoucherReceiptPdfDoc(data: VoucherPdfData): jsPDF {
   return doc;
 }
 
-export function generateVoucherPdf(data: VoucherPdfData) {
+export function generateVoucherPdf(
+  data: VoucherPdfData,
+  preOpenedTab?: Window | null
+) {
   const doc = buildVoucherReceiptPdfDoc(data);
-  doc.save(`Voucher_${data.voucherNo}.pdf`);
+  openPdfInNewTab(doc, `Voucher_${data.voucherNo}.pdf`, preOpenedTab);
 }

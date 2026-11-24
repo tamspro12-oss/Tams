@@ -14,6 +14,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
@@ -251,8 +252,8 @@ export function StatementsTab({ initialScope = "all", initialPartyId }: Statemen
         doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
       }
 
-      doc.save(`Statement_${scopeType}_${format(new Date(), "yyyyMMdd")}.pdf`);
-      toast.success("Statement PDF downloaded");
+      openPdfInNewTab(doc, `Statement_${scopeType}_${format(new Date(), "yyyyMMdd")}.pdf`);
+      toast.success("Statement PDF opened in a new tab");
     } catch (err: unknown) {
       handleSupabaseError(err, "Export failed. Please try again.", "StatementsTab.handleExportPDF");
     }

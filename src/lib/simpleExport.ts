@@ -12,6 +12,7 @@ import {
   resolveAgencyBrandingFromRecords,
   type AgencyBranding,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 export function exportRowsToExcel(
   rows: Record<string, any>[],
@@ -96,5 +97,5 @@ export function exportRowsToPDF(
       headStyles: { fillColor: primaryRgb, textColor: contrastRgb, fontStyle: "bold" },
     });
   }
-  doc.save(`${fileName}-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
+  openPdfInNewTab(doc, `${fileName}-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
 }

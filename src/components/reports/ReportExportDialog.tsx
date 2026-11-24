@@ -34,18 +34,19 @@ import { toast } from "sonner";
 import { handleSupabaseError } from "@/lib/supabaseErrorHandler";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { brandingToReportAgencyInfo } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import {
   format,
-  startOfDay,
-  endOfDay,
-  startOfMonth,
-  endOfMonth,
-  subMonths,
-  startOfYear,
-  endOfYear,
-  subDays,
   parseISO,
 } from "date-fns";
+import {
+  buildAccountStatementRows,
+  filterAccountStatementRows,
+  isPlainYmdInRange,
+  resolveStatementDateRange,
+  syncPartiesWithLedgerRows,
+  toPlainYmd,
+} from "@/lib/accountStatementUtils";
 import {
   generateAccountStatementPdf,
   generateBookingReportPdf,
@@ -58,7 +59,6 @@ import {
   DailyReportRow,
   AccountSummaryRow,
   AssetDueRow,
-  MonthlyFigureRow,
   FinancialPnlData,
 } from "@/lib/reportPdfGenerator";
 
@@ -76,6 +76,7 @@ export interface ReportExportDialogProps {
   rawInvoices: any[];
   rawExpenses: any[];
   rawTransactions: any[];
+  rawRefunds?: any[];
   rawStatementData: StatementRow[];
   financialSubReport?: "pnl" | "accounts_summary" | "assets_dues" | "monthly_income" | "monthly_expenses";
   // Initial page settings to mirror defaults
@@ -86,6 +87,8 @@ export interface ReportExportDialogProps {
   initialDetailedView?: boolean;
   initialOnlyUnpaid?: boolean;
   initialOverdueBucket?: string;
+  initialStatus?: string;
+  initialSearchQuery?: string;
   quotationSummary?: {
     totalQuotes: number;
     acceptedQuotes: number;
@@ -104,6 +107,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   rawInvoices = [],
   rawExpenses = [],
   rawTransactions = [],
+  rawRefunds = [],
   rawStatementData = [],
   financialSubReport = "pnl",
   initialDateRange = "this_month",
@@ -113,6 +117,8 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   initialDetailedView = false,
   initialOnlyUnpaid = false,
   initialOverdueBucket = "none",
+  initialStatus = "all",
+  initialSearchQuery = "",
   quotationSummary,
 }) => {
   const { getBrandingAsync } = useAgencyBranding();
@@ -120,70 +126,59 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   // --------------------------------------------------------------------------
   // 1. DATE RANGE STATE (Synced to defaults on open)
   // --------------------------------------------------------------------------
-  const [datePreset, setDatePreset] = useState<DatePreset>("this_month");
-  const [fromDate, setFromDate] = useState<string>("");
-  const [toDate, setToDate] = useState<string>("");
+  const initialResolvedRange = useMemo(
+    () => resolveStatementDateRange(initialDateRange, initialStartDate, initialEndDate),
+    [initialDateRange, initialStartDate, initialEndDate]
+  );
+  const [datePreset, setDatePreset] = useState<DatePreset>(
+    (initialDateRange as DatePreset) || "this_month"
+  );
+  const [fromDate, setFromDate] = useState<string>(initialResolvedRange.fromDate);
+  const [toDate, setToDate] = useState<string>(initialResolvedRange.toDate);
+  const wasOpenRef = useRef(false);
+  const lastReportTabRef = useRef<ReportTab | null>(null);
 
   useEffect(() => {
-    if (open) {
-      const now = new Date();
-      if (initialDateRange === "today") {
-        setDatePreset("today");
-        setFromDate(format(now, "yyyy-MM-dd"));
-        setToDate(format(now, "yyyy-MM-dd"));
-      } else if (initialDateRange === "last_month") {
-        setDatePreset("last_month");
-        const lm = subMonths(now, 1);
-        setFromDate(format(startOfMonth(lm), "yyyy-MM-dd"));
-        setToDate(format(endOfMonth(lm), "yyyy-MM-dd"));
-      } else if (initialDateRange === "all") {
-        setDatePreset("all");
-        setFromDate("");
-        setToDate("");
-      } else if (initialDateRange === "custom" && initialStartDate && initialEndDate) {
-        setDatePreset("custom");
-        setFromDate(initialStartDate);
-        setToDate(initialEndDate);
-      } else {
-        setDatePreset("this_month");
-        setFromDate(format(startOfMonth(now), "yyyy-MM-dd"));
-        setToDate(format(endOfMonth(now), "yyyy-MM-dd"));
-      }
+    if (!open) {
+      wasOpenRef.current = false;
+      lastReportTabRef.current = null;
+      return;
     }
-  }, [open, initialDateRange, initialStartDate, initialEndDate]);
+    if (!wasOpenRef.current || lastReportTabRef.current !== reportTab) {
+      const validPresets: DatePreset[] = [
+        "today",
+        "yesterday",
+        "this_month",
+        "last_month",
+        "this_year",
+        "all",
+        "custom",
+      ];
+      const nextPreset: DatePreset = validPresets.includes(initialDateRange as DatePreset)
+        ? (initialDateRange as DatePreset)
+        : "this_month";
+      const resolved = resolveStatementDateRange(nextPreset, initialStartDate, initialEndDate);
+      setDatePreset(nextPreset);
+      setFromDate(resolved.fromDate);
+      setToDate(resolved.toDate);
+    }
+  }, [open, reportTab, initialDateRange, initialStartDate, initialEndDate]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
-    const now = new Date();
-    if (preset === "today") {
-      const str = format(now, "yyyy-MM-dd");
-      setFromDate(str);
-      setToDate(str);
-    } else if (preset === "yesterday") {
-      const yest = subDays(now, 1);
-      const str = format(yest, "yyyy-MM-dd");
-      setFromDate(str);
-      setToDate(str);
-    } else if (preset === "this_month") {
-      setFromDate(format(startOfMonth(now), "yyyy-MM-dd"));
-      setToDate(format(endOfMonth(now), "yyyy-MM-dd"));
-    } else if (preset === "last_month") {
-      const lm = subMonths(now, 1);
-      setFromDate(format(startOfMonth(lm), "yyyy-MM-dd"));
-      setToDate(format(endOfMonth(lm), "yyyy-MM-dd"));
-    } else if (preset === "this_year") {
-      setFromDate(format(startOfYear(now), "yyyy-MM-dd"));
-      setToDate(format(endOfYear(now), "yyyy-MM-dd"));
-    } else if (preset === "all") {
-      setFromDate("");
-      setToDate("");
+    if (preset !== "custom") {
+      const resolved = resolveStatementDateRange(preset);
+      setFromDate(resolved.fromDate);
+      setToDate(resolved.toDate);
     }
   };
 
   const isDateInvalid = useMemo(() => {
     if (datePreset === "all") return false;
-    if (datePreset === "custom" && (!fromDate || !toDate)) return true;
-    if (fromDate && toDate && fromDate > toDate) return true;
+    const f = toPlainYmd(fromDate);
+    const t = toPlainYmd(toDate);
+    if (datePreset === "custom" && (!f || !t)) return true;
+    if (f && t && f > t) return true;
     return false;
   }, [datePreset, fromDate, toDate]);
 
@@ -195,23 +190,39 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   const [partySearchQuery, setPartySearchQuery] = useState("");
   const [partyDropdownOpen, setPartyDropdownOpen] = useState(false);
 
+  // Account Statement options
+  const [separateParties, setSeparateParties] = useState<boolean>(false);
+  const [detailedView, setDetailedView] = useState<boolean>(initialDetailedView);
+  const [onlyUnpaid, setOnlyUnpaid] = useState<boolean>(initialOnlyUnpaid);
+  const [overdueBucket, setOverdueBucket] = useState<string>(initialOverdueBucket || "none");
+  const [selectedServices, setSelectedServices] = useState<string[]>(["Ticket", "Umrah", "Visa", "Hotel", "Insurance", "Other"]);
+
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (!wasOpenRef.current || lastReportTabRef.current !== reportTab) {
       if (initialPartyId && initialPartyId !== "all") {
         setSelectedPartyIds([initialPartyId]);
       } else {
         setSelectedPartyIds([]); // empty means All Parties
       }
+      setDetailedView(Boolean(initialDetailedView));
+      setOnlyUnpaid(Boolean(initialOnlyUnpaid));
+      setOverdueBucket(initialOverdueBucket || "none");
+      if (financialSubReport) {
+        setSelectedFinSubReport(financialSubReport);
+      }
+      wasOpenRef.current = true;
+      lastReportTabRef.current = reportTab;
     }
-  }, [open, initialPartyId]);
-
-  // Account Statement options
-  const [separateParties, setSeparateParties] = useState<boolean>(false);
-  const [detailedView, setDetailedView] = useState<boolean>(initialDetailedView);
-  const [onlyUnpaid, setOnlyUnpaid] = useState<boolean>(initialOnlyUnpaid);
-  const [overdueBucket, setOverdueBucket] = useState<string>(initialOverdueBucket);
-  const [selectedEntryTypes, setSelectedEntryTypes] = useState<string[]>(["Sale", "Payment", "Refund", "Expense"]);
-  const [selectedServices, setSelectedServices] = useState<string[]>(["Ticket", "Umrah", "Visa", "Hotel", "Insurance", "Other"]);
+  }, [
+    open,
+    reportTab,
+    initialPartyId,
+    initialDetailedView,
+    initialOnlyUnpaid,
+    initialOverdueBucket,
+    financialSubReport,
+  ]);
 
   // Booking Report options
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["Paid", "Partial", "Pending"]);
@@ -224,19 +235,69 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
 
   // Financial Reports options
   const [selectedFinSubReport, setSelectedFinSubReport] = useState<string>(financialSubReport);
-  useEffect(() => {
-    if (open && financialSubReport) {
-      setSelectedFinSubReport(financialSubReport);
-    }
-  }, [open, financialSubReport]);
 
   // UI state
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [lastExportedParty, setLastExportedParty] = useState<{ name: string; phone?: string } | null>(null);
 
+  // Helper date checker (plain YYYY-MM-DD comparison, no timezone conversion)
+  const isDateInRange = (dateStr?: string) =>
+    isPlainYmdInRange(dateStr, fromDate, toDate, datePreset);
+
+  // Shared Account Statement data source & filter function (identical to Account Statement table)
+  const statementSourceRows = useMemo(() => {
+    if (detailedView === initialDetailedView && rawStatementData.length > 0) {
+      return rawStatementData;
+    }
+    if (
+      rawInvoices.length > 0 ||
+      rawTransactions.length > 0 ||
+      rawExpenses.length > 0 ||
+      rawRefunds.length > 0
+    ) {
+      return buildAccountStatementRows({
+        rawInvoices,
+        rawTransactions,
+        rawExpenses,
+        rawRefunds,
+        parties,
+        detailedView,
+      });
+    }
+    return rawStatementData;
+  }, [
+    detailedView,
+    initialDetailedView,
+    rawStatementData,
+    rawInvoices,
+    rawTransactions,
+    rawExpenses,
+    rawRefunds,
+    parties,
+  ]);
+
+  const dialogParties = useMemo(
+    () => syncPartiesWithLedgerRows(parties, statementSourceRows as any),
+    [parties, statementSourceRows]
+  );
+
   // Categorized Parties
-  const clientParties = useMemo(() => parties.filter((p) => p.type === "client" || p.type === "both"), [parties]);
-  const vendorParties = useMemo(() => parties.filter((p) => p.type === "vendor" || p.type === "both"), [parties]);
+  const clientParties = useMemo(
+    () =>
+      dialogParties.filter((p) => {
+        const t = String(p?.type || "client").trim().toLowerCase();
+        return t === "client" || t === "both" || t !== "vendor";
+      }),
+    [dialogParties]
+  );
+  const vendorParties = useMemo(
+    () =>
+      dialogParties.filter((p) => {
+        const t = String(p?.type || "").trim().toLowerCase();
+        return t === "vendor" || t === "both";
+      }),
+    [dialogParties]
+  );
 
   const filteredClientParties = useMemo(() => {
     if (!partySearchQuery.trim()) return clientParties;
@@ -257,22 +318,45 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
   };
 
   const selectAllParties = () => {
-    setSelectedPartyIds(parties.map((p) => p.id));
+    setSelectedPartyIds(dialogParties.map((p) => p.id));
   };
 
   const clearParties = () => {
     setSelectedPartyIds([]);
   };
 
-  // Helper date checker
-  const isDateInRange = (dateStr?: string) => {
-    if (datePreset === "all") return true;
-    if (!dateStr) return false;
-    const d = dateStr.slice(0, 10);
-    if (fromDate && d < fromDate) return false;
-    if (toDate && d > toDate) return false;
-    return true;
-  };
+  const filteredAccountStatementRows = useMemo(() => {
+    if (reportTab !== "account-statement" || isDateInvalid) return [];
+    return filterAccountStatementRows(
+      statementSourceRows,
+      {
+        datePreset,
+        fromDate,
+        toDate,
+        selectedPartyIds,
+        onlyUnpaid,
+        overdueBucket,
+        detailedView,
+        status: initialStatus,
+        searchQuery: initialSearchQuery,
+      },
+      dialogParties
+    );
+  }, [
+    reportTab,
+    isDateInvalid,
+    statementSourceRows,
+    datePreset,
+    fromDate,
+    toDate,
+    selectedPartyIds,
+    onlyUnpaid,
+    overdueBucket,
+    detailedView,
+    initialStatus,
+    initialSearchQuery,
+    dialogParties,
+  ]);
 
   // --------------------------------------------------------------------------
   // 3. LIVE RECORD COUNT COMPUTATION & PREVIEWS
@@ -290,33 +374,20 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         : "Selected Period";
 
     if (reportTab === "account-statement") {
-      let filtered = rawStatementData.filter((r) => isDateInRange(r.date));
-      if (selectedPartyIds.length > 0) {
-        filtered = filtered.filter((r) => r.party_id && selectedPartyIds.includes(r.party_id));
-      }
-      if (onlyUnpaid) {
-        filtered = filtered.filter((r) => r.is_unpaid);
-      }
-      if (overdueBucket && overdueBucket !== "none") {
-        filtered = filtered.filter((r) => {
-          if (overdueBucket === "all") return r.overdue_status && r.overdue_status.includes("Overdue");
-          return r.overdue_status === overdueBucket;
-        });
-      }
-      if (selectedEntryTypes.length > 0) {
-        filtered = filtered.filter((r) => selectedEntryTypes.includes(r.entry_type));
-      }
-      if (selectedServices.length > 0) {
-        filtered = filtered.filter((r) => !r.service || selectedServices.includes(r.service));
-      }
-
-      const partiesCount = selectedPartyIds.length > 0 ? selectedPartyIds.length : "All";
-      if (filtered.length === 0) {
+      if (filteredAccountStatementRows.length === 0) {
         return { count: 0, text: "No records for this selection", isValid: false };
       }
+      const totalDebit = filteredAccountStatementRows.reduce(
+        (sum, r) => sum + (Number(r.debit) || 0),
+        0
+      );
+      const totalCredit = filteredAccountStatementRows.reduce(
+        (sum, r) => sum + (Number(r.credit) || 0),
+        0
+      );
       return {
-        count: filtered.length,
-        text: `${filtered.length} records, ${partiesCount} parties, ${periodStr}`,
+        count: filteredAccountStatementRows.length,
+        text: `${filteredAccountStatementRows.length} records, Debit ${totalDebit.toLocaleString()}, Credit ${totalCredit.toLocaleString()}`,
         isValid: true,
       };
     }
@@ -378,14 +449,11 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
     datePreset,
     fromDate,
     toDate,
-    rawStatementData,
+    filteredAccountStatementRows,
     rawInvoices,
     rawExpenses,
     rawTransactions,
     selectedPartyIds,
-    onlyUnpaid,
-    overdueBucket,
-    selectedEntryTypes,
     selectedServices,
     selectedStatuses,
   ]);
@@ -436,29 +504,11 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
       // EXPORT 1: ACCOUNT STATEMENT
       // ----------------------------------------------------------------------
       if (reportTab === "account-statement") {
-        let filtered = rawStatementData.filter((r) => isDateInRange(r.date));
-        if (selectedPartyIds.length > 0) {
-          filtered = filtered.filter((r) => r.party_id && selectedPartyIds.includes(r.party_id));
-        }
-        if (onlyUnpaid) {
-          filtered = filtered.filter((r) => r.is_unpaid);
-        }
-        if (overdueBucket && overdueBucket !== "none") {
-          filtered = filtered.filter((r) => {
-            if (overdueBucket === "all") return r.overdue_status && r.overdue_status.includes("Overdue");
-            return r.overdue_status === overdueBucket;
-          });
-        }
-        if (selectedEntryTypes.length > 0) {
-          filtered = filtered.filter((r) => selectedEntryTypes.includes(r.entry_type));
-        }
-        if (selectedServices.length > 0) {
-          filtered = filtered.filter((r) => !r.service || selectedServices.includes(r.service));
-        }
+        const filtered = filteredAccountStatementRows;
 
         const selectedPartyObjs =
           selectedPartyIds.length > 0
-            ? parties
+            ? dialogParties
                 .filter((p) => selectedPartyIds.includes(p.id))
                 .map((p) => ({
                   id: p.id,
@@ -485,7 +535,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         });
 
         const filename = `${sanitizeFilename(agencyName)}_AccountStatement_${partySlug}_${fromSlug}_to_${toSlug}.pdf`;
-        doc.save(filename);
+        openPdfInNewTab(doc, filename);
 
         if (selectedPartyObjs.length === 1 && selectedPartyObjs[0].id !== "all") {
           setLastExportedParty({
@@ -544,7 +594,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         });
 
         const filename = `${sanitizeFilename(agencyName)}_BookingReport_${partySlug}_${fromSlug}_to_${toSlug}.pdf`;
-        doc.save(filename);
+        openPdfInNewTab(doc, filename);
         toast.success("Booking report exported successfully");
       }
 
@@ -597,7 +647,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         });
 
         const filename = `${sanitizeFilename(agencyName)}_DailyReport_${fromSlug}_to_${toSlug}.pdf`;
-        doc.save(filename);
+        openPdfInNewTab(doc, filename);
         toast.success("Daily report exported successfully");
       }
 
@@ -675,7 +725,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
         });
 
         const filename = `${sanitizeFilename(agencyName)}_Financial_${selectedFinSubReport}_${fromSlug}_to_${toSlug}.pdf`;
-        doc.save(filename);
+        openPdfInNewTab(doc, filename);
         toast.success("Financial report exported successfully");
       }
     } catch (err: unknown) {
@@ -828,7 +878,7 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
                       {selectedPartyIds.length === 0
                         ? "All Parties (Clients & Vendors)"
                         : selectedPartyIds.length === 1
-                        ? parties.find((p) => p.id === selectedPartyIds[0])?.name || "1 party selected"
+                        ? dialogParties.find((p) => p.id === selectedPartyIds[0])?.name || "1 party selected"
                         : `${selectedPartyIds.length} parties selected`}
                     </span>
                     <span className="text-[10px] text-muted-foreground">▼</span>
@@ -975,7 +1025,15 @@ export const ReportExportDialog: React.FC<ReportExportDialogProps> = ({
               {/* Overdue Bucket */}
               <div className="flex items-center justify-between text-xs pt-1">
                 <span className="text-muted-foreground font-medium">Overdue Filter:</span>
-                <Select value={overdueBucket} onValueChange={setOverdueBucket}>
+                <Select
+                  value={overdueBucket}
+                  onValueChange={(val) => {
+                    setOverdueBucket(val);
+                    if (val === "none") {
+                      setOnlyUnpaid(false);
+                    }
+                  }}
+                >
                   <SelectTrigger className="h-7 w-36 text-xs">
                     <SelectValue />
                   </SelectTrigger>

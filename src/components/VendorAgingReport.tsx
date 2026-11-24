@@ -17,6 +17,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { format, differenceInDays, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -210,8 +211,8 @@ export function VendorAgingReport() {
     doc.setTextColor(148, 163, 184);
     doc.text(`${branding.agencyName} • Vendor Aging Report`, 14, pageHeight - 8);
 
-    doc.save(`Vendor_Aging_Report_${format(new Date(), "yyyyMMdd")}.pdf`);
-    toast.success("Vendor Aging Report PDF downloaded");
+    openPdfInNewTab(doc, `Vendor_Aging_Report_${format(new Date(), "yyyyMMdd")}.pdf`);
+    toast.success("Vendor Aging Report PDF opened in a new tab");
   };
 
   const exportExcel = () => {

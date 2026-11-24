@@ -21,6 +21,7 @@ import {
   type RgbTuple,
 } from "@/lib/pdf/agencyBranding";
 import { drawAirlineHeaderLogo } from "@/lib/pdf/airlineLogos";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 export interface BookingPassengerInput {
   name: string;
@@ -1165,13 +1166,16 @@ export function buildBookingConfirmationPdfDoc(data: BookingPdfData): jsPDF {
   return doc;
 }
 
-export function generateBookingConfirmationPdf(data: BookingPdfData) {
+export function generateBookingConfirmationPdf(
+  data: BookingPdfData,
+  preOpenedTab?: Window | null
+) {
   const doc = buildBookingConfirmationPdfDoc(data);
   const refSlug = cleanStr(data.bookingRef || data.invoiceNo || "Booking").replace(
     /[^a-zA-Z0-9_-]/g,
     "_"
   );
-  doc.save(`Confirmation_${refSlug}.pdf`);
+  openPdfInNewTab(doc, `Confirmation_${refSlug}.pdf`, preOpenedTab);
 }
 
 // 2. FORMAL INVOICE PDF (Financial Invoice — NO Payment Terms & Conditions)
@@ -1340,7 +1344,10 @@ export function buildBookingInvoicePdfDoc(data: BookingPdfData): jsPDF {
   return doc;
 }
 
-export function generateBookingInvoicePdf(data: BookingPdfData) {
+export function generateBookingInvoicePdf(
+  data: BookingPdfData,
+  preOpenedTab?: Window | null
+) {
   const doc = buildBookingInvoicePdfDoc(data);
-  doc.save(`Invoice_${data.invoiceNo}.pdf`);
+  openPdfInNewTab(doc, `Invoice_${data.invoiceNo}.pdf`, preOpenedTab);
 }

@@ -15,6 +15,7 @@ import {
   type AgencyBranding,
   type RgbTuple,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 
 export interface VoucherPdfOptions {
   branding?: AgencyBranding;
@@ -366,19 +367,13 @@ export function generateVoucherPdf(v: Voucher, opts: VoucherPdfOptions = {}) {
 export function downloadVoucherPdf(v: Voucher, opts: VoucherPdfOptions = {}) {
   const doc = generateVoucherPdf(v, opts);
   const cleanName = (v.passenger_name || "Guest").replace(/[^a-zA-Z0-9]/g, "_");
-  doc.save(`${v.voucher_number}_${cleanName}_Voucher.pdf`);
+  openPdfInNewTab(doc, `${v.voucher_number}_${cleanName}_Voucher.pdf`);
 }
 
 export function printVoucherPdf(v: Voucher, opts: VoucherPdfOptions = {}) {
   const doc = generateVoucherPdf(v, opts);
-  const blob = doc.output("blob");
-  const blobUrl = URL.createObjectURL(blob);
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  iframe.src = blobUrl;
-  document.body.appendChild(iframe);
-  iframe.contentWindow?.focus();
-  iframe.contentWindow?.print();
+  const cleanName = (v.passenger_name || "Guest").replace(/[^a-zA-Z0-9]/g, "_");
+  openPdfInNewTab(doc, `${v.voucher_number}_${cleanName}_Voucher.pdf`);
 }
 
 export function generateVoucherWhatsAppText(v: Voucher, agencyName = "Travel Agency"): string {

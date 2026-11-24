@@ -29,6 +29,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { getKarachiYmd, getKarachiTodayNoon } from "@/lib/karachiTime";
 import { toast } from "sonner";
@@ -286,8 +287,8 @@ export function PartyLedgerAndStatement({
         doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 7, { align: "right" });
       }
 
-      doc.save(`${partyName.replace(/\s+/g, "_")}_Statement.pdf`);
-      toast.success("Statement exported to PDF");
+      openPdfInNewTab(doc, `${partyName.replace(/\s+/g, "_")}_Statement.pdf`);
+      toast.success("Statement PDF opened in a new tab");
     } catch (err: unknown) {
       handleSupabaseError(err, "Export failed. Please try again.", "PartyLedgerAndStatement.export");
     }

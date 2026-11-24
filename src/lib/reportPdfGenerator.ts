@@ -254,7 +254,24 @@ export function generateAccountStatementPdf(opts: ExportStatementOptions): jsPDF
     // Each party gets a separate statement on a new page
     opts.selectedParties.forEach((party, idx) => {
       if (idx > 0) doc.addPage();
-      const partyRows = opts.rows.filter((r) => r.party_id === party.id || r.party_name === party.name);
+      const partyNameLower = (party.name || "").trim().toLowerCase();
+      const partyRows = opts.rows.filter((r) => {
+        const anyRow = r as any;
+        if (r.party_id === party.id || anyRow.vendor_id === party.id || anyRow.raw_party_id === party.id) {
+          return true;
+        }
+        if (Array.isArray(anyRow.party_keys)) {
+          if (anyRow.party_keys.includes(party.id)) return true;
+          if (partyNameLower && anyRow.party_keys.includes(`name:${partyNameLower}`)) return true;
+        }
+        if (partyNameLower && (r.party_name || "").trim().toLowerCase() === partyNameLower) {
+          return true;
+        }
+        if (partyNameLower && (anyRow.vendor_name || "").trim().toLowerCase() === partyNameLower) {
+          return true;
+        }
+        return false;
+      });
       const subtitle = party.code ? `${party.name} (${party.code})` : party.name;
       buildSinglePartyStatement(doc, opts.agency, opts.periodText, subtitle, party.opening_balance || 0, partyRows, party.type);
     });
@@ -324,16 +341,23 @@ function buildSinglePartyStatement(
     const debitStr = r.debit > 0 ? Number(r.debit).toLocaleString() : "—";
     const creditStr = r.credit > 0 ? Number(r.credit).toLocaleString() : "—";
 
+    const anyRow = r as any;
+    const overdueVal =
+      r.overdue_status ||
+      (anyRow.overdue_days && anyRow.overdue_days > 0
+        ? `${anyRow.overdue_days}d Overdue`
+        : "Current");
+
     return [
       (i + 1).toString(),
       r.date || "—",
       r.voucher_no || "—",
-      r.particulars || "—",
-      r.entry_type || "Journal",
+      r.particulars || anyRow.description || "—",
+      r.entry_type || anyRow.entry || "Journal",
       debitStr,
       creditStr,
       balanceStr,
-      r.overdue_status || "Current",
+      overdueVal,
     ];
   });
 

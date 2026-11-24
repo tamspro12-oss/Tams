@@ -21,6 +21,7 @@ import {
   getContrastTextRgb,
   hexToRgb,
 } from "@/lib/pdf/agencyBranding";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { refreshAffectedFinancialQueries } from "@/lib/accountingEngine";
 import { useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
@@ -362,7 +363,7 @@ export function InvoiceGenerator({ client }: InvoiceGeneratorProps) {
             );
 
             const fileName = `Invoice-${invoiceNumber}-${client.name.replace(/\s+/g, "-")}.pdf`;
-            doc.save(fileName);
+            openPdfInNewTab(doc, fileName);
           } catch (pdfErr) {
             console.warn("Background invoice PDF error:", pdfErr);
           }

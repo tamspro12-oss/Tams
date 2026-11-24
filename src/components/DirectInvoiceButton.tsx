@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/hooks/useAgency";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { generateInvoicePDF } from "@/lib/invoiceGenerator";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import {
   Tooltip,
@@ -25,7 +26,7 @@ export function DirectInvoiceButton({ client }: DirectInvoiceButtonProps) {
 
   const handleGenerateInvoice = async () => {
     if (isGenerating) return;
-    
+
     if (!agency) {
       toast({
         title: "Error",
@@ -36,20 +37,17 @@ export function DirectInvoiceButton({ client }: DirectInvoiceButtonProps) {
     }
 
     setIsGenerating(true);
-    
+
     try {
       const branding = await getBrandingAsync();
       const { blobUrl, filename, doc } = await generateInvoicePDF(client, agency, branding);
-      
-      // Direct download
-      doc.save(filename);
-      
-      // Clean up blob URL
-      URL.revokeObjectURL(blobUrl);
-      
+
+      // Open PDF in a new tab while keeping current app state intact
+      openPdfInNewTab(blobUrl || doc, filename);
+
       toast({
         title: "Invoice Generated",
-        description: `Downloaded ${filename}`,
+        description: `Opened ${filename} in a new tab`,
       });
     } catch (error: unknown) {
       console.error('[DirectInvoiceButton] Generation failed:', error);

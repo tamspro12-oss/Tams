@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FileDown, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
+import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
 import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import {
@@ -34,27 +35,18 @@ export function BookingDownloadButton({ client, vendor }: BookingDownloadButtonP
         description: "Please wait",
       });
 
-      // Generate booking confirmation PDF
-      const { blobUrl, filename } = await generateBookingConfirmationPDF(
+      // Generate booking confirmation PDF and open in a new tab
+      const { blobUrl, filename, doc } = await generateBookingConfirmationPDF(
         client,
         vendor || null,
         branding
       );
 
-      // Download the PDF
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Clean up
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+      openPdfInNewTab(blobUrl || doc, filename);
 
       toast({
-        title: "Booking confirmation downloaded",
-        description: `${filename} has been saved to your device`,
+        title: "Booking confirmation ready",
+        description: `Opened ${filename} in a new tab`,
       });
     } catch (error: unknown) {
       console.error("Failed to generate booking confirmation:", error);
