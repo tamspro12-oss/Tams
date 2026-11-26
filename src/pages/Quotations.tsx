@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useFormKeyboardNav } from "@/hooks/useFormKeyboardNav";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -47,10 +46,14 @@ import { format, parseISO, isPast } from "date-fns";
 import { toast } from "sonner";
 import { useQuotations, type Quotation } from "@/hooks/useQuotations";
 import { useClients } from "@/hooks/useStorage";
-import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
+import { useAgency } from "@/hooks/useAgency";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
 import { downloadQuotationPdf, quotationPdfBase64 } from "@/lib/quotationPdf";
-import { sendEmail } from "@/lib/emailService";
+import { createQuotationEmailBody } from "@/lib/emailService";
+import {
+  SendDocumentEmailDialog,
+  type DocumentEmailPayload,
+} from "@/components/SendDocumentEmailDialog";
 import {
   DatePresetFilter,
   type DatePresetFilterValue,
@@ -81,7 +84,6 @@ export default function Quotations() {
   const { clients = [] } = useClients();
   const { data: agency } = useAgency();
   const { getBrandingAsync } = useAgencyBranding();
-  const queryClient = useQueryClient();
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -92,7 +94,7 @@ export default function Quotations() {
   });
 
   // Action states
-  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [emailPayload, setEmailPayload] = useState<DocumentEmailPayload | null>(null);
   const [previewQ, setPreviewQ] = useState<Quotation | null>(null);
 
   // Keyboard shortcut 'N' for New Quotation
@@ -221,65 +223,40 @@ export default function Quotations() {
     toast.success("PDF opened in a new tab");
   };
 
-  const handleEmail = async (q: Quotation) => {
-    if (!q.client_email) {
-      toast.error("Client email missing", {
-        description: "Edit this quotation to add the client's email address.",
-      });
-      return;
-    }
-    const smtpConfigured = agency?.email
-      ? await queryClient.fetchQuery({
-          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
-          queryFn: fetchAgencySmtpConfigured,
-          staleTime: 10 * 60 * 1000,
-        })
-      : false;
-
-    if (!agency?.email || !smtpConfigured) {
-      toast.error("Add your Gmail App Password in Settings → Email Integration to send emails.");
-      return;
-    }
-
-    setSendingEmailId(q.id);
-    try {
-      const branding = await getBrandingAsync();
-      const base64 = quotationPdfBase64(q, { branding });
-      const body = `
-        <div style="font-family:Arial,sans-serif;color:#0a2540;">
-          <h2>Quotation ${q.quotation_number}</h2>
-          <p>Dear ${q.client_name},</p>
-          <p>Please find attached your requested quotation for <strong>${getServiceDisplayLabel(q.service_type)}</strong>${q.title ? ` — ${q.title}` : ""}.</p>
-          <p><strong>Total Amount: ${q.currency} ${Number(q.total).toLocaleString()}</strong></p>
-          ${q.valid_until ? `<p>Valid until: ${format(new Date(q.valid_until), "dd MMM yyyy")}</p>` : ""}
-          <p>Best regards,<br/>${agency?.name || ""}</p>
-        </div>`;
-
-      const result = await sendEmail(
-        { email: agency.email, password: "", contactEmail: agency.contact_email || undefined },
-        {
-          to: q.client_email,
-          subject: `Quotation ${q.quotation_number} — ${agency?.name || "Quotation"}`,
-          body,
-          attachments: [{ name: `Quotation-${q.quotation_number}.pdf`, data: base64 }],
-          emailType: "quotation",
-          clientId: q.client_id || undefined,
-        }
-      );
-
-      if (result.success) {
-        toast.success("Quotation emailed successfully");
+  const handleEmail = (q: Quotation) => {
+    const qNo = q.quotation_number || "Quotation";
+    const safeSlug = String(qNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const serviceLabel = `${getServiceDisplayLabel(q.service_type)}${q.title ? ` — ${q.title}` : ""}`;
+    setEmailPayload({
+      documentLabel: `Quotation ${qNo} — ${q.client_name}`,
+      emailType: "quotation",
+      defaultRecipientEmail: q.client_email || "",
+      recipientName: q.client_name,
+      clientId: q.client_id || undefined,
+      subject: `Quotation ${qNo} — ${agency?.name || "Travel Quotation"}`,
+      attachmentFileName: `Quotation-${safeSlug}.pdf`,
+      buildPdfAndBody: async (agencyName) => {
+        const branding = await getBrandingAsync();
+        const pdfBase64 = quotationPdfBase64(q, { branding });
+        const htmlBody = createQuotationEmailBody({
+          clientName: q.client_name,
+          agencyName,
+          quotationNumber: qNo,
+          serviceLabel,
+          currency: q.currency || "PKR",
+          total: Number(q.total) || 0,
+          validUntil: q.valid_until
+            ? format(new Date(q.valid_until), "dd MMM yyyy")
+            : undefined,
+        });
+        return { pdfBase64, htmlBody };
+      },
+      onSentSuccess: () => {
         if (q.status === "draft") {
           updateQuotation.mutate({ id: q.id, status: "sent" });
         }
-      } else {
-        toast.error("Email sending failed", { description: result.message });
-      }
-    } catch (e: any) {
-      toast.error("Email failed", { description: e?.message || String(e) });
-    } finally {
-      setSendingEmailId(null);
-    }
+      },
+    });
   };
 
   const handleConvertToBooking = async (q: Quotation) => {
@@ -648,15 +625,10 @@ export default function Quotations() {
                               size="icon"
                               variant="ghost"
                               onClick={() => handleEmail(q)}
-                              disabled={sendingEmailId === q.id}
                               className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                              title="Send PDF Email"
+                              title="Send by email"
                             >
-                              {sendingEmailId === q.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Mail className="w-3.5 h-3.5" />
-                              )}
+                              <Mail className="w-3.5 h-3.5" />
                             </Button>
 
                             <AlertDialog>
@@ -790,15 +762,10 @@ export default function Quotations() {
                           size="icon"
                           variant="ghost"
                           onClick={() => handleEmail(q)}
-                          disabled={sendingEmailId === q.id}
                           className="h-8 w-8 text-muted-foreground"
-                          title="Email"
+                          title="Send by email"
                         >
-                          {sendingEmailId === q.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Mail className="w-4 h-4" />
-                          )}
+                          <Mail className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
@@ -937,17 +904,21 @@ export default function Quotations() {
                     setPreviewQ(null);
                     handleEmail(q);
                   }}
-                  disabled={!previewQ.client_email}
                   className="gap-1.5"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>Email to Client</span>
+                  <span>Send by email</span>
                 </Button>
               </>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SendDocumentEmailDialog
+        payload={emailPayload}
+        onClose={() => setEmailPayload(null)}
+      />
     </div>
   );
 }

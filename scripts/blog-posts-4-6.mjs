@@ -48,7 +48,7 @@ export const POSTS_4_TO_6 = [
           "Yes. Branded PDF quotes look trustworthy, prevent misunderstandings about baggage or meal inclusions, and make families more comfortable transferring advance payments.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Pakistani travelers routinely message three agencies at once; the first agency to send a clear, trustworthy quote usually wins the advance payment.</li><li>Manual Word documents or messy copy-pasted WhatsApp text make high-value tickets and Umrah packages look unprofessional and invite disputes over inclusions.</li><li>A digital query-to-quote pipeline cuts quote creation time from 20 minutes to under 2 minutes and converts approved deals into invoices in one click.</li><li>TAMS Pro standardizes your quotes, branding, and follow-up pipeline starting at PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Pakistani travelers routinely message three agencies at once; the first agency to send a clear, trustworthy quote usually wins the advance payment.</li><li>Manual Word documents or messy copy-pasted WhatsApp text make high-value tickets and Umrah packages look unprofessional and invite disputes over inclusions.</li><li>A digital query-to-quote pipeline cuts quote creation time from 20 minutes to under 2 minutes and converts approved deals into invoices in one click.</li><li>TAMS Pro standardizes your quotes, branding, and follow-up pipeline at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Picture a familiar Tuesday afternoon at any travel agency in Islamabad, Lahore, or Karachi. A prospective client messages on WhatsApp asking for three economy tickets from Lahore to London in December plus hotel options for two nights in Istanbul. Your senior ticketing agent checks fares, writes down numbers on scrap paper, opens an old Microsoft Word file, edits dates, forgets to change the validity line at the bottom, and finally exports a misaligned PDF twenty-five minutes later.</p>
 
@@ -86,13 +86,13 @@ export const POSTS_4_TO_6 = [
 
 <h3>Step 2: Generate a Branded PDF Quotation in Under 2 Minutes</h3>
 
-<p>Select the query, add your fare or package line items—or calculate Umrah package tiers rapidly via our built-in calculator or <a href="https://umrahcal.online">umrahcal.online</a>—set your margin, and download a formatted PDF stamped with your agency branding. Send it straight to WhatsApp with a clear payment call to action.</p>
+<p>Select the query, add your fare or package line items—or price Umrah tiers directly inside TAMS Pro by opening <strong>Umrah Calculator</strong> in your sidebar, entering the SAR-to-PKR rate, setting Makkah and Madinah hotel nights and room sharing (Quad, Triple, or Double), and adding visa, transport, and flight costs—set your margin, and download a formatted PDF stamped with your agency branding. Send it straight to WhatsApp with a clear payment call to action.</p>
 
 <h3>Step 3: One-Click Conversion to Booking Invoice</h3>
 
 <p>The best part happens when the client replies "Book Option A." Instead of opening a separate billing sheet and re-entering names, dates, and PKR totals, click convert. Your accepted quotation turns straight into an official booking invoice, updating client receivables and supplier payables automatically.</p>
 
-<blockquote><p><strong>Turn more inquiries into paid bookings:</strong> Check out Queries, Quotations, and Branded PDFs on our <a href="/features">Features page</a>, or <a href="/signup">create your TAMS Pro account</a> today for just <a href="/pricing">PKR 999/month</a>.</p></blockquote>
+<blockquote><p><strong>Turn more inquiries into paid bookings:</strong> Check out Queries, Quotations, and Branded PDFs on our <a href="/features">Features page</a>, or <a href="/signup">create your TAMS Pro account</a> today for <a href="/pricing">PKR 1,999/month (or PKR 9,999/year — 50% off yearly)</a>.</p></blockquote>
 
 <h2>3 Follow-Up Habits That Double Quote Conversion</h2>
 
@@ -120,7 +120,7 @@ export const POSTS_4_TO_6 = [
 
 <h2>Upgrade How Your Agency Quotes Today</h2>
 
-<p>Your competitors are one WhatsApp message away. Give your clients a polished, 2-minute quotation experience that earns trust before they ever step into your office. View our <a href="/pricing">PKR 999/month and PKR 9,999/year plans</a> or <a href="/signup">sign up free on TAMS Pro</a> to send your first branded quotation today.</p>
+<p>Your competitors are one WhatsApp message away. Give your clients a polished, 2-minute quotation experience that earns trust before they ever step into your office. View our <a href="/pricing">PKR 1,999/month and PKR 9,999/year (50% off yearly) plans</a> or <a href="/signup">sign up free on TAMS Pro</a> to send your first branded quotation today.</p>
 
 <h2>Frequently Asked Questions</h2>
 
@@ -186,7 +186,7 @@ export const POSTS_4_TO_6 = [
           "Yes. You can download crisp PDFs in one click to send on WhatsApp or email booking invoices and payment reminders directly from inside TAMS Pro.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Handwritten carbon-copy bill books and manually edited Word templates waste hours every week and make established agencies look small.</li><li>Mistyped check-in dates, duplicate invoice numbers, or unclear payment statuses on paper receipts lead directly to costly airport and hotel disputes.</li><li>Dedicated invoice and voucher software auto-generates unique sequential numbers, custom agency branding, and real-time Paid/Due balances.</li><li>TAMS Pro unifies booking invoices, payment vouchers, and Umrah/hotel vouchers starting at PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Handwritten carbon-copy bill books and manually edited Word templates waste hours every week and make established agencies look small.</li><li>Mistyped check-in dates, duplicate invoice numbers, or unclear payment statuses on paper receipts lead directly to costly airport and hotel disputes.</li><li>Dedicated invoice and voucher software auto-generates unique sequential numbers, custom agency branding, and real-time Paid/Due balances.</li><li>TAMS Pro unifies booking invoices, payment vouchers, and Umrah/hotel vouchers at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Walk into a neighborhood travel office almost anywhere in Rawalpindi, Jhelum, or Multan and you will often still spot a tear-off paper bill book sitting next to an old desktop monitor. When a client hands over PKR 250,000 for two airline tickets or an Umrah package, the agent scribbles names on carbon paper, tears out a faint pink slip, and snaps a crooked phone photo for WhatsApp.</p>
 
@@ -226,7 +226,7 @@ export const POSTS_4_TO_6 = [
 
 <p>Beyond billing, travelers need operational confirmation vouchers for check-in counters and hotel receptions. Digital voucher templates pull passenger names, room sharing, hotel addresses, and check-in/out dates directly from your booking record so typos never sneak in. See how this plugs into end-to-end group operations in our guide on <a href="/blogs/manage-umrah-packages-digitally-pakistan">managing Umrah packages digitally</a>.</p>
 
-<blockquote><p><strong>Deliver agency documents clients trust:</strong> Preview TAMS Pro's Invoice &amp; Voucher Designer on our <a href="/features">Features page</a>, or <a href="/signup">start using branded PDFs today</a> from just <a href="/pricing">PKR 999/month</a>.</p></blockquote>
+<blockquote><p><strong>Deliver agency documents clients trust:</strong> Preview TAMS Pro's Invoice &amp; Voucher Designer on our <a href="/features">Features page</a>, or <a href="/signup">start using branded PDFs today</a> at <a href="/pricing">PKR 1,999/month (or PKR 9,999/year — 50% off yearly)</a>.</p></blockquote>
 
 <h2>How Automated Invoicing Syncs With Your Ledger</h2>
 
@@ -262,7 +262,7 @@ export const POSTS_4_TO_6 = [
 
 <h2>Look Like a Top-Tier Agency on Every Transaction</h2>
 
-<p>You do not need a design agency or expensive ERP system to hand clients polished, error-free documents. Customize your template once inside TAMS Pro and let every booking, receipt, and Umrah voucher carry your brand cleanly. Check <a href="/pricing">TAMS Pro Pricing (PKR 999/month or PKR 9,999/year)</a> and <a href="/signup">sign up free</a> to issue your first branded PDF today.</p>
+<p>You do not need a design agency or expensive ERP system to hand clients polished, error-free documents. Customize your template once inside TAMS Pro and let every booking, receipt, and Umrah voucher carry your brand cleanly. Check <a href="/pricing">TAMS Pro Pricing (PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan)</a> and <a href="/signup">sign up free</a> to issue your first branded PDF today.</p>
 
 <h2>Frequently Asked Questions</h2>
 
@@ -328,7 +328,7 @@ export const POSTS_4_TO_6 = [
           "Automated notifications alert staff days before biometric appointments, ticket hold deadlines, or visa validity cutoffs so clients are updated proactively.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Managing dozens of passports across UAE, Saudi, UK, Schengen, and Malaysia visa desks on sticky notes leads to missed appointments and frantic client calls.</li><li>A single missed biometric slot or passport expiry check can cost a client their job offer, family trip, or flight ticket.</li><li>Centralized visa tracking connects applicant documents, submission milestones, reminders, and embassy fee accounting in one place.</li><li>TAMS Pro helps Pakistani visa consultants and travel agencies stay ahead of every deadline from PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Managing dozens of passports across UAE, Saudi, UK, Schengen, and Malaysia visa desks on sticky notes leads to missed appointments and frantic client calls.</li><li>A single missed biometric slot or passport expiry check can cost a client their job offer, family trip, or flight ticket.</li><li>Centralized visa tracking connects applicant documents, submission milestones, reminders, and embassy fee accounting in one place.</li><li>TAMS Pro helps Pakistani visa consultants and travel agencies stay ahead of every deadline at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Visa consultancy has become one of the fastest-growing revenue streams for Pakistani travel agencies in Lahore, Islamabad, Mirpur, Gujrat, and Karachi. Yet unlike instant airline ticketing, a visa file moves slowly across several stages over days or weeks: document collection, bank statement verification, portal submission, biometric appointment, embassy review, passport collection, and finally ticket issuance.</p>
 
@@ -369,7 +369,7 @@ export const POSTS_4_TO_6 = [
 
 <p>Once the visa approves, your client's name, phone, and passport details are already saved in your database. Issuing their return flight ticket or booking their Umrah package takes seconds instead of starting from scratch.</p>
 
-<blockquote><p><strong>Organize every visa file and deadline:</strong> Explore Visa tracking, Notifications, and Client Ledgers on our <a href="/features">Features page</a>, or <a href="/signup">create your TAMS Pro account</a> today starting at <a href="/pricing">PKR 999/month</a>.</p></blockquote>
+<blockquote><p><strong>Organize every visa file and deadline:</strong> Explore Visa tracking, Notifications, and Client Ledgers on our <a href="/features">Features page</a>, or <a href="/signup">create your TAMS Pro account</a> today at <a href="/pricing">PKR 1,999/month (or PKR 9,999/year — 50% off yearly)</a>.</p></blockquote>
 
 <h2>Handling Umrah Visas vs. Visit &amp; Schengen Files</h2>
 
@@ -404,7 +404,7 @@ export const POSTS_4_TO_6 = [
 
 <h2>Protect Every Passport and Every Deadline</h2>
 
-<p>In visa consultancy, trust is your real product. One missed deadline costs referrals across an entire family network, while consistent, timely updates bring repeat clients all year. See <a href="/pricing">TAMS Pro plans (PKR 999/month or PKR 9,999/year)</a> and <a href="/signup">get started free today</a>.</p>
+<p>In visa consultancy, trust is your real product. One missed deadline costs referrals across an entire family network, while consistent, timely updates bring repeat clients all year. See <a href="/pricing">TAMS Pro plans (PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan)</a> and <a href="/signup">get started free today</a>.</p>
 
 <h2>Frequently Asked Questions</h2>
 

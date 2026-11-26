@@ -75,8 +75,25 @@ export default function AuthCallbackPage() {
         // 1. PKCE Code Exchange (e.g. ?code=...)
         const code = searchParams.get("code");
         if (code) {
+          const { data: preSession } = await supabase.auth.getSession();
+          if (preSession?.session?.user) {
+            sessionManager.startSession(preSession.session.user.id);
+            setStatus("success");
+            setTimeout(() => navigate(successRoute, { replace: true }), 1200);
+            return;
+          }
+
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
+            await new Promise((r) => setTimeout(r, 350));
+            const { data: postSession } = await supabase.auth.getSession();
+            if (postSession?.session?.user) {
+              sessionManager.startSession(postSession.session.user.id);
+              setStatus("success");
+              setTimeout(() => navigate(successRoute, { replace: true }), 1200);
+              return;
+            }
+
             console.warn("Auth callback PKCE exchange note:", exchangeError);
             setOutcome(
               classifyAuthCallbackFailure({
@@ -101,9 +118,17 @@ export default function AuthCallbackPage() {
         if (tokenHash) {
           const { data, error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
-            type: (type as "signup" | "email" | "recovery") || "signup",
+            type: (type as "signup" | "email" | "recovery" | "magiclink") || "signup",
           });
           if (verifyError) {
+            const { data: postVerifySession } = await supabase.auth.getSession();
+            if (postVerifySession?.session?.user) {
+              sessionManager.startSession(postVerifySession.session.user.id);
+              setStatus("success");
+              setTimeout(() => navigate(successRoute, { replace: true }), 1200);
+              return;
+            }
+
             console.warn("Auth callback verifyOtp error:", verifyError);
             setOutcome(
               classifyAuthCallbackFailure({
@@ -115,9 +140,21 @@ export default function AuthCallbackPage() {
             return;
           }
           if (data?.user) {
-            sessionManager.startSession(data.user.id);
-            setStatus("success");
-            setTimeout(() => navigate(successRoute, { replace: true }), 1200);
+            if (data.session) {
+              sessionManager.startSession(data.user.id);
+              setStatus("success");
+              setTimeout(() => navigate(successRoute, { replace: true }), 1200);
+            } else {
+              setStatus("success");
+              setTimeout(
+                () =>
+                  navigate("/login?verified=true", {
+                    replace: true,
+                    state: { message: "Email confirmed! Please sign in to your account." },
+                  }),
+                1200
+              );
+            }
             return;
           }
         }
@@ -308,11 +345,11 @@ export default function AuthCallbackPage() {
                   size="sm"
                   disabled={resending || cooldownLeft > 0 || !emailInput.trim()}
                   onClick={() => handleResendVerification()}
-                  className="w-full h-11 md:h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-medium"
+                  className="w-full h-11 md:h-9 text-xs gap-1.5 cursor-pointer border-slate-300 dark:border-slate-700 font-semibold"
                 >
                   {resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                   <span>
-                    {cooldownLeft > 0 ? `Resend in ${cooldownLeft}s` : "Resend Confirmation Link"}
+                    {cooldownLeft > 0 ? `Send new link in ${cooldownLeft}s` : "Send new link"}
                   </span>
                 </Button>
               </div>

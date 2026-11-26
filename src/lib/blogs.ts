@@ -131,15 +131,76 @@ export function parseTagsInput(raw: string): string[] {
   return normalizeTags((raw || "").split(","));
 }
 
+/**
+ * Normalizes legacy pricing text ("PKR 999", monthly 50% off) and legacy external
+ * umrahcal.online mentions in blog strings so any row read from Supabase always
+ * complies with current TAMS Pro pricing (PKR 1,999/mo with no monthly discount;
+ * PKR 9,999/yr with 50% off on yearly only) and points to the built-in Umrah Calculator.
+ */
+export function normalizeBlogLegacyText(text: string): string {
+  if (!text) return text;
+  let out = text;
+
+  // Replace any <a href="https://umrahcal.online...">...</a> links with TAMS Pro Umrah Calculator guide text
+  out = out.replace(
+    /<a\b[^>]*href=["']https?:\/\/(?:www\.)?umrahcal\.online[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
+    "the built-in <strong>Umrah Calculator inside TAMS Pro</strong> (open Umrah Calculator from the sidebar, enter the SAR-to-PKR rate, set Makkah/Madinah hotel nights and room sharing, and add visa, transport, and flight costs)"
+  );
+
+  // Replace any plain-text umrahcal.online mentions
+  out = out.replace(
+    /\b(?:https?:\/\/)?(?:www\.)?umrahcal\.online\b/gi,
+    "the built-in Umrah Calculator inside TAMS Pro"
+  );
+
+  // Fix monthly discount wording such as "PKR 999/month (50% off)" or "lock in the 50% launch discount ... PKR 999/month or PKR 9,999/year"
+  out = out.replace(
+    /PKR\s*999\s*\/\s*month\s*\(\s*50%\s*off\s*\)/gi,
+    "PKR 1,999/month or PKR 9,999/year (50% off on the yearly plan)"
+  );
+  out = out.replace(
+    /lock in the 50% launch discount on (<a[^>]*>[^<]*<\/a>)—just PKR\s*999\/month or PKR\s*9,999\/year/gi,
+    "check $1—PKR 1,999/month, or PKR 9,999/year with 50% off exclusively on the yearly plan"
+  );
+  out = out.replace(
+    /PKR\s*999(?:\s*\/\s*month|\s+per\s+month|\s+a\s+month|\s*\/\s*mo)\s+or\s+PKR\s*9,999(?:\s*\/\s*year|\s+per\s+year)\s*\(\s*50%\s*off\s*\)/gi,
+    "PKR 1,999/month, or PKR 9,999/year (50% off on the yearly plan)"
+  );
+
+  // Replace remaining PKR 999 monthly mentions cleanly
+  out = out.replace(/PKR\s*999\s*\/\s*month/gi, "PKR 1,999/month");
+  out = out.replace(/PKR\s*999\s+per\s+month/gi, "PKR 1,999 per month");
+  out = out.replace(/PKR\s*999\s+a\s+month/gi, "PKR 1,999 a month");
+  out = out.replace(/PKR\s*999\s*\/\s*mo\b/gi, "PKR 1,999/mo");
+
+  return out;
+}
+
 function normalizeFaqItems(raw: unknown): BlogFaqItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
     .map((item) => ({
-      question: typeof item.question === "string" ? item.question.trim() : "",
-      answer: typeof item.answer === "string" ? item.answer.trim() : "",
+      question:
+        typeof item.question === "string"
+          ? normalizeBlogLegacyText(item.question.trim())
+          : "",
+      answer:
+        typeof item.answer === "string"
+          ? normalizeBlogLegacyText(item.answer.trim())
+          : "",
     }))
     .filter((item) => item.question.length > 0 && item.answer.length > 0);
+}
+
+function normalizeKeywordList(items?: string[] | null): string[] {
+  return normalizeTags(
+    (Array.isArray(items) ? items : []).map((t) =>
+      typeof t === "string" && /umrahcal\.online/i.test(t)
+        ? "umrah package calculator"
+        : t
+    )
+  );
 }
 
 function normalizeBlogRow(row: Record<string, unknown>): BlogPost {
@@ -157,21 +218,25 @@ function normalizeBlogRow(row: Record<string, unknown>): BlogPost {
 
   return {
     id: String(row.id || ""),
-    title: String(row.title || ""),
+    title: normalizeBlogLegacyText(String(row.title || "")),
     slug: String(row.slug || ""),
-    excerpt: String(row.excerpt || ""),
-    content: String(row.content || ""),
+    excerpt: normalizeBlogLegacyText(String(row.excerpt || "")),
+    content: normalizeBlogLegacyText(String(row.content || "")),
     cover_image_url: typeof row.cover_image_url === "string" ? row.cover_image_url : null,
     category:
       typeof row.category === "string" && row.category.trim() ? row.category.trim() : "General",
-    tags: normalizeTags(Array.isArray(row.tags) ? (row.tags as string[]) : []),
+    tags: normalizeKeywordList(Array.isArray(row.tags) ? (row.tags as string[]) : []),
     author: rawAuthor,
     status: row.status === "published" ? "published" : "draft",
     is_featured: Boolean(row.is_featured),
-    seo_title: typeof row.seo_title === "string" ? row.seo_title : null,
-    seo_description: typeof row.seo_description === "string" ? row.seo_description : null,
+    seo_title:
+      typeof row.seo_title === "string" ? normalizeBlogLegacyText(row.seo_title) : null,
+    seo_description:
+      typeof row.seo_description === "string"
+        ? normalizeBlogLegacyText(row.seo_description)
+        : null,
     focus_keyword: typeof row.focus_keyword === "string" ? row.focus_keyword : null,
-    secondary_keywords: normalizeTags(
+    secondary_keywords: normalizeKeywordList(
       Array.isArray(row.secondary_keywords) ? (row.secondary_keywords as string[]) : []
     ),
     cover_image_alt: typeof row.cover_image_alt === "string" ? row.cover_image_alt : null,

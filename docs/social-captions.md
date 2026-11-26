@@ -13,13 +13,13 @@ Ready-to-copy Facebook/LinkedIn captions, Instagram/TikTok captions, and 10–15
 ### Facebook / LinkedIn Caption
 Still managing PKR 50+ lakh monthly travel turnover in paper registers and three disconnected Excel sheets? One missed PNR balance or forgotten sub-agent entry wipes out an entire week's commission.
 
-In our 2026 Buyer's Guide for Pakistani travel agencies (Lahore, Karachi, Islamabad, Rawalpindi, Jhelum, Gujranwala, Faisalabad), we break down the 7 essentials every ticketing and Umrah desk needs—from dual-sided party ledgers and branded PDFs to SAR-to-PKR Umrah costing—for just **PKR 999/month** or **PKR 9,999/year (50% off)**.
+In our 2026 Buyer's Guide for Pakistani travel agencies (Lahore, Karachi, Islamabad, Rawalpindi, Jhelum, Gujranwala, Faisalabad), we break down the 7 essentials every ticketing and Umrah desk needs—from dual-sided party ledgers and branded PDFs to SAR-to-PKR Umrah costing—at **PKR 1,999/month** or **PKR 9,999/year (50% off on the yearly plan)**.
 
 Read the full guide: https://tamspro.online/blogs/best-travel-agency-software-pakistan-2026
 See plans: https://tamspro.online/pricing
 
 ### Instagram / TikTok Caption
-Stop losing ticket & Umrah profits to paper registers! Here is what every Pakistani travel agency needs in 2026—unified bookings, PKR khata ledgers, Umrah vouchers & branded PDFs starting at PKR 999/month.
+Stop losing ticket & Umrah profits to paper registers! Here is what every Pakistani travel agency needs in 2026—unified bookings, PKR khata ledgers, Umrah vouchers & branded PDFs at PKR 1,999/month (or PKR 9,999/year — 50% off yearly).
 
 Read the full 2026 guide via the link in bio (`tamspro.online/blogs`) or DM **"DEMO"** for a free 10-minute WhatsApp walkthrough!
 
@@ -40,12 +40,12 @@ During Rajab, Shaban, and Ramadan Umrah rushes, paper folders and scattered What
 See the exact 5-stage digital Umrah workflow Pakistani operators use to calculate SAR-to-PKR rates accurately, store pilgrim passports, issue 1-click Makkah/Madinah vouchers, and track family & sub-agent payments cleanly.
 
 Read the full Umrah operations guide: https://tamspro.online/blogs/manage-umrah-packages-digitally-pakistan
-Test SAR costing anytime: https://umrahcal.online | Full agency system: https://tamspro.online/pricing
+Full agency system & built-in Umrah Calculator: https://tamspro.online/pricing
 
 ### Instagram / TikTok Caption
 Ramadan & Shawwal Umrah season stress? Stop hunting for pilgrim passports and hotel dates in 50 WhatsApp chats!
 
-Run your Umrah packages digitally—SAR costing, 1-click hotel vouchers & installment ledgers all in one place from PKR 999/month.
+Run your Umrah packages digitally—SAR costing, 1-click hotel vouchers & installment ledgers all in one place at PKR 1,999/month (or PKR 9,999/year — 50% off yearly).
 
 Read at `tamspro.online/blogs` or DM **"UMRAH"** for a quick demo!
 
@@ -71,7 +71,7 @@ Start free at: https://tamspro.online/signup
 ### Instagram / TikTok Caption
 Do you know your *real* net profit today—or just how much cash is in the drawer?
 
-Every ticket & Umrah booking should update client dues, vendor payables, and HBL/Meezan/Cash balances automatically. Zero late-night khata headaches for PKR 999/month.
+Every ticket & Umrah booking should update client dues, vendor payables, and HBL/Meezan/Cash balances automatically. Zero late-night khata headaches for PKR 1,999/month.
 
 Read the ledger guide at `tamspro.online/blogs`!
 
@@ -123,7 +123,7 @@ Explore features: https://tamspro.online/features
 ### Instagram / TikTok Caption
 Still snapping crooked photos of pink paper receipt books for WhatsApp? Upgrade your agency's credibility overnight!
 
-Issue logo-branded PDF invoices, payment receipts & Umrah hotel vouchers automatically from PKR 999/month.
+Issue logo-branded PDF invoices, payment receipts & Umrah hotel vouchers automatically at PKR 1,999/month (or PKR 9,999/year — 50% off yearly).
 
 Read how at `tamspro.online/blogs`!
 
@@ -144,7 +144,7 @@ Juggling 40+ active UAE, Saudi, UK, and Schengen visa files on sticky notes guar
 Here is a clean 5-step digital visa pipeline—plus a 10-minute morning desk checklist—so your consultants never miss an appointment, document handover, or embassy fee collection again.
 
 Read the full guide: https://tamspro.online/blogs/track-visa-applications-without-missing-deadlines
-Start at PKR 999/month: https://tamspro.online/pricing
+View plans (PKR 1,999/month or PKR 9,999/year — 50% off yearly): https://tamspro.online/pricing
 
 ### Instagram / TikTok Caption
 "Bhai visa ka status kya hua?" Stop digging through desk drawers for passports and VFS dates!
@@ -170,14 +170,14 @@ Mental math and outdated SAR exchange rates quietly erase agency profit during b
 Walk through our step-by-step PKR calculation example with real SAR conversions and learn how to protect your margin on every departure.
 
 Read the costing guide: https://tamspro.online/blogs/umrah-cost-calculator-price-packages-profitably
-Try the live calculator: https://umrahcal.online | Manage full packages: https://tamspro.online
+Use the built-in Umrah Calculator inside TAMS Pro: https://tamspro.online
 
 ### Instagram / TikTok Caption
 Stop guessing Quad, Triple & Double Umrah rates on a desk calculator!
 
-A 2-rupee SAR jump on a 30-pax group can wipe out PKR 60,000+ in margin. See our exact SAR-to-PKR formula & free calculator tips.
+A 2-rupee SAR jump on a 30-pax group can wipe out PKR 60,000+ in margin. See our exact SAR-to-PKR formula & built-in TAMS Pro Umrah Calculator guide.
 
-Read more at `tamspro.online/blogs` or test rates at `umrahcal.online`!
+Read more at `tamspro.online/blogs`!
 
 ### Hashtags
 `#UmrahPackages #UmrahAgents #TravelAgencyPakistan #TAMSPro #TravelAgencySoftware #TravelBusinessPakistan #UmrahCalculator #TravelTech #DigitalPakistan #SmallBusinessPakistan #Umrah2026 #MakkahHotels`
@@ -219,7 +219,7 @@ Check the list at `tamspro.online/blogs`!
 ### Facebook / LinkedIn Caption
 Excel feels "free"—until a 3-person agency burns 45 hours a month fixing `=SUM()` formulas, formatting Word vouchers, and arguing over mismatched `Sales_Final_v4.xlsx` files.
 
-Compare Excel vs. dedicated travel agency software across speed, PKR ledger accuracy, multi-staff permissions, and mobile access—and see how agencies switch smoothly in a single weekend for PKR 999/month.
+Compare Excel vs. dedicated travel agency software across speed, PKR ledger accuracy, multi-staff permissions, and mobile access—and see how agencies switch smoothly in a single weekend for PKR 1,999/month (or PKR 9,999/year — 50% off on the yearly plan).
 
 Read the full comparison: https://tamspro.online/blogs/excel-vs-travel-agency-software-pakistan
 View plans: https://tamspro.online/pricing
@@ -227,7 +227,7 @@ View plans: https://tamspro.online/pricing
 ### Instagram / TikTok Caption
 `Sales_Oct_FINAL_v4.xlsx` giving you headaches?
 
-Excel works for 10 tickets a month—not when you have staff, Umrah groups, and bank installments. See why switching to TAMS Pro for PKR 999/mo pays for itself in week one!
+Excel works for 10 tickets a month—not when you have staff, Umrah groups, and bank installments. See why switching to TAMS Pro at PKR 1,999/mo pays for itself in week one!
 
 Full comparison at `tamspro.online/blogs`!
 

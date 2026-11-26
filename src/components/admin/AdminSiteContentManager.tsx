@@ -165,8 +165,9 @@ export const AdminSiteContentManager: React.FC = () => {
       ...plan,
       name: plan.name.trim(),
       priceFormatted: plan.priceFormatted.trim(),
-      originalPriceFormatted: plan.originalPriceFormatted.trim(),
-      discountBadge: plan.discountBadge.trim(),
+      originalPriceFormatted:
+        plan.id === "monthly" ? "" : plan.originalPriceFormatted.trim(),
+      discountBadge: plan.id === "monthly" ? "" : plan.discountBadge.trim(),
       period: plan.period.trim(),
       ctaText: plan.ctaText.trim() || "Get Started",
       ctaLink: plan.ctaLink.trim() || "/signup",
@@ -370,7 +371,9 @@ export const AdminSiteContentManager: React.FC = () => {
                     <div className="space-y-1">
                       <Label className="text-xs">Discount Tag</Label>
                       <Input
-                        value={plan.discountBadge}
+                        value={plan.id === "monthly" ? "" : plan.discountBadge}
+                        disabled={plan.id === "monthly"}
+                        placeholder={plan.id === "monthly" ? "No discount on Monthly" : "50% OFF"}
                         onChange={(e) =>
                           updatePlanField(planIdx, "discountBadge", e.target.value)
                         }
@@ -388,7 +391,9 @@ export const AdminSiteContentManager: React.FC = () => {
                     <div className="space-y-1">
                       <Label className="text-xs">Strike-through Old Price</Label>
                       <Input
-                        value={plan.originalPriceFormatted}
+                        value={plan.id === "monthly" ? "" : plan.originalPriceFormatted}
+                        disabled={plan.id === "monthly"}
+                        placeholder={plan.id === "monthly" ? "None on Monthly" : "19,999"}
                         onChange={(e) =>
                           updatePlanField(planIdx, "originalPriceFormatted", e.target.value)
                         }

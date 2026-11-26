@@ -23,3 +23,9 @@ verify_jwt = true
 
 [functions.app-version]
 verify_jwt = false
+
+[functions.send-email]
+verify_jwt = true
+
+[functions.send-system-email]
+verify_jwt = true

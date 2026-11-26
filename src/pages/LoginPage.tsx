@@ -38,11 +38,13 @@ export default function LoginPage() {
 
   const statusNotice =
     (location.state as { message?: string } | null)?.message ||
-    (searchParams.get("reason") === "password-changed"
-      ? "Password changed. Please login again."
-      : searchParams.get("reason") === "session-invalidated"
-        ? "Your session expired or was revoked. Please login again."
-        : null);
+    (searchParams.get("verified") === "true"
+      ? "Email confirmed! Please sign in to your account."
+      : searchParams.get("reason") === "password-changed"
+        ? "Password changed. Please login again."
+        : searchParams.get("reason") === "session-invalidated"
+          ? "Your session expired or was revoked. Please login again."
+          : null);
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

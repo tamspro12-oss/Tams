@@ -12,6 +12,8 @@ export const MARKETING_NAVIGATION = {
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
     { label: "Blogs", href: "/blogs" },
+    { label: "FAQ", href: "/faq" },
+    { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
   ] as NavLink[],
   authNav: {
@@ -22,9 +24,13 @@ export const MARKETING_NAVIGATION = {
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
     { label: "Blogs", href: "/blogs" },
+    { label: "About", href: "/about" },
+    { label: "FAQ", href: "/faq" },
     { label: "Contact", href: "/contact" },
+    { label: "Install App", href: "/install" },
     { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
+    { label: "Terms & Conditions", href: "/terms" },
+    { label: "Refund Policy", href: "/refund-policy" },
   ] as NavLink[],
 };
 

@@ -166,6 +166,9 @@ export default function EmailHistory() {
     const labels: Record<string, string> = {
       booking: 'Booking Confirmation',
       invoice: 'Invoice',
+      voucher: 'Voucher',
+      quotation: 'Quotation',
+      test: 'Test Email',
       flight_reminder: 'Flight Reminder',
       payment_reminder: 'Payment Reminder',
       general: 'General',
@@ -219,6 +222,9 @@ export default function EmailHistory() {
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="booking">Booking</SelectItem>
               <SelectItem value="invoice">Invoice</SelectItem>
+              <SelectItem value="voucher">Voucher</SelectItem>
+              <SelectItem value="quotation">Quotation</SelectItem>
+              <SelectItem value="test">Test Email</SelectItem>
               <SelectItem value="flight_reminder">Flight Reminder</SelectItem>
               <SelectItem value="payment_reminder">Payment Reminder</SelectItem>
               <SelectItem value="general">General</SelectItem>

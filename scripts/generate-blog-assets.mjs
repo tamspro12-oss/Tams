@@ -163,7 +163,7 @@ function generateCoverSvg(post, index) {
   <text x="80" y="250" font-family="Plus Jakarta Sans, Inter, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF" letter-spacing="-0.02em">${tspans}</text>
   <text x="80" y="485" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="500" fill="#CBD5E1">${escapeSvgText(post.focus_keyword)} • Pakistan Travel Agency Guide</text>
   <text x="80" y="595" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">TAMS PRO</text>
-  <text x="230" y="595" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#99F6E4">tamspro.online • PKR 999/mo</text>
+  <text x="230" y="595" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#99F6E4">tamspro.online • PKR 1,999/mo</text>
 </svg>
 `;
 }

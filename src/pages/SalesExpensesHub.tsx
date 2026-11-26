@@ -35,12 +35,24 @@ import {
 } from "@/lib/agencyQueries";
 import { useRealtimeMultiTable } from "@/hooks/useRealtimeTable";
 import {
+  buildBookingConfirmationPdfDoc,
+  buildBookingInvoicePdfDoc,
   buildBookingPdfDataFromInvoice,
   generateBookingConfirmationPdf,
   generateBookingInvoicePdf,
 } from "@/lib/pdf/bookingInvoicePdf";
-import { generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
+import { buildVoucherReceiptPdfDoc, generateVoucherPdf } from "@/lib/pdf/voucherReceiptPdf";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
+import {
+  SendDocumentEmailDialog,
+  type DocumentEmailPayload,
+} from "@/components/SendDocumentEmailDialog";
+import {
+  createBookingEmailBody,
+  createInvoiceEmailBody,
+  createVoucherEmailBody,
+  jsPdfDocToBase64,
+} from "@/lib/emailService";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { toast } from "sonner";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -68,6 +80,7 @@ import {
   Search,
   X,
   Pencil,
+  Mail,
 } from "lucide-react";
 import { EditedBadge } from "@/components/audit/EditedBadge";
 import { DocumentEditHistoryDialog } from "@/components/audit/DocumentEditHistoryDialog";
@@ -98,6 +111,7 @@ export default function SalesExpensesHub() {
   } | null>(null);
   const [inspectedInvoice, setInspectedInvoice] = useState<any | null>(null);
   const [inspectedVoucher, setInspectedVoucher] = useState<any | null>(null);
+  const [emailPayload, setEmailPayload] = useState<DocumentEmailPayload | null>(null);
   const {
     isSubUser,
     isActive,
@@ -713,8 +727,8 @@ export default function SalesExpensesHub() {
     },
     {
       key: "actions",
-      header: "PDF / Edit",
-      width: 105,
+      header: "PDF / Email / Edit",
+      width: 130,
       align: "center",
       sortable: false,
       filterable: false,
@@ -743,6 +757,44 @@ export default function SalesExpensesHub() {
             className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const invNo = inv.invoice_no || "Invoice";
+              const safeSlug = String(invNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+              const cName = inv.party?.name || inv.client_name || "Customer";
+              setEmailPayload({
+                documentLabel: `Invoice ${invNo}`,
+                emailType: "invoice",
+                defaultRecipientEmail: inv.party?.email || inv.email || "",
+                recipientName: cName,
+                clientId: inv.party_id || undefined,
+                subject: `Invoice ${invNo}`,
+                attachmentFileName: `Invoice_${safeSlug}.pdf`,
+                buildPdfAndBody: async (agencyName) => {
+                  const branding = await getBrandingAsync();
+                  const doc = buildBookingInvoicePdfDoc(
+                    buildBookingPdfDataFromInvoice(inv, branding)
+                  );
+                  return {
+                    pdfBase64: jsPdfDocToBase64(doc),
+                    htmlBody: createInvoiceEmailBody({
+                      clientName: cName,
+                      agencyName,
+                      invoiceNumber: invNo,
+                      amount: Number(inv.client_amount) || 0,
+                    }),
+                  };
+                },
+              });
+            }}
+            title="Send by email"
+            aria-label={`Send invoice ${inv.invoice_no} by email`}
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 hover:text-indigo-700 cursor-pointer"
+          >
+            <Mail className="w-3.5 h-3.5" />
           </button>
           {canEditInvoice && !inv._isLegacyClientFallback && !isInvoiceVoidedOrRefunded(inv) && (
             <button
@@ -908,7 +960,7 @@ export default function SalesExpensesHub() {
               <p className="mt-1.5 text-[11px] text-slate-400 italic">No notes</p>
             )}
           </div>
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             <Button
               type="button"
               size="sm"
@@ -926,6 +978,45 @@ export default function SalesExpensesHub() {
               type="button"
               size="sm"
               variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                const invNo = inv.invoice_no || "Booking";
+                const safeSlug = String(invNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+                const cName = inv.party?.name || inv.client_name || "Customer";
+                setEmailPayload({
+                  documentLabel: `Booking Confirmation (${invNo})`,
+                  emailType: "booking",
+                  defaultRecipientEmail: inv.party?.email || inv.email || "",
+                  recipientName: cName,
+                  clientId: inv.party_id || undefined,
+                  subject: `Booking Confirmation ${invNo}`,
+                  attachmentFileName: `Confirmation_${safeSlug}.pdf`,
+                  buildPdfAndBody: async (agencyName) => {
+                    const branding = await getBrandingAsync();
+                    const doc = buildBookingConfirmationPdfDoc(
+                      buildBookingPdfDataFromInvoice(inv, branding)
+                    );
+                    return {
+                      pdfBase64: jsPdfDocToBase64(doc),
+                      htmlBody: createBookingEmailBody({
+                        clientName: cName,
+                        agencyName,
+                        pnr: inv.pnr || undefined,
+                        travelType: inv.service || "Booking",
+                        flightDate: inv.invoice_date || undefined,
+                      }),
+                    };
+                  },
+                });
+              }}
+              className="h-7 text-xs gap-1.5 text-teal-700 hover:text-teal-800 border-teal-200 hover:bg-teal-50 cursor-pointer"
+            >
+              <Mail className="w-3 h-3" /> Send Confirmation by email
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
               onClick={async (e) => {
                 e.stopPropagation();
                 const branding = await getBrandingAsync();
@@ -934,6 +1025,44 @@ export default function SalesExpensesHub() {
               className="h-7 text-xs gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 hover:bg-slate-100 cursor-pointer"
             >
               <Printer className="w-3 h-3" /> Invoice PDF
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                const invNo = inv.invoice_no || "Invoice";
+                const safeSlug = String(invNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+                const cName = inv.party?.name || inv.client_name || "Customer";
+                setEmailPayload({
+                  documentLabel: `Invoice ${invNo}`,
+                  emailType: "invoice",
+                  defaultRecipientEmail: inv.party?.email || inv.email || "",
+                  recipientName: cName,
+                  clientId: inv.party_id || undefined,
+                  subject: `Invoice ${invNo}`,
+                  attachmentFileName: `Invoice_${safeSlug}.pdf`,
+                  buildPdfAndBody: async (agencyName) => {
+                    const branding = await getBrandingAsync();
+                    const doc = buildBookingInvoicePdfDoc(
+                      buildBookingPdfDataFromInvoice(inv, branding)
+                    );
+                    return {
+                      pdfBase64: jsPdfDocToBase64(doc),
+                      htmlBody: createInvoiceEmailBody({
+                        clientName: cName,
+                        agencyName,
+                        invoiceNumber: invNo,
+                        amount: Number(inv.client_amount) || 0,
+                      }),
+                    };
+                  },
+                });
+              }}
+              className="h-7 text-xs gap-1.5 text-indigo-700 hover:text-indigo-800 border-indigo-200 hover:bg-indigo-50 cursor-pointer"
+            >
+              <Mail className="w-3 h-3" /> Send Invoice by email
             </Button>
           </div>
         </div>
@@ -1068,36 +1197,92 @@ export default function SalesExpensesHub() {
     },
     {
       key: "print",
-      header: "Print",
-      width: 60,
+      header: "PDF / Email",
+      width: 90,
       align: "center",
       sortable: false,
       render: (v) => (
-        <button
-          type="button"
-          onClick={async (e) => {
-            e.stopPropagation();
-            const branding = await getBrandingAsync();
-            const modeStr = String(v.payment_mode || "cash").toUpperCase();
-            generateVoucherPdf({
-              voucherNo: v.voucher_no,
-              voucherDate: v.voucher_date,
-              direction: v.direction,
-              paymentMode: v.payment_mode || "cash",
-              partyName: v.party?.name || "Customer",
-              amount: v.amount,
-              accountName: v.bank_name ? `${modeStr} (${v.bank_name})` : `${modeStr} Account`,
-              referenceNo: v.reference_no,
-              notes: v.notes,
-              isEdited: v.is_edited,
-              lastEditedAt: v.last_edited_at,
-              branding,
-            });
-          }}
-          className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
-        >
-          <Printer className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center justify-center gap-1">
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const branding = await getBrandingAsync();
+              const modeStr = String(v.payment_mode || "cash").toUpperCase();
+              generateVoucherPdf({
+                voucherNo: v.voucher_no,
+                voucherDate: v.voucher_date,
+                direction: v.direction,
+                paymentMode: v.payment_mode || "cash",
+                partyName: v.party?.name || "Customer",
+                amount: v.amount,
+                accountName: v.bank_name ? `${modeStr} (${v.bank_name})` : `${modeStr} Account`,
+                referenceNo: v.reference_no,
+                notes: v.notes,
+                isEdited: v.is_edited,
+                lastEditedAt: v.last_edited_at,
+                branding,
+              });
+            }}
+            title="Print Voucher PDF"
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const vNo = v.voucher_no || "Voucher";
+              const safeSlug = String(vNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+              const pName = v.party?.name || "Customer";
+              const isRec = v.direction === "received";
+              const voucherLabel = isRec ? "Payment Receipt Voucher" : "Payment Voucher";
+              setEmailPayload({
+                documentLabel: `${voucherLabel} (${vNo})`,
+                emailType: "voucher",
+                defaultRecipientEmail: v.party?.email || "",
+                recipientName: pName,
+                clientId: v.party_id || undefined,
+                subject: `${voucherLabel} ${vNo}`,
+                attachmentFileName: `Voucher_${safeSlug}.pdf`,
+                buildPdfAndBody: async (agencyName) => {
+                  const branding = await getBrandingAsync();
+                  const modeStr = String(v.payment_mode || "cash").toUpperCase();
+                  const doc = buildVoucherReceiptPdfDoc({
+                    voucherNo: vNo,
+                    voucherDate: v.voucher_date,
+                    direction: isRec ? "received" : "paid",
+                    paymentMode: v.payment_mode || "cash",
+                    partyName: pName,
+                    amount: Number(v.amount) || 0,
+                    accountName: v.bank_name ? `${modeStr} (${v.bank_name})` : `${modeStr} Account`,
+                    referenceNo: v.reference_no,
+                    notes: v.notes,
+                    isEdited: v.is_edited,
+                    lastEditedAt: v.last_edited_at,
+                    branding,
+                  });
+                  return {
+                    pdfBase64: jsPdfDocToBase64(doc),
+                    htmlBody: createVoucherEmailBody({
+                      clientName: pName,
+                      agencyName,
+                      voucherNumber: vNo,
+                      voucherLabel,
+                      amount: Number(v.amount) || 0,
+                    }),
+                  };
+                },
+              });
+            }}
+            title="Send by email"
+            aria-label={`Send voucher ${v.voucher_no} by email`}
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 hover:text-indigo-700 cursor-pointer"
+          >
+            <Mail className="w-3.5 h-3.5" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -1817,6 +2002,12 @@ export default function SalesExpensesHub() {
       <VoucherQuickViewDialog
         voucher={inspectedVoucher}
         onClose={() => setInspectedVoucher(null)}
+      />
+
+      {/* Agency Gmail Document Sender */}
+      <SendDocumentEmailDialog
+        payload={emailPayload}
+        onClose={() => setEmailPayload(null)}
       />
     </div>
   );

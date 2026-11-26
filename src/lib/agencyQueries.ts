@@ -4,7 +4,7 @@ import { getKarachiYmd } from "@/lib/karachiTime";
 export async function fetchAgencyBookingInvoices(agencyId: string) {
   const { data, error } = await (supabase as any)
     .from("booking_invoices")
-    .select("*, party:parties!party_id(name, phone), vendor:parties!vendor_id(name)")
+    .select("*, party:parties!party_id(name, phone, email), vendor:parties!vendor_id(name)")
     .eq("agency_id", agencyId)
     .order("invoice_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -16,7 +16,7 @@ export async function fetchAgencyBookingInvoices(agencyId: string) {
 export async function fetchAgencyPaymentVouchers(agencyId: string) {
   const { data, error } = await (supabase as any)
     .from("payment_vouchers")
-    .select("*, party:parties!party_id(name, phone)")
+    .select("*, party:parties!party_id(name, phone, email)")
     .eq("agency_id", agencyId)
     .order("voucher_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -70,7 +70,8 @@ export function mapLegacyClientsToInvoices(clientsData: any[]): any[] {
     created_at: c.created_at,
     service: c.travel_type || "Ticket",
     client_name: c.name,
-    party: { name: c.name },
+    email: c.email || "",
+    party: { name: c.name, email: c.email || "" },
     client_amount: c.selling_price || 0,
     vendor_payable: c.purchasing_price || 0,
     profit: (c.selling_price || 0) - (c.purchasing_price || 0),

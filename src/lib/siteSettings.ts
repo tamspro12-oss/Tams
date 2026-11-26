@@ -56,6 +56,18 @@ function sanitizeString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function sanitizeOptionalString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeMonthlyPriceFormatted(rawPrice: string): string {
+  const compact = rawPrice.replace(/\s+/g, " ").trim();
+  if (/^pkr\s*999$/i.test(compact) || /^pkr\s*1999$/i.test(compact)) {
+    return "PKR 1,999";
+  }
+  return compact;
+}
+
 function sanitizePlan(raw: unknown, fallback: PricingPlan): PricingPlan {
   if (!raw || typeof raw !== "object") {
     return { ...fallback, bullets: [...fallback.bullets] };
@@ -67,16 +79,26 @@ function sanitizePlan(raw: unknown, fallback: PricingPlan): PricingPlan {
         .map((b) => b.trim())
     : [];
 
+  const resolvedId =
+    obj.id === "yearly" ? "yearly" : obj.id === "monthly" ? "monthly" : fallback.id;
+  const rawPriceFormatted = sanitizeString(obj.priceFormatted, fallback.priceFormatted);
+
   return {
-    id: obj.id === "yearly" ? "yearly" : obj.id === "monthly" ? "monthly" : fallback.id,
+    id: resolvedId,
     name: sanitizeString(obj.name, fallback.name),
     popular: typeof obj.popular === "boolean" ? obj.popular : Boolean(fallback.popular),
-    priceFormatted: sanitizeString(obj.priceFormatted, fallback.priceFormatted),
-    originalPriceFormatted: sanitizeString(
-      obj.originalPriceFormatted,
-      fallback.originalPriceFormatted
-    ),
-    discountBadge: sanitizeString(obj.discountBadge, fallback.discountBadge),
+    priceFormatted:
+      resolvedId === "monthly"
+        ? normalizeMonthlyPriceFormatted(rawPriceFormatted)
+        : rawPriceFormatted,
+    originalPriceFormatted:
+      resolvedId === "monthly"
+        ? ""
+        : sanitizeOptionalString(obj.originalPriceFormatted, fallback.originalPriceFormatted),
+    discountBadge:
+      resolvedId === "monthly"
+        ? ""
+        : sanitizeOptionalString(obj.discountBadge, fallback.discountBadge),
     period: sanitizeString(obj.period, fallback.period),
     bullets: rawBullets.length > 0 ? rawBullets : [...fallback.bullets],
     ctaText: sanitizeString(obj.ctaText, fallback.ctaText),

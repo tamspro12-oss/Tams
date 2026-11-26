@@ -11,6 +11,7 @@ const {
   getPostReadMinutes,
   normalizeTags,
   parseTagsInput,
+  normalizeBlogLegacyText,
 } = await import("../src/lib/blogs.ts");
 
 const {
@@ -146,8 +147,15 @@ test("mergeSiteSettings applies DB overrides safely over defaults", () => {
   assert.equal(merged.pricing.heading, "Flexible Agency Plans");
   assert.equal(merged.pricing.plans[0].name, "Starter Monthly");
   assert.equal(merged.pricing.plans[0].priceFormatted, "PKR 1,200");
+  // Monthly plan must NEVER carry a discount badge or strikethrough original price
+  assert.equal(merged.pricing.plans[0].discountBadge, "");
+  assert.equal(merged.pricing.plans[0].originalPriceFormatted, "");
   assert.deepEqual(merged.pricing.plans[0].bullets, ["Bookings", "Vouchers"]);
   assert.equal(merged.pricing.plans[1].name, DEFAULT_PRICING_SETTINGS.plans[1].name);
+  assert.equal(merged.pricing.plans[1].priceFormatted, "PKR 9,999");
+  assert.equal(merged.pricing.plans[1].originalPriceFormatted, "19,999");
+  assert.equal(merged.pricing.plans[1].discountBadge, "50% OFF");
+  assert.equal(merged.pricing.plans[1].popular, true);
 });
 
 test("buildSitemapXml includes /blogs and published post slugs", () => {
@@ -249,19 +257,65 @@ test("All 10 SEO blog posts, cover SVGs, migration SQL, and marketing docs pass 
   assert.match(seoPlanDoc, /sitemap\.xml/);
 });
 
-test("Navigation, routing, and Supabase migration guardrails stay intact", () => {
+test("Navigation, routing, pricing rules, umrahcal removal, and Supabase migration guardrails stay intact", () => {
   assert.deepEqual(
     MARKETING_NAVIGATION.mainNav.map((item) => item.label),
-    ["Home", "Features", "Pricing", "Blogs", "Contact"]
+    ["Home", "Features", "Pricing", "Blogs", "FAQ", "About", "Contact"]
   );
   assert.equal(
     MARKETING_NAVIGATION.footerLinks.some((item) => item.href === "/blogs"),
     true
   );
+  assert.equal(
+    MARKETING_NAVIGATION.footerLinks.some((item) => item.href === "/refund-policy"),
+    true
+  );
+  assert.equal(
+    MARKETING_NAVIGATION.footerLinks.some((item) => item.href === "/faq"),
+    true
+  );
+  assert.equal(
+    MARKETING_NAVIGATION.footerLinks.some((item) => item.href === "/about"),
+    true
+  );
+
+  // Task 0 default pricing invariants
+  const [monthlyPlan, yearlyPlan] = DEFAULT_PRICING_SETTINGS.plans;
+  assert.equal(monthlyPlan.id, "monthly");
+  assert.equal(monthlyPlan.priceFormatted, "PKR 1,999");
+  assert.equal(monthlyPlan.originalPriceFormatted, "");
+  assert.equal(monthlyPlan.discountBadge, "");
+  assert.equal(yearlyPlan.id, "yearly");
+  assert.equal(yearlyPlan.priceFormatted, "PKR 9,999");
+  assert.equal(yearlyPlan.originalPriceFormatted, "19,999");
+  assert.equal(yearlyPlan.discountBadge, "50% OFF");
+  assert.equal(yearlyPlan.popular, true);
+
+  // Task 3 umrahcal.online absence across all 10 blog posts + runtime legacy normalizer
+  for (const post of ALL_SEO_BLOG_POSTS) {
+    assert.doesNotMatch(post.content, /umrahcal\.online/i);
+    assert.doesNotMatch(post.excerpt, /umrahcal\.online/i);
+    assert.doesNotMatch(post.content, /PKR\s*999/i);
+  }
+  const normalizedLegacy = normalizeBlogLegacyText(
+    '<p>Try <a href="https://umrahcal.online/">umrahcal.online</a> and plans at PKR 999/month (50% off).</p>'
+  );
+  assert.doesNotMatch(normalizedLegacy, /umrahcal\.online/i);
+  assert.doesNotMatch(normalizedLegacy, /PKR\s*999/i);
+  assert.match(normalizedLegacy, /PKR 1,999\/month/);
+
+  const sitemapXml = buildSitemapXml([]);
+  assert.match(sitemapXml, /<loc>https:\/\/tamspro\.online\/about<\/loc>/);
+  assert.match(sitemapXml, /<loc>https:\/\/tamspro\.online\/faq<\/loc>/);
+  assert.match(sitemapXml, /<loc>https:\/\/tamspro\.online\/refund-policy<\/loc>/);
 
   const appSource = fs.readFileSync(path.resolve("src/App.tsx"), "utf8");
   assert.match(appSource, /path="\/blogs"/);
   assert.match(appSource, /path="\/blogs\/:slug"/);
+  assert.match(appSource, /path="\/about"/);
+  assert.match(appSource, /path="\/faq"/);
+  assert.match(appSource, /path="\/refund-policy"/);
+  assert.match(appSource, /path="\/reset-password"/);
 
   const migrationSql = fs.readFileSync(
     path.resolve("supabase/migrations/20261122140000_blogs_and_site_settings.sql"),

@@ -1,31 +1,55 @@
 /**
- * Canonical Supabase Auth redirect helpers.
- * Only uses the configured Supabase Redirect URLs:
- *   - https://tamspro.online/auth/callback
- *   - http://localhost:5173/auth/callback
- * plus /reset-password on the matching origin.
+ * Canonical Supabase Auth redirect helpers for TAMS Pro.
+ * Always resolves to an allowed public HTTPS origin (window.location.origin when valid
+ * on tamspro.online / tamspro.vercel.app, otherwise https://tamspro.online).
+ * Never emits localhost or legacy retired domains.
  */
 
 export const PRODUCTION_APP_ORIGIN = "https://tamspro.online";
-export const LOCAL_DEV_ORIGIN = "http://localhost:5173";
+
+const ALLOWED_WEB_ORIGINS = new Set([
+  "https://tamspro.online",
+  "https://www.tamspro.online",
+  "https://tamspro.vercel.app",
+]);
 
 /**
  * Resolves the safe origin to pass to Supabase Auth emailRedirectTo / redirectTo.
- * Falls back to the live production origin if running outside localhost:5173.
+ * Never returns localhost, 127.0.0.1, or retired domains; falls back to https://tamspro.online.
  */
 export function resolveAuthOrigin(currentOrigin?: string): string {
-  const origin =
+  const raw = (
     currentOrigin ??
-    (typeof window !== "undefined" ? window.location.origin : PRODUCTION_APP_ORIGIN);
+    (typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : PRODUCTION_APP_ORIGIN)
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
-  if (origin === LOCAL_DEV_ORIGIN) {
-    return LOCAL_DEV_ORIGIN;
+  if (!raw) {
+    return PRODUCTION_APP_ORIGIN;
   }
+
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("localhost") ||
+    lower.includes("127.0.0.1") ||
+    lower.includes("0.0.0.0") ||
+    lower.includes("imkaantams")
+  ) {
+    return PRODUCTION_APP_ORIGIN;
+  }
+
+  if (ALLOWED_WEB_ORIGINS.has(lower)) {
+    return lower;
+  }
+
   return PRODUCTION_APP_ORIGIN;
 }
 
 /**
- * Builds the exact confirmation callback URL allowed by Supabase Redirect URLs.
+ * Builds the confirmation callback URL for Supabase emailRedirectTo.
  */
 export function getAuthCallbackUrl(
   query?: Record<string, string>,

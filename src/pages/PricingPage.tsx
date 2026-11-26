@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,16 +7,46 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 function PricingPageContent() {
   const { pricing } = useSiteSettings();
+
+  const pricingJsonLd = useMemo(
+    () => ({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "TAMS Pro — Travel Agency Management System",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web, Desktop PWA, Android, iOS",
+      url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Monthly Plan",
+          price: "1999",
+          priceCurrency: "PKR",
+          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+        },
+        {
+          "@type": "Offer",
+          name: "Yearly Plan (50% OFF)",
+          price: "9999",
+          priceCurrency: "PKR",
+          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+        },
+      ],
+    }),
+    []
+  );
 
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Pricing — TAMS Pro Travel Agency Management System"
-        description="Simple and transparent pricing for travel agencies. Monthly and yearly subscription plans."
+        description="Simple and transparent pricing for travel agencies in Pakistan: PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan."
         path="/pricing"
+        jsonLd={pricingJsonLd}
       />
 
       <PublicHeader currentPath="/pricing" />
@@ -36,6 +66,9 @@ function PricingPageContent() {
         <div className="tams-pricing-grid tams-pricing-gap max-w-[920px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-stretch pt-2">
           {pricing.plans.map((plan) => {
             const isPopular = Boolean(plan.popular);
+            const showDiscount = plan.id !== "monthly" && Boolean(plan.discountBadge?.trim());
+            const showStrikethrough =
+              plan.id !== "monthly" && Boolean(plan.originalPriceFormatted?.trim());
 
             return (
               <div
@@ -60,9 +93,11 @@ function PricingPageContent() {
                     <h2 className="text-base sm:text-lg font-bold text-[#0F172A] tracking-tight">
                       {plan.name}
                     </h2>
-                    <span className="bg-teal-50 text-teal-700 border border-teal-200/60 text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">
-                      {plan.discountBadge}
-                    </span>
+                    {showDiscount && (
+                      <span className="bg-teal-50 text-teal-700 border border-teal-200/60 text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">
+                        {plan.discountBadge}
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-2.5 flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
@@ -72,9 +107,11 @@ function PricingPageContent() {
                     <span className="text-xs sm:text-sm font-medium text-[#64748B]">
                       {plan.period}
                     </span>
-                    <span className="text-xs font-medium text-[#64748B] line-through tabular-nums">
-                      was {plan.originalPriceFormatted}
-                    </span>
+                    {showStrikethrough && (
+                      <span className="text-xs font-medium text-[#64748B] line-through tabular-nums">
+                        was {plan.originalPriceFormatted}
+                      </span>
+                    )}
                   </div>
 
                   {/* Condensed 2-column feature list */}

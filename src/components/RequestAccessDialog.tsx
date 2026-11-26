@@ -251,13 +251,13 @@ Sent from TAMS PRO Request Access Form`
                     <SelectItem value="Monthly">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">Monthly</span>
-                        <span className="text-muted-foreground text-xs">- 32 days access</span>
+                        <span className="text-muted-foreground text-xs">- PKR 1,999 / month (32 days access)</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="Yearly">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">Yearly</span>
-                        <span className="text-muted-foreground text-xs">- Best value</span>
+                        <span className="text-muted-foreground text-xs">- PKR 9,999 / year (50% OFF — Most Popular)</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

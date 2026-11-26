@@ -39,7 +39,20 @@ import { ClientPaymentDialog } from "@/components/ClientPaymentDialog";
 import { CreateVoucherDialog } from "@/components/CreateVoucherDialog";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
 import { openPdfInNewTab } from "@/lib/pdf/openPdfInNewTab";
-import { downloadVoucherPdf, printVoucherPdf } from "@/lib/voucherPdfGenerator";
+import {
+  downloadVoucherPdf,
+  generateVoucherPdf,
+  printVoucherPdf,
+} from "@/lib/voucherPdfGenerator";
+import {
+  SendDocumentEmailDialog,
+  type DocumentEmailPayload,
+} from "@/components/SendDocumentEmailDialog";
+import {
+  createBookingEmailBody,
+  createVoucherEmailBody,
+  jsPdfDocToBase64,
+} from "@/lib/emailService";
 import { PartyLedgerAndStatement } from "./PartyLedgerAndStatement";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Scale } from "lucide-react";
@@ -75,6 +88,7 @@ export function DirectBookingDetailModal({
   const [showCreateVoucher, setShowCreateVoucher] = useState(false);
   const [copiedPnr, setCopiedPnr] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [emailPayload, setEmailPayload] = useState<DocumentEmailPayload | null>(null);
 
   const { deleteClient } = useClients();
   const { vendors } = useVendors();
@@ -209,6 +223,51 @@ export function DirectBookingDetailModal({
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Booking PDF</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const refSlug = String(client.pnr || client.name || "Booking").replace(
+                  /[^a-zA-Z0-9_-]/g,
+                  "_"
+                );
+                setEmailPayload({
+                  documentLabel: `Booking Confirmation — ${client.name}`,
+                  emailType: "booking",
+                  defaultRecipientEmail: client.email || "",
+                  recipientName: client.name,
+                  clientId: client.id,
+                  subject: `Booking Confirmation${client.pnr ? ` (${client.pnr})` : ""} — ${client.name}`,
+                  attachmentFileName: `Booking_Confirmation_${refSlug}.pdf`,
+                  buildPdfAndBody: async (agencyName) => {
+                    const branding = await getBrandingAsync();
+                    const { doc } = await generateBookingConfirmationPDF(
+                      client,
+                      vendor,
+                      branding
+                    );
+                    return {
+                      pdfBase64: jsPdfDocToBase64(doc),
+                      htmlBody: createBookingEmailBody({
+                        clientName: client.name,
+                        agencyName,
+                        pnr: client.pnr || undefined,
+                        destination: client.destination || undefined,
+                        flightDate: client.flight_date
+                          ? format(parseISO(client.flight_date), "dd MMM yyyy")
+                          : undefined,
+                        travelType: client.travel_type || "Ticket",
+                      }),
+                    };
+                  },
+                });
+              }}
+              className="text-xs h-8 gap-1.5"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Send by email</span>
             </Button>
 
             {linkedVouchers.length > 0 ? (
@@ -637,18 +696,55 @@ export function DirectBookingDetailModal({
                               ({v.voucher_type})
                             </span>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              const branding = await getBrandingAsync();
-                              downloadVoucherPdf(v, { branding });
-                            }}
-                            className="h-6 text-[11px] gap-1"
-                          >
-                            <Download className="w-3 h-3" />
-                            PDF
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                const branding = await getBrandingAsync();
+                                downloadVoucherPdf(v, { branding });
+                              }}
+                              className="h-6 text-[11px] gap-1"
+                            >
+                              <Download className="w-3 h-3" />
+                              PDF
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const vNo = v.voucher_number || "Voucher";
+                                const safeSlug = String(vNo).replace(/[^a-zA-Z0-9_-]/g, "_");
+                                const vLabel = `${v.voucher_type || "Travel"} Voucher`;
+                                setEmailPayload({
+                                  documentLabel: `${vLabel} (${vNo})`,
+                                  emailType: "voucher",
+                                  defaultRecipientEmail: client.email || "",
+                                  recipientName: v.passenger_name || client.name,
+                                  clientId: client.id,
+                                  subject: `${vLabel} ${vNo}`,
+                                  attachmentFileName: `${safeSlug}_Voucher.pdf`,
+                                  buildPdfAndBody: async (agencyName) => {
+                                    const branding = await getBrandingAsync();
+                                    const doc = generateVoucherPdf(v, { branding });
+                                    return {
+                                      pdfBase64: jsPdfDocToBase64(doc),
+                                      htmlBody: createVoucherEmailBody({
+                                        clientName: v.passenger_name || client.name,
+                                        agencyName,
+                                        voucherNumber: vNo,
+                                        voucherLabel: vLabel,
+                                      }),
+                                    };
+                                  },
+                                });
+                              }}
+                              className="h-6 text-[11px] gap-1"
+                            >
+                              <Mail className="w-3 h-3" />
+                              Send by email
+                            </Button>
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -723,6 +819,11 @@ export function DirectBookingDetailModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SendDocumentEmailDialog
+        payload={emailPayload}
+        onClose={() => setEmailPayload(null)}
+      />
     </>
   );
 }

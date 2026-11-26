@@ -641,7 +641,7 @@ function BlogDetailContent() {
                   Ready to streamline your travel agency?
                 </h2>
                 <p className="text-xs sm:text-sm text-[#475569] mt-1">
-                  Bookings, visas, accounts and vouchers, everything in one place—from PKR 999/month.
+                  Bookings, visas, accounts and vouchers, everything in one place—PKR 1,999/month or PKR 9,999/year (50% off on the yearly plan).
                 </p>
               </div>
 

@@ -84,7 +84,7 @@ function HomepageContent() {
           {
             "@type": "Offer",
             name: "Monthly Plan",
-            price: "999",
+            price: "1999",
             priceCurrency: "PKR",
             url: `${PRODUCTION_APP_ORIGIN}/pricing`,
           },

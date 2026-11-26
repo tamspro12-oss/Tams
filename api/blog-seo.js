@@ -42,6 +42,31 @@ function sanitizeNoscriptHtml(html) {
     .replace(/<\/?\s*noscript\b[^>]*>/gi, "");
 }
 
+function normalizeLegacyBlogString(raw) {
+  if (!raw || typeof raw !== "string") return String(raw ?? "");
+  return raw
+    .replace(
+      /<a\b[^>]*href=["']https?:\/\/(?:www\.)?umrahcal\.online[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
+      "the built-in <strong>Umrah Calculator inside TAMS Pro</strong> (open Umrah Calculator from the sidebar, enter the SAR-to-PKR rate, set Makkah/Madinah hotel nights and room sharing, and add visa, transport, and flight costs)"
+    )
+    .replace(
+      /\b(?:https?:\/\/)?(?:www\.)?umrahcal\.online\b/gi,
+      "the built-in Umrah Calculator inside TAMS Pro"
+    )
+    .replace(
+      /PKR\s*999\s*\/\s*month\s*\(\s*50%\s*off\s*\)/gi,
+      "PKR 1,999/month or PKR 9,999/year (50% off on the yearly plan)"
+    )
+    .replace(
+      /PKR\s*999(?:\s*\/\s*month|\s+per\s+month|\s+a\s+month|\s*\/\s*mo)\s+or\s+PKR\s*9,999(?:\s*\/\s*year|\s+per\s+year)\s*\(\s*50%\s*off\s*\)/gi,
+      "PKR 1,999/month, or PKR 9,999/year (50% off on the yearly plan)"
+    )
+    .replace(/PKR\s*999\s*\/\s*month/gi, "PKR 1,999/month")
+    .replace(/PKR\s*999\s+per\s+month/gi, "PKR 1,999 per month")
+    .replace(/PKR\s*999\s+a\s+month/gi, "PKR 1,999 a month")
+    .replace(/PKR\s*999\s*\/\s*mo\b/gi, "PKR 1,999/mo");
+}
+
 function collectKeywords(post) {
   const candidates = [
     post?.focus_keyword,
@@ -52,7 +77,8 @@ function collectKeywords(post) {
   const result = [];
   for (const item of candidates) {
     if (typeof item !== "string") continue;
-    const trimmed = item.trim();
+    const cleaned = /umrahcal\.online/i.test(item) ? "umrah package calculator" : item;
+    const trimmed = cleaned.trim();
     if (!trimmed) continue;
     const key = trimmed.toLowerCase();
     if (seen.has(key)) continue;
@@ -75,17 +101,23 @@ export function injectBlogSeoIntoHtml(html, post, origin = PRODUCTION_ORIGIN) {
   const slug = String(post.slug).trim();
   const canonicalUrl = `${cleanOrigin}/blogs/${encodeURIComponent(slug)}`;
 
-  const rawTitle = String(post.seo_title || post.title || "TAMS Pro Blog").trim();
+  const rawTitle = normalizeLegacyBlogString(
+    String(post.seo_title || post.title || "TAMS Pro Blog").trim()
+  );
   const fullTitle = `${rawTitle} | TAMS Pro Blog`;
-  const description = String(
-    post.seo_description || post.excerpt || "Insights for Pakistani travel agencies from TAMS Pro."
-  ).trim();
+  const description = normalizeLegacyBlogString(
+    String(
+      post.seo_description || post.excerpt || "Insights for Pakistani travel agencies from TAMS Pro."
+    ).trim()
+  );
   const authorName = String(post.author || "TAMS Pro Team").trim();
   const imageUrl = resolveSocialImage(post.cover_image_url, cleanOrigin);
   const imageAlt = String(post.cover_image_alt || post.title || "TAMS Pro Blog").trim();
   const keywords = collectKeywords(post);
   const cleanTags = Array.isArray(post.tags)
-    ? post.tags.filter((t) => typeof t === "string" && t.trim().length > 0).map((t) => t.trim())
+    ? post.tags
+        .filter((t) => typeof t === "string" && t.trim().length > 0)
+        .map((t) => (/umrahcal\.online/i.test(t) ? "umrah package calculator" : t.trim()))
     : [];
 
   let nextHtml = String(html).replace(
@@ -241,10 +273,10 @@ export function injectBlogSeoIntoHtml(html, post, origin = PRODUCTION_ORIGIN) {
         "@type": "FAQPage",
         mainEntity: validFaqs.map((faq) => ({
           "@type": "Question",
-          name: faq.question.trim(),
+          name: normalizeLegacyBlogString(faq.question.trim()),
           acceptedAnswer: {
             "@type": "Answer",
-            text: faq.answer.trim(),
+            text: normalizeLegacyBlogString(faq.answer.trim()),
           },
         })),
       });
@@ -263,7 +295,7 @@ export function injectBlogSeoIntoHtml(html, post, origin = PRODUCTION_ORIGIN) {
     nextHtml = nextHtml.replace(/<\/head>/i, `${headInjections}\n  </head>`);
   }
 
-  const safeNoscriptBody = sanitizeNoscriptHtml(post.content || "");
+  const safeNoscriptBody = sanitizeNoscriptHtml(normalizeLegacyBlogString(post.content || ""));
   const noscriptBlock = `<noscript><main><article><h1>${escapeHtml(
     post.title || rawTitle
   )}</h1><p>${escapeHtml(description)}</p>${safeNoscriptBody}</article></main></noscript>`;

@@ -452,9 +452,13 @@ export default function Install() {
       {/* Footer */}
       <footer className="border-t border-border mt-12 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:pb-6 px-4 text-center text-sm text-muted-foreground">
         <p>© {new Date().getFullYear()} TAMS Pro - Travel Agency Management System</p>
-        <div className="flex gap-4 justify-center mt-2">
+        <div className="flex flex-wrap gap-4 justify-center mt-2">
+          <Link to="/about" className="hover:text-primary transition-colors">About</Link>
+          <Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link>
+          <Link to="/contact" className="hover:text-primary transition-colors">Contact</Link>
           <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
-          <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+          <Link to="/terms" className="hover:text-primary transition-colors">Terms &amp; Conditions</Link>
+          <Link to="/refund-policy" className="hover:text-primary transition-colors">Refund Policy</Link>
         </div>
       </footer>
     </div>

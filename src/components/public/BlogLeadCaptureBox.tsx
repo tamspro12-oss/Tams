@@ -67,7 +67,7 @@ export const BlogLeadCaptureBox: React.FC<BlogLeadCaptureBoxProps> = ({
             Want a quick WhatsApp setup walkthrough for your agency?
           </h2>
           <p className="mt-1.5 text-xs sm:text-sm text-[#475569] leading-relaxed">
-            Get travel agency growth tips plus a 10-minute live setup call—PKR 999/month or PKR 9,999/year (50% off).
+            Get travel agency growth tips plus a 10-minute live setup call—PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan.
           </p>
         </div>
 

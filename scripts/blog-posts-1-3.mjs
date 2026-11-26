@@ -3,7 +3,7 @@ export const POSTS_1_TO_3 = [
     slug: "best-travel-agency-software-pakistan-2026",
     title: "Best Travel Agency Software in Pakistan (2026 Guide)",
     excerpt:
-      "Compare the best travel agency software in Pakistan for bookings, Umrah packages, PKR ledgers, visas, and invoices. Start with TAMS Pro at PKR 999/month.",
+      "Compare the best travel agency software in Pakistan for bookings, Umrah packages, PKR ledgers, visas, and invoices. Start with TAMS Pro at PKR 1,999/month.",
     category: "Software",
     is_featured: true,
     published_at: "2026-11-22T09:00:00Z",
@@ -30,12 +30,12 @@ export const POSTS_1_TO_3 = [
       {
         question: "Which is the best travel agency software in Pakistan in 2026?",
         answer:
-          "TAMS Pro is built specifically for Pakistani travel and Umrah agencies, combining bookings, PKR ledgers, visa tracking, quotations, branded vouchers, and an Umrah cost calculator starting at PKR 999/month.",
+          "TAMS Pro is built specifically for Pakistani travel and Umrah agencies, combining bookings, PKR ledgers, visa tracking, quotations, branded vouchers, and a built-in Umrah cost calculator at PKR 1,999/month (or PKR 9,999/year with 50% off on the yearly plan).",
       },
       {
         question: "How much does travel agency management software cost in Pakistan?",
         answer:
-          "Most enterprise ERP tools charge USD 50 to 200 per month or heavy upfront setup fees. TAMS Pro costs PKR 999 per month or PKR 9,999 per year (50% off), with two months free on the annual plan.",
+          "Most enterprise ERP tools charge USD 50 to 200 per month or heavy upfront setup fees. TAMS Pro costs PKR 1,999 per month, or PKR 9,999 per year (was PKR 19,999 — 50% off exclusively on the yearly plan).",
       },
       {
         question: "Can travel agency software handle both ticketing and Umrah packages?",
@@ -53,7 +53,7 @@ export const POSTS_1_TO_3 = [
           "Yes. Paper registers can be damaged or lost, and desktop Excel files get corrupted or accidentally deleted. Cloud-backed software stores encrypted agency records with automatic backups and user permissions.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Pakistani travel agencies lose an average of 4% to 8% of monthly revenue to unbilled extras, forgotten sub-agent dues, and manual register errors.</li><li>Generic international CRMs fail in Pakistan because they lack PKR accounting, Umrah SAR-to-PKR costing, and party-wise khata ledgers.</li><li>Evaluating travel agency software in 2026 comes down to five essentials: unified bookings, automated accounting, branded PDFs, visa tracking, and predictable PKR pricing.</li><li>TAMS Pro delivers all core modules at PKR 999/month or PKR 9,999/year (50% off), built for both growing single-desk offices and multi-staff agencies.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Pakistani travel agencies lose an average of 4% to 8% of monthly revenue to unbilled extras, forgotten sub-agent dues, and manual register errors.</li><li>Generic international CRMs fail in Pakistan because they lack PKR accounting, Umrah SAR-to-PKR costing, and party-wise khata ledgers.</li><li>Evaluating travel agency software in 2026 comes down to five essentials: unified bookings, automated accounting, branded PDFs, visa tracking, and predictable PKR pricing.</li><li>TAMS Pro delivers all core modules at PKR 1,999/month, or PKR 9,999/year with a 50% discount available exclusively on the yearly plan.</li></ul></blockquote>
 
 <p>Running a travel agency in Pakistan in 2026 looks nothing like it did five years ago. Clients in Lahore, Karachi, Islamabad, Rawalpindi, Jhelum, and Faisalabad compare flight fares and Umrah deals on WhatsApp within minutes. Meanwhile, your team still has to coordinate airline suppliers, Saudi hotel confirmations, visa biometrics, cash and bank collections, and sub-agent credit limits—often during peak Shawwal or Ramadan rushes when phones never stop ringing.</p>
 
@@ -86,7 +86,7 @@ export const POSTS_1_TO_3 = [
 
 <h3>3. Fast Umrah Costing and Package Management</h3>
 
-<p>During peak Umrah months, SAR rates and hotel availability change daily. An agency operator in Gujranwala or Rawalpindi cannot spend 45 minutes recalculating quad, triple, and double sharing rates by hand while a group leader waits on the phone. Built-in Umrah calculation—or pairing with a dedicated tool like <a href="https://umrahcal.online">umrahcal.online</a>—ensures every package quote protects your margin before you confirm seats.</p>
+<p>During peak Umrah months, SAR rates and hotel availability change daily. An agency operator in Gujranwala or Rawalpindi cannot spend 45 minutes recalculating quad, triple, and double sharing rates by hand while a group leader waits on the phone. Using the Umrah Calculator built inside TAMS Pro is straightforward: open <strong>Umrah Calculator</strong> from the left sidebar, enter today's SAR-to-PKR exchange rate, add your Makkah and Madinah hotels with nights and room sharing (Quad, Triple, Double, or Quint), enter visa, transport, and flight costs with your target margin, and generate an instant PKR summary or quotation.</p>
 
 <h3>4. Branded PDF Invoices, Quotations, and Vouchers</h3>
 
@@ -104,7 +104,7 @@ export const POSTS_1_TO_3 = [
 
 <p>Avoid tools that charge hidden fees per booking, limit PDF downloads, or lock you into confusing tiers. Transparent PKR pricing lets you budget confidently through both peak and off-peak months.</p>
 
-<blockquote><p><strong>Ready to replace manual registers?</strong> Explore all modules on our <a href="/features">Features page</a> or lock in the 50% launch discount on <a href="/pricing">TAMS Pro Pricing</a>—just PKR 999/month or PKR 9,999/year. <a href="/signup">Create your free agency account today</a>.</p></blockquote>
+<blockquote><p><strong>Ready to replace manual registers?</strong> Explore all modules on our <a href="/features">Features page</a> or check <a href="/pricing">TAMS Pro Pricing</a>—PKR 1,999/month, or PKR 9,999/year with 50% off exclusively on the yearly plan. <a href="/signup">Create your free agency account today</a>.</p></blockquote>
 
 <h2>Top Travel Software Options Used in Pakistan Compared</h2>
 
@@ -129,15 +129,15 @@ export const POSTS_1_TO_3 = [
 
 <p>You do not need a complex enterprise rollout to modernize your office. Start by listing the three biggest bottlenecks costing your agency money right now—usually uncollected client balances, slow Umrah quoting, or messy paper vouchers. Pick a system designed for local PKR accounting and mobile access so your staff actually enjoys using it daily.</p>
 
-<p><strong>Take the next step:</strong> Compare our <a href="/pricing">PKR 999/month and PKR 9,999/year plans</a> or <a href="/signup">sign up free on TAMS Pro</a> in under two minutes to see how clean your agency records can look today.</p>
+<p><strong>Take the next step:</strong> Compare our <a href="/pricing">PKR 1,999/month and PKR 9,999/year (50% off yearly) plans</a> or <a href="/signup">sign up free on TAMS Pro</a> in under two minutes to see how clean your agency records can look today.</p>
 
 <h2>Frequently Asked Questions</h2>
 
 <h3>Which is the best travel agency software in Pakistan in 2026?</h3>
-<p>TAMS Pro is purpose-built for Pakistani travel and Umrah agencies, unifying bookings, PKR ledgers, visa tracking, quotations, branded vouchers, and an Umrah cost calculator starting at PKR 999/month.</p>
+<p>TAMS Pro is purpose-built for Pakistani travel and Umrah agencies, unifying bookings, PKR ledgers, visa tracking, quotations, branded vouchers, and a built-in Umrah cost calculator at PKR 1,999/month.</p>
 
 <h3>How much does travel agency management software cost in Pakistan?</h3>
-<p>While foreign CRMs charge USD 50 to 200 per month, TAMS Pro offers transparent local pricing at PKR 999 per month or PKR 9,999 per year (50% off), including cloud backups and mobile access.</p>
+<p>While foreign CRMs charge USD 50 to 200 per month, TAMS Pro offers transparent local pricing at PKR 1,999 per month, or PKR 9,999 per year (was PKR 19,999 — 50% off exclusively on the yearly plan), including cloud backups and mobile access.</p>
 
 <h3>Can travel agency software handle both ticketing and Umrah packages?</h3>
 <p>Yes. TAMS Pro manages one-way and return air tickets alongside complete Umrah packages, hotel and transport vouchers, visa applications, and SAR-to-PKR costing inside one dashboard.</p>
@@ -190,7 +190,7 @@ export const POSTS_1_TO_3 = [
       {
         question: "How do I calculate Umrah package profit accurately in PKR?",
         answer:
-          "Use an Umrah calculator with live SAR-to-PKR exchange conversion, including visa, flights, Makkah and Madinah nights, transport, and contingency margins. TAMS Pro includes a built-in Umrah Calculator and pairs smoothly with umrahcal.online.",
+          "Open the Umrah Calculator inside TAMS Pro, enter the live SAR-to-PKR exchange rate, set Makkah and Madinah nights and room sharing (Quad, Triple, or Double), add visa, flights, transport, and contingency margins, and generate an instant PKR breakdown.",
       },
       {
         question: "Can sub-agents or group leaders manage installments separately?",
@@ -198,7 +198,7 @@ export const POSTS_1_TO_3 = [
           "Yes. Each family head or B2B partner gets an individual ledger account showing total package price, cash or bank installments received, and remaining balance due before departure.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Umrah seasons in Rajab, Shaban, and Ramadan compress months of bookings into chaotic weeks—making manual folders and WhatsApp searches a major operational risk.</li><li>A digital Umrah workflow connects five stages: SAR-to-PKR costing, fast quotation, family/group booking, hotel &amp; ticket vouchers, and installment ledgers.</li><li>Linking accurate costing via built-in calculators or <a href="https://umrahcal.online">umrahcal.online</a> prevents exchange-rate losses when SAR fluctuates.</li><li>TAMS Pro gives Pakistani Umrah operators complete control over pilgrims, Saudi vendors, and vouchers for PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Umrah seasons in Rajab, Shaban, and Ramadan compress months of bookings into chaotic weeks—making manual folders and WhatsApp searches a major operational risk.</li><li>A digital Umrah workflow connects five stages: SAR-to-PKR costing, fast quotation, family/group booking, hotel &amp; ticket vouchers, and installment ledgers.</li><li>Calculating exact package tiers in TAMS Pro's built-in Umrah Calculator prevents exchange-rate losses when SAR fluctuates.</li><li>TAMS Pro gives Pakistani Umrah operators complete control over pilgrims, Saudi vendors, and vouchers for PKR 1,999/month (or PKR 9,999/year with 50% off on the yearly plan).</li></ul></blockquote>
 
 <p>Every seasoned Umrah operator in Lahore, Gujranwala, Sialkot, or Karachi knows the stress of the 15th of Shaban. Within forty-eight hours, hotel tariffs in Makkah shift, flight group seats fill up, three families ask to upgrade from quad to triple sharing, and a sub-agent from Faisalabad deposits partial cash without sending a clear breakdown. When your records live inside thick physical folders and WhatsApp chat threads, one overlooked room change can leave pilgrims waiting in a lobby at 2:00 AM.</p>
 
@@ -225,7 +225,7 @@ export const POSTS_1_TO_3 = [
 
 <h3>Stage 1: Accurate SAR-to-PKR Costing Before Quoting</h3>
 
-<p>Profitability starts before the client pays a single rupee of advance. Always calculate per-person costs across adult, child, and infant categories using current SAR rates plus a small currency cushion. Our dedicated guide on <a href="/blogs/umrah-cost-calculator-price-packages-profitably">using an Umrah cost calculator profitably</a> walks through real Makkah and Madinah room-sharing math. You can use TAMS Pro's integrated Umrah Calculator or run instant package scenarios on <a href="https://umrahcal.online">umrahcal.online</a> so your counter staff never underprices a group departure.</p>
+<p>Profitability starts before the client pays a single rupee of advance. Always calculate per-person costs across adult, child, and infant categories using current SAR rates plus a small currency cushion. Our dedicated guide on <a href="/blogs/umrah-cost-calculator-price-packages-profitably">using an Umrah cost calculator profitably</a> walks through real Makkah and Madinah room-sharing math. Inside TAMS Pro, simply open <strong>Umrah Calculator</strong> from your sidebar, enter today's SAR-to-PKR rate, select your Makkah and Madinah hotels, nights, and room sharing (Quad, Triple, Double, or Quint), add visa, transport, ziyarat, and flight costs plus your profit margin, and convert the result straight into a branded quotation so your counter staff never underprices a group departure.</p>
 
 <h3>Stage 2: Fast, Branded Quotations</h3>
 
@@ -252,7 +252,7 @@ export const POSTS_1_TO_3 = [
 
 <p>Pakistani families commonly pay in two or three installments before departure. Every cash receipt or bank transfer into your agency account should immediately reduce the client's pending balance and generate a shareable receipt. At the same time, track what you owe your Makkah hotel supplier or Umrah company so no group closes with surprise supplier balances weeks later.</p>
 
-<blockquote><p><strong>Run your next Umrah group stress-free:</strong> Explore TAMS Pro's Umrah Calculator, vouchers, and party ledgers on our <a href="/features">Features page</a>, or <a href="/pricing">pick a plan starting at PKR 999/month</a>. <a href="/signup">Start your free trial now</a>.</p></blockquote>
+<blockquote><p><strong>Run your next Umrah group stress-free:</strong> Explore TAMS Pro's Umrah Calculator, vouchers, and party ledgers on our <a href="/features">Features page</a>, or <a href="/pricing">pick a plan at PKR 1,999/month (or PKR 9,999/year — 50% off on the yearly plan)</a>. <a href="/signup">Start your free trial now</a>.</p></blockquote>
 
 <h2>Managing Ramadan, Shawwal &amp; Group Ticket Departures</h2>
 
@@ -286,7 +286,7 @@ export const POSTS_1_TO_3 = [
 <p>Yes. TAMS Pro turns saved Umrah booking details directly into clean, branded PDF vouchers ready to download or send via WhatsApp—saving hours of manual Word editing.</p>
 
 <h3>How do I calculate Umrah package profit accurately in PKR?</h3>
-<p>Combine flight, visa, hotel nights, transport, and SAR conversion inside TAMS Pro's Umrah Calculator or <a href="https://umrahcal.online">umrahcal.online</a> to lock in target per-passenger margins before quoting clients.</p>
+<p>Open the Umrah Calculator inside TAMS Pro from your sidebar, enter the current SAR-to-PKR rate, add Makkah and Madinah hotel nights by room sharing alongside flight, visa, and transport costs, and set your target per-passenger margin before quoting clients.</p>
 
 <h3>Can sub-agents or group leaders manage installments separately?</h3>
 <p>Yes. Every sub-agent or family group gets a dedicated party ledger tracking package charges, partial cash or bank receipts, and remaining receivables before travel.</p>`,
@@ -343,10 +343,10 @@ export const POSTS_1_TO_3 = [
       {
         question: "How much does travel agency accounting software cost in Pakistan?",
         answer:
-          "TAMS Pro includes complete client, vendor, cash/bank, expense, and profit-loss reporting at PKR 999/month or PKR 9,999/year (50% off).",
+          "TAMS Pro includes complete client, vendor, cash/bank, expense, and profit-loss reporting at PKR 1,999/month, or PKR 9,999/year (50% off exclusively on the yearly plan).",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>High monthly cash turnover hides thin travel margins: a PKR 40 lakh ticket sales month might only yield PKR 2.4 lakh in true profit—one uncollected PKR 65,000 ticket wipes out a week of hard work.</li><li>Paper khatas and disconnected Excel tabs create reconciliation gaps between booking desks, cash drawers, and supplier statements.</li><li>Automated double-entry travel ledgers connect bookings, payment vouchers, expenses, refunds, and cash/bank balances in real time.</li><li>TAMS Pro turns complex travel agency accounting into simple daily receipts and instant WhatsApp-ready statements for PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>High monthly cash turnover hides thin travel margins: a PKR 40 lakh ticket sales month might only yield PKR 2.4 lakh in true profit—one uncollected PKR 65,000 ticket wipes out a week of hard work.</li><li>Paper khatas and disconnected Excel tabs create reconciliation gaps between booking desks, cash drawers, and supplier statements.</li><li>Automated double-entry travel ledgers connect bookings, payment vouchers, expenses, refunds, and cash/bank balances in real time.</li><li>TAMS Pro turns complex travel agency accounting into simple daily receipts and instant WhatsApp-ready statements for PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Ask any travel agency owner in Karachi, Lahore, or Islamabad what keeps them up at night and the answer is rarely finding customers—it is knowing where the money actually went. A travel agency handles huge gross cash flows on slim commissions. You might collect PKR 380,000 for four Jeddah return tickets where PKR 356,000 belongs to the consolidator and only PKR 24,000 is your true agency income.</p>
 
@@ -393,7 +393,7 @@ export const POSTS_1_TO_3 = [
 
 <p>Nothing builds trust with corporate clients and sub-agents faster than clean documentation. When a regular B2B partner in Gujranwala asks for this month's reconciliation, you select a From and To date, click export, and send a chronological statement displaying Opening/Brought-Forward balance, every booking and receipt with DR/CR columns, and the exact Closing Balance.</p>
 
-<blockquote><p><strong>Stop guessing your cash flow:</strong> See how unified party ledgers, cash/bank accounts, and profit reports work together on our <a href="/features">Features page</a>, or <a href="/signup">start your TAMS Pro trial</a> at just <a href="/pricing">PKR 999/month</a>.</p></blockquote>
+<blockquote><p><strong>Stop guessing your cash flow:</strong> See how unified party ledgers, cash/bank accounts, and profit reports work together on our <a href="/features">Features page</a>, or <a href="/signup">start your TAMS Pro trial</a> at <a href="/pricing">PKR 1,999/month (or PKR 9,999/year — 50% off yearly)</a>.</p></blockquote>
 
 <h2>Managing Audited Edits and Preventing Fraud</h2>
 
@@ -420,7 +420,7 @@ export const POSTS_1_TO_3 = [
 
 <h2>Take Control of Your Agency Khata Today</h2>
 
-<p>Every week spent on paper notebooks costs your agency forgotten dues and stressful late-night reconciliations. Move your opening balances and active bookings into TAMS Pro today—plans start at <a href="/pricing">PKR 999/month or PKR 9,999/year (50% off)</a>. <a href="/signup">Sign up free now</a> and check your real profit in minutes.</p>
+<p>Every week spent on paper notebooks costs your agency forgotten dues and stressful late-night reconciliations. Move your opening balances and active bookings into TAMS Pro today—plans are <a href="/pricing">PKR 1,999/month, or PKR 9,999/year with 50% off exclusively on the yearly plan</a>. <a href="/signup">Sign up free now</a> and check your real profit in minutes.</p>
 
 <h2>Frequently Asked Questions</h2>
 
@@ -437,6 +437,6 @@ export const POSTS_1_TO_3 = [
 <p>Refunds and voids adjust client and supplier balances transparently while preserving invoice history and audit trails, keeping your receivables and profit figures accurate.</p>
 
 <h3>How much does travel agency accounting software cost in Pakistan?</h3>
-<p>TAMS Pro includes complete client/vendor ledgers, cash and bank books, expense tracking, and financial reports starting at PKR 999/month or PKR 9,999/year.</p>`,
+<p>TAMS Pro includes complete client/vendor ledgers, cash and bank books, expense tracking, and financial reports at PKR 1,999/month, or PKR 9,999/year (50% off on the yearly plan).</p>`,
   },
 ];

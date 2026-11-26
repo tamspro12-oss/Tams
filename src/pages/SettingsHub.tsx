@@ -31,6 +31,7 @@ export default function SettingsHub() {
       case "general":
       case "templates":
         return "branding";
+      case "email":
       case "email-integration":
       case "email-history":
         return "email-integration";
@@ -87,13 +88,13 @@ export default function SettingsHub() {
               <span>Branding</span>
             </TabsTrigger>
 
-            {/* 3. Email Integration (formerly Email History) */}
+            {/* 3. Email (Agency's own Gmail + App Password) */}
             <TabsTrigger
               value="email-integration"
               className="gap-2 text-xs sm:text-sm font-semibold px-3.5 py-1.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all shrink-0"
             >
               <Mail className="w-4 h-4" />
-              <span>Email Integration</span>
+              <span>Email</span>
             </TabsTrigger>
 
             {/* 4. Storage & Backup */}

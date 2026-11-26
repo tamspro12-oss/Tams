@@ -16,9 +16,9 @@ export interface PricingPlan {
 
 export const PRICING_CONSTANTS = {
   monthly: {
-    price: 999,
-    originalPrice: 1999,
-    discount: "50% OFF",
+    price: 1999,
+    originalPrice: null,
+    discount: "",
     period: "/ month",
   },
   yearly: {
@@ -33,9 +33,9 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: "monthly",
     name: "Monthly",
-    priceFormatted: "PKR 999",
-    originalPriceFormatted: "1,999",
-    discountBadge: "50% OFF",
+    priceFormatted: "PKR 1,999",
+    originalPriceFormatted: "",
+    discountBadge: "",
     period: "/ month",
     bullets: [
       "All core features",

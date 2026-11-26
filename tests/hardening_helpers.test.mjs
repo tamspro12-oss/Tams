@@ -244,9 +244,12 @@ test("agencyTemplatesCore prefers DB, migrates localStorage once, and survives m
   );
 });
 
-test("authRedirect & authFlowState enforce allowlisted origins, cross-device PKCE message, and 60s cooldown", () => {
+test("authRedirect & authFlowState enforce allowlisted production origins (never localhost or imkaantams.online), cross-device PKCE message, and 60s cooldown", () => {
   assert.equal(resolveAuthOrigin("https://tamspro.online"), "https://tamspro.online");
-  assert.equal(resolveAuthOrigin("http://localhost:5173"), "http://localhost:5173");
+  assert.equal(resolveAuthOrigin("https://www.tamspro.online"), "https://www.tamspro.online");
+  assert.equal(resolveAuthOrigin("https://tamspro.vercel.app"), "https://tamspro.vercel.app");
+  assert.equal(resolveAuthOrigin("http://localhost:5173"), "https://tamspro.online");
+  assert.equal(resolveAuthOrigin("https://imkaantams.online"), "https://tamspro.online");
   assert.equal(resolveAuthOrigin("https://old-vercel.example"), "https://tamspro.online");
   assert.equal(resolveAuthOrigin("https://old-retired.example"), "https://tamspro.online");
 
@@ -255,12 +258,20 @@ test("authRedirect & authFlowState enforce allowlisted origins, cross-device PKC
     "https://tamspro.online/auth/callback"
   );
   assert.equal(
+    getAuthCallbackUrl(undefined, "https://tamspro.vercel.app"),
+    "https://tamspro.vercel.app/auth/callback"
+  );
+  assert.equal(
     getAuthCallbackUrl(undefined, "http://localhost:5173"),
-    "http://localhost:5173/auth/callback"
+    "https://tamspro.online/auth/callback"
   );
   assert.equal(
     getAuthRedirectUrl("/reset-password", "http://localhost:5173"),
-    "http://localhost:5173/reset-password"
+    "https://tamspro.online/reset-password"
+  );
+  assert.equal(
+    getAuthRedirectUrl("/reset-password", "https://imkaantams.online"),
+    "https://tamspro.online/reset-password"
   );
 
   const pkceOutcome = classifyAuthCallbackFailure({

@@ -1,14 +1,16 @@
 # TAMS Pro
 
-> TAMS Pro (`https://tamspro.online`) is a cloud travel agency management system built for Pakistani travel, Umrah, visa, and airline ticketing agencies. Plans are PKR 999/month and PKR 9,999/year (50% off). It manages bookings, branded quotations, PDF invoices and vouchers, automated PKR client/sub-agent/vendor ledgers, visa deadlines, Umrah package costing, and financial reports.
+> TAMS Pro (`https://tamspro.online`) is a cloud travel agency management system built for Pakistani travel, Umrah, visa, and airline ticketing agencies. Plans are PKR 1,999/month (standard monthly billing) and PKR 9,999/year (was PKR 19,999 — 50% off on the yearly plan). It manages bookings, branded quotations, PDF invoices and vouchers, automated PKR client/sub-agent/vendor ledgers, visa deadlines, Umrah package costing, and financial reports.
 
 ## Pages
 
 - [Home](https://tamspro.online/): Overview of TAMS Pro for Pakistani travel and Umrah agencies.
 - [Features](https://tamspro.online/features): Bookings, PKR ledgers, quotations, invoices, vouchers, visa tracking, Umrah calculator, and reports.
-- [Pricing](https://tamspro.online/pricing): PKR 999/month and PKR 9,999/year plans for Pakistani travel agencies.
+- [Pricing](https://tamspro.online/pricing): PKR 1,999/month and PKR 9,999/year (50% off yearly) plans for Pakistani travel agencies.
 - [Blogs](https://tamspro.online/blogs): Guides on travel agency software, Umrah management, PKR ledgers, quotations, vouchers, and visa tracking in Pakistan.
-- [Contact](https://tamspro.online/contact): Sales and WhatsApp support (`+92 319 0846768`).
+- [About](https://tamspro.online/about): About TAMS Pro, modules, security, and platform mission.
+- [FAQ](https://tamspro.online/faq): Frequently asked questions on pricing, security, Umrah Calculator, and onboarding.
+- [Contact](https://tamspro.online/contact): Sales, email (`tamspro12@gmail.com`), and WhatsApp support (`+92 319 0846768`).
 - [Sign Up](https://tamspro.online/signup): Create a TAMS Pro agency workspace.
 - [Install](https://tamspro.online/install): Desktop and mobile PWA install instructions.
 
@@ -29,4 +31,5 @@
 
 - [Sitemap](https://tamspro.online/sitemap.xml): Dynamic XML sitemap including all published blog posts.
 - [Privacy Policy](https://tamspro.online/privacy): How TAMS Pro handles agency and user data.
-- [Terms of Service](https://tamspro.online/terms): Terms governing use of TAMS Pro.
+- [Terms & Conditions](https://tamspro.online/terms): Terms governing use of TAMS Pro.
+- [Refund & Cancellation Policy](https://tamspro.online/refund-policy): Subscription cancellation and refund rules.

@@ -18,7 +18,7 @@ export const POSTS_7_TO_10 = [
       "SAR to PKR umrah calculator",
       "umrah package calculation",
       "umrah package price Pakistan",
-      "umrahcal.online",
+      "umrah package calculator",
       "umrah operator software",
       "umrah costing sheet",
     ],
@@ -38,9 +38,9 @@ export const POSTS_7_TO_10 = [
           "Smart operators add a small 1% to 2% currency buffer over the daily interbank/open market SAR rate to protect profit if the rupee weakens between quote acceptance and Saudi vendor settlement.",
       },
       {
-        question: "Where can Pakistani Umrah agents calculate quick Umrah packages online?",
+        question: "How do I use the Umrah Calculator inside TAMS Pro?",
         answer:
-          "You can use TAMS Pro's integrated Umrah Calculator directly inside your agency dashboard or run fast standalone package calculations on umrahcal.online.",
+          "Open Umrah Calculator from the TAMS Pro sidebar, enter today's SAR-to-PKR exchange rate, add Makkah and Madinah hotel nights and room sharing (Quad, Triple, Double, or Quint), enter visa, flight, transport, and ziyarat costs plus your profit margin, and download a PDF summary or create a quotation in one click.",
       },
       {
         question: "Why should Quad, Triple, and Double packages always be priced separately?",
@@ -48,7 +48,7 @@ export const POSTS_7_TO_10 = [
           "Hotel rooms are billed per room per night, not per person. Dividing a SAR 400 room across two people instead of four doubles the accommodation cost per pilgrim.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Manual calculator errors and forgotten SAR exchange shifts quietly turn busy Umrah months into break-even or loss-making departures.</li><li>Always divide Makkah and Madinah room costs by actual sharing type (Quad ÷ 4, Triple ÷ 3, Double ÷ 2), never by a flat guess.</li><li>Using TAMS Pro's integrated Umrah Calculator or <a href="https://umrahcal.online">umrahcal.online</a> produces accurate PKR quotes in under 60 seconds.</li><li>Connecting costing directly to invoicing protects margins across every family and group booking.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Manual calculator errors and forgotten SAR exchange shifts quietly turn busy Umrah months into break-even or loss-making departures.</li><li>Always divide Makkah and Madinah room costs by actual sharing type (Quad ÷ 4, Triple ÷ 3, Double ÷ 2), never by a flat guess.</li><li>Using the built-in Umrah Calculator inside TAMS Pro produces accurate PKR quotes across Quad, Triple, and Double sharing in under 60 seconds.</li><li>Connecting costing directly to invoicing protects margins across every family and group booking.</li></ul></blockquote>
 
 <p>During peak Umrah seasons in Pakistan, pricing speed determines who closes the deal. A group leader from Sargodha or a family of six in Lahore calls asking for a 14-day economy Umrah package—7 nights in Makkah, 7 nights in Madinah, direct Saudia flight, transport, and visa—with rates for Quad, Triple, and Double rooms.</p>
 
@@ -90,7 +90,7 @@ export const POSTS_7_TO_10 = [
 
 <p>Add a healthy PKR 12,000 agency profit per adult (plus a PKR 2,500 SAR rate cushion) and your transparent selling prices are PKR 295,000 (Quad), PKR 317,750 (Triple), and PKR 363,250 (Double). Zero guesswork—and you can show the client exact value differences instantly.</p>
 
-<blockquote><p><strong>Price every Umrah tier in seconds:</strong> Run quick estimates anytime on <a href="https://umrahcal.online">umrahcal.online</a> or unlock the full integrated Umrah Calculator + booking &amp; voucher suite inside <a href="/pricing">TAMS Pro (PKR 999/month)</a>. <a href="/signup">Sign up free today</a>.</p></blockquote>
+<blockquote><p><strong>How to use the Umrah Calculator inside TAMS Pro:</strong> Log in and click <strong>Umrah Calculator</strong> in the left sidebar &rarr; enter today's SAR-to-PKR rate &rarr; add your Makkah and Madinah hotels, nights, and sharing mode (Quad &divide; 4, Triple &divide; 3, Double &divide; 2, or Quint &divide; 5) &rarr; enter visa, transport, ziyarat, and airfare with your target profit margin &rarr; export a branded PDF summary or convert directly into a quotation. View <a href="/pricing">TAMS Pro Pricing (PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan)</a> and <a href="/signup">sign up free today</a>.</p></blockquote>
 
 <h2>3 Costing Traps That Quietly Destroy Umrah Profits</h2>
 
@@ -126,7 +126,7 @@ export const POSTS_7_TO_10 = [
 
 <h2>Calculate Smarter, Quote Faster, Keep Your Margin</h2>
 
-<p>Stop losing margin to rushed mental arithmetic. Bookmark <a href="https://umrahcal.online">umrahcal.online</a> for instant Umrah scenario pricing, and run your full agency bookings, vouchers, and PKR accounting inside TAMS Pro. Visit our <a href="/features">Features page</a> or <a href="/signup">create your account for PKR 999/month</a>.</p>
+<p>Stop losing margin to rushed mental arithmetic. Open the built-in Umrah Calculator inside TAMS Pro to price multi-tier packages, save preset 3-star, 4-star, and 5-star hotel combinations, and run your full agency bookings, vouchers, and PKR accounting in one place. Visit our <a href="/features">Features page</a>, compare <a href="/pricing">PKR 1,999/month and PKR 9,999/year (50% off yearly) plans</a>, or <a href="/signup">create your free account today</a>.</p>
 
 <h2>Frequently Asked Questions</h2>
 
@@ -136,8 +136,8 @@ export const POSTS_7_TO_10 = [
 <h3>What SAR to PKR buffer should agents use when quoting Umrah packages?</h3>
 <p>Adding a 1% to 2% buffer above the daily exchange rate protects agency profits against rupee volatility between advance collection and Saudi vendor settlement.</p>
 
-<h3>Where can Pakistani Umrah agents calculate quick Umrah packages online?</h3>
-<p>You can calculate complete multi-tier packages inside TAMS Pro's built-in Umrah Calculator or via <a href="https://umrahcal.online">umrahcal.online</a>.</p>
+<h3>How do I use the Umrah Calculator inside TAMS Pro?</h3>
+<p>Open Umrah Calculator from your TAMS Pro sidebar, enter the SAR-to-PKR rate, select Makkah and Madinah hotels with nights and room sharing (Quad, Triple, Double, or Quint), add visa, transport, and flight costs plus your profit margin, and export a PDF breakdown or convert directly into a client quotation.</p>
 
 <h3>Why should Quad, Triple, and Double packages always be priced separately?</h3>
 <p>Hotels charge per room per night rather than per bed. Fewer guests per room spreads the exact same SAR room tariff across fewer travelers, raising per-person cost significantly.</p>`,
@@ -192,7 +192,7 @@ export const POSTS_7_TO_10 = [
           "Yes. Small agencies actually save the most time because every forgotten PKR 10,000 due or wasted administrative hour hits the owner directly.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Most cash losses at Pakistani travel agencies do not come from bad sales—they come from repeatable record-keeping mistakes at the counter.</li><li>Disconnected notebooks, unrecorded cash advances, unverified sub-agent credit, and missing refund logs cost thousands of rupees every month.</li><li>Fixing these seven habits immediately boosts profit margins and saves 10+ hours of weekly staff stress.</li><li>TAMS Pro eliminates every one of these errors starting at PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Most cash losses at Pakistani travel agencies do not come from bad sales—they come from repeatable record-keeping mistakes at the counter.</li><li>Disconnected notebooks, unrecorded cash advances, unverified sub-agent credit, and missing refund logs cost thousands of rupees every month.</li><li>Fixing these seven habits immediately boosts profit margins and saves 10+ hours of weekly staff stress.</li><li>TAMS Pro eliminates every one of these errors at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Most Pakistani travel agency owners work relentlessly. You open early, stay late for urgent airport re-issues, chase airline consolidators for seat confirmations, and handle family inquiries through the weekend. Yet at the end of a busy quarter, many owners look at their bank balance and wonder why profits feel smaller than their booking volume.</p>
 
@@ -218,7 +218,7 @@ export const POSTS_7_TO_10 = [
 
 <h2>Mistake 4: Quoting Without Locking Currency &amp; Vendor Cost</h2>
 
-<p>Quoting an Umrah or Dubai package based on memory—without verifying today's hotel tariff or SAR exchange rate—turns profitable departures into silent losses. Even a two-rupee shift on SAR across a 25-passenger group eats tens of thousands in net earnings. See exact package pricing math in our <a href="/blogs/umrah-cost-calculator-price-packages-profitably">Umrah cost calculator guide</a> (and verify live scenarios on <a href="https://umrahcal.online">umrahcal.online</a>).</p>
+<p>Quoting an Umrah or Dubai package based on memory—without verifying today's hotel tariff or SAR exchange rate—turns profitable departures into silent losses. Even a two-rupee shift on SAR across a 25-passenger group eats tens of thousands in net earnings. See exact package pricing math in our <a href="/blogs/umrah-cost-calculator-price-packages-profitably">Umrah cost calculator guide</a>, and inside TAMS Pro simply open <strong>Umrah Calculator</strong> from the sidebar, enter today's SAR-to-PKR rate, set Makkah/Madinah hotel nights and room sharing, and lock your exact PKR margin before sending a quote.</p>
 
 <h2>Mistake 5: Failing to Track Ticket Voids and Supplier Refunds</h2>
 
@@ -226,7 +226,7 @@ export const POSTS_7_TO_10 = [
 
 <p><strong>The fix:</strong> Log voids and refunds through an explicit refund workflow that adjusts client credit, vendor expectations, and net profit simultaneously with complete notes.</p>
 
-<blockquote><p><strong>Eliminate costly counter mistakes:</strong> See how TAMS Pro automates bookings, party ledgers, reminders, and refunds on our <a href="/features">Features page</a>, or <a href="/signup">start your free account</a> at <a href="/pricing">PKR 999/month</a>.</p></blockquote>
+<blockquote><p><strong>Eliminate costly counter mistakes:</strong> See how TAMS Pro automates bookings, party ledgers, reminders, and refunds on our <a href="/features">Features page</a>, or <a href="/signup">start your free account</a> at <a href="/pricing">PKR 1,999/month (or PKR 9,999/year — 50% off yearly)</a>.</p></blockquote>
 
 <h2>Mistake 6: Sending Informal Text Quotes and Paper Receipts</h2>
 
@@ -252,7 +252,7 @@ export const POSTS_7_TO_10 = [
 
 <h2>Fix One Habit This Week, Save Thousands Every Month</h2>
 
-<p>You do not have to overhaul everything overnight. Pick the mistake costing your office the most sleep today—usually scattered payments or messy client balances—and move active bookings into TAMS Pro. Compare our <a href="/pricing">PKR 999/month and PKR 9,999/year plans</a> and <a href="/signup">sign up free now</a>.</p>
+<p>You do not have to overhaul everything overnight. Pick the mistake costing your office the most sleep today—usually scattered payments or messy client balances—and move active bookings into TAMS Pro. Compare our <a href="/pricing">PKR 1,999/month and PKR 9,999/year (50% off yearly) plans</a> and <a href="/signup">sign up free now</a>.</p>
 
 <h2>Frequently Asked Questions</h2>
 
@@ -315,10 +315,10 @@ export const POSTS_7_TO_10 = [
       {
         question: "Is switching from Excel to TAMS Pro expensive?",
         answer:
-          "No. At PKR 999/month or PKR 9,999/year (50% off), TAMS Pro costs less than a single forgotten ticket fee adjustment while supporting unlimited growth.",
+          "No. At PKR 1,999/month, or PKR 9,999/year (50% off exclusively on the yearly plan), TAMS Pro costs less than a single forgotten ticket fee adjustment while supporting unlimited growth.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Excel feels free, but broken formulas, copy-paste errors, and manual PDF formatting cost Pakistani agencies hours of labor and lost receivables every month.</li><li>Spreadsheets cannot link one booking simultaneously to a client ledger, vendor payable, cash/bank book, and branded PDF voucher.</li><li>Once an agency handles 25+ monthly bookings or employs 2+ staff, dedicated travel software scales dramatically faster than Excel.</li><li>TAMS Pro replaces messy workbooks with purpose-built workflows for PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Excel feels free, but broken formulas, copy-paste errors, and manual PDF formatting cost Pakistani agencies hours of labor and lost receivables every month.</li><li>Spreadsheets cannot link one booking simultaneously to a client ledger, vendor payable, cash/bank book, and branded PDF voucher.</li><li>Once an agency handles 25+ monthly bookings or employs 2+ staff, dedicated travel software scales dramatically faster than Excel.</li><li>TAMS Pro replaces messy workbooks with purpose-built workflows at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Almost every travel agency in Pakistan starts on Microsoft Excel—and for good reason. When you first open a small desk in Jhelum or Karachi with ten tickets a month, Excel feels free, familiar, and flexible. You create columns for Date, Passenger Name, Sector, Cost, Sale, and Profit, and everything fits neatly on one screen.</p>
 
@@ -348,21 +348,21 @@ export const POSTS_7_TO_10 = [
 
 <p><strong>In Travel Software:</strong> TAMS Pro adapts cleanly to mobile screens so you can check today's cash position, look up a PNR, or send a client ledger statement on WhatsApp straight from your phone.</p>
 
-<blockquote><p><strong>Ready to outgrow spreadsheets?</strong> See every tool built specifically for Pakistani agencies on our <a href="/features">Features page</a>, or lock in <a href="/pricing">PKR 999/month (50% off)</a> and <a href="/signup">sign up free on TAMS Pro</a>.</p></blockquote>
+<blockquote><p><strong>Ready to outgrow spreadsheets?</strong> See every tool built specifically for Pakistani agencies on our <a href="/features">Features page</a>, compare <a href="/pricing">PKR 1,999/month or PKR 9,999/year (50% off on the yearly plan)</a>, and <a href="/signup">sign up free on TAMS Pro</a>.</p></blockquote>
 
 <h2>Side-by-Side Comparison: Excel vs. TAMS Pro</h2>
 
 <ul>
-  <li><strong>Monthly Cost:</strong> Excel (free/Office license, high hidden error cost) vs. TAMS Pro (<strong>PKR 999/month or PKR 9,999/year</strong>).</li>
+  <li><strong>Subscription Cost:</strong> Excel (free/Office license, high hidden error cost) vs. TAMS Pro (<strong>PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan</strong>).</li>
   <li><strong>Client &amp; Vendor Ledgers:</strong> Manual formulas vs. automatic double-sided sync.</li>
-  <li><strong>Umrah Package Costing:</strong> Manual sheets vs. built-in SAR-to-PKR calculator (plus <a href="https://umrahcal.online">umrahcal.online</a>).</li>
+  <li><strong>Umrah Package Costing:</strong> Manual sheets vs. TAMS Pro's built-in Umrah Calculator (set SAR-to-PKR rate, Makkah/Madinah hotel nights &amp; room sharing, visa/transport/flight costs, and export a quote in seconds).</li>
   <li><strong>Branded PDFs:</strong> Slow Word templates vs. one-click invoices, quotes, and vouchers.</li>
   <li><strong>Data Safety:</strong> Risk of laptop crash or accidental delete vs. encrypted cloud storage &amp; backups.</li>
 </ul>
 
 <h2>The Hidden PKR Cost of "Free" Spreadsheets</h2>
 
-<p>Owners often resist spending PKR 999 a month because Excel feels already paid for. Yet do the simple math on a 3-person agency in Rawalpindi or Karachi. If each employee spends just 45 minutes a day formatting Word invoices, cross-checking bank screenshots against rows, and building manual party statements, your office burns nearly <strong>45 hours of skilled staff time every month</strong>. Even conservatively valued, that wasted labor costs far more than ten months of software—before counting a single missed PKR 18,000 partial balance or formula slip-up.</p>
+<p>Owners often resist spending PKR 1,999 a month because Excel feels already paid for. Yet do the simple math on a 3-person agency in Rawalpindi or Karachi. If each employee spends just 45 minutes a day formatting Word invoices, cross-checking bank screenshots against rows, and building manual party statements, your office burns nearly <strong>45 hours of skilled staff time every month</strong>. Even conservatively valued, that wasted labor costs far more than an entire year of software—before counting a single missed PKR 18,000 partial balance or formula slip-up.</p>
 
 <h2>How to Migrate From Excel in One Weekend</h2>
 
@@ -399,7 +399,7 @@ export const POSTS_7_TO_10 = [
 <p>Most Pakistani teams save 8 to 15 hours weekly across billing, voucher preparation, cash/bank reconciliation, and sending client ledger statements.</p>
 
 <h3>Is switching from Excel to TAMS Pro expensive?</h3>
-<p>Not at all. TAMS Pro starts at PKR 999/month or PKR 9,999/year (50% off), paying for itself many times over by preventing just one missed receivable.</p>`,
+<p>Not at all. TAMS Pro is PKR 1,999/month, or PKR 9,999/year with a 50% discount exclusively on the yearly plan, paying for itself many times over by preventing just one missed receivable.</p>`,
   },
 
   {
@@ -448,10 +448,10 @@ export const POSTS_7_TO_10 = [
       {
         question: "How much investment is needed to digitize a travel agency in Pakistan?",
         answer:
-          "You only need an internet connection and cloud software like TAMS Pro at PKR 999/month or PKR 9,999/year, with zero server hardware or IT overhead.",
+          "You only need an internet connection and cloud software like TAMS Pro at PKR 1,999/month, or PKR 9,999/year (50% off on the yearly plan), with zero server hardware or IT overhead.",
       },
     ],
-    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Growth stalls when agency owners remain trapped at the counter fixing billing mistakes instead of winning corporate clients and group bookings.</li><li>Replacing manual work with digital systems allows a 3-person agency in Pakistan to comfortably triple its monthly booking capacity.</li><li>Weekly financial reports, fast Umrah &amp; ticket quoting, and consistent follow-up reminders turn one-time buyers into lifelong repeat families.</li><li>TAMS Pro equips ambitious Pakistani agencies with enterprise-grade operational systems for PKR 999/month.</li></ul></blockquote>
+    content: `<blockquote><p><strong>Quick Takeaways</strong></p><ul><li>Growth stalls when agency owners remain trapped at the counter fixing billing mistakes instead of winning corporate clients and group bookings.</li><li>Replacing manual work with digital systems allows a 3-person agency in Pakistan to comfortably triple its monthly booking capacity.</li><li>Weekly financial reports, fast Umrah &amp; ticket quoting, and consistent follow-up reminders turn one-time buyers into lifelong repeat families.</li><li>TAMS Pro equips ambitious Pakistani agencies with enterprise-grade operational systems at PKR 1,999/month (or PKR 9,999/year with 50% off yearly).</li></ul></blockquote>
 
 <p>Every ambitious travel agency owner in Pakistan hits the same ceiling eventually. When you start, personal hustle drives growth—you know every client by name, negotiate every fare personally, and manage cash out of one notebook. At 40 bookings a month, hustle works. By 150 bookings a month, hustle turns into daily firefighting.</p>
 
@@ -472,7 +472,7 @@ export const POSTS_7_TO_10 = [
 
 <h3>1. Win High-Intent WhatsApp Leads With Speed and Trust</h3>
 
-<p>From overseas families in Dubai and London booking parents' Umrah trips to local corporate travelers in Islamabad, speed wins deals. Implement our <a href="/blogs/create-travel-quotations-in-2-minutes">2-minute travel quotation workflow</a> and use instant package calculators like <a href="https://umrahcal.online">umrahcal.online</a> so your agency responds first with clean, itemized options.</p>
+<p>From overseas families in Dubai and London booking parents' Umrah trips to local corporate travelers in Islamabad, speed wins deals. Implement our <a href="/blogs/create-travel-quotations-in-2-minutes">2-minute travel quotation workflow</a> and use the built-in <strong>Umrah Calculator</strong> inside TAMS Pro—open it from your sidebar, enter today's SAR-to-PKR rate, add Makkah and Madinah hotels by room sharing (Quad, Triple, or Double) plus visa, transport, and airfare, and push accurate per-person PKR tiers straight into a client quotation—so your agency responds first with clean, itemized options.</p>
 
 <h3>2. Turn Financial Reports Into Weekly Strategy</h3>
 
@@ -495,7 +495,7 @@ export const POSTS_7_TO_10 = [
 
 <p>True scale happens when your office runs smoothly even while you travel for supplier meetings or family events. Give counter agents sub-user accounts with clear permissions—creating quotes, logging bookings, issuing vouchers—while keeping sensitive financial controls, audit trails, and master settings protected under your owner login.</p>
 
-<blockquote><p><strong>Scale your travel agency on solid systems:</strong> Explore all TAMS Pro capabilities on our <a href="/features">Features page</a>, compare <a href="/pricing">PKR 999/month and PKR 9,999/year plans</a>, and <a href="/signup">create your free agency workspace</a>.</p></blockquote>
+<blockquote><p><strong>Scale your travel agency on solid systems:</strong> Explore all TAMS Pro capabilities on our <a href="/features">Features page</a>, compare <a href="/pricing">PKR 1,999/month and PKR 9,999/year (50% off yearly) plans</a>, and <a href="/signup">create your free agency workspace</a>.</p></blockquote>
 
 <h2>Your 4-Week Digital Modernization Checklist</h2>
 
@@ -540,6 +540,6 @@ export const POSTS_7_TO_10 = [
 <p>Overseas buyers expect fast WhatsApp PDF quotes, professional invoices, transparent receipt vouchers, and reliable follow-up—standards automated travel software makes effortless.</p>
 
 <h3>How much investment is needed to digitize a travel agency in Pakistan?</h3>
-<p>Starting costs just PKR 999/month or PKR 9,999/year (50% off) with TAMS Pro, requiring zero local servers or IT maintenance.</p>`,
+<p>Starting costs PKR 1,999/month, or PKR 9,999/year with 50% off exclusively on the yearly plan with TAMS Pro, requiring zero local servers or IT maintenance.</p>`,
   },
 ];

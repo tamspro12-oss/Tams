@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Mail, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Mail } from "lucide-react";
 import { generateBookingConfirmationPDF } from "@/lib/bookingPdfGenerator";
-import { sendEmail, createBookingEmailBody } from "@/lib/emailService";
-import { fetchAgencySmtpConfigured, useAgency } from "@/hooks/useAgency";
+import { createBookingEmailBody, jsPdfDocToBase64 } from "@/lib/emailService";
+import { useAgency } from "@/hooks/useAgency";
 import { useAgencyBranding } from "@/hooks/useAgencyBranding";
-import { parseSupabaseError } from "@/lib/supabaseErrorHandler";
+import {
+  SendDocumentEmailDialog,
+  type DocumentEmailPayload,
+} from "@/components/SendDocumentEmailDialog";
 import {
   Tooltip,
   TooltipContent,
@@ -21,161 +22,73 @@ interface EmailBookingButtonProps {
 }
 
 export function EmailBookingButton({ client, vendor }: EmailBookingButtonProps) {
-  const [isSending, setIsSending] = useState(false);
-  const { toast } = useToast();
+  const [emailPayload, setEmailPayload] = useState<DocumentEmailPayload | null>(null);
   const { data: agency } = useAgency();
   const { getBrandingAsync } = useAgencyBranding();
-  const queryClient = useQueryClient();
 
-  const handleEmailBooking = async () => {
-    if (isSending) return;
-    
-    console.log('[EmailBookingButton] Validating client email:', { 
-      clientId: client.id, 
-      clientName: client.name,
-      hasEmail: !!client.email,
-      email: client.email 
-    });
-
-    if (!client.email) {
-      console.error('[EmailBookingButton] Client email missing');
-      toast({
-        title: "Email Required",
-        description: "Please add an email address for this client first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const smtpConfigured = agency?.email
-      ? await queryClient.fetchQuery({
-          queryKey: ["agency-smtp-configured", agency?.id ?? "anonymous"],
-          queryFn: fetchAgencySmtpConfigured,
-          staleTime: 10 * 60 * 1000,
-        })
-      : false;
-
-    console.log('[EmailBookingButton] Validating agency SMTP config:', {
-      hasEmail: !!agency?.email,
-      hasPassword: smtpConfigured
-    });
-
-    if (!agency?.email || !smtpConfigured) {
-      console.error('[EmailBookingButton] Agency SMTP credentials missing');
-      toast({
-        title: "Email Not Configured",
-        description: "Add your Gmail App Password in Settings → Email Integration to send emails.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsSending(true);
-    console.log('[EmailBookingButton] Starting booking email process...');
-    try {
-      const branding = await getBrandingAsync();
-
-      // Generate PDF and get blob
-      const pdfResult = await generateBookingConfirmationPDF(client, vendor, branding);
-      const pdfBlob = pdfResult.doc.output('blob');
-      
-      // Convert blob to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          resolve(base64.split(',')[1]);
+  const handleOpenDialog = () => {
+    const safeSlug = String(client.pnr || client.name || "Confirmation").replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_"
+    );
+    setEmailPayload({
+      documentLabel: `Booking Confirmation — ${client.name || "Traveler"}`,
+      emailType: "booking",
+      defaultRecipientEmail: client.email || "",
+      recipientName: client.name || "Traveler",
+      clientId: client.id,
+      subject: `Booking Confirmation${agency?.name ? ` — ${agency.name}` : ""}`,
+      attachmentFileName: `Booking_${safeSlug}.pdf`,
+      buildPdfAndBody: async (agencyName) => {
+        const branding = await getBrandingAsync();
+        const pdfResult = await generateBookingConfirmationPDF(client, vendor, branding);
+        return {
+          pdfBase64: jsPdfDocToBase64(pdfResult.doc),
+          htmlBody: createBookingEmailBody({
+            clientName: client.name || "Traveler",
+            agencyName,
+            pnr: client.pnr || undefined,
+            destination: client.destination || undefined,
+            flightDate: client.flight_date
+              ? new Date(client.flight_date).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })
+              : undefined,
+            travelType: client.travel_type || undefined,
+          }),
         };
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(pdfBlob);
-      const base64Data = await base64Promise;
-
-      // Create email body
-      const emailBody = createBookingEmailBody({
-        clientName: client.name,
-        agencyName: agency.name,
-        pnr: client.pnr,
-        destination: client.destination,
-        flightDate: client.flight_date ? new Date(client.flight_date).toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        }) : undefined,
-        travelType: client.travel_type,
-      });
-
-      // Send email
-      const result = await sendEmail(
-        {
-          email: agency.email,
-          password: "",
-          contactEmail: agency.contact_email,
-        },
-        {
-          to: client.email,
-          subject: `Booking Confirmation - ${agency.name}`,
-          body: emailBody,
-          attachments: [
-            {
-              name: `Booking_${client.name}_${client.pnr || 'Confirmation'}.pdf`,
-              data: base64Data,
-            },
-          ],
-          emailType: 'booking',
-          clientId: client.id,
-        }
-      );
-
-      if (result.success) {
-        console.log('[EmailBookingButton] ✓ Booking email sent successfully');
-        toast({
-          title: "Email Sent",
-          description: `Booking confirmation sent to ${client.email}`,
-        });
-      } else {
-        console.warn('[EmailBookingButton] Email queued:', result.message);
-        toast({
-          title: "Email Queued",
-          description: result.message,
-          variant: "default",
-        });
-      }
-    } catch (error: unknown) {
-      console.error('[EmailBookingButton] ✗ Send failed:', error);
-      const parsed = parseSupabaseError(error, "Failed to send booking email");
-      toast({
-        title: "Error",
-        description: parsed.userMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
+      },
+    });
   };
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            onClick={handleEmailBooking}
-            disabled={isSending}
-          >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+    <>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={handleOpenDialog}
+              aria-label="Send Booking Confirmation by email"
+            >
               <Mail className="h-4 w-4" />
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Send Booking PDF via Email</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Send by email</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <SendDocumentEmailDialog
+        payload={emailPayload}
+        onClose={() => setEmailPayload(null)}
+      />
+    </>
   );
 }

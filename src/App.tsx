@@ -78,11 +78,14 @@ const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const PricingPage = lazyWithRetry(() => import("./pages/PricingPage"));
 const BlogsPage = lazyWithRetry(() => import("./pages/BlogsPage"));
 const BlogDetailPage = lazyWithRetry(() => import("./pages/BlogDetailPage"));
+const AboutPage = lazyWithRetry(() => import("./pages/AboutPage"));
+const FaqPage = lazyWithRetry(() => import("./pages/FaqPage"));
 const ContactPage = lazyWithRetry(() => import("./pages/ContactPage"));
 const LoginPage = lazyWithRetry(() => import("./pages/LoginPage"));
 const SignupPage = lazyWithRetry(() => import("./pages/SignupPage"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyWithRetry(() => import("./pages/TermsOfService"));
+const RefundPolicyPage = lazyWithRetry(() => import("./pages/RefundPolicyPage"));
 const Install = lazyWithRetry(() => import("./pages/Install"));
 const SubscriptionExpired = lazyWithRetry(() => import("./pages/SubscriptionExpired"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
@@ -197,16 +200,24 @@ const App = () => {
                     <Route path="/pricing" element={<RouteErrorBoundary routeName="Pricing"><PricingPage /></RouteErrorBoundary>} />
                     <Route path="/blogs" element={<RouteErrorBoundary routeName="Blogs"><BlogsPage /></RouteErrorBoundary>} />
                     <Route path="/blogs/:slug" element={<RouteErrorBoundary routeName="Blog Post"><BlogDetailPage /></RouteErrorBoundary>} />
+                    <Route path="/about" element={<RouteErrorBoundary routeName="About"><AboutPage /></RouteErrorBoundary>} />
+                    <Route path="/faq" element={<RouteErrorBoundary routeName="FAQ"><FaqPage /></RouteErrorBoundary>} />
                     <Route path="/contact" element={<RouteErrorBoundary routeName="Contact"><ContactPage /></RouteErrorBoundary>} />
                     <Route path="/login" element={<RouteErrorBoundary routeName="Login"><LoginPage /></RouteErrorBoundary>} />
                     <Route path="/signup" element={<RouteErrorBoundary routeName="Sign Up"><SignupPage /></RouteErrorBoundary>} />
                     <Route path="/privacy" element={<RouteErrorBoundary routeName="Privacy Policy"><PrivacyPolicy /></RouteErrorBoundary>} />
-                    <Route path="/terms" element={<RouteErrorBoundary routeName="Terms of Service"><TermsOfService /></RouteErrorBoundary>} />
+                    <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
+                    <Route path="/terms" element={<RouteErrorBoundary routeName="Terms & Conditions"><TermsOfService /></RouteErrorBoundary>} />
+                    <Route path="/terms-and-conditions" element={<Navigate to="/terms" replace />} />
+                    <Route path="/refund-policy" element={<RouteErrorBoundary routeName="Refund Policy"><RefundPolicyPage /></RouteErrorBoundary>} />
+                    <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
+                    <Route path="/cancellation-policy" element={<Navigate to="/refund-policy" replace />} />
                     <Route path="/install" element={<RouteErrorBoundary routeName="Install"><Install /></RouteErrorBoundary>} />
                     <Route path="/subscription-expired" element={<RouteErrorBoundary routeName="Subscription Expired"><SubscriptionExpired /></RouteErrorBoundary>} />
                     <Route path="/reset-password" element={<RouteErrorBoundary routeName="Reset Password"><ResetPassword /></RouteErrorBoundary>} />
                     <Route path="/auth/callback" element={<RouteErrorBoundary routeName="Auth Callback"><AuthCallbackPage /></RouteErrorBoundary>} />
                     <Route path="/verify-email" element={<RouteErrorBoundary routeName="Verify Email"><AuthCallbackPage /></RouteErrorBoundary>} />
+                    <Route path="/confirm-email" element={<RouteErrorBoundary routeName="Confirm Email"><AuthCallbackPage /></RouteErrorBoundary>} />
 
                     <Route path="/auth" element={<Navigate to="/login" replace />} />
                     <Route path="/public" element={<Navigate to="/" replace />} />

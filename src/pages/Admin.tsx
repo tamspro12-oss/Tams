@@ -1,18 +1,20 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Shield, UserCircle2, Loader2, Users, FileText, LayoutTemplate } from "lucide-react";
+import { Shield, UserCircle2, Loader2, Users, FileText, LayoutTemplate, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { AdminUserManagement } from "@/components/AdminUserManagement";
 import { AdminBlogManager } from "@/components/admin/AdminBlogManager";
 import { AdminSiteContentManager } from "@/components/admin/AdminSiteContentManager";
+import { AdminSystemEmailManager } from "@/components/admin/AdminSystemEmailManager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
-type AdminTab = "users" | "blogs" | "site-content";
+type AdminTab = "users" | "blogs" | "site-content" | "system-email";
 
 function parseAdminTab(raw: string | null): AdminTab {
   if (raw === "blogs") return "blogs";
   if (raw === "site-content") return "site-content";
+  if (raw === "system-email") return "system-email";
   return "users";
 }
 
@@ -46,7 +48,11 @@ export default function Admin() {
 
   const handleTabChange = (nextTab: string) => {
     const nextParams = new URLSearchParams(searchParams);
-    if (nextTab === "blogs" || nextTab === "site-content") {
+    if (
+      nextTab === "blogs" ||
+      nextTab === "site-content" ||
+      nextTab === "system-email"
+    ) {
       nextParams.set("tab", nextTab);
     } else {
       nextParams.delete("tab");
@@ -64,7 +70,7 @@ export default function Admin() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Admin Panel</h1>
             <p className="text-muted-foreground mt-1">
-              Manage users, subscriptions, blog articles, and public site content
+              Manage users, subscriptions, blog articles, public site content, and system email
             </p>
           </div>
         </div>
@@ -74,13 +80,13 @@ export default function Admin() {
         <div className="flex items-center gap-2">
           <UserCircle2 className="h-5 w-5 text-primary" />
           <p className="text-sm font-medium text-primary">
-            Super Admin Access: Manage agency accounts, publish blog posts, and update landing &amp; pricing copy
+            Super Admin Access: Manage agency accounts, publish blog posts, update landing &amp; pricing copy, and monitor System Email
           </p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+        <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
             <span>Users &amp; Plans</span>
@@ -92,6 +98,10 @@ export default function Admin() {
           <TabsTrigger value="site-content" className="gap-2">
             <LayoutTemplate className="h-4 w-4" />
             <span>Landing &amp; Pricing</span>
+          </TabsTrigger>
+          <TabsTrigger value="system-email" className="gap-2">
+            <Mail className="h-4 w-4" />
+            <span>System Email</span>
           </TabsTrigger>
         </TabsList>
 
@@ -105,6 +115,10 @@ export default function Admin() {
 
         <TabsContent value="site-content">
           <AdminSiteContentManager />
+        </TabsContent>
+
+        <TabsContent value="system-email">
+          <AdminSystemEmailManager />
         </TabsContent>
       </Tabs>
     </div>

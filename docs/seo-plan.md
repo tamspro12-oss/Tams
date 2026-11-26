@@ -1,6 +1,6 @@
 # TAMS Pro (`tamspro.online`) — 30-Day SEO & Growth Plan for Pakistan
 
-Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms (English & Roman Urdu) and convert organic search + social traffic into **PKR 999/month** and **PKR 9,999/year** subscribers.
+Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms (English & Roman Urdu) and convert organic search + social traffic into **PKR 1,999/month** and **PKR 9,999/year (50% off on the yearly plan)** subscribers.
 
 ---
 
@@ -39,13 +39,13 @@ Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms
 
 ### Week 2: Backlinks, Directories & Community Distribution
 - **Day 8–10:** Submit `tamspro.online` to Pakistani & global SaaS/business directories (see Section 4 below).
-- **Day 11–12:** Post helpful educational summaries (not spammy ads!) from Blog #4 (2-Min Quotes) and Blog #7 (Umrah Cost Calculator) in Pakistani travel agent Facebook & LinkedIn groups, linking back to the guides and `https://umrahcal.online`.
+- **Day 11–12:** Post helpful educational summaries (not spammy ads!) from Blog #4 (2-Min Quotes) and Blog #7 (Umrah Cost Calculator) in Pakistani travel agent Facebook & LinkedIn groups, linking back to the guides and TAMS Pro's built-in Umrah Calculator (`https://tamspro.online/features`).
 - **Day 13–14:** Record two 45-second vertical screen-demo reels (TikTok / Instagram Reels / YouTube Shorts):
-  1. *"Create an Umrah Hotel Voucher & Invoice in 45 Seconds (PKR 999/mo)"*
+  1. *"Create an Umrah Hotel Voucher & Invoice in 45 Seconds (PKR 1,999/mo)"*
   2. *"Stop Losing PKR on Paper Khatas — Travel Ledger Demo"*
 
 ### Week 3: Cross-Linking, New Content & Conversion Optimization
-- **Day 15–17:** Add a subtle footer/resource backlink from `https://umrahcal.online` pointing to `https://tamspro.online/blogs/umrah-cost-calculator-price-packages-profitably` and `https://tamspro.online/pricing`.
+- **Day 15–17:** Add internal links across public guides pointing to `https://tamspro.online/blogs/umrah-cost-calculator-price-packages-profitably` and `https://tamspro.online/pricing`.
 - **Day 18–19:** Publish 2 fresh blog posts from the 15-idea backlog below using `/app/admin?tab=blogs`.
 - **Day 20–21:** Check Google Search Console **Performance** & **Pages** reports to see initial impressions, fix any crawl warnings, and verify WhatsApp lead submissions in `blog_leads`.
 
@@ -84,7 +84,7 @@ Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms
   - Connect with TAAP (Travel Agents Association of Pakistan) and HOAP member agencies via LinkedIn & regional chapters (Lahore, Karachi, Islamabad).
   - Answer genuine operational questions on Quora, Reddit (`r/Pakistan`, `r/PakStartups`), and Pakistani small-business Facebook communities with non-promotional insights linking back to relevant TAMS Pro blog guides.
 - **Ecosystem Cross-Linking:**
-  - Cross-link cleanly between **TAMS Pro (`tamspro.online`)** and **UmrahCal (`umrahcal.online`)** where relevant to Umrah costing and full agency management.
+  - Cross-link cleanly between **TAMS Pro (`tamspro.online`)** feature guides, the built-in **Umrah Calculator**, and `/pricing` where relevant to Umrah costing and full agency management.
 - **WhatsApp & YouTube Distribution:**
   - Create a dedicated YouTube channel (`TAMS Pro Pakistan`) with 2-minute Urdu/English tutorials for every module; link the matching `/blogs/<slug>` and `/signup` URL in every video description.
 
@@ -97,7 +97,7 @@ Goal: Rank `tamspro.online` for high-intent Pakistani travel agency search terms
 | **Monday** | Blog (`/app/admin?tab=blogs`) | Publish 1 new SEO article (1,200+ words) + submit URL in Search Console |
 | **Tuesday** | Facebook & LinkedIn | Share Monday's blog post using FB/LinkedIn caption + link |
 | **Wednesday** | TikTok / Reels / Shorts | Post 45s screen-recording tip based on the week's topic |
-| **Thursday** | WhatsApp Business Status | Share quick visual tip + "Reply DEMO for PKR 999/mo walkthrough" |
+| **Thursday** | WhatsApp Business Status | Share quick visual tip + "Reply DEMO for PKR 1,999/mo walkthrough" |
 | **Friday** | Travel Communities | Answer 3–5 agent questions in groups; share helpful calculator/guide links |
 | **Saturday** | Search Console Check | Review top queries, impressions, CTR, and incoming `blog_leads` |
 
