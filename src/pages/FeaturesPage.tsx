@@ -43,7 +43,7 @@ const FEATURES_DATA: FeatureDef[] = [
 
 function FeaturesPageContent() {
   return (
-    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
+    <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Features — TAMS Pro Travel Agency Management System"
         description="Explore core operational modules: bookings, visas, vouchers, parties, expenses, Umrah calculator, and branded invoices."
@@ -55,7 +55,7 @@ function FeaturesPageContent() {
       <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between gap-10">
         {/* Top Heading */}
         <div className="text-center">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#0F172A] tracking-tight">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[var(--ink,#0B1F2A)] tracking-tight">
             Everything your agency needs
           </h1>
         </div>
@@ -79,10 +79,10 @@ function FeaturesPageContent() {
           <Link to="/login" className="w-full sm:w-auto">
             <Button
               size="lg"
-              className="tams-btn-primary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all group"
+              className="tams-btn-primary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold gap-2 bg-[var(--primary,#0F5C63)] text-white hover:bg-[var(--primary-hover,#0B4A50)] shadow-sm group"
             >
               <span>Login</span>
-              <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
+              <ArrowRight className="w-4 h-4 text-[#E4F2EF] group-hover:translate-x-0.5 group-hover:transition-transform group-hover:duration-200" strokeWidth={1.75} />
             </Button>
           </Link>
 
@@ -90,7 +90,7 @@ function FeaturesPageContent() {
             <Button
               variant="outline"
               size="lg"
-              className="tams-btn-secondary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold bg-white border border-[#CBD5E1] text-[#0F172A] hover:bg-[#F1F5F9] transition-all"
+              className="tams-btn-secondary w-full sm:w-auto h-11 px-6 rounded-xl text-sm font-semibold bg-[var(--card,#FFFFFF)] border border-[var(--border,#E5E0D3)] text-[var(--ink,#0B1F2A)]"
             >
               Sign Up Free
             </Button>

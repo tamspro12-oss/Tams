@@ -101,7 +101,7 @@ function FaqPageContent() {
   );
 
   return (
-    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
+    <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="FAQ — TAMS Pro Travel Agency Management System"
         description="Frequently asked questions about TAMS Pro pricing, data security, Umrah Calculator, agency Gmail setup, and subscriptions."
@@ -113,28 +113,32 @@ function FaqPageContent() {
 
       <main className="flex-1 py-10 sm:py-14 px-4 sm:px-6 lg:px-8 max-w-[920px] mx-auto w-full space-y-8 sm:space-y-10">
         <div className="text-center max-w-2xl mx-auto">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 text-[#0F5E63] flex items-center justify-center mx-auto mb-4 shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--tint,#E4F2EF)] border border-[var(--border,#E5E0D3)] text-[var(--primary,#0F5C63)] flex items-center justify-center mx-auto mb-4 shadow-xs">
             <HelpCircle className="w-5 h-5" strokeWidth={1.75} />
           </div>
-          <span className="text-xs font-semibold tracking-widest uppercase text-[#0F5E63] block mb-2">
+          <span className="text-xs font-semibold tracking-widest uppercase text-[var(--primary,#0F5C63)] block mb-2">
             FREQUENTLY ASKED QUESTIONS
           </span>
-          <h1 className="text-3xl sm:text-4xl font-bold text-[#0F172A] tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold text-[var(--ink,#0B1F2A)] tracking-tight">
             Clear answers for travel agencies
           </h1>
-          <p className="mt-3 text-sm sm:text-base text-[#475569]">
+          <p className="mt-3 text-sm sm:text-base text-[var(--body,#4A5A63)]">
             Everything you need to know about plans, security, accounting, and setup on TAMS Pro.
           </p>
         </div>
 
-        <div className="tams-card rounded-2xl bg-white p-5 sm:p-8">
-          <Accordion type="single" collapsible className="w-full divide-y divide-slate-200/80">
+        <div className="tams-card rounded-2xl bg-[var(--card,#FFFFFF)] p-5 sm:p-8">
+          <Accordion type="single" collapsible className="w-full divide-y divide-[var(--border,#E5E0D3)]">
             {FAQ_ENTRIES.map((item) => (
-              <AccordionItem key={item.id} value={item.id} className="border-none">
-                <AccordionTrigger className="py-4 text-left text-sm sm:text-base font-semibold text-[#0F172A] hover:text-[#0F5E63] hover:no-underline">
+              <AccordionItem
+                key={item.id}
+                value={item.id}
+                className="tams-faq-item border-none rounded-xl px-3 sm:px-4"
+              >
+                <AccordionTrigger className="tams-faq-trigger py-4 text-left text-sm sm:text-base font-semibold text-[var(--ink,#0B1F2A)] hover:text-[var(--primary,#0F5C63)] hover:no-underline">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="pb-4 text-xs sm:text-sm text-[#475569] leading-relaxed">
+                <AccordionContent className="pb-4 text-xs sm:text-sm text-[var(--body,#4A5A63)] leading-relaxed">
                   {item.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -142,17 +146,17 @@ function FaqPageContent() {
           </Accordion>
         </div>
 
-        <div className="tams-card tams-banner-card rounded-2xl bg-white p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="tams-card tams-banner-card rounded-2xl bg-[var(--card,#FFFFFF)] p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-[#0F172A]">
+            <h2 className="text-base sm:text-lg font-bold text-[var(--ink,#0B1F2A)]">
               Still have a question?
             </h2>
-            <p className="text-xs sm:text-sm text-[#475569] mt-1 flex items-center gap-1.5">
-              <Mail className="w-4 h-4 text-[#0F5E63] shrink-0" />
+            <p className="text-xs sm:text-sm text-[var(--body,#4A5A63)] mt-1 flex items-center gap-1.5">
+              <Mail className="w-4 h-4 text-[var(--primary,#0F5C63)] shrink-0" />
               <span>Write to us at</span>
               <a
                 href={CONTACT_CHANNELS.email.href}
-                className="font-semibold text-[#0F5E63] hover:underline"
+                className="font-semibold text-[var(--primary,#0F5C63)] hover:underline"
               >
                 {CONTACT_CHANNELS.email.value}
               </a>
@@ -169,9 +173,9 @@ function FaqPageContent() {
               </Button>
             </Link>
             <Link to="/signup">
-              <Button className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[#0F5E63] text-white hover:bg-[#0B4A4E]">
+              <Button className="tams-btn-primary h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold gap-1.5 bg-[var(--primary,#0F5C63)] text-white hover:bg-[var(--primary-hover,#0B4A50)]">
                 <span>Start Free Trial</span>
-                <ArrowRight className="w-4 h-4 text-teal-100" strokeWidth={1.75} />
+                <ArrowRight className="w-4 h-4 text-[#E4F2EF]" strokeWidth={1.75} />
               </Button>
             </Link>
           </div>
@@ -190,4 +194,3 @@ export default function FaqPage() {
     </PublicErrorBoundary>
   );
 }
-

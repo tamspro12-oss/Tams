@@ -11,7 +11,7 @@ import { CONTACT_CHANNELS } from "@/config/marketingContent";
 
 function ContactPageContent() {
   return (
-    <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
+    <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Contact — TAMS Pro Travel Agency Management System"
         description="Get in touch with TAMS Pro support, sales, and account onboarding."
@@ -23,10 +23,10 @@ function ContactPageContent() {
       <main className="flex-1 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full flex flex-col justify-between">
         {/* Header */}
         <div className="text-center mb-10 sm:mb-12">
-          <span className="text-xs font-semibold tracking-widest uppercase text-[#0F5E63] block mb-2.5">
+          <span className="text-xs font-semibold tracking-widest uppercase text-[var(--primary,#0F5C63)] block mb-2.5">
             CONTACT
           </span>
-          <h1 className="text-3xl sm:text-5xl font-bold text-[#0F172A] tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-bold text-[var(--ink,#0B1F2A)] tracking-tight">
             Get in touch
           </h1>
         </div>
@@ -55,15 +55,15 @@ function ContactPageContent() {
           </div>
 
           {/* Under it: Full-width rounded-2xl horizontal banner */}
-          <div className="tams-card tams-banner-card rounded-2xl p-6 sm:p-8 bg-white flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="tams-card tams-banner-card rounded-2xl p-6 sm:p-8 bg-[var(--card,#FFFFFF)] flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-[#0F172A] tracking-tight">
+              <h2 className="text-base sm:text-lg font-bold text-[var(--ink,#0B1F2A)] tracking-tight">
                 Request account access
               </h2>
-              <p className="text-xs sm:text-sm text-[#475569] mt-1">
+              <p className="text-xs sm:text-sm text-[var(--body,#4A5A63)] mt-1">
                 Create your agency account to get started immediately.
               </p>
-              <p className="text-xs text-[#64748B] mt-1.5 font-normal">
+              <p className="text-xs text-[var(--body,#4A5A63)] mt-1.5 font-normal">
                 Replies within 24 hours.
               </p>
             </div>
@@ -71,10 +71,10 @@ function ContactPageContent() {
             <Link to="/signup" className="w-full md:w-auto shrink-0">
               <Button
                 size="lg"
-                className="tams-btn-primary group w-full md:w-auto h-11 px-6 rounded-xl text-xs sm:text-sm font-semibold gap-2 bg-[#0F5E63] text-white hover:bg-[#0B4A4E] shadow-sm hover:shadow-md transition-all"
+                className="tams-btn-primary group w-full md:w-auto h-11 px-6 rounded-xl text-xs sm:text-sm font-semibold gap-2 bg-[var(--primary,#0F5C63)] text-white hover:bg-[var(--primary-hover,#0B4A50)] shadow-sm"
               >
                 <span>Sign Up Free</span>
-                <ArrowRight className="w-4 h-4 text-teal-100 transition-transform duration-150 group-hover:translate-x-0.5" strokeWidth={1.75} />
+                <ArrowRight className="w-4 h-4 text-[#E4F2EF] group-hover:translate-x-0.5 group-hover:transition-transform group-hover:duration-200" strokeWidth={1.75} />
               </Button>
             </Link>
           </div>

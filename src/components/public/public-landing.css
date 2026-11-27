@@ -1,17 +1,34 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 /* ==========================================================================
-   TAMS PRO — Scoped Public Marketing Design System (.tams-public-landing)
-   Strictly isolated to /, /features, /pricing, /blogs, /contact and PublicHeader/Footer.
-   Does not affect /app/* or any logged-in dashboard view.
+   TAMS PRO — Scoped Public Marketing Design System (.public-site)
+   Strictly isolated to Home, Features, Pricing, Blogs, FAQ, About, Contact,
+   and their shared PublicHeader and PublicFooter.
+   Does NOT edit global :root variables, Login, Sign Up, or /app/* portal.
    ========================================================================== */
 
+.public-site {
+  --primary: #0F5C63;
+  --primary-hover: #0B4A50;
+  --accent: #C9A24B;
+  --bg: #F8F5EE;
+  --card: #FFFFFF;
+  --tint: #E4F2EF;
+  --ink: #0B1F2A;
+  --body: #4A5A63;
+  --border: #E5E0D3;
+  --hero-from: #0A2A30;
+  --hero-to: #0F5C63;
+}
+
+.public-site,
+.public-site.min-h-screen,
 .tams-public-landing,
 .tams-public-landing.min-h-screen {
-  background-color: #F8FAFC !important;
-  background-image: radial-gradient(ellipse 80% 50% at 50% -5%, rgba(13, 148, 136, 0.08), transparent 65%) !important;
+  background-color: var(--bg, #F8F5EE) !important;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -5%, rgba(15, 92, 99, 0.06), transparent 65%) !important;
   background-repeat: no-repeat !important;
-  color: #0F172A !important;
+  color: var(--ink, #0B1F2A) !important;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
   min-height: 100vh !important;
   height: auto !important;
@@ -20,12 +37,19 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+.public-site main,
 .tams-public-landing main {
   background-color: transparent !important;
   background: transparent !important;
   height: auto !important;
 }
 
+.public-site h1,
+.public-site h2,
+.public-site h3,
+.public-site h4,
+.public-site h5,
+.public-site h6,
 .tams-public-landing h1,
 .tams-public-landing h2,
 .tams-public-landing h3,
@@ -33,127 +57,221 @@
 .tams-public-landing h5,
 .tams-public-landing h6 {
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   letter-spacing: -0.025em;
 }
 
+/* Home Hero: Dark gradient (hero-from to hero-to) with soft gold radial glow in top-right corner */
+.public-site .tams-home-hero {
+  background-color: var(--hero-from, #0A2A30) !important;
+  background-image:
+    radial-gradient(circle at 88% 14%, rgba(201, 162, 75, 0.24) 0%, rgba(201, 162, 75, 0.08) 28%, transparent 58%),
+    linear-gradient(135deg, var(--hero-from, #0A2A30) 0%, var(--hero-to, #0F5C63) 100%) !important;
+  border: 1px solid rgba(201, 162, 75, 0.28) !important;
+  box-shadow: 0 8px 30px rgba(15, 92, 99, 0.16) !important;
+}
+
+.public-site .tams-home-hero h1 {
+  color: #FFFFFF !important;
+}
+
+.public-site .tams-home-hero .tams-hero-subtext {
+  color: #CFE3E0 !important;
+}
+
+/* Home Hero Buttons: Login button gold with dark text; Sign Up Free white outline */
+.public-site .tams-btn-hero-gold {
+  background-color: var(--accent, #C9A24B) !important;
+  color: var(--ink, #0B1F2A) !important;
+  border: 1px solid var(--accent, #C9A24B) !important;
+  box-shadow: 0 4px 16px rgba(10, 42, 48, 0.24) !important;
+  transition: none;
+}
+
+.public-site .tams-btn-hero-gold:hover {
+  background-color: #D4AF5A !important;
+  border-color: #D4AF5A !important;
+  color: var(--ink, #0B1F2A) !important;
+  box-shadow: 0 6px 20px rgba(201, 162, 75, 0.32) !important;
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.public-site .tams-btn-hero-outline {
+  background-color: transparent !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow: none !important;
+  transition: none;
+}
+
+.public-site .tams-btn-hero-outline:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent, #C9A24B) !important;
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
 /* Restore Tailwind border-radius utilities inside public pages only */
+.public-site .rounded-sm,
 .tams-public-landing .rounded-sm {
   border-radius: 0.125rem !important;
 }
 
+.public-site .rounded,
 .tams-public-landing .rounded {
   border-radius: 0.25rem !important;
 }
 
+.public-site .rounded-md,
 .tams-public-landing .rounded-md {
   border-radius: 0.375rem !important;
 }
 
+.public-site .rounded-lg,
 .tams-public-landing .rounded-lg {
   border-radius: 0.5rem !important;
 }
 
+.public-site .rounded-xl,
 .tams-public-landing .rounded-xl {
   border-radius: 0.75rem !important;
 }
 
+.public-site .rounded-2xl,
 .tams-public-landing .rounded-2xl {
   border-radius: 1rem !important;
 }
 
+.public-site .rounded-3xl,
 .tams-public-landing .rounded-3xl {
   border-radius: 1.5rem !important;
 }
 
+.public-site .rounded-full,
 .tams-public-landing .rounded-full {
   border-radius: 9999px !important;
 }
 
 /* Override global yellow search-input rule from index.css on public marketing pages */
+.public-site .tams-public-search-input,
 .tams-public-landing .tams-public-search-input {
-  background-color: #FFFFFF !important;
-  color: #0F172A !important;
-  border: 1px solid #CBD5E1 !important;
+  background-color: var(--card, #FFFFFF) !important;
+  color: var(--ink, #0B1F2A) !important;
+  border: 1px solid var(--border, #E5E0D3) !important;
   font-weight: 400 !important;
 }
 
+.public-site .tams-public-search-input::placeholder,
 .tams-public-landing .tams-public-search-input::placeholder {
-  color: #64748B !important;
-  opacity: 1 !important;
+  color: var(--body, #4A5A63) !important;
+  opacity: 0.85 !important;
 }
 
+.public-site .tams-public-search-input:focus,
 .tams-public-landing .tams-public-search-input:focus {
-  border-color: #0F5E63 !important;
-  box-shadow: 0 0 0 3px rgba(15, 94, 99, 0.12) !important;
+  border-color: var(--primary, #0F5C63) !important;
+  box-shadow: 0 0 0 3px rgba(15, 92, 99, 0.14) !important;
   outline: none !important;
 }
 
-/* Luxury Card Surface */
+/* White cards, 1px --border, soft shadow (0 8px 30px rgba(15,92,99,.08)); card hover lifts slightly with a gold border */
+.public-site .tams-card,
 .tams-public-landing .tams-card {
-  background-color: #FFFFFF !important;
-  border: 1px solid rgba(15, 23, 42, 0.08) !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 16px -2px rgba(15, 23, 42, 0.04);
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-color: var(--card, #FFFFFF) !important;
+  border: 1px solid var(--border, #E5E0D3) !important;
+  box-shadow: 0 8px 30px rgba(15, 92, 99, 0.08) !important;
 }
 
+.public-site .tams-card:hover,
+.public-site .tams-card-interactive:hover,
 .tams-public-landing .tams-card-interactive:hover {
-  transform: translateY(-4px);
-  border-color: rgba(20, 184, 166, 0.35) !important;
-  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(13, 148, 136, 0.06);
+  transform: translateY(-3px);
+  border-color: var(--accent, #C9A24B) !important;
+  box-shadow: 0 12px 34px rgba(15, 92, 99, 0.12) !important;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-/* Featured Pricing Card */
+/* Featured Yearly Pricing Card: --primary border, faint tint gradient, gold hover accent */
+.public-site .tams-card-featured,
 .tams-public-landing .tams-card-featured {
-  background-color: #FFFFFF !important;
-  border: 2px solid rgba(13, 148, 136, 0.8) !important;
-  box-shadow: 0 20px 25px -5px rgba(19, 78, 74, 0.06), 0 8px 10px -6px rgba(19, 78, 74, 0.04);
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-color: var(--card, #FFFFFF) !important;
+  background-image: linear-gradient(180deg, rgba(228, 242, 239, 0.55) 0%, #FFFFFF 48%) !important;
+  border: 2px solid var(--primary, #0F5C63) !important;
+  box-shadow: 0 8px 30px rgba(15, 92, 99, 0.12) !important;
 }
 
+.public-site .tams-card-featured:hover,
 .tams-public-landing .tams-card-featured:hover {
-  transform: translateY(-4px);
-  border-color: #0D9488 !important;
-  box-shadow: 0 24px 32px -6px rgba(19, 78, 74, 0.1), 0 10px 14px -6px rgba(19, 78, 74, 0.06);
+  transform: translateY(-3px);
+  border-color: var(--accent, #C9A24B) !important;
+  box-shadow: 0 14px 36px rgba(15, 92, 99, 0.16) !important;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-/* Primary & Secondary Buttons */
+/* Blog Card Header Cover: Teal gradient (hero-from to hero-to) */
+.public-site .tams-blog-cover {
+  background-color: var(--hero-from, #0A2A30) !important;
+  background-image: linear-gradient(135deg, var(--hero-from, #0A2A30) 0%, var(--hero-to, #0F5C63) 100%) !important;
+}
+
+/* Primary & Secondary Buttons (Overrides global index.css submit button rule inside .public-site) */
+.public-site .tams-btn-primary,
+.public-site button[type="submit"].tams-btn-primary,
 .tams-public-landing .tams-btn-primary {
-  background-color: #0F5E63 !important;
+  background-color: var(--primary, #0F5C63) !important;
   color: #FFFFFF !important;
-  border: 1px solid #0F5E63 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 94, 99, 0.18);
-  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  border: 1px solid var(--primary, #0F5C63) !important;
+  box-shadow: 0 2px 8px rgba(15, 92, 99, 0.18) !important;
 }
 
+.public-site .tams-btn-primary:hover,
+.public-site button[type="submit"].tams-btn-primary:hover,
 .tams-public-landing .tams-btn-primary:hover {
-  background-color: #0B4A4E !important;
-  border-color: #0B4A4E !important;
+  background-color: var(--primary-hover, #0B4A50) !important;
+  border-color: var(--primary-hover, #0B4A50) !important;
   color: #FFFFFF !important;
-  box-shadow: 0 4px 12px rgba(15, 94, 99, 0.25);
+  box-shadow: 0 4px 14px rgba(15, 92, 99, 0.26) !important;
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
+.public-site .tams-btn-secondary,
 .tams-public-landing .tams-btn-secondary {
-  background-color: #FFFFFF !important;
-  color: #0F172A !important;
-  border: 1px solid #CBD5E1 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-color: var(--card, #FFFFFF) !important;
+  color: var(--ink, #0B1F2A) !important;
+  border: 1px solid var(--border, #E5E0D3) !important;
+  box-shadow: 0 1px 2px rgba(11, 31, 42, 0.04) !important;
 }
 
+.public-site .tams-btn-secondary:hover,
 .tams-public-landing .tams-btn-secondary:hover {
-  background-color: #F1F5F9 !important;
-  color: #0F172A !important;
-  border-color: #94A3B8 !important;
+  background-color: var(--tint, #E4F2EF) !important;
+  color: var(--ink, #0B1F2A) !important;
+  border-color: var(--accent, #C9A24B) !important;
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
+/* FAQ Accordion Rows: white rows, gold chevron, open row gets --tint background */
+.public-site .tams-faq-item {
+  background-color: var(--card, #FFFFFF) !important;
+  border-color: var(--border, #E5E0D3) !important;
+}
+
+.public-site .tams-faq-item[data-state="open"] {
+  background-color: var(--tint, #E4F2EF) !important;
+}
+
+.public-site .tams-faq-trigger > svg {
+  color: var(--accent, #C9A24B) !important;
+}
+
+.public-site .tams-faq-trigger:hover {
+  color: var(--primary, #0F5C63) !important;
+  transition: color 200ms ease;
 }
 
 /* Public Blog Article Typography */
 .tams-blog-prose {
-  color: #334155;
+  color: var(--body, #4A5A63);
   font-size: 1.03125rem;
   line-height: 1.8;
   overflow-wrap: break-word;
@@ -166,7 +284,7 @@
 .tams-blog-prose h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   margin-top: 2rem;
   margin-bottom: 0.75rem;
   line-height: 1.25;
@@ -175,7 +293,7 @@
 .tams-blog-prose h2 {
   font-size: 1.45rem;
   font-weight: 700;
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   margin-top: 1.85rem;
   margin-bottom: 0.65rem;
   line-height: 1.3;
@@ -184,7 +302,7 @@
 .tams-blog-prose h3 {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
   line-height: 1.35;
@@ -193,7 +311,7 @@
 .tams-blog-prose h4 {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   margin-top: 1.25rem;
   margin-bottom: 0.45rem;
 }
@@ -222,16 +340,16 @@
 
 .tams-blog-prose strong,
 .tams-blog-prose b {
-  color: #0F172A;
+  color: var(--ink, #0B1F2A);
   font-weight: 600;
 }
 
 .tams-blog-prose blockquote {
   margin: 1.5rem 0;
   padding: 0.9rem 1.25rem;
-  border-left: 3px solid #0F5E63;
-  background-color: #F0FDFA;
-  color: #134E4A;
+  border-left: 3px solid var(--accent, #C9A24B);
+  background-color: var(--tint, #E4F2EF);
+  color: var(--ink, #0B1F2A);
   border-radius: 0.75rem !important;
 }
 
@@ -240,17 +358,17 @@
 }
 
 .tams-blog-prose a {
-  color: #0F5E63;
+  color: var(--primary, #0F5C63);
   font-weight: 600;
   text-decoration: underline;
-  text-decoration-color: rgba(15, 94, 99, 0.35);
+  text-decoration-color: rgba(15, 92, 99, 0.35);
   text-underline-offset: 3px;
-  transition: color 150ms ease, text-decoration-color 150ms ease;
 }
 
 .tams-blog-prose a:hover {
-  color: #0B4A4E;
-  text-decoration-color: #0B4A4E;
+  color: var(--primary-hover, #0B4A50);
+  text-decoration-color: var(--accent, #C9A24B);
+  transition: color 200ms ease, text-decoration-color 200ms ease;
 }
 
 .tams-blog-prose img {
@@ -259,15 +377,15 @@
   height: auto;
   margin: 1.5rem auto;
   border-radius: 1rem !important;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--border, #E5E0D3);
+  box-shadow: 0 8px 30px rgba(15, 92, 99, 0.08);
 }
 
 .tams-blog-prose code {
   font-family: 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
   font-size: 0.875em;
-  background-color: #F1F5F9;
-  color: #0F5E63;
+  background-color: var(--tint, #E4F2EF);
+  color: var(--primary, #0F5C63);
   padding: 0.15rem 0.4rem;
   border-radius: 0.375rem !important;
 }
@@ -275,8 +393,8 @@
 .tams-blog-prose pre {
   margin: 1.25rem 0;
   padding: 1rem;
-  background-color: #0F172A;
-  color: #F8FAFC;
+  background-color: var(--hero-from, #0A2A30);
+  color: #F8F5EE;
   border-radius: 0.75rem !important;
   overflow-x: auto;
 }
@@ -290,60 +408,72 @@
 .tams-blog-prose hr {
   margin: 2rem 0;
   border: 0;
-  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  border-top: 1px solid var(--border, #E5E0D3);
 }
 
 /* Protect public pages from global mobile table/dashboard overrides (strictly < 768px) */
 @media (max-width: 767px) {
+  .public-site,
+  .public-site.min-h-screen,
   .tams-public-landing,
   .tams-public-landing.min-h-screen {
     overflow-x: clip !important;
   }
 
+  .public-site main,
   .tams-public-landing main {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
 
+  .public-site .tams-pricing-card,
   .tams-public-landing .tams-pricing-card {
     padding: 1.25rem !important;
   }
 
+  .public-site .tams-banner-card,
   .tams-public-landing .tams-banner-card {
     padding: 1.5rem !important;
   }
 
+  .public-site .tams-grid-gap,
   .tams-public-landing .tams-grid-gap {
     gap: 0.875rem !important;
   }
 
+  .public-site .tams-pricing-gap,
   .tams-public-landing .tams-pricing-gap {
     gap: 1.25rem !important;
   }
 }
 
 @media (min-width: 640px) {
+  .public-site main,
   .tams-public-landing main {
     padding-left: 1.5rem !important;
     padding-right: 1.5rem !important;
   }
 
+  .public-site .tams-pricing-card,
   .tams-public-landing .tams-pricing-card {
     padding: 1.25rem !important;
   }
 
+  .public-site .tams-grid-gap,
   .tams-public-landing .tams-grid-gap {
     gap: 1rem !important;
   }
 }
 
 @media (min-width: 768px) {
+  .public-site .tams-pricing-card,
   .tams-public-landing .tams-pricing-card {
     padding: 1.25rem 1.5rem !important;
   }
 }
 
 @media (min-width: 1024px) {
+  .public-site main,
   .tams-public-landing main {
     padding-left: 2rem !important;
     padding-right: 2rem !important;
@@ -352,22 +482,28 @@
 
 /* Preserve responsive multi-column grids on touch devices inside public landing */
 @media (hover: none) and (pointer: coarse) {
+  .public-site main .tams-home-strip-grid,
   .tams-public-landing main .tams-home-strip-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-features-grid,
   .tams-public-landing main .tams-features-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-pricing-grid,
   .tams-public-landing main .tams-pricing-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-contact-grid,
   .tams-public-landing main .tams-contact-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-blogs-grid,
+  .public-site main .tams-related-blogs-grid,
   .tams-public-landing main .tams-blogs-grid,
   .tams-public-landing main .tams-related-blogs-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
@@ -375,14 +511,18 @@
 }
 
 @media (hover: none) and (pointer: coarse) and (min-width: 640px) {
+  .public-site main .tams-home-strip-grid,
   .tams-public-landing main .tams-home-strip-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-features-grid,
   .tams-public-landing main .tams-features-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-blogs-grid,
+  .public-site main .tams-related-blogs-grid,
   .tams-public-landing main .tams-blogs-grid,
   .tams-public-landing main .tams-related-blogs-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -390,24 +530,30 @@
 }
 
 @media (hover: none) and (pointer: coarse) and (min-width: 768px) {
+  .public-site main .tams-pricing-grid,
   .tams-public-landing main .tams-pricing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-contact-grid,
   .tams-public-landing main .tams-contact-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
 @media (hover: none) and (pointer: coarse) and (min-width: 1024px) {
+  .public-site main .tams-home-strip-grid,
   .tams-public-landing main .tams-home-strip-grid {
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-features-grid,
   .tams-public-landing main .tams-features-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 
+  .public-site main .tams-blogs-grid,
+  .public-site main .tams-related-blogs-grid,
   .tams-public-landing main .tams-blogs-grid,
   .tams-public-landing main .tams-related-blogs-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;

@@ -52,27 +52,27 @@ export const BlogLeadCaptureBox: React.FC<BlogLeadCaptureBoxProps> = ({
 
   return (
     <section
-      className="mt-8 tams-card rounded-2xl bg-white p-6 sm:p-8"
+      className="mt-8 tams-card rounded-2xl bg-[var(--card,#FFFFFF)] p-6 sm:p-8"
       aria-labelledby="blog-lead-capture-heading"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="max-w-lg">
-          <span className="text-[11px] font-semibold tracking-widest uppercase text-[#0F5E63] block mb-1.5">
+          <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--primary,#0F5C63)] block mb-1.5">
             FREE AGENCY WALKTHROUGH
           </span>
           <h2
             id="blog-lead-capture-heading"
-            className="text-lg sm:text-xl font-bold text-[#0F172A] tracking-tight"
+            className="text-lg sm:text-xl font-bold text-[var(--ink,#0B1F2A)] tracking-tight"
           >
             Want a quick WhatsApp setup walkthrough for your agency?
           </h2>
-          <p className="mt-1.5 text-xs sm:text-sm text-[#475569] leading-relaxed">
+          <p className="mt-1.5 text-xs sm:text-sm text-[var(--body,#4A5A63)] leading-relaxed">
             Get travel agency growth tips plus a 10-minute live setup call—PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan.
           </p>
         </div>
 
         {submitted ? (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-teal-50 border border-teal-200/70 text-[#0F5E63] shrink-0">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--tint,#E4F2EF)] border border-[var(--primary,#0F5C63)]/30 text-[var(--primary,#0F5C63)] shrink-0">
             <CheckCircle2 className="w-5 h-5 shrink-0" strokeWidth={1.75} />
             <div className="text-xs sm:text-sm font-semibold">
               Thanks! We will reach out on WhatsApp shortly.
@@ -124,13 +124,13 @@ export const BlogLeadCaptureBox: React.FC<BlogLeadCaptureBoxProps> = ({
               </Button>
             </div>
 
-            <div className="pt-0.5 flex items-center justify-between text-xs text-[#64748B]">
+            <div className="pt-0.5 flex items-center justify-between text-xs text-[var(--body,#4A5A63)]">
               <span>Prefer direct chat?</span>
               <a
                 href={`${CONTACT_CHANNELS.whatsapp.href}?text=${whatsappText}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-semibold text-[#0F5E63] hover:text-[#0B4A4E]"
+                className="inline-flex items-center gap-1.5 font-semibold text-[var(--primary,#0F5C63)] hover:text-[var(--primary-hover,#0B4A50)] hover:transition-colors hover:duration-200"
               >
                 <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.75} />
                 <span>Chat on WhatsApp</span>
@@ -142,4 +142,3 @@ export const BlogLeadCaptureBox: React.FC<BlogLeadCaptureBoxProps> = ({
     </section>
   );
 };
-

@@ -6,19 +6,19 @@ import { CONTACT_CHANNELS, MARKETING_NAVIGATION } from "@/config/marketingConten
 export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   return (
     <footer
-      className={`w-full border-t border-slate-200/80 bg-white/75 backdrop-blur-sm text-[#475569] safe-area-bottom ${
+      className={`w-full border-t border-[var(--accent,#C9A24B)]/25 bg-[var(--hero-from,#0A2A30)] text-[#CFE3E0] safe-area-bottom ${
         compact ? "py-4 lg:py-5" : "py-7"
-      } transition-colors`}
+      }`}
     >
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-3.5 text-xs">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
           {/* Brand */}
           <Link
             to="/"
-            className="flex items-center gap-2 text-[#0F172A] font-bold tracking-tight hover:opacity-80 transition-opacity shrink-0"
+            className="flex items-center gap-2 text-white font-bold tracking-tight hover:opacity-90 hover:transition-opacity hover:duration-200 shrink-0"
           >
-            <div className="w-6 h-6 rounded-lg bg-[#0F5E63] flex items-center justify-center shadow-sm">
-              <Plane className="w-3.5 h-3.5 text-white" strokeWidth={1.75} />
+            <div className="w-6 h-6 rounded-lg bg-[var(--primary,#0F5C63)] border border-[var(--accent,#C9A24B)]/40 flex items-center justify-center shadow-sm">
+              <Plane className="w-3.5 h-3.5 text-[var(--accent,#C9A24B)]" strokeWidth={1.75} />
             </div>
             <span>TAMS PRO</span>
           </Link>
@@ -32,7 +32,7 @@ export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false 
               <Link
                 key={link.href}
                 to={link.href}
-                className="text-[#475569] hover:text-[#0F5E63] font-medium transition-colors"
+                className="text-[#E4F2EF] hover:text-[var(--accent,#C9A24B)] font-medium hover:transition-colors hover:duration-200"
               >
                 {link.label}
               </Link>
@@ -40,10 +40,10 @@ export const PublicFooter: React.FC<{ compact?: boolean }> = ({ compact = false 
           </nav>
 
           {/* Official Contact Email & Copyright */}
-          <div className="flex flex-wrap items-center justify-center gap-3 text-[#64748B] shrink-0">
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[#CFE3E0] shrink-0">
             <a
               href={CONTACT_CHANNELS.email.href}
-              className="inline-flex items-center gap-1.5 text-[#0F5E63] hover:underline font-medium"
+              className="inline-flex items-center gap-1.5 text-[var(--accent,#C9A24B)] hover:underline font-medium hover:transition-colors hover:duration-200"
             >
               <Mail className="w-3.5 h-3.5" strokeWidth={1.75} />
               <span>{CONTACT_CHANNELS.email.value}</span>
