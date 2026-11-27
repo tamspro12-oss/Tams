@@ -206,7 +206,7 @@ function BlogDetailContent() {
     if (!post) return undefined;
 
     const plainWords = stripHtmlToText(post.content).split(/\s+/).filter(Boolean).length;
-    const ogFallbackImage = `${PRODUCTION_APP_ORIGIN}/icons/tams-icon-512.png`;
+    const ogFallbackImage = `${PRODUCTION_APP_ORIGIN}/logo.png`;
     const schemaImage =
       safeCoverUrl && !/\.svg(?:[?#].*)?$/i.test(safeCoverUrl)
         ? /^https?:\/\//i.test(safeCoverUrl)

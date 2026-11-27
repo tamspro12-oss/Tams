@@ -67,7 +67,7 @@ function HomepageContent() {
         "@type": "Organization",
         name: "TAMS Pro",
         url: PRODUCTION_APP_ORIGIN,
-        logo: `${PRODUCTION_APP_ORIGIN}/icons/tams-icon-512.png`,
+        logo: `${PRODUCTION_APP_ORIGIN}/logo.png`,
         email: "tamspro12@gmail.com",
         telephone: "+92-319-0846768",
         areaServed: "PK",
@@ -75,37 +75,34 @@ function HomepageContent() {
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: "TAMS Pro — Travel Agency Management System",
+        name: "TAMS Pro",
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web, Desktop PWA, Android, iOS",
         url: PRODUCTION_APP_ORIGIN,
-        description: hero.subtitle,
-        offers: [
-          {
-            "@type": "Offer",
-            name: "Monthly Plan",
-            price: "1999",
+        description:
+          "Cloud travel agency management software for Pakistani ticketing, Umrah and visa agencies. Bookings, Umrah calculator, invoices, vouchers and ledgers.",
+        offers: {
+          "@type": "Offer",
+          price: "999",
+          priceCurrency: "PKR",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "999",
             priceCurrency: "PKR",
-            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+            unitText: "MONTH",
           },
-          {
-            "@type": "Offer",
-            name: "Yearly Plan",
-            price: "9999",
-            priceCurrency: "PKR",
-            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
-          },
-        ],
+          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+        },
       },
     ],
-    [hero.subtitle]
+    []
   );
 
   return (
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
-        title="TAMS Pro — Travel Agency Management System"
-        description={hero.subtitle}
+        title="TAMS Pro - Travel Agency Management Software in Pakistan"
+        description="Cloud travel agency management software for Pakistani ticketing, Umrah and visa agencies. Bookings, Umrah calculator, invoices, vouchers and ledgers."
         path="/"
         keywords={[
           "travel agency management system Pakistan",

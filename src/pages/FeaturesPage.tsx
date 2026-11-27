@@ -46,7 +46,7 @@ function FeaturesPageContent() {
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Features — TAMS Pro Travel Agency Management System"
-        description="Explore core operational modules: bookings, visas, vouchers, parties, expenses, Umrah calculator, and branded invoices."
+        description="Explore TAMS Pro operational modules for Pakistani travel agencies: bookings, visas, vouchers, parties, expenses, Umrah calculator, and branded invoices."
         path="/features"
       />
 

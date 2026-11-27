@@ -245,7 +245,7 @@ function BlogsPageContent() {
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Blogs — TAMS Pro Travel Agency Management System"
-        description="Guides, Umrah package strategies, PKR accounting tips, and operational playbooks for Pakistani travel and Umrah agencies."
+        description="TAMS Pro guides, Umrah package strategies, PKR accounting tips, and operational playbooks for Pakistani travel and Umrah agencies."
         path="/blogs"
         keywords={[
           "travel agency software Pakistan",

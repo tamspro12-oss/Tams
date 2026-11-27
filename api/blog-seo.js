@@ -18,7 +18,7 @@ function serializeJsonLd(obj) {
 
 function resolveSocialImage(rawImage, cleanOrigin) {
   const trimmed = String(rawImage || "").trim();
-  const fallback = `${cleanOrigin}/icons/tams-icon-512.png`;
+  const fallback = `${cleanOrigin}/logo.png`;
   if (!trimmed || /\.svg(?:[?#].*)?$/i.test(trimmed)) {
     return fallback;
   }
@@ -246,7 +246,7 @@ export function injectBlogSeoIntoHtml(html, post, origin = PRODUCTION_ORIGIN) {
         name: "TAMS Pro",
         logo: {
           "@type": "ImageObject",
-          url: `${cleanOrigin}/icons/tams-icon-512.png`,
+          url: `${cleanOrigin}/logo.png`,
         },
       },
       articleSection: post.category || "Travel Agency Management",

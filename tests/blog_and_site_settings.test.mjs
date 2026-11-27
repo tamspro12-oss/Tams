@@ -210,7 +210,7 @@ test("index.html and blog SSR SEO injector preserve Google verification and emit
     new RegExp(`<link rel="canonical" href="https://tamspro\\.online/blogs/${post.slug}" />`)
   );
   assert.match(injected, /<meta property="og:type" content="article" \/>/);
-  assert.match(injected, /https:\/\/tamspro\.online\/icons\/tams-icon-512\.png/);
+  assert.match(injected, /https:\/\/tamspro\.online\/logo\.png/);
   assert.match(injected, /"@type":"Article"/);
   assert.match(injected, /"@type":"BreadcrumbList"/);
   assert.match(injected, /"@type":"FAQPage"/);

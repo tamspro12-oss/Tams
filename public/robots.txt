@@ -1,20 +1,34 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /blogs
+Allow: /about
+Allow: /faq
+Allow: /contact
+Allow: /install
+Allow: /privacy
+Allow: /terms
+Allow: /refund-policy
+Disallow: /app
 Disallow: /app/
+Disallow: /app/dashboard
+Disallow: /app/sales-expenses
+Disallow: /app/clients-vendors
+Disallow: /app/reports
+Disallow: /app/admin
+Disallow: /app/leads-quotes
+Disallow: /app/umrah-calculator
+Disallow: /app/notifications
+Disallow: /app/settings
+Disallow: /admin
 Disallow: /admin/
+Disallow: /login
+Disallow: /signup
 Disallow: /auth
+Disallow: /auth/callback
+Disallow: /verify-email
+Disallow: /confirm-email
 Disallow: /reset-password
 Disallow: /subscription-expired
 

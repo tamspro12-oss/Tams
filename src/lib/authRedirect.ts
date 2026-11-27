@@ -35,8 +35,7 @@ export function resolveAuthOrigin(currentOrigin?: string): string {
   if (
     lower.includes("localhost") ||
     lower.includes("127.0.0.1") ||
-    lower.includes("0.0.0.0") ||
-    lower.includes("imkaantams")
+    lower.includes("0.0.0.0")
   ) {
     return PRODUCTION_APP_ORIGIN;
   }

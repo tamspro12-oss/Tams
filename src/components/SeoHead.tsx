@@ -16,7 +16,7 @@ interface SeoHeadProps {
   jsonLd?: object | object[];
 }
 
-const DEFAULT_OG_IMAGE = `${PRODUCTION_APP_ORIGIN}/icons/tams-icon-512.png`;
+const DEFAULT_OG_IMAGE = `${PRODUCTION_APP_ORIGIN}/logo.png`;
 
 function resolveSocialImageUrl(rawImage: string): string {
   const trimmed = rawImage.trim();
