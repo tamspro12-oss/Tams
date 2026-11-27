@@ -73,10 +73,12 @@ function CompactBlogCard({ post }: { post: BlogPost }) {
       <article className="tams-card tams-card-interactive group h-full rounded-2xl overflow-hidden bg-[var(--card,#FFFFFF)] flex flex-col justify-between">
         <div>
           <div className="tams-blog-cover aspect-[16/9] w-full overflow-hidden border-b border-[var(--border,#E5E0D3)]">
-            {coverUrl ? (
+              {coverUrl ? (
               <img
                 src={coverUrl}
                 alt={post.cover_image_alt || post.title}
+                width={640}
+                height={360}
                 loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-[1.03] group-hover:transition-transform group-hover:duration-200"
               />
@@ -206,7 +208,8 @@ function BlogDetailContent() {
     if (!post) return undefined;
 
     const plainWords = stripHtmlToText(post.content).split(/\s+/).filter(Boolean).length;
-    const ogFallbackImage = `${PRODUCTION_APP_ORIGIN}/logo.png`;
+    const ogFallbackImage = `${PRODUCTION_APP_ORIGIN}/og-image.png`;
+    const publisherLogo = `${PRODUCTION_APP_ORIGIN}/logo.png`;
     const schemaImage =
       safeCoverUrl && !/\.svg(?:[?#].*)?$/i.test(safeCoverUrl)
         ? /^https?:\/\//i.test(safeCoverUrl)
@@ -236,7 +239,7 @@ function BlogDetailContent() {
         url: PRODUCTION_APP_ORIGIN,
         logo: {
           "@type": "ImageObject",
-          url: ogFallbackImage,
+          url: publisherLogo,
         },
       },
       mainEntityOfPage: {
@@ -429,6 +432,12 @@ function BlogDetailContent() {
                   </span>
                 )}
 
+                {post.updated_at && formatBlogDate(post.updated_at) && (
+                  <span className="inline-flex items-center gap-1 text-xs text-[var(--body,#4A5A63)] font-medium">
+                    <span>• Last updated: {formatBlogDate(post.updated_at)}</span>
+                  </span>
+                )}
+
                 <span className="inline-flex items-center gap-1.5 text-xs text-[var(--body,#4A5A63)] font-medium">
                   <User className="w-3.5 h-3.5" strokeWidth={1.75} />
                   <span>{post.author || "TAMS Pro Team"}</span>
@@ -457,6 +466,9 @@ function BlogDetailContent() {
                   <img
                     src={safeCoverUrl}
                     alt={post.cover_image_alt || post.title}
+                    width={1200}
+                    height={630}
+                    fetchPriority="high"
                     className="w-full max-h-[440px] object-cover"
                   />
                 </div>

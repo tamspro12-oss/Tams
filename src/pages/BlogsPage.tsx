@@ -68,10 +68,12 @@ function BlogPostCard({ post }: { post: BlogPost }) {
       <article className="tams-card tams-card-interactive group h-full rounded-2xl overflow-hidden flex flex-col justify-between bg-[var(--card,#FFFFFF)]">
         <div>
           <div className="tams-blog-cover aspect-[16/9] w-full overflow-hidden border-b border-[var(--border,#E5E0D3)] relative">
-            {safeCover ? (
+            { safeCover ? (
               <img
                 src={safeCover}
                 alt={post.cover_image_alt || post.title}
+                width={640}
+                height={360}
                 loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-[1.03] group-hover:transition-transform group-hover:duration-200"
               />
@@ -245,7 +247,7 @@ function BlogsPageContent() {
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Blogs — TAMS Pro Travel Agency Management System"
-        description="TAMS Pro guides, Umrah package strategies, PKR accounting tips, and operational playbooks for Pakistani travel and Umrah agencies."
+        description="Read TAMS Pro guides, Umrah package costing formulas, PKR accounting tips, and operational playbooks for Pakistani ticketing, Umrah, and visa agencies."
         path="/blogs"
         keywords={[
           "travel agency software Pakistan",

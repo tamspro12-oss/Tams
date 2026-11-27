@@ -7,14 +7,25 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { CONTACT_CHANNELS } from "@/config/marketingContent";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 function RefundPolicyContent() {
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${PRODUCTION_APP_ORIGIN}/` },
+      { "@type": "ListItem", position: 2, name: "Refund & Cancellation Policy", item: `${PRODUCTION_APP_ORIGIN}/refund-policy` },
+    ],
+  };
+
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Refund & Cancellation Policy — TAMS Pro"
-        description="Review TAMS Pro's subscription cancellation, free trial, and refund rules for travel agencies."
+        description="Review TAMS Pro subscription cancellation, 14-day free trial, and refund rules for Monthly (PKR 1,999) and Yearly (PKR 9,999) travel agency software plans."
         path="/refund-policy"
+        jsonLd={breadcrumbJsonLd}
       />
 
       <PublicHeader currentPath="/refund-policy" />

@@ -1,8 +1,13 @@
+# TAMS Pro — robots.txt (https://tamspro.online/robots.txt)
+# Public pages and blogs are open to search engines and AI search/assistant crawlers.
+# Private app, admin, and authentication routes are disallowed.
+
 User-agent: *
 Allow: /
 Allow: /features
 Allow: /pricing
 Allow: /blogs
+Allow: /blogs/
 Allow: /about
 Allow: /faq
 Allow: /contact
@@ -10,6 +15,9 @@ Allow: /install
 Allow: /privacy
 Allow: /terms
 Allow: /refund-policy
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /sitemap.xml
 Disallow: /app
 Disallow: /app/
 Disallow: /app/dashboard
@@ -30,6 +38,133 @@ Disallow: /auth/callback
 Disallow: /verify-email
 Disallow: /confirm-email
 Disallow: /reset-password
+Disallow: /subscription-expired
+
+# AI Search & Assistant Crawlers — explicitly allowed on public pages
+User-agent: GPTBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
+Disallow: /subscription-expired
+
+User-agent: CCBot
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /signup
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-email
 Disallow: /subscription-expired
 
 Sitemap: https://tamspro.online/sitemap.xml

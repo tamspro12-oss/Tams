@@ -8,16 +8,26 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import { CONTACT_CHANNELS } from "@/config/marketingContent";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 function TermsOfServiceContent() {
   const { user } = useAuth();
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${PRODUCTION_APP_ORIGIN}/` },
+      { "@type": "ListItem", position: 2, name: "Terms & Conditions", item: `${PRODUCTION_APP_ORIGIN}/terms` },
+    ],
+  };
 
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Terms & Conditions — TAMS Pro"
-        description="Terms and conditions governing use of TAMS Pro travel agency management software."
+        description="Read the Terms and Conditions governing your agency subscription, 14-day free trial, data ownership, and use of TAMS Pro travel agency software in Pakistan."
         path="/terms"
+        jsonLd={breadcrumbJsonLd}
       />
 
       <PublicHeader currentPath="/terms" />

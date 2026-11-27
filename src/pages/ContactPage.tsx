@@ -8,14 +8,51 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { Tile } from "@/components/public/Tile";
 import { CONTACT_CHANNELS } from "@/config/marketingContent";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 function ContactPageContent() {
+  const contactJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      name: "Contact TAMS Pro",
+      url: `${PRODUCTION_APP_ORIGIN}/contact`,
+      mainEntity: {
+        "@type": "Organization",
+        name: "TAMS Pro",
+        url: PRODUCTION_APP_ORIGIN,
+        email: CONTACT_CHANNELS.email.value,
+        telephone: "+92-319-0846768",
+        areaServed: "PK",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${PRODUCTION_APP_ORIGIN}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Contact",
+          item: `${PRODUCTION_APP_ORIGIN}/contact`,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Contact — TAMS Pro Travel Agency Management System"
-        description="Get in touch with TAMS Pro support, sales, and account onboarding."
+        description="Contact TAMS Pro support, sales, and onboarding via email (tamspro12@gmail.com), WhatsApp, or phone (+92 319 0846768) for travel agency software in Pakistan."
         path="/contact"
+        jsonLd={contactJsonLd}
       />
 
       <PublicHeader currentPath="/contact" />

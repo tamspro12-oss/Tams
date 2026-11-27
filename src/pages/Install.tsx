@@ -33,7 +33,11 @@ export default function Install() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <SeoHead title="Install TAMS Pro App - iPhone, Android & Desktop" description="Step-by-step guide to install the TAMS Pro travel agency app on iPhone, Android or desktop for faster, offline-ready access." path="/install" />
+      <SeoHead
+        title="Install TAMS Pro App - iPhone, Android & Desktop"
+        description="Step-by-step guide to install the TAMS Pro travel agency management app on iPhone, Android, or Windows/Mac desktop for fast, one-click workspace access."
+        path="/install"
+      />
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)] md:pt-0">
         <div className="container mx-auto px-4 min-h-16 py-2 md:py-0 md:h-16 flex flex-wrap items-center justify-between gap-2">

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toFriendlyMessage } from "@/lib/friendlyError";
 import { stripHtmlToText } from "@/lib/blogSanitizer";
+import { BUILTIN_ANSWER_FIRST_BLOG_POSTS } from "@/config/answerFirstBlogPosts";
 
 export type BlogStatus = "draft" | "published";
 
@@ -272,6 +273,14 @@ function isMissingExtendedColumnError(error: unknown): boolean {
   );
 }
 
+function mergeWithBuiltinBlogPosts(dbPosts: BlogPost[]): BlogPost[] {
+  const seenSlugs = new Set(dbPosts.map((p) => p.slug.trim().toLowerCase()));
+  const extras = BUILTIN_ANSWER_FIRST_BLOG_POSTS.filter(
+    (b) => !seenSlugs.has(b.slug.trim().toLowerCase())
+  );
+  return [...dbPosts, ...extras];
+}
+
 export async function fetchPublishedBlogs(): Promise<{
   posts: BlogPost[];
   error: string | null;
@@ -287,21 +296,22 @@ export async function fetchPublishedBlogs(): Promise<{
     if (error) {
       console.error("[TAMS Blogs] fetchPublishedBlogs error:", error);
       return {
-        posts: [],
-        error: "Articles are temporarily unavailable. Please check back shortly.",
+        posts: [...BUILTIN_ANSWER_FIRST_BLOG_POSTS],
+        error: null,
       };
     }
 
     const rows = Array.isArray(data) ? data : [];
+    const dbPosts = rows.map((row: Record<string, unknown>) => normalizeBlogRow(row));
     return {
-      posts: rows.map((row: Record<string, unknown>) => normalizeBlogRow(row)),
+      posts: mergeWithBuiltinBlogPosts(dbPosts),
       error: null,
     };
   } catch (err) {
     console.error("[TAMS Blogs] fetchPublishedBlogs exception:", err);
     return {
-      posts: [],
-      error: "Articles are temporarily unavailable. Please check back shortly.",
+      posts: [...BUILTIN_ANSWER_FIRST_BLOG_POSTS],
+      error: null,
     };
   }
 }
@@ -317,6 +327,11 @@ export async function fetchPublishedBlogBySlug(slug: string): Promise<{
       return { post: null, notFound: true, error: null };
     }
 
+    const builtinMatch =
+      BUILTIN_ANSWER_FIRST_BLOG_POSTS.find(
+        (b) => b.slug.toLowerCase() === cleanSlug.toLowerCase()
+      ) ?? null;
+
     const { data, error } = await (supabase as any)
       .from("blog_posts")
       .select("*")
@@ -326,6 +341,9 @@ export async function fetchPublishedBlogBySlug(slug: string): Promise<{
 
     if (error) {
       console.error("[TAMS Blogs] fetchPublishedBlogBySlug error:", error);
+      if (builtinMatch) {
+        return { post: builtinMatch, notFound: false, error: null };
+      }
       return {
         post: null,
         notFound: false,
@@ -334,6 +352,9 @@ export async function fetchPublishedBlogBySlug(slug: string): Promise<{
     }
 
     if (!data) {
+      if (builtinMatch) {
+        return { post: builtinMatch, notFound: false, error: null };
+      }
       return { post: null, notFound: true, error: null };
     }
 
@@ -344,6 +365,12 @@ export async function fetchPublishedBlogBySlug(slug: string): Promise<{
     };
   } catch (err) {
     console.error("[TAMS Blogs] fetchPublishedBlogBySlug exception:", err);
+    const cleanSlug = (slug || "").trim().toLowerCase();
+    const builtinMatch =
+      BUILTIN_ANSWER_FIRST_BLOG_POSTS.find((b) => b.slug.toLowerCase() === cleanSlug) ?? null;
+    if (builtinMatch) {
+      return { post: builtinMatch, notFound: false, error: null };
+    }
     return {
       post: null,
       notFound: false,
@@ -366,14 +393,13 @@ export async function fetchRelatedPublishedBlogs(
       .order("created_at", { ascending: false })
       .limit(12);
 
-    if (error || !Array.isArray(data)) {
-      if (error) {
-        console.error("[TAMS Blogs] fetchRelatedPublishedBlogs error:", error);
-      }
-      return [];
-    }
-
-    const normalized = data.map((row: Record<string, unknown>) => normalizeBlogRow(row));
+    const dbPosts =
+      !error && Array.isArray(data)
+        ? data.map((row: Record<string, unknown>) => normalizeBlogRow(row))
+        : [];
+    const normalized = mergeWithBuiltinBlogPosts(dbPosts).filter(
+      (p) => p.id !== currentPost.id
+    );
     const currentCategory = (currentPost.category || "").trim().toLowerCase();
 
     const sameCategory = normalized.filter(
@@ -386,7 +412,7 @@ export async function fetchRelatedPublishedBlogs(
     return [...sameCategory, ...others].slice(0, limit);
   } catch (err) {
     console.error("[TAMS Blogs] fetchRelatedPublishedBlogs exception:", err);
-    return [];
+    return BUILTIN_ANSWER_FIRST_BLOG_POSTS.filter((p) => p.id !== currentPost.id).slice(0, limit);
   }
 }
 
@@ -404,21 +430,18 @@ export async function fetchPopularPublishedBlogs(
       .order("created_at", { ascending: false })
       .limit(16);
 
-    if (error || !Array.isArray(data)) {
-      if (error) {
-        console.error("[TAMS Blogs] fetchPopularPublishedBlogs error:", error);
-      }
-      return [];
-    }
-
+    const dbPosts =
+      !error && Array.isArray(data)
+        ? data.map((row: Record<string, unknown>) => normalizeBlogRow(row))
+        : [];
     const excludeSet = new Set(excludeIds.filter(Boolean));
-    return data
-      .map((row: Record<string, unknown>) => normalizeBlogRow(row))
+    return mergeWithBuiltinBlogPosts(dbPosts)
       .filter((p) => !excludeSet.has(p.id))
       .slice(0, limit);
   } catch (err) {
     console.error("[TAMS Blogs] fetchPopularPublishedBlogs exception:", err);
-    return [];
+    const excludeSet = new Set(excludeIds.filter(Boolean));
+    return BUILTIN_ANSWER_FIRST_BLOG_POSTS.filter((p) => !excludeSet.has(p.id)).slice(0, limit);
   }
 }
 

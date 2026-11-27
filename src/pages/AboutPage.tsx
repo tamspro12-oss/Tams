@@ -17,6 +17,7 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { CONTACT_CHANNELS } from "@/config/marketingContent";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 const PILLARS = [
   {
@@ -58,12 +59,51 @@ const PILLARS = [
 ];
 
 function AboutPageContent() {
+  const aboutJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      name: "About TAMS Pro",
+      url: `${PRODUCTION_APP_ORIGIN}/about`,
+      description:
+        "TAMS Pro is cloud travel agency management software built for Pakistani airline ticketing, Umrah, and visa agencies to manage bookings, Umrah package costing, quotations, branded PDF invoices, vouchers, and PKR client and vendor ledgers.",
+      mainEntity: {
+        "@type": "Organization",
+        name: "TAMS Pro",
+        url: PRODUCTION_APP_ORIGIN,
+        logo: `${PRODUCTION_APP_ORIGIN}/logo.png`,
+        email: CONTACT_CHANNELS.email.value,
+        telephone: "+92-319-0846768",
+        areaServed: "PK",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${PRODUCTION_APP_ORIGIN}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "About",
+          item: `${PRODUCTION_APP_ORIGIN}/about`,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="About — TAMS Pro Travel Agency Management System"
-        description="Learn about TAMS Pro, cloud travel agency management software built for ticketing, Umrah, and visa agencies in Pakistan."
+        description="Learn about TAMS Pro, cloud travel agency management software built for ticketing, Umrah, and visa agencies in Pakistan with PKR ledgers and PDF invoices."
         path="/about"
+        jsonLd={aboutJsonLd}
       />
 
       <PublicHeader currentPath="/about" />

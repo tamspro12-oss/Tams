@@ -71,28 +71,65 @@ function HomepageContent() {
         email: "tamspro12@gmail.com",
         telephone: "+92-319-0846768",
         areaServed: "PK",
+        contactPoint: {
+          "@type": "ContactPoint",
+          telephone: "+92-319-0846768",
+          email: "tamspro12@gmail.com",
+          contactType: "sales",
+          areaServed: "PK",
+          availableLanguage: ["en", "ur"],
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "TAMS Pro",
+        url: PRODUCTION_APP_ORIGIN,
+        inLanguage: "en-PK",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${PRODUCTION_APP_ORIGIN}/blogs?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
       },
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         name: "TAMS Pro",
         applicationCategory: "BusinessApplication",
-        operatingSystem: "Web, Desktop PWA, Android, iOS",
+        operatingSystem: "Web",
+        areaServed: "PK",
         url: PRODUCTION_APP_ORIGIN,
         description:
-          "Cloud travel agency management software for Pakistani ticketing, Umrah and visa agencies. Bookings, Umrah calculator, invoices, vouchers and ledgers.",
-        offers: {
-          "@type": "Offer",
-          price: "999",
-          priceCurrency: "PKR",
-          priceSpecification: {
-            "@type": "UnitPriceSpecification",
-            price: "999",
+          "TAMS Pro is cloud travel agency management software built for Pakistani airline ticketing, Umrah, and visa agencies to manage bookings, Umrah package costing, quotations, branded PDF invoices, vouchers, and PKR client and vendor ledgers.",
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Monthly Plan",
+            price: "1999",
             priceCurrency: "PKR",
-            unitText: "MONTH",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "1999",
+              priceCurrency: "PKR",
+              unitText: "MONTH",
+            },
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
           },
-          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
-        },
+          {
+            "@type": "Offer",
+            name: "Yearly Plan (50% OFF)",
+            price: "9999",
+            priceCurrency: "PKR",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "9999",
+              priceCurrency: "PKR",
+              unitText: "YEAR",
+            },
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+        ],
       },
     ],
     []
@@ -230,6 +267,8 @@ function HomepageContent() {
                             <img
                               src={safeCover}
                               alt={post.cover_image_alt || post.title}
+                              width={640}
+                              height={360}
                               loading="lazy"
                               className="w-full h-full object-cover group-hover:scale-[1.03] group-hover:transition-transform group-hover:duration-200"
                             />

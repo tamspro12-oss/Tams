@@ -1,21 +1,55 @@
 # TAMS Pro
 
-> TAMS Pro (`https://tamspro.online`) is a cloud travel agency management system built for Pakistani travel, Umrah, visa, and airline ticketing agencies. Plans are PKR 1,999/month (standard monthly billing) and PKR 9,999/year (was PKR 19,999 — 50% off on the yearly plan). It manages bookings, branded quotations, PDF invoices and vouchers, automated PKR client/sub-agent/vendor ledgers, visa deadlines, Umrah package costing, and financial reports.
+> **What is TAMS Pro?** TAMS Pro (`https://tamspro.online`) is cloud travel agency management software built for Pakistani airline ticketing, Umrah, and visa agencies. It unifies bookings, an integrated SAR-to-PKR Umrah Cost Calculator, travel queries and quotations, branded PDF invoices and payment vouchers, automated double-entry PKR client and vendor ledgers, Cash and Bank accounts, and financial reports. Plans start with a 14-day free trial, followed by PKR 1,999/month or PKR 9,999/year (was PKR 19,999 — 50% OFF on the yearly plan).
 
-## Pages
+## Brand & Entity Facts
 
-- [Home](https://tamspro.online/): Overview of TAMS Pro for Pakistani travel and Umrah agencies.
-- [Features](https://tamspro.online/features): Bookings, PKR ledgers, quotations, invoices, vouchers, visa tracking, Umrah calculator, and reports.
-- [Pricing](https://tamspro.online/pricing): PKR 1,999/month and PKR 9,999/year (50% off yearly) plans for Pakistani travel agencies.
-- [Blogs](https://tamspro.online/blogs): Guides on travel agency software, Umrah management, PKR ledgers, quotations, vouchers, and visa tracking in Pakistan.
-- [About](https://tamspro.online/about): About TAMS Pro, modules, security, and platform mission.
-- [FAQ](https://tamspro.online/faq): Frequently asked questions on pricing, security, Umrah Calculator, and onboarding.
-- [Contact](https://tamspro.online/contact): Sales, email (`tamspro12@gmail.com`), and WhatsApp support (`+92 319 0846768`).
-- [Sign Up](https://tamspro.online/signup): Create a TAMS Pro agency workspace.
-- [Install](https://tamspro.online/install): Desktop and mobile PWA install instructions.
+- **Official Name:** TAMS Pro (Travel Agency Management System)
+- **Category:** Cloud Travel Agency Management Software / Umrah & Ticketing ERP (`BusinessApplication`)
+- **Primary Audience:** Travel agencies, Umrah operators, airline ticketing agents, sub-agents, and visa consultants in Pakistan
+- **Country & Currency:** Pakistan (`en-PK`, `PKR`, with `SAR`-to-`PKR` conversion in the Umrah Cost Calculator)
+- **Official Website:** https://tamspro.online
+- **Pricing:** 14-day free trial; Monthly Plan: PKR 1,999 / month; Yearly Plan: PKR 9,999 / year (50% OFF from PKR 19,999)
+- **Platform Support:** Web browser (Windows, macOS, Android, iOS) and installable Progressive Web App (PWA)
+- **Security & Privacy:** Multi-tenant PostgreSQL Row-Level Security (RLS) per agency workspace, server-side encrypted Gmail App Passwords, full JSON/Excel/PDF data export
+- **Official Contact:** Email `tamspro12@gmail.com` | Phone & WhatsApp `+92 319 0846768`
 
-## Published Guides
+## Core Application Modules
 
+1. **Dashboard (`/app/dashboard`):** Live KPI overview of total invoiced sales, net profit, client receivables, vendor payables, cash/bank balances, and recent activity.
+2. **Sales & Expenses Hub (`/app/sales-expenses`):**
+   - **Booking Invoices:** Multi-service invoicing for Airline Tickets (PNR, ticket number, sector, airline, fare, taxes), Umrah packages, Visas, Hotels, Transport, and Insurance with automatic double-entry posting to client receivables and supplier payables.
+   - **Payment Vouchers:** Cash/Bank Receipt Vouchers (CRV) and Payment Vouchers (CPV) linked to invoices, parties, and agency bank accounts.
+   - **Refunds & Voids:** Structured customer refund and ticket void processing that automatically adjusts client and vendor ledgers.
+   - **Daily Operating Expenses:** Office expense tracking linked to Cash or Bank accounts.
+3. **Clients & Vendors (`/app/clients-vendors`):** Unified master party directory (`Client`, `Vendor`, or `Both`) and registered Agency Bank accounts with running PKR debit/credit balances and one-click Party Ledger statements.
+4. **Queries & Quotations Hub (`/app/leads-quotes`):** Log incoming travel inquiries, build multi-option branded PDF quotations, and convert approved quotes directly into booking invoices.
+5. **Umrah Cost Calculator (`/app/umrah-calculator`):** Calculate Makkah and Madinah hotel packages across Sharing, Quint, Quad, Triple, and Double room types with live SAR-to-PKR exchange rates, visa fees, transport, ziyarat, flights, and per-person profit margins.
+6. **Financial & Operations Reports (`/app/reports`):** Daily Report (Day Book), Party Account Statements with overdue aging buckets (`0-30`, `31-60`, `61-90`, `90+` days), Booking-Wise Profit Report, and Profit & Loss (P&L) financial statements.
+7. **Notifications & Reminders (`/app/notifications`):** Automated alerts for upcoming flight/Umrah departures, overdue client payments, vendor payables, and custom staff reminders.
+8. **Settings & Branding (`/app/settings`):** Custom agency logo and PDF invoice/voucher templates, sub-user staff role permissions, agency-owned Gmail integration, and full workspace data export.
+
+## Key Public Pages
+
+- [Home](https://tamspro.online/): Overview of TAMS Pro travel agency management software in Pakistan.
+- [Features](https://tamspro.online/features): Complete list of the 10 operational modules in TAMS Pro.
+- [Pricing](https://tamspro.online/pricing): PKR 1,999/month and PKR 9,999/year (50% OFF yearly) plans.
+- [Blogs & Guides](https://tamspro.online/blogs): Operational guides on travel agency software, Umrah costing, ticketing, and PKR ledgers.
+- [About](https://tamspro.online/about): Architecture, data privacy, PKR accounting pillars, and contact details.
+- [FAQ](https://tamspro.online/faq): Direct answers on software selection, Umrah costing, pricing, security, and invoices.
+- [Contact](https://tamspro.online/contact): Email (`tamspro12@gmail.com`), WhatsApp, and phone (`+92 319 0846768`).
+- [Sign Up Free](https://tamspro.online/signup): Create an agency account and start a 14-day free trial.
+- [Install App](https://tamspro.online/install): Install TAMS Pro on desktop, Android, or iPhone/iPad.
+- [Full LLM Documentation](https://tamspro.online/llms-full.txt): Comprehensive product reference, Q&A, and feature specification.
+
+## Published Guides & Articles
+
+- [Best Travel Agency Management Software in Pakistan](https://tamspro.online/blogs/best-travel-agency-management-software-pakistan)
+- [Umrah Agency Software in Pakistan: Bookings, Vouchers, Invoices and Ledgers](https://tamspro.online/blogs/umrah-agency-software-pakistan-bookings-vouchers-invoices-ledgers)
+- [Airline Ticketing Software for Pakistani Travel Agents](https://tamspro.online/blogs/airline-ticketing-software-pakistani-travel-agents)
+- [How to Manage Client and Vendor Ledgers in a Travel Agency](https://tamspro.online/blogs/how-to-manage-client-and-vendor-ledgers-travel-agency)
+- [TAMS Pro vs Spreadsheets and Paper Registers](https://tamspro.online/blogs/tams-pro-vs-spreadsheets-and-paper-registers)
+- [TAMS Pro Features and Pricing Explained](https://tamspro.online/blogs/tams-pro-features-and-pricing-explained)
 - [Best Travel Agency Software in Pakistan (2026 Guide)](https://tamspro.online/blogs/best-travel-agency-software-pakistan-2026)
 - [How to Manage Umrah Packages Digitally in Pakistan](https://tamspro.online/blogs/manage-umrah-packages-digitally-pakistan)
 - [Travel Agency Accounting & Ledger Software in Pakistan](https://tamspro.online/blogs/travel-agency-accounting-ledger-pakistan)
@@ -29,7 +63,7 @@
 
 ## Discovery & Legal
 
-- [Sitemap](https://tamspro.online/sitemap.xml): Dynamic XML sitemap including all published blog posts.
-- [Privacy Policy](https://tamspro.online/privacy): How TAMS Pro handles agency and user data.
-- [Terms & Conditions](https://tamspro.online/terms): Terms governing use of TAMS Pro.
-- [Refund & Cancellation Policy](https://tamspro.online/refund-policy): Subscription cancellation and refund rules.
+- [XML Sitemap](https://tamspro.online/sitemap.xml)
+- [Privacy Policy](https://tamspro.online/privacy)
+- [Terms & Conditions](https://tamspro.online/terms)
+- [Refund & Cancellation Policy](https://tamspro.online/refund-policy)

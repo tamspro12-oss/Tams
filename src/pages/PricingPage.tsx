@@ -13,30 +13,63 @@ function PricingPageContent() {
   const { pricing } = useSiteSettings();
 
   const pricingJsonLd = useMemo(
-    () => ({
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      name: "TAMS Pro — Travel Agency Management System",
-      applicationCategory: "BusinessApplication",
-      operatingSystem: "Web, Desktop PWA, Android, iOS",
-      url: `${PRODUCTION_APP_ORIGIN}/pricing`,
-      offers: [
-        {
-          "@type": "Offer",
-          name: "Monthly Plan",
-          price: "1999",
-          priceCurrency: "PKR",
-          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
-        },
-        {
-          "@type": "Offer",
-          name: "Yearly Plan (50% OFF)",
-          price: "9999",
-          priceCurrency: "PKR",
-          url: `${PRODUCTION_APP_ORIGIN}/pricing`,
-        },
-      ],
-    }),
+    () => [
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: "TAMS Pro",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        areaServed: "PK",
+        url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Monthly Plan",
+            price: "1999",
+            priceCurrency: "PKR",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "1999",
+              priceCurrency: "PKR",
+              unitText: "MONTH",
+            },
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+          {
+            "@type": "Offer",
+            name: "Yearly Plan (50% OFF)",
+            price: "9999",
+            priceCurrency: "PKR",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "9999",
+              priceCurrency: "PKR",
+              unitText: "YEAR",
+            },
+            url: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+        ],
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${PRODUCTION_APP_ORIGIN}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Pricing",
+            item: `${PRODUCTION_APP_ORIGIN}/pricing`,
+          },
+        ],
+      },
+    ],
     []
   );
 
@@ -44,7 +77,7 @@ function PricingPageContent() {
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Pricing — TAMS Pro Travel Agency Management System"
-        description="Simple and transparent pricing for travel agencies in Pakistan: PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan."
+        description="Simple and transparent TAMS Pro pricing for travel agencies in Pakistan: PKR 1,999/month, or PKR 9,999/year with 50% off on the yearly plan. Try 14 days free."
         path="/pricing"
         jsonLd={pricingJsonLd}
       />

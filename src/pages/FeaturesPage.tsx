@@ -20,6 +20,7 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { Tile } from "@/components/public/Tile";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 interface FeatureDef {
   id: string;
@@ -42,12 +43,45 @@ const FEATURES_DATA: FeatureDef[] = [
 ];
 
 function FeaturesPageContent() {
+  const featuresJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${PRODUCTION_APP_ORIGIN}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Features",
+          item: `${PRODUCTION_APP_ORIGIN}/features`,
+        },
+      ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: "TAMS Pro Travel Agency Management Features",
+      itemListElement: FEATURES_DATA.map((feature, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: feature.title,
+        description: feature.caption,
+      })),
+    },
+  ];
+
   return (
     <div className="public-site tams-public-landing min-h-screen bg-[var(--bg,#F8F5EE)] text-[var(--ink,#0B1F2A)] flex flex-col">
       <SeoHead
         title="Features — TAMS Pro Travel Agency Management System"
         description="Explore TAMS Pro operational modules for Pakistani travel agencies: bookings, visas, vouchers, parties, expenses, Umrah calculator, and branded invoices."
         path="/features"
+        jsonLd={featuresJsonLd}
       />
 
       <PublicHeader currentPath="/features" />

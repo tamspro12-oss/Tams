@@ -8,16 +8,26 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicErrorBoundary } from "@/components/public/PublicErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import { CONTACT_CHANNELS } from "@/config/marketingContent";
+import { PRODUCTION_APP_ORIGIN } from "@/lib/authRedirect";
 
 function PrivacyPolicyContent() {
   const { user } = useAuth();
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${PRODUCTION_APP_ORIGIN}/` },
+      { "@type": "ListItem", position: 2, name: "Privacy Policy", item: `${PRODUCTION_APP_ORIGIN}/privacy` },
+    ],
+  };
 
   return (
     <div className="tams-public-landing min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       <SeoHead
         title="Privacy Policy — TAMS Pro"
-        description="How TAMS Pro collects, uses, isolates, and protects your travel agency data."
+        description="Read the TAMS Pro Privacy Policy to learn how we collect, encrypt, isolate with PostgreSQL Row-Level Security, and protect your travel agency records."
         path="/privacy"
+        jsonLd={breadcrumbJsonLd}
       />
 
       <PublicHeader currentPath="/privacy" />

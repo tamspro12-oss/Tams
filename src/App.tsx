@@ -143,6 +143,35 @@ const App = () => {
   useAutoUpdate();
 
   useEffect(() => {
+    const syncPrivateRouteRobots = () => {
+      if (typeof document === "undefined" || !document.head) return;
+      const p = window.location.pathname.toLowerCase();
+      const isPrivate =
+        p === "/app" ||
+        p.startsWith("/app/") ||
+        p === "/admin" ||
+        p.startsWith("/admin/") ||
+        p === "/login" ||
+        p === "/signup" ||
+        p === "/auth" ||
+        p.startsWith("/auth/") ||
+        p === "/reset-password" ||
+        p === "/verify-email" ||
+        p === "/confirm-email" ||
+        p === "/subscription-expired";
+      if (isPrivate) {
+        let meta = document.head.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+        if (!meta) {
+          meta = document.createElement("meta");
+          meta.setAttribute("name", "robots");
+          document.head.appendChild(meta);
+        }
+        meta.setAttribute("content", "noindex, nofollow");
+      }
+    };
+    syncPrivateRouteRobots();
+    window.addEventListener("popstate", syncPrivateRouteRobots);
+
     // Defer non-critical boot work until the browser is idle
     idle(() => {
       versionManager.checkVersion();
@@ -173,6 +202,7 @@ const App = () => {
     window.addEventListener("vite:preloadError", handleVitePreloadError as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      window.removeEventListener("popstate", syncPrivateRouteRobots);
       window.removeEventListener("vite:preloadError", handleVitePreloadError as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

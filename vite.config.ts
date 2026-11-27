@@ -47,10 +47,17 @@ function tamsVersionManifestPlugin(appVersion: string, buildId: string): Plugin 
         }
       });
     },
-    closeBundle() {
+    async closeBundle() {
       const outDir = path.resolve(__dirname, "dist");
       if (fs.existsSync(outDir)) {
         fs.writeFileSync(path.join(outDir, "version.json"), payload, "utf-8");
+        try {
+          const posts = await fetchPublishedPostsForSitemap();
+          const sitemapXml = buildSitemapXml(posts);
+          fs.writeFileSync(path.join(outDir, "sitemap.xml"), sitemapXml, "utf-8");
+        } catch {
+          fs.writeFileSync(path.join(outDir, "sitemap.xml"), buildSitemapXml([]), "utf-8");
+        }
       }
     },
   };
